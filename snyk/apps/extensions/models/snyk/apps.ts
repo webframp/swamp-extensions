@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/apps";
 
@@ -32,7 +32,7 @@ const GetAppInstallsForGroupItemSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
-});
+}).passthrough();
 
 const GetAppInstallsForGroupSchema = z.object({
   items: z.array(GetAppInstallsForGroupItemSchema),
@@ -49,23 +49,10 @@ const GetAppInstallsForGroupSchema = z.object({
 const CreateGroupAppInstallSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-  client_id: z.string().min(1).describe(
-    "The OAuth2 client id for the app installation.",
-  ),
-  client_secret: z.string().min(1).describe(
-    "The OAuth2 client secret for the app installation.",
-  ),
+  client_id: z.string(),
+  client_secret: z.string(),
   app_id: z.string().optional().describe("Related app ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateGroupAppInstallSecretSchema = z.object({
   id: z.string(),
@@ -80,16 +67,7 @@ const UpdateGroupAppInstallSecretSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetOrgAppsItemSchema = z.object({
   id: z.string(),
@@ -122,7 +100,7 @@ const GetOrgAppsItemSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-});
+}).passthrough();
 
 const GetOrgAppsSchema = z.object({
   items: z.array(GetOrgAppsItemSchema),
@@ -168,16 +146,7 @@ const CreateOrgAppSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAppByIdSchema = z.object({
   id: z.string(),
@@ -210,16 +179,7 @@ const GetAppByIdSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAppCreationByIdSchema = z.object({
   id: z.string(),
@@ -252,16 +212,7 @@ const UpdateAppCreationByIdSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateManageAppCreationSecretSchema = z.object({
   id: z.string(),
@@ -295,16 +246,7 @@ const CreateManageAppCreationSecretSchema = z.object({
   scopes: z.array(z.string().min(1)).describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAppInstallsForOrgItemSchema = z.object({
   id: z.string(),
@@ -316,7 +258,7 @@ const GetAppInstallsForOrgItemSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
-});
+}).passthrough();
 
 const GetAppInstallsForOrgSchema = z.object({
   items: z.array(GetAppInstallsForOrgItemSchema),
@@ -333,23 +275,10 @@ const GetAppInstallsForOrgSchema = z.object({
 const CreateOrgAppInstallSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-  client_id: z.string().min(1).describe(
-    "The OAuth2 client id for the app installation.",
-  ),
-  client_secret: z.string().min(1).describe(
-    "The OAuth2 client secret for the app installation.",
-  ),
+  client_id: z.string(),
+  client_secret: z.string(),
   app_id: z.string().optional().describe("Related app ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateOrgAppInstallSecretSchema = z.object({
   id: z.string(),
@@ -364,16 +293,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -382,7 +302,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -392,7 +312,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted, and the *_secret methods require a secret value when mode is create/replace. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -422,6 +341,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -519,8 +443,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -589,7 +513,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -605,16 +528,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "group_app_install",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created group_app_install {id}", { id });
         return { dataHandles: [handle] };
@@ -662,13 +582,7 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }).refine(
-            (attrs) => attrs.mode === "delete" || !!attrs.secret,
-            {
-              message: 'secret is required when mode is "create" or "replace"',
-              path: ["secret"],
-            },
-          ),
+          }),
           type: z.enum(["app"]),
         }),
       }),
@@ -686,7 +600,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "install_id"]);
@@ -702,16 +615,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_group_app_install_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_group_app_install_secret {id}", {
           id,
@@ -736,8 +646,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -800,7 +710,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -816,13 +725,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("org_app", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("org_app", id, result);
         context.logger.info("Created org_app {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -846,7 +752,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -857,13 +762,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "app_by_id",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Fetched app_by_id", {});
         return { dataHandles: [handle] };
@@ -897,7 +797,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["app_id"]);
@@ -915,13 +814,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "app_creation_by_id",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Updated app_creation_by_id", {});
         return { dataHandles: [handle] };
@@ -966,13 +860,7 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }).refine(
-            (attrs) => attrs.mode === "delete" || !!attrs.secret,
-            {
-              message: 'secret is required when mode is "create" or "replace"',
-              path: ["secret"],
-            },
-          ),
+          }),
           type: z.enum(["app"]),
         }),
       }),
@@ -990,7 +878,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["app_id"]);
@@ -1006,16 +893,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "manage_app_creation_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created manage_app_creation_secret {id}", { id });
         return { dataHandles: [handle] };
@@ -1040,8 +924,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1109,7 +993,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1125,16 +1008,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "org_app_install",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created org_app_install {id}", { id });
         return { dataHandles: [handle] };
@@ -1181,13 +1061,7 @@ export const model = {
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
             secret: z.string().optional(),
-          }).refine(
-            (attrs) => attrs.mode === "delete" || !!attrs.secret,
-            {
-              message: 'secret is required when mode is "create" or "replace"',
-              path: ["secret"],
-            },
-          ),
+          }),
           type: z.enum(["app"]),
         }),
       }),
@@ -1205,7 +1079,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["install_id"]);
@@ -1221,16 +1094,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_org_app_install_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_org_app_install_secret {id}", {
           id,

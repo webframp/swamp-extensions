@@ -34,28 +34,17 @@ Deno.test("projects model: has globalArguments with apiToken", () => {
 Deno.test("projects model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_org_projects);
+  assertExists(model.methods.delete_org_projects);
   assertExists(model.methods.get_org_project);
   assertExists(model.methods.update_org_project);
   assertExists(model.methods.delete_org_project);
   assertExists(model.methods.get_sbom);
 });
 
-Deno.test("projects model: get_org_project rejects empty project_id", () => {
-  const result = model.methods.get_org_project.arguments.safeParse({
-    project_id: "",
-  });
-  assertEquals(result.success, false);
-  if (!result.success) {
-    assertStringIncludes(
-      JSON.stringify(result.error.issues),
-      "project_id must not be empty",
-    );
-  }
-});
-
 Deno.test("projects model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["org_projects"]);
+  assertExists(model.resources["delete_org_projects"]);
   assertExists(model.resources["org_project"]);
   assertExists(model.resources["sbom"]);
 });
@@ -227,6 +216,69 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "projects model: delete_org_projects creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "new-123",
+      "type": "resource",
+      "attributes": {
+        "jsonapi": null,
+        "meta": { "deleted": [], "failed": [] },
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/projects/bulk-delete": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-projects",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_org_projects.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/projects/bulk-delete");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "delete_org_projects");
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

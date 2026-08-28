@@ -57,7 +57,7 @@ swamp model create @webframp/cloudflare/email-routing cf-email-routing \
 ## Development
 
 ```bash
-cd cloudflare/email-routing
+cd ../../cloudflare/email-routing
 deno task check
 deno task lint
 deno task fmt

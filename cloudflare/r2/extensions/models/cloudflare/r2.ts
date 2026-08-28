@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi } from "./_lib/api.ts";
+import { cfApi, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/r2";
 
@@ -18,23 +18,14 @@ const EXTENSION_NAME = "@webframp/cloudflare/r2";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
 const ListCatalogsSchema = z.object({
   warehouses: z.array(z.unknown()).describe("Lists catalogs in the account."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCatalogDetailsSchema = z.object({
   bucket: z.string().describe("Specifies the associated R2 bucket name."),
@@ -49,58 +40,21 @@ const GetCatalogDetailsSchema = z.object({
     "Specifies the catalog name (generated from account and bucket name).",
   ),
   status: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const CreateStoreCredentialsSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+const CreateStoreCredentialsSchema = z.object({}).nullable().passthrough();
 
 const EnableCatalogSchema = z.object({
   id: z.string().describe(
     "Use this to uniquely identify the activated catalog.",
   ),
   name: z.string().describe("Specifies the name of the activated catalog."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMaintenanceConfigSchema = z.object({
   credential_status: z.unknown(),
   maintenance_config: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListNamespacesSchema = z.object({
   details: z.array(z.unknown()).nullable().optional().describe(
@@ -113,16 +67,7 @@ const ListNamespacesSchema = z.object({
   next_page_token: z.string().nullable().optional().describe(
     "Use this opaque token to fetch the next page of results. A null or absent value indicates the las...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListTablesSchema = z.object({
   details: z.array(z.unknown()).nullable().optional().describe(
@@ -135,16 +80,7 @@ const ListTablesSchema = z.object({
   table_uuids: z.array(z.string()).nullable().optional().describe(
     "Contains UUIDs for each table when return_uuids is true. The order corresponds to the identifiers...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTableSchema = z.object({
   identifier: z.unknown(),
@@ -161,42 +97,15 @@ const GetTableSchema = z.object({
   total_snapshots: z.number().int().min(0).describe(
     "Indicates the total number of snapshots stored for the table, before pruning.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTableMaintenanceConfigSchema = z.object({
   maintenance_config: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListBucketsSchema = z.object({
   buckets: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateBucketSchema = z.object({
   creation_date: z.string().optional().describe("Creation timestamp."),
@@ -204,16 +113,7 @@ const CreateBucketSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   storage_class: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchBucketSchema = z.object({
   creation_date: z.string().optional().describe("Creation timestamp."),
@@ -221,41 +121,13 @@ const PatchBucketSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   storage_class: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetBucketCorsPolicySchema = z.object({
   rules: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PutBucketCorsPolicySchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const PutBucketCorsPolicySchema = z.object({}).passthrough();
 
 const ListCustomDomainsSchema = z.object({
   domains: z.array(z.object({
@@ -284,16 +156,7 @@ const ListCustomDomainsSchema = z.object({
     zoneId: z.string().optional(),
     zoneName: z.string().optional(),
   })),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateR2AddCustomDomainSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
@@ -307,16 +170,7 @@ const CreateR2AddCustomDomainSchema = z.object({
     "Minimum TLS Version the custom domain will accept for incoming connections. If not set, defaults ...",
   ),
   zoneId: z.string().describe("Zone ID of the custom domain."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCustomDomainSettingsSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
@@ -353,16 +207,7 @@ const GetCustomDomainSettingsSchema = z.object({
   zoneName: z.string().optional().describe(
     "Zone that the custom domain resides in.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateR2EditCustomDomainSettingsSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
@@ -375,16 +220,7 @@ const UpdateR2EditCustomDomainSettingsSchema = z.object({
   minTLS: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional().describe(
     "Minimum TLS Version the custom domain will accept for incoming connections. If not set, defaults ...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetBucketPublicPolicySchema = z.object({
   bucketId: z.string().max(32).describe("Bucket ID."),
@@ -392,16 +228,7 @@ const GetBucketPublicPolicySchema = z.object({
   enabled: z.boolean().describe(
     "Whether this bucket is publicly accessible at the r2.dev domain.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PutBucketPublicPolicySchema = z.object({
   bucketId: z.string().max(32).describe("Bucket ID."),
@@ -409,93 +236,27 @@ const PutBucketPublicPolicySchema = z.object({
   enabled: z.boolean().describe(
     "Whether this bucket is publicly accessible at the r2.dev domain.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetBucketLifecycleConfigurationSchema = z.object({
   rules: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PutBucketLifecycleConfigurationSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const PutBucketLifecycleConfigurationSchema = z.object({}).passthrough();
 
 const GetBucketLocalUploadsConfigurationSchema = z.object({
   enabled: z.boolean().optional().describe(
     "Whether local uploads is enabled for this bucket. When enabled, object's data is written to the n...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PutBucketLocalUploadsConfigurationSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const PutBucketLocalUploadsConfigurationSchema = z.object({}).passthrough();
 
 const GetBucketLockConfigurationSchema = z.object({
   rules: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PutBucketLockConfigurationSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const PutBucketLockConfigurationSchema = z.object({}).passthrough();
 
 const ObjectsItemSchema = z.object({
   custom_metadata: z.record(z.string(), z.string()).optional().describe(
@@ -516,7 +277,7 @@ const ObjectsItemSchema = z.object({
     "Whether the object is encrypted with a customer-supplied encryption key.",
   ),
   storage_class: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListObjectsSchema = z.object({
   items: z.array(ObjectsItemSchema),
@@ -544,16 +305,7 @@ const GetBucketSippyConfigSchema = z.object({
     provider: z.enum(["aws", "gcs", "s3"]).optional(),
     region: z.string().nullable().optional(),
   }).optional().describe("Details about the configured source bucket."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PutBucketSippyConfigSchema = z.object({
   destination: z.object({
@@ -569,45 +321,18 @@ const PutBucketSippyConfigSchema = z.object({
     provider: z.enum(["aws", "gcs", "s3"]).optional(),
     region: z.string().nullable().optional(),
   }).optional().describe("Details about the configured source bucket."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAccountLevelMetricsSchema = z.object({
   infrequentAccess: z.unknown().optional(),
   standard: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateTempAccessCredentialsSchema = z.object({
   accessKeyId: z.string().optional().describe("ID for new access key."),
   secretAccessKey: z.string().optional().describe("Secret access key."),
   sessionToken: z.string().optional().describe("Security token."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -616,7 +341,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -642,6 +367,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -859,7 +589,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -870,12 +599,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_catalogs",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_catalogs", {});
         return { dataHandles: [handle] };
@@ -884,9 +608,7 @@ export const model = {
     get_catalog_details: {
       description: "Get R2 catalog details",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -902,7 +624,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -912,13 +633,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "catalog_details",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched catalog_details", {});
         return { dataHandles: [handle] };
@@ -927,9 +643,7 @@ export const model = {
     create_store_credentials: {
       description: "Store catalog credentials",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
         token: z.string().describe(
           "Provides the Cloudflare API token for accessing R2.",
         ),
@@ -948,7 +662,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -964,16 +677,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "store_credentials",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created store_credentials {id}", { id });
         return { dataHandles: [handle] };
@@ -982,7 +692,7 @@ export const model = {
     disable_catalog: {
       description: "Disable R2 catalog",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
+        bucket_name: z.string().describe(
           "Specifies the R2 bucket name to disable as catalog.",
         ),
       }),
@@ -1000,7 +710,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1012,12 +721,7 @@ export const model = {
         const handle = await context.writeResource(
           "disable_catalog",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed disable_catalog", {});
         return { dataHandles: [handle] };
@@ -1026,7 +730,7 @@ export const model = {
     enable_catalog: {
       description: "Enable R2 bucket as a catalog",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
+        bucket_name: z.string().describe(
           "Specifies the R2 bucket name to enable as catalog.",
         ),
       }),
@@ -1044,7 +748,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1056,12 +759,7 @@ export const model = {
         const handle = await context.writeResource(
           "enable_catalog",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed enable_catalog", {});
         return { dataHandles: [handle] };
@@ -1070,9 +768,7 @@ export const model = {
     get_maintenance_config: {
       description: "Get catalog maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1088,7 +784,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1098,13 +793,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "maintenance_config",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched maintenance_config", {});
         return { dataHandles: [handle] };
@@ -1113,9 +803,7 @@ export const model = {
     update_maintenance_config: {
       description: "Update catalog maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
         compaction: z.unknown().optional(),
         snapshot_expiration: z.unknown().optional(),
       }),
@@ -1133,7 +821,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1149,16 +836,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_maintenance_config",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_maintenance_config {id}", { id });
         return { dataHandles: [handle] };
@@ -1167,13 +851,11 @@ export const model = {
     list_namespaces: {
       description: "List namespaces in catalog",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
         page_token: z.string().optional().describe(
           "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
         ),
-        page_size: z.number().int().min(1).max(1000).optional().describe(
+        page_size: z.number().optional().describe(
           "Maximum number of namespaces to return per page. Defaults to 100, maximum 1000. ",
         ),
         parent: z.string().optional().describe(
@@ -1200,7 +882,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1210,13 +891,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_namespaces",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched list_namespaces", {});
         return { dataHandles: [handle] };
@@ -1225,16 +901,14 @@ export const model = {
     list_tables: {
       description: "List tables in namespace",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        namespace: z.string().min(1).describe(
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        namespace: z.string().describe(
           'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
         ),
         page_token: z.string().optional().describe(
           "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
         ),
-        page_size: z.number().int().min(1).max(1000).optional().describe(
+        page_size: z.number().optional().describe(
           "Maximum number of tables to return per page. Defaults to 100, maximum 1000. ",
         ),
         return_uuids: z.boolean().optional().describe(
@@ -1258,7 +932,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1268,13 +941,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_tables",
-          String(args.namespace),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.namespace)),
+          result,
         );
         context.logger.info("Fetched list_tables", {});
         return { dataHandles: [handle] };
@@ -1283,13 +951,11 @@ export const model = {
     get_table: {
       description: "Get table details",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        namespace: z.string().min(1).describe(
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        namespace: z.string().describe(
           'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
         ),
-        table_name: z.string().min(1).describe(
+        table_name: z.string().describe(
           "The table name within the given namespace.",
         ),
       }),
@@ -1307,7 +973,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1317,13 +982,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "table",
-          String(args.table_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.table_name)),
+          result,
         );
         context.logger.info("Fetched table", {});
         return { dataHandles: [handle] };
@@ -1332,13 +992,11 @@ export const model = {
     get_table_maintenance_config: {
       description: "Get table maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        namespace: z.string().min(1).describe(
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        namespace: z.string().describe(
           "The namespace identifier (use %1F as separator for nested namespaces).",
         ),
-        table_name: z.string().min(1).describe("The table name."),
+        table_name: z.string().describe("The table name."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1354,7 +1012,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1364,13 +1021,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "table_maintenance_config",
-          String(args.table_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.table_name)),
+          result,
         );
         context.logger.info("Fetched table_maintenance_config", {});
         return { dataHandles: [handle] };
@@ -1379,13 +1031,11 @@ export const model = {
     update_table_maintenance_config: {
       description: "Update table maintenance configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        namespace: z.string().min(1).describe(
+        bucket_name: z.string().describe("Specifies the R2 bucket name."),
+        namespace: z.string().describe(
           "The namespace identifier (use %1F as separator for nested namespaces).",
         ),
-        table_name: z.string().min(1).describe("The table name."),
+        table_name: z.string().describe("The table name."),
         compaction: z.unknown().optional(),
         snapshot_expiration: z.unknown().optional(),
       }),
@@ -1403,7 +1053,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1419,16 +1068,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_table_maintenance_config",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_table_maintenance_config {id}", {
           id,
@@ -1460,7 +1106,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1471,12 +1116,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_buckets",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_buckets", {});
         return { dataHandles: [handle] };
@@ -1503,7 +1143,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1515,13 +1154,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("bucket", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("bucket", id, result);
         context.logger.info("Created bucket {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1529,9 +1165,7 @@ export const model = {
     get_bucket: {
       description: "Get Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1547,7 +1181,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1557,13 +1190,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket", {});
         return { dataHandles: [handle] };
@@ -1572,9 +1200,7 @@ export const model = {
     patch_bucket: {
       description: "Patch Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1590,7 +1216,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1608,13 +1233,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_bucket",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated patch_bucket", {});
         return { dataHandles: [handle] };
@@ -1623,9 +1243,7 @@ export const model = {
     delete_bucket: {
       description: "Delete Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1656,9 +1274,7 @@ export const model = {
     get_bucket_cors_policy: {
       description: "Get Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1674,7 +1290,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1684,13 +1299,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_cors_policy",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_cors_policy", {});
         return { dataHandles: [handle] };
@@ -1699,9 +1309,7 @@ export const model = {
     put_bucket_cors_policy: {
       description: "Put Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -1718,7 +1326,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1736,13 +1343,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_cors_policy",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated put_bucket_cors_policy", {});
         return { dataHandles: [handle] };
@@ -1751,9 +1353,7 @@ export const model = {
     delete_bucket_cors_policy: {
       description: "Delete Bucket CORS Policy",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1784,9 +1384,7 @@ export const model = {
     list_custom_domains: {
       description: "List Custom Domains of Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1802,7 +1400,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1812,13 +1409,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_custom_domains",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched list_custom_domains", {});
         return { dataHandles: [handle] };
@@ -1827,9 +1419,7 @@ export const model = {
     create_r2_add_custom_domain: {
       description: "Attach Custom Domain To Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         ciphers: z.array(z.string()).optional().describe(
           "An allowlist of ciphers for TLS termination. These ciphers must be in the Bor...",
         ),
@@ -1856,7 +1446,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1872,16 +1461,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "r2_add_custom_domain",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created r2_add_custom_domain {id}", { id });
         return { dataHandles: [handle] };
@@ -1890,10 +1476,8 @@ export const model = {
     get_custom_domain_settings: {
       description: "Get Custom Domain Settings",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        domain: z.string().min(1).describe("Name of the custom domain."),
+        bucket_name: z.string(),
+        domain: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1909,7 +1493,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1919,13 +1502,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "custom_domain_settings",
-          String(args.domain),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.domain)),
+          result,
         );
         context.logger.info("Fetched custom_domain_settings", {});
         return { dataHandles: [handle] };
@@ -1934,10 +1512,8 @@ export const model = {
     update_r2_edit_custom_domain_settings: {
       description: "Configure Custom Domain Settings",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        domain: z.string().min(1).describe("Name of the custom domain."),
+        bucket_name: z.string(),
+        domain: z.string(),
         ciphers: z.array(z.string()).optional().describe(
           "An allowlist of ciphers for TLS termination. These ciphers must be in the Bor...",
         ),
@@ -1962,7 +1538,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1980,13 +1555,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "r2_edit_custom_domain_settings",
-          String(args.domain),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.domain)),
+          result,
         );
         context.logger.info("Updated r2_edit_custom_domain_settings", {});
         return { dataHandles: [handle] };
@@ -1995,10 +1565,8 @@ export const model = {
     delete_custom_domain: {
       description: "Remove Custom Domain From Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        domain: z.string().min(1).describe("Name of the custom domain."),
+        bucket_name: z.string(),
+        domain: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2029,9 +1597,7 @@ export const model = {
     get_bucket_public_policy: {
       description: "Get r2.dev Domain of Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2047,7 +1613,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2057,13 +1622,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_public_policy",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_public_policy", {});
         return { dataHandles: [handle] };
@@ -2072,9 +1632,7 @@ export const model = {
     put_bucket_public_policy: {
       description: "Update r2.dev Domain of Bucket",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         enabled: z.boolean().describe(
           "Whether to enable public bucket access at the r2.dev domain.",
         ),
@@ -2093,7 +1651,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2111,13 +1668,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_public_policy",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated put_bucket_public_policy", {});
         return { dataHandles: [handle] };
@@ -2126,9 +1678,7 @@ export const model = {
     get_bucket_lifecycle_configuration: {
       description: "Get Object Lifecycle Rules",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2144,7 +1694,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2154,13 +1703,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_lifecycle_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_lifecycle_configuration", {});
         return { dataHandles: [handle] };
@@ -2169,9 +1713,7 @@ export const model = {
     put_bucket_lifecycle_configuration: {
       description: "Put Object Lifecycle Rules",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -2188,7 +1730,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2206,13 +1747,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_lifecycle_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated put_bucket_lifecycle_configuration", {});
         return { dataHandles: [handle] };
@@ -2221,9 +1757,7 @@ export const model = {
     get_bucket_local_uploads_configuration: {
       description: "Get Local Uploads Configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2239,7 +1773,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2249,13 +1782,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_local_uploads_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_local_uploads_configuration", {});
         return { dataHandles: [handle] };
@@ -2264,9 +1792,7 @@ export const model = {
     put_bucket_local_uploads_configuration: {
       description: "Put Local Uploads Configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         enabled: z.boolean().describe(
           "Whether to enable local uploads for this bucket.",
         ),
@@ -2285,7 +1811,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2303,13 +1828,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_local_uploads_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info(
           "Updated put_bucket_local_uploads_configuration",
@@ -2321,9 +1841,7 @@ export const model = {
     get_bucket_lock_configuration: {
       description: "Get Bucket Lock Rules",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2339,7 +1857,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2349,13 +1866,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_lock_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_lock_configuration", {});
         return { dataHandles: [handle] };
@@ -2364,9 +1876,7 @@ export const model = {
     put_bucket_lock_configuration: {
       description: "Put Bucket Lock Rules",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
       }),
       execute: async (
@@ -2383,7 +1893,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2401,13 +1910,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_lock_configuration",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated put_bucket_lock_configuration", {});
         return { dataHandles: [handle] };
@@ -2416,9 +1920,7 @@ export const model = {
     list_objects: {
       description: "List Objects",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         per_page: z.number().optional(),
         prefix: z.string().optional(),
         delimiter: z.string().optional(),
@@ -2439,8 +1941,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["bucket_name"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2476,9 +1978,7 @@ export const model = {
     delete_objects: {
       description: "Delete Objects",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         prefix: z.string().optional(),
         items: z.array(z.string()),
       }),
@@ -2522,12 +2022,8 @@ export const model = {
     delete_object: {
       description: "Delete Object",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
-        object_key: z.string().min(1).describe(
-          "Key of the object in the bucket.",
-        ),
+        bucket_name: z.string(),
+        object_key: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2558,9 +2054,7 @@ export const model = {
     get_bucket_sippy_config: {
       description: "Get Sippy Configuration",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2576,7 +2070,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2586,13 +2079,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "bucket_sippy_config",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Fetched bucket_sippy_config", {});
         return { dataHandles: [handle] };
@@ -2601,9 +2089,7 @@ export const model = {
     put_bucket_sippy_config: {
       description: "Enable Sippy",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
         body: z.union([
           z.object({
             destination: z.object({
@@ -2661,7 +2147,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -2675,13 +2160,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_bucket_sippy_config",
-          String(args.bucket_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
         );
         context.logger.info("Updated put_bucket_sippy_config", {});
         return { dataHandles: [handle] };
@@ -2690,9 +2170,7 @@ export const model = {
     delete_bucket_sippy_config: {
       description: "Disable Sippy",
       arguments: z.object({
-        bucket_name: z.string().min(1).describe(
-          "Specifies the R2 bucket name.",
-        ),
+        bucket_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2737,7 +2215,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2748,12 +2225,7 @@ export const model = {
         const handle = await context.writeResource(
           "account_level_metrics",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched account_level_metrics", {});
         return { dataHandles: [handle] };
@@ -2796,7 +2268,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2808,16 +2279,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "temp_access_credentials",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created temp_access_credentials {id}", { id });
         return { dataHandles: [handle] };

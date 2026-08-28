@@ -49,7 +49,7 @@ swamp model create @webframp/cloudflare/logpush cf-logpush \
 ## Development
 
 ```bash
-cd cloudflare/logpush
+cd ../../cloudflare/logpush
 deno task check
 deno task lint
 deno task fmt

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/service-accounts";
 
@@ -64,7 +64,7 @@ const GetManyGroupServiceAccountItemSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-});
+}).passthrough();
 
 const GetManyGroupServiceAccountSchema = z.object({
   items: z.array(GetManyGroupServiceAccountItemSchema),
@@ -120,16 +120,7 @@ const CreateGroupServiceAccountSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetOneGroupServiceAccountSchema = z.object({
   id: z.string(),
@@ -173,16 +164,7 @@ const GetOneGroupServiceAccountSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateServiceAccountSecretSchema = z.object({
   id: z.string(),
@@ -226,16 +208,7 @@ const UpdateServiceAccountSecretSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetManyOrgServiceAccountsItemSchema = z.object({
   id: z.string(),
@@ -279,7 +252,7 @@ const GetManyOrgServiceAccountsItemSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-});
+}).passthrough();
 
 const GetManyOrgServiceAccountsSchema = z.object({
   items: z.array(GetManyOrgServiceAccountsItemSchema),
@@ -335,16 +308,7 @@ const CreateOrgServiceAccountSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetOneOrgServiceAccountSchema = z.object({
   id: z.string(),
@@ -388,16 +352,7 @@ const GetOneOrgServiceAccountSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateOrgServiceAccountSecretSchema = z.object({
   id: z.string(),
@@ -441,16 +396,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
   role_id: z.string().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -459,7 +405,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -490,6 +436,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -549,7 +500,7 @@ export const model = {
     get_many_group_service_account: {
       description: "Get a list of group service accounts.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that owns the service accounts.",
         ),
       }),
@@ -567,8 +518,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -610,7 +561,7 @@ export const model = {
     create_group_service_account: {
       description: "Create a service account for a group.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that is creating and owns the service account",
         ),
         data: z.object({
@@ -645,7 +596,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -661,16 +611,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "group_service_account",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created group_service_account {id}", { id });
         return { dataHandles: [handle] };
@@ -679,13 +626,10 @@ export const model = {
     get_one_group_service_account: {
       description: "Get a group service account.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
       }),
@@ -703,7 +647,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -714,13 +657,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "one_group_service_account",
-          String(args.serviceaccount_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.serviceaccount_id)),
+          result,
         );
         context.logger.info("Fetched one_group_service_account", {});
         return { dataHandles: [handle] };
@@ -729,13 +667,10 @@ export const model = {
     update_group_service_account: {
       description: "Update a group service account.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -760,7 +695,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "serviceaccount_id"]);
@@ -778,13 +712,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "group_service_account",
-          String(args.serviceaccount_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.serviceaccount_id)),
+          result,
         );
         context.logger.info("Updated group_service_account", {});
         return { dataHandles: [handle] };
@@ -793,13 +722,10 @@ export const model = {
     delete_one_group_service_account: {
       description: "Delete a group service account.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
       }),
@@ -834,13 +760,10 @@ export const model = {
     update_service_account_secret: {
       description: "Manage a group service account's client secret.",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
+        group_id: z.string().describe(
           "The ID of the Snyk Group that owns the service account.",
         ),
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -865,7 +788,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "serviceaccount_id"]);
@@ -881,16 +803,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_service_account_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_service_account_secret {id}", {
           id,
@@ -915,8 +834,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -990,7 +909,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1006,16 +924,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "org_service_account",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created org_service_account {id}", { id });
         return { dataHandles: [handle] };
@@ -1024,10 +939,7 @@ export const model = {
     get_one_org_service_account: {
       description: "Get an organization service account.",
       arguments: z.object({
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
       }),
@@ -1045,7 +957,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1056,13 +967,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "one_org_service_account",
-          String(args.serviceaccount_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.serviceaccount_id)),
+          result,
         );
         context.logger.info("Fetched one_org_service_account", {});
         return { dataHandles: [handle] };
@@ -1071,10 +977,7 @@ export const model = {
     update_org_service_account: {
       description: "Update an organization service account.",
       arguments: z.object({
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -1099,7 +1002,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["serviceaccount_id"]);
@@ -1117,13 +1019,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_service_account",
-          String(args.serviceaccount_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.serviceaccount_id)),
+          result,
         );
         context.logger.info("Updated org_service_account", {});
         return { dataHandles: [handle] };
@@ -1132,10 +1029,7 @@ export const model = {
     delete_service_account: {
       description: "Delete a service account in an organization.",
       arguments: z.object({
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
       }),
@@ -1170,10 +1064,7 @@ export const model = {
     update_org_service_account_secret: {
       description: "Manage an organization service account's client secret.",
       arguments: z.object({
-        serviceaccount_id: z.string().min(
-          1,
-          "serviceaccount_id must not be empty",
-        ).describe(
+        serviceaccount_id: z.string().describe(
           "The ID of the service account.",
         ),
         data: z.object({
@@ -1198,7 +1089,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["serviceaccount_id"]);
@@ -1214,16 +1104,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "update_org_service_account_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created update_org_service_account_secret {id}", {
           id,

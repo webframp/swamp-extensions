@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/self"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Snyk Self — current user context, org listing, and app management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,8 +14,7 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
-  - account
-  - security
-  - self
   - snyk
+  - self
   - user
+  - account

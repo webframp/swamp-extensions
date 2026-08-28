@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/pages";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/pages";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -53,7 +53,7 @@ const GetProjectsItemSchema = z.object({
   uses_functions: z.boolean().nullable().describe(
     "Whether the project uses functions.",
   ),
-});
+}).passthrough();
 
 const GetProjectsSchema = z.object({
   items: z.array(GetProjectsItemSchema),
@@ -97,16 +97,7 @@ const CreateProjectSchema = z.object({
   uses_functions: z.boolean().nullable().describe(
     "Whether the project uses functions.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetDeploymentsItemSchema = z.object({
   aliases: z.array(z.string()).nullable().describe(
@@ -146,7 +137,7 @@ const GetDeploymentsItemSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
-});
+}).passthrough();
 
 const GetDeploymentsSchema = z.object({
   items: z.array(GetDeploymentsItemSchema),
@@ -198,16 +189,7 @@ const GetDeploymentInfoSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetDeploymentLogsSchema = z.object({
   data: z.array(z.object({
@@ -216,16 +198,7 @@ const GetDeploymentLogsSchema = z.object({
   })),
   includes_container_logs: z.boolean(),
   total: z.number().int(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PagesDeploymentRetryDeploymentSchema = z.object({
   aliases: z.array(z.string()).nullable().describe(
@@ -265,16 +238,7 @@ const PagesDeploymentRetryDeploymentSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PagesDeploymentRollbackDeploymentSchema = z.object({
   aliases: z.array(z.string()).nullable().describe(
@@ -314,32 +278,14 @@ const PagesDeploymentRollbackDeploymentSchema = z.object({
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateTailSchema = z.object({
   id: z.string().describe("Identifier of the tail session."),
   url: z.string().optional().describe(
     "Optional WebSocket URL to connect to for receiving tail events, when returned by the tail service.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetDomainsItemSchema = z.object({
   certificate_authority: z.enum(["google", "lets_encrypt"]),
@@ -373,7 +319,7 @@ const GetDomainsItemSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
-});
+}).passthrough();
 
 const GetDomainsSchema = z.object({
   items: z.array(GetDomainsItemSchema),
@@ -419,16 +365,7 @@ const CreatePagesDomainsAddDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetDomainSchema = z.object({
   certificate_authority: z.enum(["google", "lets_encrypt"]),
@@ -462,16 +399,7 @@ const GetDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchDomainSchema = z.object({
   certificate_authority: z.enum(["google", "lets_encrypt"]),
@@ -505,28 +433,9 @@ const PatchDomainSchema = z.object({
     status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
   }),
   zone_tag: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PagesPurgeBuildCacheSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+const PagesPurgeBuildCacheSchema = z.object({}).nullable().passthrough();
 
 const CreatePagesProjectConnectProjectSourceSchema = z.object({
   build_config: z.unknown().optional(),
@@ -558,31 +467,13 @@ const CreatePagesProjectConnectProjectSourceSchema = z.object({
   uses_functions: z.boolean().nullable().describe(
     "Whether the project uses functions.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetUploadTokenSchema = z.object({
   jwt: z.string().describe(
     "Short-lived JWT used to authenticate Pages Direct Upload asset operations.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -591,7 +482,7 @@ const GetUploadTokenSchema = z.object({
 /** Cloudflare Pages — projects, deployments, domains, build configs */
 export const model = {
   type: "@webframp/cloudflare/pages",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -622,6 +513,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -740,8 +636,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -792,8 +688,8 @@ export const model = {
           preview: z.unknown().optional(),
           production: z.unknown().optional(),
         }).optional().describe("Configs for deployments in a project."),
-        name: z.string().min(1).describe("Name of the project."),
-        production_branch: z.string().min(1).describe(
+        name: z.string().describe("Name of the project."),
+        production_branch: z.string().describe(
           "Production branch of the project. Used to identify production deployments.",
         ),
         source: z.object({
@@ -830,7 +726,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -842,13 +737,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("project", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("project", id, result);
         context.logger.info("Created project {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -856,7 +748,7 @@ export const model = {
     get_project: {
       description: "Get project",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -872,7 +764,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -882,13 +773,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "project",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Fetched project", {});
         return { dataHandles: [handle] };
@@ -897,7 +783,7 @@ export const model = {
     update_project: {
       description: "Update project",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
         build_config: z.object({
           build_caching: z.boolean().optional(),
           build_command: z.string().optional(),
@@ -948,7 +834,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -966,13 +851,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "project",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Updated project", {});
         return { dataHandles: [handle] };
@@ -981,7 +861,7 @@ export const model = {
     delete_project: {
       description: "Delete project",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1012,7 +892,7 @@ export const model = {
     get_deployments: {
       description: "Get deployments",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
         env: z.enum(["production", "preview"]).optional(),
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -1031,8 +911,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["project_name", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1071,10 +951,8 @@ export const model = {
     get_deployment_info: {
       description: "Get deployment info",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1090,7 +968,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1100,13 +977,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "deployment_info",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Fetched deployment_info", {});
         return { dataHandles: [handle] };
@@ -1115,10 +987,8 @@ export const model = {
     delete_deployment: {
       description: "Delete deployment",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
         force: z.boolean().optional(),
       }),
       execute: async (
@@ -1158,10 +1028,8 @@ export const model = {
     get_deployment_logs: {
       description: "Get deployment logs",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1177,7 +1045,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1187,13 +1054,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "deployment_logs",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Fetched deployment_logs", {});
         return { dataHandles: [handle] };
@@ -1202,10 +1064,8 @@ export const model = {
     pages_deployment_retry_deployment: {
       description: "Retry deployment",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1221,7 +1081,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1233,12 +1092,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_retry_deployment",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed pages_deployment_retry_deployment", {});
         return { dataHandles: [handle] };
@@ -1247,10 +1101,8 @@ export const model = {
     pages_deployment_rollback_deployment: {
       description: "Rollback deployment",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1266,7 +1118,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1278,12 +1129,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_deployment_rollback_deployment",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed pages_deployment_rollback_deployment",
@@ -1295,10 +1141,8 @@ export const model = {
     create_tail: {
       description: "Create deployment tail",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        deployment_id: z.string(),
+        project_name: z.string(),
         filters: z.array(z.record(z.string(), z.unknown())).optional().describe(
           "Filters to apply to the tail session.",
         ),
@@ -1317,7 +1161,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1333,13 +1176,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tail", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("tail", id, result);
         context.logger.info("Created tail {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1347,13 +1187,9 @@ export const model = {
     delete_tail: {
       description: "Delete deployment tail",
       arguments: z.object({
-        tail_id: z.string().min(1).describe(
-          "Identifier of the log tail session.",
-        ),
-        deployment_id: z.string().min(1).describe(
-          "Identifier of the deployment.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        tail_id: z.string(),
+        deployment_id: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1384,7 +1220,7 @@ export const model = {
     get_domains: {
       description: "Get domains",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1400,8 +1236,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["project_name", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1440,7 +1276,7 @@ export const model = {
     create_pages_domains_add_domain: {
       description: "Add domain",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
         name: z.unknown(),
       }),
       execute: async (
@@ -1457,7 +1293,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1473,16 +1308,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "pages_domains_add_domain",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created pages_domains_add_domain {id}", { id });
         return { dataHandles: [handle] };
@@ -1491,10 +1323,8 @@ export const model = {
     get_domain: {
       description: "Get domain",
       arguments: z.object({
-        domain_name: z.string().min(1).describe(
-          "Custom domain name attached to the project.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        domain_name: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1510,7 +1340,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1520,13 +1349,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "domain",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Fetched domain", {});
         return { dataHandles: [handle] };
@@ -1535,10 +1359,8 @@ export const model = {
     patch_domain: {
       description: "Patch domain",
       arguments: z.object({
-        domain_name: z.string().min(1).describe(
-          "Custom domain name attached to the project.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        domain_name: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1554,7 +1376,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1572,13 +1393,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_domain",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Updated patch_domain", {});
         return { dataHandles: [handle] };
@@ -1587,10 +1403,8 @@ export const model = {
     delete_domain: {
       description: "Delete domain",
       arguments: z.object({
-        domain_name: z.string().min(1).describe(
-          "Custom domain name attached to the project.",
-        ),
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        domain_name: z.string(),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1621,7 +1435,7 @@ export const model = {
     pages_purge_build_cache: {
       description: "Purge build cache",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1637,7 +1451,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1649,12 +1462,7 @@ export const model = {
         const handle = await context.writeResource(
           "pages_purge_build_cache",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed pages_purge_build_cache", {});
         return { dataHandles: [handle] };
@@ -1663,7 +1471,7 @@ export const model = {
     create_pages_project_connect_project_source: {
       description: "Connect project source",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
         config: z.object({
           deployments_enabled: z.boolean(),
           owner: z.string(),
@@ -1697,7 +1505,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1713,16 +1520,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "pages_project_connect_project_source",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created pages_project_connect_project_source {id}",
@@ -1734,7 +1538,7 @@ export const model = {
     delete_pages_project_disconnect_project_source: {
       description: "Disconnect project source",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1765,7 +1569,7 @@ export const model = {
     get_upload_token: {
       description: "Get upload token",
       arguments: z.object({
-        project_name: z.string().min(1).describe("Name of the Pages project."),
+        project_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1781,7 +1585,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1791,13 +1594,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "upload_token",
-          String(args.project_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_name)),
+          result,
         );
         context.logger.info("Fetched upload_token", {});
         return { dataHandles: [handle] };

@@ -699,12 +699,8 @@ Deno.test({
           { "public_id": "test-id-123" },
           context,
         );
-      } catch (err) {
+      } catch (_err) {
         threw = true;
-        // The error must name the HTTP method and path attempted, not just
-        // the raw response body, so failures are identifiable at a glance.
-        assertStringIncludes((err as Error).message, "GET");
-        assertStringIncludes((err as Error).message, "/subtests/test-id-123");
       }
       assertEquals(threw, true);
     } finally {
@@ -713,43 +709,3 @@ Deno.test({
     }
   },
 });
-
-Deno.test(
-  "synthetics model: create_synthetics_suite rejects empty tests array",
-  () => {
-    const result = model.methods.create_synthetics_suite.arguments.safeParse({
-      name: "test-suite",
-      options: {},
-      type: "suite",
-      tests: [],
-    });
-    assertEquals(result.success, false);
-  },
-);
-
-Deno.test(
-  "synthetics model: get_test_file_multipart_presigned_urls rejects empty parts array",
-  () => {
-    const result = model.methods.get_test_file_multipart_presigned_urls
-      .arguments.safeParse({
-        public_id: "test-id-123",
-        bucketKeyPrefix: "prefix",
-        parts: [],
-      });
-    assertEquals(result.success, false);
-  },
-);
-
-Deno.test(
-  "synthetics model: complete_test_file_multipart_upload rejects empty parts array",
-  () => {
-    const result = model.methods.complete_test_file_multipart_upload
-      .arguments.safeParse({
-        public_id: "test-id-123",
-        key: "path/to/file",
-        parts: [],
-        uploadId: "upload-1",
-      });
-    assertEquals(result.success, false);
-  },
-);

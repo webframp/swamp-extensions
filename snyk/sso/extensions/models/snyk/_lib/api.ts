@@ -4,6 +4,49 @@
 
 const SNYK_API_BASE = "https://api.snyk.io/rest";
 
+/**
+ * Sanitize a resource instance name for swamp's data layer.
+ *
+ * Swamp rejects data-artifact instance names containing "/", "\", "..", or
+ * null bytes (path-traversal protection). Instance names are frequently derived
+ * from API-returned identifiers, which are attacker-influenceable, so every
+ * writeResource instance name is routed through this before it reaches the
+ * datastore.
+ */
+export function sanitizeInstanceName(name: string): string {
+  return name
+    .replace(/[/\\]/g, "_")
+    .replace(/\.\./g, "_")
+    .replace(/\0/g, "");
+}
+
+const MAX_RETRIES = 3;
+
+/**
+ * fetch with bounded retry on HTTP 429. Honors `Retry-After` (seconds) when
+ * present, otherwise backs off linearly. Returns the final Response; does not
+ * throw on non-429 statuses.
+ */
+async function snykFetch(url: string, init?: RequestInit): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(url, init);
+    if (response.status !== 429) return response;
+
+    const retryAfter = response.headers.get("Retry-After");
+    const parsed = retryAfter ? Number(retryAfter) : NaN;
+    const delayMs = Number.isFinite(parsed)
+      ? parsed * 1000
+      : 1000 * (attempt + 1);
+    await response.text();
+    if (attempt < MAX_RETRIES) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    return response;
+  }
+  throw new Error(`Snyk API request failed: ${url}`);
+}
+
 export interface SnykJsonApiResponse<T = unknown> {
   data: T;
   jsonapi: { version: string };
@@ -48,19 +91,16 @@ export async function snykApi(
     headers["Content-Type"] = "application/vnd.api+json";
   }
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch (cause) {
+  const response = await snykFetch(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (response.status === 429) {
+    await response.text();
     throw new Error(
-      `Snyk API request failed: ${method} ${path} (${
-        cause instanceof Error ? cause.message : String(cause)
-      })`,
-      { cause },
+      `Snyk API rate limited after ${MAX_RETRIES} retries: ${method} ${path}`,
     );
   }
 
@@ -73,9 +113,7 @@ export async function snykApi(
         detail = err.errors.map((e) => e.detail).join("; ");
       }
     } catch { /* use raw text */ }
-    throw new Error(
-      `Snyk API ${method} ${path} returned HTTP ${response.status}: ${detail}`,
-    );
+    throw new Error(`Snyk API HTTP ${response.status}: ${detail}`);
   }
 
   // DELETE returns 204 No Content
@@ -126,20 +164,16 @@ export async function snykApiPaginated(
   }`;
 
   while (nextUrl && page < MAX_PAGES) {
-    const requestUrl = nextUrl;
-    let response: Response;
-    try {
-      response = await fetch(requestUrl, {
-        headers: {
-          "Authorization": `token ${apiToken}`,
-        },
-      });
-    } catch (cause) {
+    const response = await snykFetch(nextUrl, {
+      headers: {
+        "Authorization": `token ${apiToken}`,
+      },
+    });
+
+    if (response.status === 429) {
+      await response.text();
       throw new Error(
-        `Snyk API pagination request failed: GET ${path} (page ${page}, ${
-          cause instanceof Error ? cause.message : String(cause)
-        })`,
-        { cause },
+        `Snyk API rate limited after ${MAX_RETRIES} retries: GET ${path}`,
       );
     }
 
@@ -152,9 +186,7 @@ export async function snykApiPaginated(
           detail = err.errors.map((e) => e.detail).join("; ");
         }
       } catch { /* use raw text */ }
-      throw new Error(
-        `Snyk API GET ${path} (page ${page}) returned HTTP ${response.status}: ${detail}`,
-      );
+      throw new Error(`Snyk API HTTP ${response.status}: ${detail}`);
     }
 
     const json = await response.json() as SnykJsonApiResponse<unknown[]>;

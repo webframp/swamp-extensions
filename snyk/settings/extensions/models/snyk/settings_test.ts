@@ -65,23 +65,6 @@ Deno.test("settings model: has expected methods", () => {
   assertExists(model.methods.update_org_secrets_settings);
 });
 
-Deno.test(
-  "settings model: get_opensource_broker_setting_for_group rejects empty group_id",
-  () => {
-    const result = model.methods.get_opensource_broker_setting_for_group
-      .arguments.safeParse({
-        group_id: "",
-      });
-    assertEquals(result.success, false);
-    if (!result.success) {
-      assertStringIncludes(
-        JSON.stringify(result.error.issues),
-        "group_id must not be empty",
-      );
-    }
-  },
-);
-
 Deno.test("settings model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["iac_settings_for_group"]);

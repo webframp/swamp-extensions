@@ -34,7 +34,7 @@ swamp model create @webframp/cloudflare/kv cf-kv \
 ## Development
 
 ```bash
-cd cloudflare/kv
+cd ../../cloudflare/kv
 deno task check
 deno task lint
 deno task fmt

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/groups"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Snyk Groups — group management, orgs, members, and audit"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,8 +14,7 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
-  - groups
-  - management
-  - organizations
-  - security
   - snyk
+  - groups
+  - organizations
+  - management

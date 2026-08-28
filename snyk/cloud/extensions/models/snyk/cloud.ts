@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/cloud";
 
@@ -26,26 +26,20 @@ const EnvironmentsItemSchema = z.object({
   id: z.string().describe("Environment ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional().describe(
-    "When the environment was deleted, if applicable",
-  ),
+  deleted_at: z.string().nullable().optional(),
   kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
     "Environment kind: aws",
   ),
   name: z.string().describe("Environment name"),
-  options: z.object({}).optional().describe(
-    "Provider-specific configuration options for the environment",
-  ),
-  properties: z.object({}).optional().describe(
-    "Provider-specific properties recorded for the environment",
-  ),
+  options: z.object({}).optional(),
+  properties: z.object({}).optional(),
   revision: z.number().int().optional().describe(
     "Increment for each change to an environment",
   ),
   updated_at: z.string().nullable().optional().describe(
     "When the environment was last updated",
   ),
-});
+}).passthrough();
 
 const ListEnvironmentsSchema = z.object({
   items: z.array(EnvironmentsItemSchema),
@@ -63,60 +57,32 @@ const CreateEnvironmentSchema = z.object({
   id: z.string().describe("Environment ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional().describe(
-    "When the environment was deleted, if applicable",
-  ),
+  deleted_at: z.string().nullable().optional(),
   kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
     "Environment kind: aws",
   ),
   name: z.string().describe("Environment name"),
-  options: z.object({}).optional().describe(
-    "Provider-specific configuration options for the environment",
-  ),
-  properties: z.object({}).optional().describe(
-    "Provider-specific properties recorded for the environment",
-  ),
+  options: z.object({}).optional(),
+  properties: z.object({}).optional(),
   revision: z.number().int().optional().describe(
     "Increment for each change to an environment",
   ),
   updated_at: z.string().nullable().optional().describe(
     "When the environment was last updated",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetPermissionsSchema = z.object({
   id: z.string(),
-  type: z.enum(["cf", "tf", "bash"]).describe(
-    "Output format for the generated permissions document",
-  ),
-  data: z.string().describe("Generated cloud provider permissions document"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  type: z.enum(["cf", "tf", "bash"]),
+  data: z.string(),
+}).passthrough();
 
 const ResourcesItemSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   created_at: z.string().describe("When the resource was first recorded"),
-  deleted_at: z.string().nullable().optional().describe(
-    "When the resource was deleted, if applicable",
-  ),
+  deleted_at: z.string().nullable().optional(),
   hash: z.string().describe(
     "Computed hash value for the resource based on its attributes",
   ),
@@ -147,7 +113,7 @@ const ResourcesItemSchema = z.object({
   updated_at: z.string().nullable().describe(
     "When the resource was last updated",
   ),
-});
+}).passthrough();
 
 const ListResourcesSchema = z.object({
   items: z.array(ResourcesItemSchema),
@@ -165,9 +131,7 @@ const ScanItemSchema = z.object({
   id: z.string().describe("Scan ID"),
   type: z.string().optional(),
   created_at: z.string().describe("When the scan was created"),
-  deleted_at: z.string().nullable().optional().describe(
-    "When the scan was deleted, if applicable",
-  ),
+  deleted_at: z.string().nullable().optional(),
   environment_id: z.string().optional().describe("Environment ID"),
   error: z.string().nullable().describe("Error message if the scan failed"),
   finished_at: z.string().nullable().optional().describe(
@@ -195,7 +159,7 @@ const ScanItemSchema = z.object({
   updated_at: z.string().nullable().optional().describe(
     "When the scan was last updated",
   ),
-});
+}).passthrough();
 
 const ListScanSchema = z.object({
   items: z.array(ScanItemSchema),
@@ -216,7 +180,7 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -226,7 +190,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -256,6 +219,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -340,8 +308,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -398,7 +366,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -414,13 +381,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("environment", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("environment", id, result);
         context.logger.info("Created environment {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -451,7 +415,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["environment_id"]);
@@ -469,13 +432,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "environment",
-          String(args.environment_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.environment_id)),
+          result,
         );
         context.logger.info("Updated environment", {});
         return { dataHandles: [handle] };
@@ -538,7 +496,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -554,16 +511,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_permissions",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created get_permissions {id}", { id });
         return { dataHandles: [handle] };
@@ -617,8 +571,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -670,8 +624,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -727,7 +681,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -743,13 +696,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("scan", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("scan", id, result);
         context.logger.info("Created scan {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -773,7 +723,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -784,13 +733,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "scan",
-          String(args.scan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.scan_id)),
+          result,
         );
         context.logger.info("Fetched scan", {});
         return { dataHandles: [handle] };

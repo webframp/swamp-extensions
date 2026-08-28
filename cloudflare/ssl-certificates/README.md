@@ -45,7 +45,7 @@ swamp model create @webframp/cloudflare/ssl-certificates cf-ssl-certificates \
 ## Development
 
 ```bash
-cd cloudflare/ssl-certificates
+cd ../../cloudflare/ssl-certificates
 deno task check
 deno task lint
 deno task fmt

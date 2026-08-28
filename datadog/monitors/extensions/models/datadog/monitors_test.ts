@@ -147,6 +147,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "bundle_config": { "duration": 3600 },
               "conditional_recipients": {
                 "conditions": [],
                 "fallback_recipients": null,
@@ -228,6 +229,7 @@ Deno.test({
             "id": "new-123",
             "type": "resource",
             "attributes": {
+              "bundle_config": { "duration": 3600 },
               "conditional_recipients": {
                 "conditions": [],
                 "fallback_recipients": null,
@@ -307,6 +309,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "bundle_config": { "duration": 3600 },
               "conditional_recipients": {
                 "conditions": [],
                 "fallback_recipients": null,
@@ -386,6 +389,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "bundle_config": { "duration": 3600 },
               "conditional_recipients": {
                 "conditions": [],
                 "fallback_recipients": null,

@@ -18,13 +18,14 @@ swamp model create @webframp/snyk/projects snyk-projects \
 
 ## Methods
 
-| Method               | Description                                         |
-| -------------------- | --------------------------------------------------- |
-| `list_org_projects`  | List all Projects for an Org with the given Org ID. |
-| `get_org_project`    | Get project by project ID.                          |
-| `update_org_project` | Updates project by project ID.                      |
-| `delete_org_project` | Delete project by project ID.                       |
-| `get_sbom`           | Get a project’s SBOM document                       |
+| Method                | Description                                         |
+| --------------------- | --------------------------------------------------- |
+| `list_org_projects`   | List all Projects for an Org with the given Org ID. |
+| `delete_org_projects` | Delete several projects in one request.             |
+| `get_org_project`     | Get project by project ID.                          |
+| `update_org_project`  | Updates project by project ID.                      |
+| `delete_org_project`  | Delete project by project ID.                       |
+| `get_sbom`            | Get a project’s SBOM document                       |
 
 ## Development
 

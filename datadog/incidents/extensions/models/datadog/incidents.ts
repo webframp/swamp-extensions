@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/incidents";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/incidents";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,9 +29,8 @@ const GlobalArgsSchema = z.object({
 
 const IncidentImpactsItemSchema = z.object({
   id: z.string().describe("The incident impact's ID."),
-  type: z.enum(["incident_impacts"]).optional().describe(
-    "Incident impact resource type.",
-  ),
+  type: z.enum(["incident_impacts"]).optional().default("incident_impacts")
+    .describe("Incident impact resource type."),
   created: z.string().optional().describe(
     "Timestamp when the impact was created.",
   ),
@@ -39,7 +38,7 @@ const IncidentImpactsItemSchema = z.object({
   end_at: z.string().nullable().optional().describe(
     "Timestamp when the impact ended.",
   ),
-  fields: z.record(z.string(), z.unknown()).nullable().optional().describe(
+  fields: z.record(z.string(), z.unknown()).optional().describe(
     "An object mapping impact field names to field values.",
   ),
   impact_type: z.string().optional().describe("The type of impact."),
@@ -56,7 +55,7 @@ const IncidentImpactsItemSchema = z.object({
   last_modified_by_user_id: z.string().optional().describe(
     "Related last_modified_by_user ID",
   ),
-});
+}).passthrough();
 
 const ListIncidentImpactsSchema = z.object({
   items: z.array(IncidentImpactsItemSchema),
@@ -72,9 +71,8 @@ const ListIncidentImpactsSchema = z.object({
 
 const CreateIncidentImpactSchema = z.object({
   id: z.string().describe("The incident impact's ID."),
-  type: z.enum(["incident_impacts"]).optional().describe(
-    "Incident impact resource type.",
-  ),
+  type: z.enum(["incident_impacts"]).optional().default("incident_impacts")
+    .describe("Incident impact resource type."),
   created: z.string().optional().describe(
     "Timestamp when the impact was created.",
   ),
@@ -82,7 +80,7 @@ const CreateIncidentImpactSchema = z.object({
   end_at: z.string().nullable().optional().describe(
     "Timestamp when the impact ended.",
   ),
-  fields: z.record(z.string(), z.unknown()).nullable().optional().describe(
+  fields: z.record(z.string(), z.unknown()).optional().describe(
     "An object mapping impact field names to field values.",
   ),
   impact_type: z.string().optional().describe("The type of impact."),
@@ -99,16 +97,7 @@ const CreateIncidentImpactSchema = z.object({
   last_modified_by_user_id: z.string().optional().describe(
     "Related last_modified_by_user ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -117,7 +106,7 @@ const CreateIncidentImpactSchema = z.object({
 /** Datadog Incidents — incident lifecycle, timelines, teams, and attachments */
 export const model = {
   type: "@webframp/datadog/incidents",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -150,6 +139,11 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -171,7 +165,7 @@ export const model = {
     list_incident_impacts: {
       description: "List an incident's impacts",
       arguments: z.object({
-        incident_id: z.string().min(1).describe("The UUID of the incident."),
+        incident_id: z.string().describe("The UUID of the incident."),
         include: z.string().optional().describe(
           "Specifies which related resources should be included in the response.",
         ),
@@ -190,8 +184,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["incident_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -236,7 +230,7 @@ export const model = {
     create_incident_impact: {
       description: "Create an incident impact",
       arguments: z.object({
-        incident_id: z.string().min(1).describe("The UUID of the incident."),
+        incident_id: z.string().describe("The UUID of the incident."),
         include: z.string().optional().describe(
           "Specifies which related resources should be included in the response.",
         ),
@@ -244,9 +238,7 @@ export const model = {
         end_at: z.string().nullable().optional().describe(
           "Timestamp when the impact ended.",
         ),
-        fields: z.unknown().optional().describe(
-          "An object mapping impact field names to field values.",
-        ),
+        fields: z.unknown().optional(),
         start_at: z.string().describe("Timestamp when the impact started."),
       }),
       execute: async (
@@ -263,7 +255,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -293,16 +284,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "incident_impact",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created incident_impact {id}", { id });
         return { dataHandles: [handle] };
@@ -311,10 +299,8 @@ export const model = {
     delete_incident_impact: {
       description: "Delete an incident impact",
       arguments: z.object({
-        incident_id: z.string().min(1).describe("The UUID of the incident."),
-        impact_id: z.string().min(1).describe(
-          "The UUID of the incident impact.",
-        ),
+        incident_id: z.string().describe("The UUID of the incident."),
+        impact_id: z.string().describe("The UUID of the incident impact."),
       }),
       execute: async (
         args: Record<string, unknown>,

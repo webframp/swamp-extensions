@@ -5,12 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi } from "./_lib/api.ts";
-
-const EXTENSION_NAME = "@webframp/cloudflare/rulesets";
+import { cfApi, sanitizeInstanceName } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -18,8 +16,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/rulesets";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -30,7 +28,7 @@ const GlobalArgsSchema = z.object({
 /** Cloudflare Rulesets — WAF custom rules, transform rules, managed rulesets */
 export const model = {
   type: "@webframp/cloudflare/rulesets",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -56,6 +54,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -223,12 +226,8 @@ export const model = {
     listaccountrulesets: {
       description: "List account rulesets",
       arguments: z.object({
-        cursor: z.string().optional().describe(
-          "Opaque token for fetching the next page of results.",
-        ),
-        per_page: z.string().optional().describe(
-          "Number of results per page.",
-        ),
+        cursor: z.string().optional(),
+        per_page: z.string().optional(),
       }),
       execute: async (
         _args: Record<string, unknown>,
@@ -244,7 +243,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -255,12 +253,7 @@ export const model = {
         const handle = await context.writeResource(
           "listaccountrulesets",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched listaccountrulesets", {});
         return { dataHandles: [handle] };
@@ -268,50 +261,20 @@ export const model = {
     },
     createaccountruleset: {
       description: "Create an account ruleset",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const startMs = Date.now();
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/rulesets`,
-        );
-
-        const handle = await context.writeResource(
-          "createaccountruleset",
-          "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-        context.logger.info("Executed createaccountruleset", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    getaccountentrypointruleset: {
-      description: "Get an account entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
         ),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        kind: z.unknown(),
+        phase: z.unknown(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -327,7 +290,48 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/rulesets`,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource(
+          "createaccountruleset",
+          id,
+          result,
+        );
+        context.logger.info("Created createaccountruleset {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    getaccountentrypointruleset: {
+      description: "Get an account entry point ruleset",
+      arguments: z.object({
+        ruleset_phase: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -337,13 +341,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getaccountentrypointruleset",
-          String(args.ruleset_phase),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_phase)),
+          result,
         );
         context.logger.info("Fetched getaccountentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -352,9 +351,18 @@ export const model = {
     updateaccountentrypointruleset: {
       description: "Update an account entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ruleset_phase: z.string(),
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
         ),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).optional().describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -370,7 +378,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -388,13 +395,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updateaccountentrypointruleset",
-          String(args.ruleset_phase),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_phase)),
+          result,
         );
         context.logger.info("Updated updateaccountentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -403,9 +405,7 @@ export const model = {
     listaccountentrypointrulesetversions: {
       description: "List an account entry point ruleset's versions",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
-        ),
+        ruleset_phase: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -421,7 +421,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -431,13 +430,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listaccountentrypointrulesetversions",
-          String(args.ruleset_phase),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_phase)),
+          result,
         );
         context.logger.info("Fetched listaccountentrypointrulesetversions", {});
         return { dataHandles: [handle] };
@@ -446,10 +440,8 @@ export const model = {
     getaccountentrypointrulesetversion: {
       description: "Get an account entry point ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
-        ),
+        ruleset_version: z.string(),
+        ruleset_phase: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -465,7 +457,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -475,13 +466,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getaccountentrypointrulesetversion",
-          String(args.ruleset_phase),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_phase)),
+          result,
         );
         context.logger.info("Fetched getaccountentrypointrulesetversion", {});
         return { dataHandles: [handle] };
@@ -490,7 +476,7 @@ export const model = {
     getaccountruleset: {
       description: "Get an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -506,7 +492,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -516,13 +501,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getaccountruleset",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Fetched getaccountruleset", {});
         return { dataHandles: [handle] };
@@ -531,7 +511,20 @@ export const model = {
     updateaccountruleset: {
       description: "Update an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_id: z.string(),
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
+        ),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).optional().describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        kind: z.unknown().optional(),
+        phase: z.unknown().optional(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -547,7 +540,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -565,13 +557,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updateaccountruleset",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Updated updateaccountruleset", {});
         return { dataHandles: [handle] };
@@ -580,7 +567,7 @@ export const model = {
     deleteaccountruleset: {
       description: "Delete an account ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -597,6 +584,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -610,7 +598,8 @@ export const model = {
     createaccountrulesetrule: {
       description: "Create an account ruleset rule",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_id: z.string(),
+        position: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -626,36 +615,39 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["ruleset_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/rulesets/${args.ruleset_id}/rules`,
+          body,
         );
 
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createaccountrulesetrule",
-          "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          id,
+          result,
         );
-        context.logger.info("Executed createaccountrulesetrule", {});
+        context.logger.info("Created createaccountrulesetrule {id}", { id });
         return { dataHandles: [handle] };
       },
     },
     updateaccountrulesetrule: {
       description: "Update an account ruleset rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
-          "Identifier of the rule within the ruleset.",
-        ),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        rule_id: z.string(),
+        ruleset_id: z.string(),
+        position: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -671,7 +663,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -689,13 +680,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updateaccountrulesetrule",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Updated updateaccountrulesetrule", {});
         return { dataHandles: [handle] };
@@ -704,10 +690,8 @@ export const model = {
     deleteaccountrulesetrule: {
       description: "Delete an account ruleset rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
-          "Identifier of the rule within the ruleset.",
-        ),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        rule_id: z.string(),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -724,6 +708,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -737,7 +722,7 @@ export const model = {
     listaccountrulesetversions: {
       description: "List an account ruleset's versions",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -753,7 +738,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -763,13 +747,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listaccountrulesetversions",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Fetched listaccountrulesetversions", {});
         return { dataHandles: [handle] };
@@ -778,8 +757,8 @@ export const model = {
     getaccountrulesetversion: {
       description: "Get an account ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -795,7 +774,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -805,13 +783,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getaccountrulesetversion",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Fetched getaccountrulesetversion", {});
         return { dataHandles: [handle] };
@@ -820,8 +793,8 @@ export const model = {
     deleteaccountrulesetversion: {
       description: "Delete an account ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -838,6 +811,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -851,11 +825,9 @@ export const model = {
     listaccountrulesetversionrulesbytag: {
       description: "List an account ruleset version's rules by tag",
       arguments: z.object({
-        rule_tag: z.string().min(1).describe(
-          "Tag identifying the rule to filter or target.",
-        ),
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
+        rule_tag: z.string(),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -871,7 +843,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -881,13 +852,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listaccountrulesetversionrulesbytag",
-          String(args.ruleset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ruleset_id)),
+          result,
         );
         context.logger.info("Fetched listaccountrulesetversionrulesbytag", {});
         return { dataHandles: [handle] };
@@ -896,13 +862,9 @@ export const model = {
     listzonerulesets: {
       description: "List zone rulesets",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
-        cursor: z.string().optional().describe(
-          "Opaque token for fetching the next page of results.",
-        ),
-        per_page: z.string().optional().describe(
-          "Number of results per page.",
-        ),
+        zone_id: z.string(),
+        cursor: z.string().optional(),
+        per_page: z.string().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -918,7 +880,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -928,13 +889,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listzonerulesets",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched listzonerulesets", {});
         return { dataHandles: [handle] };
@@ -943,7 +899,20 @@ export const model = {
     createzoneruleset: {
       description: "Create a zone ruleset",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
+        ),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        kind: z.unknown(),
+        phase: z.unknown(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -959,36 +928,38 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["zone_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${args.zone_id}/rulesets`,
+          body,
         );
 
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createzoneruleset",
-          "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          id,
+          result,
         );
-        context.logger.info("Executed createzoneruleset", {});
+        context.logger.info("Created createzoneruleset {id}", { id });
         return { dataHandles: [handle] };
       },
     },
     getzoneentrypointruleset: {
       description: "Get a zone entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
-        ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_phase: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1004,7 +975,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1014,13 +984,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getzoneentrypointruleset",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched getzoneentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -1029,10 +994,19 @@ export const model = {
     updatezoneentrypointruleset: {
       description: "Update a zone entry point ruleset",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
+        ruleset_phase: z.string(),
+        zone_id: z.string(),
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
         ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).optional().describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1048,7 +1022,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1066,13 +1039,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatezoneentrypointruleset",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Updated updatezoneentrypointruleset", {});
         return { dataHandles: [handle] };
@@ -1081,10 +1049,8 @@ export const model = {
     listzoneentrypointrulesetversions: {
       description: "List a zone entry point ruleset's versions",
       arguments: z.object({
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
-        ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_phase: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1100,7 +1066,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1110,13 +1075,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listzoneentrypointrulesetversions",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched listzoneentrypointrulesetversions", {});
         return { dataHandles: [handle] };
@@ -1125,11 +1085,9 @@ export const model = {
     getzoneentrypointrulesetversion: {
       description: "Get a zone entry point ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_phase: z.string().min(1).describe(
-          "Phase of the ruleset (e.g. http_request_firewall_custom).",
-        ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_version: z.string(),
+        ruleset_phase: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1145,7 +1103,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1155,13 +1112,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getzoneentrypointrulesetversion",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched getzoneentrypointrulesetversion", {});
         return { dataHandles: [handle] };
@@ -1170,8 +1122,8 @@ export const model = {
     getzoneruleset: {
       description: "Get a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1187,7 +1139,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1197,13 +1148,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getzoneruleset",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched getzoneruleset", {});
         return { dataHandles: [handle] };
@@ -1212,8 +1158,21 @@ export const model = {
     updatezoneruleset: {
       description: "Update a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
+        description: z.string().optional().describe(
+          "An informative description of the ruleset.",
+        ),
+        last_updated: z.string().describe(
+          "The timestamp of when the ruleset was last modified.",
+        ),
+        name: z.string().min(1).optional().describe(
+          "The human-readable name of the ruleset.",
+        ),
+        version: z.unknown(),
+        kind: z.unknown().optional(),
+        phase: z.unknown().optional(),
+        rules: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1229,7 +1188,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1247,13 +1205,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatezoneruleset",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Updated updatezoneruleset", {});
         return { dataHandles: [handle] };
@@ -1262,8 +1215,8 @@ export const model = {
     deletezoneruleset: {
       description: "Delete a zone ruleset",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1280,6 +1233,7 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1293,8 +1247,9 @@ export const model = {
     createzonerulesetrule: {
       description: "Create a zone ruleset rule",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
+        position: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1310,37 +1265,40 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["ruleset_id", "zone_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${args.zone_id}/rulesets/${args.ruleset_id}/rules`,
+          body,
         );
 
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createzonerulesetrule",
-          "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          id,
+          result,
         );
-        context.logger.info("Executed createzonerulesetrule", {});
+        context.logger.info("Created createzonerulesetrule {id}", { id });
         return { dataHandles: [handle] };
       },
     },
     updatezonerulesetrule: {
       description: "Update a zone ruleset rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
-          "Identifier of the rule within the ruleset.",
-        ),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        rule_id: z.string(),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
+        position: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1356,7 +1314,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1374,13 +1331,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatezonerulesetrule",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Updated updatezonerulesetrule", {});
         return { dataHandles: [handle] };
@@ -1389,11 +1341,9 @@ export const model = {
     deletezonerulesetrule: {
       description: "Delete a zone ruleset rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
-          "Identifier of the rule within the ruleset.",
-        ),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        rule_id: z.string(),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1410,6 +1360,7 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1423,8 +1374,8 @@ export const model = {
     listzonerulesetversions: {
       description: "List a zone ruleset's versions",
       arguments: z.object({
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1440,7 +1391,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1450,13 +1400,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listzonerulesetversions",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched listzonerulesetversions", {});
         return { dataHandles: [handle] };
@@ -1465,9 +1410,9 @@ export const model = {
     getzonerulesetversion: {
       description: "Get a zone ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1483,7 +1428,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1493,13 +1437,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getzonerulesetversion",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched getzonerulesetversion", {});
         return { dataHandles: [handle] };
@@ -1508,9 +1447,9 @@ export const model = {
     deletezonerulesetversion: {
       description: "Delete a zone ruleset version",
       arguments: z.object({
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1527,6 +1466,7 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1540,12 +1480,10 @@ export const model = {
     listzonerulesetversionrulesbytag: {
       description: "List a zone ruleset version's rules by tag",
       arguments: z.object({
-        rule_tag: z.string().min(1).describe(
-          "Tag identifying the rule to filter or target.",
-        ),
-        ruleset_version: z.string().min(1).describe("Version of the ruleset."),
-        ruleset_id: z.string().min(1).describe("Identifier of the ruleset."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        rule_tag: z.string(),
+        ruleset_version: z.string(),
+        ruleset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1561,7 +1499,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1571,13 +1508,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "listzonerulesetversionrulesbytag",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched listzonerulesetversionrulesbytag", {});
         return { dataHandles: [handle] };

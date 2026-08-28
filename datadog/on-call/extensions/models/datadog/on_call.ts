@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/on-call";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/on-call";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -31,7 +31,7 @@ const CreateOnCallEscalationPolicySchema = z.object({
   id: z.string().describe(
     "Specifies the unique identifier of the escalation policy.",
   ),
-  type: z.enum(["policies"]).optional().describe(
+  type: z.enum(["policies"]).optional().default("policies").describe(
     "Indicates that the resource is of type `policies`.",
   ),
   name: z.string().min(1).describe(
@@ -45,20 +45,13 @@ const CreateOnCallEscalationPolicySchema = z.object({
   ),
   steps_id: z.string().optional().describe("Related steps ID"),
   teams_id: z.string().optional().describe("Related teams ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateOnCallScheduleSchema = z.object({
   id: z.string().describe("The schedule's unique identifier."),
-  type: z.enum(["schedules"]).optional().describe("Schedules resource type."),
+  type: z.enum(["schedules"]).optional().default("schedules").describe(
+    "Schedules resource type.",
+  ),
   name: z.string().optional().describe("A short name for the schedule."),
   tags: z.array(z.string()).optional().describe(
     "A list of tags associated with the schedule.",
@@ -68,22 +61,15 @@ const CreateOnCallScheduleSchema = z.object({
   ),
   layers_id: z.string().optional().describe("Related layers ID"),
   teams_id: z.string().optional().describe("Related teams ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetScheduleOnCallRespondersSchema = z.object({
   id: z.string().describe(
     "Unique identifier of this on-call responders lookup.",
   ),
-  type: z.enum(["schedule_oncall_responders"]).optional().describe(
+  type: z.enum(["schedule_oncall_responders"]).optional().default(
+    "schedule_oncall_responders",
+  ).describe(
     "Represents the resource type for a schedule's grouped on-call responders across the previous, cur...",
   ),
   scheduled_at: z.string().optional().describe(
@@ -91,86 +77,44 @@ const GetScheduleOnCallRespondersSchema = z.object({
   ),
   responders_id: z.string().optional().describe("Related responders ID"),
   schedule_id: z.string().optional().describe("Related schedule ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTeamOnCallUsersSchema = z.object({
   id: z.string().optional().describe(
     "Unique identifier of the on-call responder configuration.",
   ),
-  relationships: z.unknown().optional().describe(
-    "JSON:API relationships object linking this resource to related entities.",
-  ),
-  type: z.unknown().describe("JSON:API resource type for this record."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  relationships: z.unknown().optional(),
+  type: z.unknown(),
+}).passthrough();
 
 const GetOnCallTeamRoutingRulesSchema = z.object({
   id: z.string().optional().describe(
     "Specifies the unique identifier of this team routing rules record.",
   ),
-  relationships: z.unknown().optional().describe(
-    "JSON:API relationships object linking this resource to related entities.",
-  ),
-  type: z.unknown().describe("JSON:API resource type for this record."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  relationships: z.unknown().optional(),
+  type: z.unknown(),
+}).passthrough();
 
 const SetOnCallTeamRoutingRulesSchema = z.object({
   id: z.string().optional().describe(
     "Specifies the unique identifier of this team routing rules record.",
   ),
-  relationships: z.unknown().optional().describe(
-    "JSON:API relationships object linking this resource to related entities.",
-  ),
-  type: z.unknown().describe("JSON:API resource type for this record."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  relationships: z.unknown().optional(),
+  type: z.unknown(),
+}).passthrough();
 
 const UserNotificationChannelsItemSchema = z.object({
   id: z.string().describe("Unique identifier for the channel"),
-  type: z.enum(["notification_channels"]).optional().describe(
-    "Indicates that the resource is of type 'notification_channels'.",
-  ),
+  type: z.enum(["notification_channels"]).optional().default(
+    "notification_channels",
+  ).describe("Indicates that the resource is of type 'notification_channels'."),
   active: z.boolean().optional().describe(
     "Whether the notification channel is currently active.",
   ),
   config: z.union([z.unknown(), z.unknown(), z.unknown()]).optional().describe(
     "Defines the configuration for an On-Call notification channel",
   ),
-});
+}).passthrough();
 
 const ListUserNotificationChannelsSchema = z.object({
   items: z.array(UserNotificationChannelsItemSchema),
@@ -186,34 +130,24 @@ const ListUserNotificationChannelsSchema = z.object({
 
 const CreateUserNotificationChannelSchema = z.object({
   id: z.string().describe("Unique identifier for the channel"),
-  type: z.enum(["notification_channels"]).optional().describe(
-    "Indicates that the resource is of type 'notification_channels'.",
-  ),
+  type: z.enum(["notification_channels"]).optional().default(
+    "notification_channels",
+  ).describe("Indicates that the resource is of type 'notification_channels'."),
   active: z.boolean().optional().describe(
     "Whether the notification channel is currently active.",
   ),
   config: z.union([z.unknown(), z.unknown(), z.unknown()]).optional().describe(
     "Defines the configuration for an On-Call notification channel",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UserNotificationRulesItemSchema = z.object({
   id: z.string().describe("Unique identifier for the rule"),
-  type: z.enum(["notification_rules"]).optional().describe(
-    "Indicates that the resource is of type 'notification_rules'.",
-  ),
-  category: z.enum(["high_urgency", "low_urgency"]).optional().describe(
-    "Specifies the category a notification rule will apply to",
-  ),
+  type: z.enum(["notification_rules"]).optional().default("notification_rules")
+    .describe("Indicates that the resource is of type 'notification_rules'."),
+  category: z.enum(["high_urgency", "low_urgency"]).optional().default(
+    "high_urgency",
+  ).describe("Specifies the category a notification rule will apply to"),
   channel_settings: z.unknown().optional().describe(
     "Defines the configuration for a channel associated with a notification rule",
   ),
@@ -221,7 +155,7 @@ const UserNotificationRulesItemSchema = z.object({
     "The number of minutes that will elapse before this rule is evaluated. 0 indicates immediate evalu...",
   ),
   channel_id: z.string().optional().describe("Related channel ID"),
-});
+}).passthrough();
 
 const ListUserNotificationRulesSchema = z.object({
   items: z.array(UserNotificationRulesItemSchema),
@@ -237,12 +171,11 @@ const ListUserNotificationRulesSchema = z.object({
 
 const CreateUserNotificationRuleSchema = z.object({
   id: z.string().describe("Unique identifier for the rule"),
-  type: z.enum(["notification_rules"]).optional().describe(
-    "Indicates that the resource is of type 'notification_rules'.",
-  ),
-  category: z.enum(["high_urgency", "low_urgency"]).optional().describe(
-    "Specifies the category a notification rule will apply to",
-  ),
+  type: z.enum(["notification_rules"]).optional().default("notification_rules")
+    .describe("Indicates that the resource is of type 'notification_rules'."),
+  category: z.enum(["high_urgency", "low_urgency"]).optional().default(
+    "high_urgency",
+  ).describe("Specifies the category a notification rule will apply to"),
   channel_settings: z.unknown().optional().describe(
     "Defines the configuration for a channel associated with a notification rule",
   ),
@@ -250,16 +183,7 @@ const CreateUserNotificationRuleSchema = z.object({
     "The number of minutes that will elapse before this rule is evaluated. 0 indicates immediate evalu...",
   ),
   channel_id: z.string().optional().describe("Related channel ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -268,7 +192,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -299,6 +223,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -382,10 +311,7 @@ export const model = {
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
         ),
-        steps: z.array(z.unknown()).min(
-          1,
-          "steps must contain at least one escalation step",
-        ).describe(
+        steps: z.array(z.unknown()).describe(
           "A list of escalation steps, each defining assignment, escalation timeout, and...",
         ),
       }),
@@ -403,7 +329,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -431,16 +356,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "on_call_escalation_policy",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created on_call_escalation_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -468,7 +390,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -494,13 +415,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_call_escalation_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Fetched on_call_escalation_policy", {});
         return { dataHandles: [handle] };
@@ -522,10 +438,7 @@ export const model = {
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
         ),
-        steps: z.array(z.unknown()).min(
-          1,
-          "steps must contain at least one escalation step",
-        ).describe(
+        steps: z.array(z.unknown()).describe(
           "A list of escalation steps, each defining assignment, escalation timeout, and...",
         ),
       }),
@@ -543,7 +456,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id", "include"]);
@@ -565,13 +477,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_call_escalation_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated on_call_escalation_policy", {});
         return { dataHandles: [handle] };
@@ -617,10 +524,7 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        layers: z.array(z.unknown()).min(
-          1,
-          "layers must contain at least one layer",
-        ).describe(
+        layers: z.array(z.unknown()).describe(
           "The layers of On-Call coverage that define rotation intervals and restrictions.",
         ),
         name: z.string().describe(
@@ -644,7 +548,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -672,16 +575,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "on_call_schedule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created on_call_schedule {id}", { id });
         return { dataHandles: [handle] };
@@ -709,7 +609,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["schedule_id"]);
@@ -735,13 +634,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_call_schedule",
-          String(args.schedule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.schedule_id)),
+          result,
         );
         context.logger.info("Fetched on_call_schedule", {});
         return { dataHandles: [handle] };
@@ -754,10 +648,7 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        layers: z.array(z.unknown()).min(
-          1,
-          "layers must contain at least one layer",
-        ).describe(
+        layers: z.array(z.unknown()).describe(
           "The updated list of layers (rotations) for this schedule.",
         ),
         name: z.string().describe("A short name for the schedule."),
@@ -779,7 +670,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["schedule_id", "include"]);
@@ -801,13 +691,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_call_schedule",
-          String(args.schedule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.schedule_id)),
+          result,
         );
         context.logger.info("Updated on_call_schedule", {});
         return { dataHandles: [handle] };
@@ -875,7 +760,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["schedule_id"]);
@@ -905,13 +789,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "schedule_on_call_responders",
-          String(args.schedule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.schedule_id)),
+          result,
         );
         context.logger.info("Fetched schedule_on_call_responders", {});
         return { dataHandles: [handle] };
@@ -939,7 +818,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["team_id"]);
@@ -965,13 +843,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_on_call_users",
-          String(args.team_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.team_id)),
+          result,
         );
         context.logger.info("Fetched team_on_call_users", {});
         return { dataHandles: [handle] };
@@ -999,7 +872,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["team_id"]);
@@ -1025,13 +897,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_call_team_routing_rules",
-          String(args.team_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.team_id)),
+          result,
         );
         context.logger.info("Fetched on_call_team_routing_rules", {});
         return { dataHandles: [handle] };
@@ -1062,7 +929,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "include"]);
@@ -1086,13 +952,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "set_on_call_team_routing_rules",
-          String(args.team_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.team_id)),
+          result,
         );
         context.logger.info("Updated set_on_call_team_routing_rules", {});
         return { dataHandles: [handle] };
@@ -1117,8 +978,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1186,7 +1047,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -1208,16 +1068,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "user_notification_channel",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created user_notification_channel {id}", { id });
         return { dataHandles: [handle] };
@@ -1243,7 +1100,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1259,13 +1115,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "user_notification_channel",
-          String(args.channel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.channel_id)),
+          result,
         );
         context.logger.info("Fetched user_notification_channel", {});
         return { dataHandles: [handle] };
@@ -1330,8 +1181,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1381,9 +1232,7 @@ export const model = {
       description: "Create an On-Call notification rule for a user",
       arguments: z.object({
         user_id: z.string().describe("The user ID"),
-        category: z.unknown().optional().describe(
-          "Specifies the category a notification rule will apply to (high_urgency or low_urgency).",
-        ),
+        category: z.unknown().optional(),
         channel_settings: z.unknown().nullable().optional().describe(
           "Configuration for the associated channel, if necessary",
         ),
@@ -1405,7 +1254,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id"]);
@@ -1427,16 +1275,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "user_notification_rule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created user_notification_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -1465,7 +1310,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["user_id", "rule_id"]);
@@ -1493,13 +1337,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "user_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched user_notification_rule", {});
         return { dataHandles: [handle] };
@@ -1513,9 +1352,7 @@ export const model = {
         include: z.string().optional().describe(
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
-        category: z.unknown().optional().describe(
-          "Specifies the category a notification rule will apply to (high_urgency or low_urgency).",
-        ),
+        category: z.unknown().optional(),
         channel_settings: z.unknown().nullable().optional().describe(
           "Configuration for the associated channel, if necessary",
         ),
@@ -1537,7 +1374,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["user_id", "rule_id", "include"]);
@@ -1561,13 +1397,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "user_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated user_notification_rule", {});
         return { dataHandles: [handle] };

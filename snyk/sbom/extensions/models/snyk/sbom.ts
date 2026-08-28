@@ -5,12 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi } from "./_lib/api.ts";
-
-const EXTENSION_NAME = "@webframp/snyk/sbom";
+import { sanitizeInstanceName, snykApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -24,49 +22,25 @@ const GlobalArgsSchema = z.object({
 
 const CreateSbomTestRunSchema = z.object({
   id: z.string(),
-  type: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
+}).passthrough();
 
 const GetSbomTestStatusSchema = z.object({
   id: z.string(),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   status: z.enum(["processing", "error", "finished"]).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSbomTestResultSchema = z.object({
   id: z.string(),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   affected_packages_id: z.string().optional().describe(
     "Related affected_packages ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -75,7 +49,7 @@ const GetSbomTestResultSchema = z.object({
 /** Snyk SBOM — software bill of materials testing and analysis */
 export const model = {
   type: "@webframp/snyk/sbom",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -101,6 +75,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -149,7 +128,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -165,13 +143,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("sbom_test_run", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("sbom_test_run", id, result);
         context.logger.info("Created sbom_test_run {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -179,9 +154,7 @@ export const model = {
     get_sbom_test_status: {
       description: "Gets an SBOM test run status (Early Access)",
       arguments: z.object({
-        job_id: z.string().min(1, "job_id must not be empty").describe(
-          "Job ID",
-        ),
+        job_id: z.string().describe("Job ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -197,7 +170,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -208,13 +180,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sbom_test_status",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info("Fetched sbom_test_status", {});
         return { dataHandles: [handle] };
@@ -223,9 +190,7 @@ export const model = {
     get_sbom_test_result: {
       description: "Gets an SBOM test run result (Early Access)",
       arguments: z.object({
-        job_id: z.string().min(1, "job_id must not be empty").describe(
-          "Job ID",
-        ),
+        job_id: z.string().describe("Job ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -241,7 +206,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -252,13 +216,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sbom_test_result",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info("Fetched sbom_test_result", {});
         return { dataHandles: [handle] };

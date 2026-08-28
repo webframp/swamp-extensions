@@ -65,7 +65,7 @@ swamp model create @webframp/cloudflare/load-balancing cf-load-balancing \
 ## Development
 
 ```bash
-cd cloudflare/load-balancing
+cd ../../cloudflare/load-balancing
 deno task check
 deno task lint
 deno task fmt

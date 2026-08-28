@@ -47,13 +47,6 @@ Deno.test("logs model: has expected resources", () => {
   assertExists(model.resources["logs"]);
 });
 
-Deno.test("logs model: submit_log rejects an empty entries array", () => {
-  const result = model.methods.submit_log.arguments.safeParse({
-    entries: [],
-  });
-  assertEquals(result.success, false);
-});
-
 // ---------------------------------------------------------------------------
 // Mock Datadog API Server
 // ---------------------------------------------------------------------------

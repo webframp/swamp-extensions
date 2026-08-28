@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/container-images";
 
@@ -23,14 +23,10 @@ const GlobalArgsSchema = z.object({
 });
 
 const ContainerImageItemSchema = z.object({
-  id: z.string(),
+  id: z.string().regex(new RegExp("^sha256(:|%3A)[a-f0-9]{64}$")),
   type: z.enum(["container_image"]).optional(),
-  layers: z.array(z.unknown()).describe(
-    "OCI layers making up this container image",
-  ),
-  names: z.array(z.unknown()).optional().describe(
-    "Registry names/tags this image is known by",
-  ),
+  layers: z.array(z.unknown()),
+  names: z.array(z.unknown()).optional(),
   platform: z.enum([
     "aix/ppc64",
     "android/386",
@@ -106,11 +102,11 @@ const ContainerImageItemSchema = z.object({
     "windows/arm/v7",
     "windows/arm64",
     "windows/arm64/v8",
-  ]).describe("The image Operating System and processor architecture"),
+  ]),
   image_target_refs_id: z.string().optional().describe(
     "Related image_target_refs ID",
   ),
-});
+}).passthrough();
 
 const ListContainerImageSchema = z.object({
   items: z.array(ContainerImageItemSchema),
@@ -202,16 +198,10 @@ const ImageTargetRefsItemSchema = z.object({
     "windows/arm/v7",
     "windows/arm64",
     "windows/arm64/v8",
-  ]).optional().describe(
-    "The image Operating System and processor architecture",
-  ),
-  target_id: z.string().optional().describe(
-    "ID of the target (e.g. registry repository) this image reference belongs to",
-  ),
-  target_reference: z.string().optional().describe(
-    "Tag or reference identifying the image within its target",
-  ),
-});
+  ]).optional(),
+  target_id: z.string().optional(),
+  target_reference: z.string().optional(),
+}).passthrough();
 
 const ListImageTargetRefsSchema = z.object({
   items: z.array(ImageTargetRefsItemSchema),
@@ -232,7 +222,7 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -242,7 +232,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -272,6 +261,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -393,8 +387,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -448,7 +442,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -459,13 +452,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "container_image",
-          String(args.image_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.image_id)),
+          result,
         );
         context.logger.info("Fetched container_image", {});
         return { dataHandles: [handle] };
@@ -491,8 +479,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["image_id"]);
         for (const [k, v] of Object.entries(args)) {

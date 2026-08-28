@@ -50,7 +50,7 @@ swamp model create @webframp/cloudflare/workers-scripts cf-workers-scripts \
 ## Development
 
 ```bash
-cd cloudflare/workers-scripts
+cd ../../cloudflare/workers-scripts
 deno task check
 deno task lint
 deno task fmt

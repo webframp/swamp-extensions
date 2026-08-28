@@ -33,7 +33,7 @@ swamp model create @webframp/cloudflare/registrar cf-registrar \
 ## Development
 
 ```bash
-cd cloudflare/registrar
+cd ../../cloudflare/registrar
 deno task check
 deno task lint
 deno task fmt

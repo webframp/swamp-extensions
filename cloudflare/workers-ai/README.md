@@ -243,7 +243,7 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 ## Development
 
 ```bash
-cd cloudflare/workers-ai
+cd ../../cloudflare/workers-ai
 deno task check
 deno task lint
 deno task fmt

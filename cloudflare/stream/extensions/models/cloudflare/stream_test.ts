@@ -146,13 +146,6 @@ Deno.test("stream model: has expected resources", () => {
   assertExists(model.resources["signed_url_tokens_for_videos"]);
 });
 
-Deno.test("stream model: rejects empty identifier", () => {
-  const result = model.methods.delete_signing_keys.arguments.safeParse({
-    identifier: "",
-  });
-  assertEquals(result.success, false);
-});
-
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

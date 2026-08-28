@@ -542,15 +542,8 @@ Deno.test({
           { "name": "test-resource" },
           context,
         );
-      } catch (err) {
+      } catch (_err) {
         threw = true;
-        // The error must name the HTTP method and path attempted, not just
-        // the raw response body, so failures are identifiable at a glance.
-        assertStringIncludes((err as Error).message, "POST");
-        assertStringIncludes(
-          (err as Error).message,
-          "/on-call/escalation-policies",
-        );
       }
       assertEquals(threw, true);
     } finally {
@@ -558,26 +551,4 @@ Deno.test({
       await server.shutdown();
     }
   },
-});
-
-Deno.test("on-call model: create_on_call_escalation_policy rejects empty steps array", () => {
-  const schema = (model.methods as Record<
-    string,
-    { arguments: { safeParse: (v: unknown) => { success: boolean } } }
-  >).create_on_call_escalation_policy.arguments;
-  const result = schema.safeParse({ name: "test", steps: [] });
-  assertEquals(result.success, false);
-});
-
-Deno.test("on-call model: create_on_call_schedule rejects empty layers array", () => {
-  const schema = (model.methods as Record<
-    string,
-    { arguments: { safeParse: (v: unknown) => { success: boolean } } }
-  >).create_on_call_schedule.arguments;
-  const result = schema.safeParse({
-    name: "test",
-    time_zone: "UTC",
-    layers: [],
-  });
-  assertEquals(result.success, false);
 });

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/turnstile";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/turnstile";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -37,7 +37,7 @@ const ListItemSchema = z.object({
   offlabel: z.unknown(),
   region: z.unknown(),
   sitekey: z.unknown(),
-});
+}).passthrough();
 
 const ListSchema = z.object({
   items: z.array(ListItemSchema),
@@ -66,16 +66,7 @@ const GetCreateSchema = z.object({
   region: z.unknown(),
   secret: z.unknown(),
   sitekey: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetGetSchema = z.object({
   bot_fight_mode: z.unknown(),
@@ -92,16 +83,7 @@ const GetGetSchema = z.object({
   region: z.unknown(),
   secret: z.unknown(),
   sitekey: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetUpdateSchema = z.object({
   bot_fight_mode: z.unknown(),
@@ -118,16 +100,7 @@ const GetUpdateSchema = z.object({
   region: z.unknown(),
   secret: z.unknown(),
   sitekey: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetRotateSecretSchema = z.object({
   bot_fight_mode: z.unknown(),
@@ -144,16 +117,7 @@ const GetRotateSecretSchema = z.object({
   region: z.unknown(),
   secret: z.unknown(),
   sitekey: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -162,7 +126,7 @@ const GetRotateSecretSchema = z.object({
 /** Cloudflare Turnstile — CAPTCHA-free challenges, site widgets */
 export const model = {
   type: "@webframp/cloudflare/turnstile",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -193,6 +157,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -257,8 +226,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -326,7 +295,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -362,13 +330,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("get_create", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("get_create", id, result);
         context.logger.info("Created get_create {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -376,7 +341,7 @@ export const model = {
     get_get: {
       description: "Turnstile Widget Details",
       arguments: z.object({
-        sitekey: z.string().min(1, "sitekey must not be empty"),
+        sitekey: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -392,7 +357,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -402,13 +366,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "get",
-          String(args.sitekey),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.sitekey)),
+          result,
         );
         context.logger.info("Fetched get", {});
         return { dataHandles: [handle] };
@@ -417,7 +376,7 @@ export const model = {
     get_update: {
       description: "Update a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string().min(1, "sitekey must not be empty"),
+        sitekey: z.string(),
         bot_fight_mode: z.unknown().optional(),
         clearance_level: z.unknown().optional(),
         domains: z.unknown(),
@@ -441,7 +400,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -459,13 +417,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "get_update",
-          String(args.sitekey),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.sitekey)),
+          result,
         );
         context.logger.info("Updated get_update", {});
         return { dataHandles: [handle] };
@@ -474,7 +427,7 @@ export const model = {
     get_delete: {
       description: "Delete a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string().min(1, "sitekey must not be empty"),
+        sitekey: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -491,6 +444,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -504,7 +458,7 @@ export const model = {
     get_rotate_secret: {
       description: "Rotate Secret for a Turnstile Widget",
       arguments: z.object({
-        sitekey: z.string().min(1, "sitekey must not be empty"),
+        sitekey: z.string(),
         invalidate_immediately: z.unknown().optional(),
       }),
       execute: async (
@@ -521,7 +475,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -537,16 +490,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_rotate_secret",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created get_rotate_secret {id}", { id });
         return { dataHandles: [handle] };

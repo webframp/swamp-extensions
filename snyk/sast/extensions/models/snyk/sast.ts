@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/sast";
 
@@ -59,7 +59,7 @@ const SastRuleExtensionsByGroupItemSchema = z.object({
   updated_by: z.string().nullable().describe(
     "User ID of the user who last updated the SAST rule extension",
   ),
-});
+}).passthrough();
 
 const ListSastRuleExtensionsByGroupSchema = z.object({
   items: z.array(SastRuleExtensionsByGroupItemSchema),
@@ -110,16 +110,7 @@ const CreateSastRuleExtensionSchema = z.object({
   updated_by: z.string().nullable().describe(
     "User ID of the user who last updated the SAST rule extension",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSastImpactTestStatusSchema = z.object({
   id: z.string().describe(
@@ -156,16 +147,7 @@ const GetSastImpactTestStatusSchema = z.object({
   title: z.string().optional().describe(
     "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurren...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSastImpactTestResultSchema = z.object({
   id: z.string().describe("The test id of the resource."),
@@ -181,13 +163,14 @@ const GetSastImpactTestResultSchema = z.object({
     changes: z.array(z.unknown()),
     count: z.number().int(),
   }).optional(),
-  fully_qualified_name: z.string().max(1000).describe(
-    "The fully qualified name of a function that performs sanitization in your codebase. Should Snyk S...",
-  ),
+  fully_qualified_name: z.string().max(1000).regex(new RegExp("^\\S+$"))
+    .describe(
+      "The fully qualified name of a function that performs sanitization in your codebase. Should Snyk S...",
+    ),
   org_id: z.string().describe(
     "The org id for the relevant project against which to run the test.",
   ),
-  project_commit_sha: z.string().describe(
+  project_commit_sha: z.string().regex(new RegExp("^[0-9a-f]{40}$")).describe(
     "The relevant commit sha for the project against which the test was run.",
   ),
   project_id: z.string().describe(
@@ -203,16 +186,7 @@ const GetSastImpactTestResultSchema = z.object({
   total_count: z.number().int().describe(
     "The total number of findings added and removed as a result of the rule extension.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -221,7 +195,7 @@ const GetSastImpactTestResultSchema = z.object({
 /** Snyk SAST — static application security testing results and management */
 export const model = {
   type: "@webframp/snyk/sast",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -247,6 +221,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -304,8 +283,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -363,7 +342,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -379,16 +357,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "sast_rule_extension",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created sast_rule_extension {id}", { id });
         return { dataHandles: [handle] };
@@ -413,7 +388,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -429,16 +403,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "sast_impact_test",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created sast_impact_test {id}", { id });
         return { dataHandles: [handle] };
@@ -447,9 +418,7 @@ export const model = {
     get_sast_impact_test_status: {
       description: "Retrieve the SAST rule extension impact test status.",
       arguments: z.object({
-        test_id: z.string().min(1, "test_id must not be empty").describe(
-          "Unique identifier for a test result",
-        ),
+        test_id: z.string().describe("Unique identifier for a test result"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -465,7 +434,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -476,13 +444,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sast_impact_test_status",
-          String(args.test_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.test_id)),
+          result,
         );
         context.logger.info("Fetched sast_impact_test_status", {});
         return { dataHandles: [handle] };
@@ -491,9 +454,7 @@ export const model = {
     get_sast_impact_test_result: {
       description: "Retrieve the impact test result for a SAST rule extension.",
       arguments: z.object({
-        test_id: z.string().min(1, "test_id must not be empty").describe(
-          "Unique identifier for a test result",
-        ),
+        test_id: z.string().describe("Unique identifier for a test result"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -509,7 +470,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -520,13 +480,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sast_impact_test_result",
-          String(args.test_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.test_id)),
+          result,
         );
         context.logger.info("Fetched sast_impact_test_result", {});
         return { dataHandles: [handle] };
@@ -535,10 +490,7 @@ export const model = {
     get_sast_rule_extension: {
       description: "Get a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().min(
-          1,
-          "rule_extension_id must not be empty",
-        ).describe(
+        rule_extension_id: z.string().describe(
           "Unique identifier for SAST rule extension in request path",
         ),
       }),
@@ -556,7 +508,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -567,13 +518,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sast_rule_extension",
-          String(args.rule_extension_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_extension_id)),
+          result,
         );
         context.logger.info("Fetched sast_rule_extension", {});
         return { dataHandles: [handle] };
@@ -582,10 +528,7 @@ export const model = {
     update_sast_rule_extension: {
       description: "Update a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().min(
-          1,
-          "rule_extension_id must not be empty",
-        ).describe(
+        rule_extension_id: z.string().describe(
           "Unique identifier for SAST rule extension in request path",
         ),
         data: z.unknown(),
@@ -604,7 +547,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_extension_id"]);
@@ -622,13 +564,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sast_rule_extension",
-          String(args.rule_extension_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_extension_id)),
+          result,
         );
         context.logger.info("Updated sast_rule_extension", {});
         return { dataHandles: [handle] };
@@ -637,10 +574,7 @@ export const model = {
     delete_sast_rule_extension: {
       description: "Delete a SAST rule extension by SAST rule extension ID",
       arguments: z.object({
-        rule_extension_id: z.string().min(
-          1,
-          "rule_extension_id must not be empty",
-        ).describe(
+        rule_extension_id: z.string().describe(
           "Unique identifier for SAST rule extension in request path",
         ),
       }),

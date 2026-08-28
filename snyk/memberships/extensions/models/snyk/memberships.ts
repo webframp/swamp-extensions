@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/memberships";
 
@@ -31,7 +31,7 @@ const GroupMembershipsItemSchema = z.object({
   group_id: z.string().optional().describe("Related group ID"),
   role_id: z.string().optional().describe("Related role ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const ListGroupMembershipsSchema = z.object({
   items: z.array(GroupMembershipsItemSchema),
@@ -54,16 +54,7 @@ const CreateGroupMembershipSchema = z.object({
   group_id: z.string().optional().describe("Related group ID"),
   role_id: z.string().optional().describe("Related role ID"),
   user_id: z.string().optional().describe("Related user ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const OrgMembershipsItemSchema = z.object({
   id: z.string(),
@@ -74,7 +65,7 @@ const OrgMembershipsItemSchema = z.object({
   org_id: z.string().optional().describe("Related org ID"),
   role_id: z.string().optional().describe("Related role ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const ListOrgMembershipsSchema = z.object({
   items: z.array(OrgMembershipsItemSchema),
@@ -97,16 +88,7 @@ const CreateOrgMembershipSchema = z.object({
   org_id: z.string().optional().describe("Related org ID"),
   role_id: z.string().optional().describe("Related role ID"),
   user_id: z.string().optional().describe("Related user ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -115,7 +97,7 @@ const CreateOrgMembershipSchema = z.object({
 /** Snyk Memberships — group and org member management */
 export const model = {
   type: "@webframp/snyk/memberships",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -146,6 +128,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -187,9 +174,7 @@ export const model = {
     list_group_memberships: {
       description: "Get all memberships of the group",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "The ID of the group",
-        ),
+        group_id: z.string().describe("The ID of the group"),
         sort_by: z.enum([
           "username",
           "user_display_name",
@@ -230,8 +215,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -273,9 +258,7 @@ export const model = {
     create_group_membership: {
       description: "Create a group membership for a user with role",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "The ID of the group",
-        ),
+        group_id: z.string().describe("The ID of the group"),
         data: z.object({
           relationships: z.object({
             group: z.object({
@@ -314,7 +297,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -330,16 +312,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "group_membership",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created group_membership {id}", { id });
         return { dataHandles: [handle] };
@@ -348,11 +327,8 @@ export const model = {
     update_group_user_membership: {
       description: "Update a role from a group membership",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "The ID of the group",
-        ),
-        membership_id: z.string().min(1, "membership_id must not be empty")
-          .describe("The ID of the Group Membership"),
+        group_id: z.string().describe("The ID of the group"),
+        membership_id: z.string().describe("The ID of the Group Membership"),
         data: z.unknown().optional(),
       }),
       execute: async (
@@ -369,7 +345,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "membership_id"]);
@@ -387,13 +362,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "group_user_membership",
-          String(args.membership_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.membership_id)),
+          result,
         );
         context.logger.info("Updated group_user_membership", {});
         return { dataHandles: [handle] };
@@ -402,11 +372,8 @@ export const model = {
     delete_group_membership: {
       description: "Delete a membership from a group",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "The ID of the group",
-        ),
-        membership_id: z.string().min(1, "membership_id must not be empty")
-          .describe("The ID of the Group Membership"),
+        group_id: z.string().describe("The ID of the group"),
+        membership_id: z.string().describe("The ID of the Group Membership"),
         cascade: z.boolean().optional().describe(
           "indicates whether to delete the child org memberships of the group membership.",
         ),
@@ -490,8 +457,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -567,7 +534,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -583,16 +549,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "org_membership",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created org_membership {id}", { id });
         return { dataHandles: [handle] };
@@ -601,8 +564,7 @@ export const model = {
     update_org_membership: {
       description: "Update a org membership for a user with role",
       arguments: z.object({
-        membership_id: z.string().min(1, "membership_id must not be empty")
-          .describe("The id of the org membership"),
+        membership_id: z.string().describe("The id of the org membership"),
         data: z.unknown(),
       }),
       execute: async (
@@ -619,7 +581,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["membership_id"]);
@@ -637,13 +598,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_membership",
-          String(args.membership_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.membership_id)),
+          result,
         );
         context.logger.info("Updated org_membership", {});
         return { dataHandles: [handle] };
@@ -652,8 +608,7 @@ export const model = {
     delete_org_membership: {
       description: "Remove user's org membership",
       arguments: z.object({
-        membership_id: z.string().min(1, "membership_id must not be empty")
-          .describe("The id of the org membership"),
+        membership_id: z.string().describe("The id of the org membership"),
       }),
       execute: async (
         args: Record<string, unknown>,

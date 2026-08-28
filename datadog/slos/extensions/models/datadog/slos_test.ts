@@ -33,15 +33,11 @@ Deno.test("slos model: has globalArguments with apiKey and appKey", () => {
 
 Deno.test("slos model: has expected methods", () => {
   assertExists(model.methods);
-  assertExists(model.methods.create_slo_report_job);
-  assertExists(model.methods.get_slo_report_job_status);
   assertExists(model.methods.get_slo_status);
 });
 
 Deno.test("slos model: has expected resources", () => {
   assertExists(model.resources);
-  assertExists(model.resources["slo_report_job"]);
-  assertExists(model.resources["slo_report_job_status"]);
   assertExists(model.resources["slo_status"]);
 });
 
@@ -127,58 +123,7 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
-  name: "slos model: create_slo_report_job creates and writes resource",
-  // sanitizeResources: false — Deno.serve() listener outlives test scope
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server, requests } = startMockDdServer({
-      "/slo/report": { body: { "id": "new-123", "type": "report_id" } },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: {
-          "apiKey": "test-api-key",
-          "appKey": "test-app-key",
-          "site": "us1",
-        },
-        definition: { id: "test-id", name: "test-slos", version: 1, tags: {} },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).create_slo_report_job.execute({ "name": "test-resource" }, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      assertEquals(requests.length, 1);
-      const req0 = requests[0];
-      assertEquals(req0.method, "POST");
-      assertStringIncludes(req0.path, "/slo/report");
-      assertEquals(req0.headers["dd-api-key"], "test-api-key");
-      assertEquals(req0.headers["dd-application-key"], "test-app-key");
-      assertEquals(req0.headers["content-type"], "application/json");
-      assertExists(req0.body);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "slo_report_job");
-      assertEquals(resources[0].name, "new-123");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "slos model: get_slo_report_job_status fetches and writes resource",
+  name: "slos model: get_slo_status fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
@@ -188,7 +133,16 @@ Deno.test({
           "data": {
             "id": "fixture-123",
             "type": "resource",
-            "attributes": { "status": "completed" },
+            "attributes": {
+              "error_budget_remaining": 99.5,
+              "raw_error_budget_remaining": {
+                "unit": "seconds",
+                "value": 86400.5,
+              },
+              "sli": 99.95,
+              "span_precision": 2,
+              "state": "ok",
+            },
           },
         },
       },
@@ -213,10 +167,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_slo_report_job_status.execute(
-        { "report_id": "test-id-123" },
-        context,
-      );
+      >).get_slo_status.execute({ "slo_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -228,7 +179,7 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "slo_report_job_status");
+      assertEquals(resources[0].specName, "slo_status");
       assertEquals(resources[0].name, "test-id-123");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
@@ -240,12 +191,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "slos model: create_slo_report_job surfaces API errors",
+  name: "slos model: get_slo_status surfaces API errors",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server } = startMockDdServer({
-      "/slo/report": {
+      "/test-id-123/status": {
         body: { errors: [{ status: "500", title: "Internal Error" }] },
         status: 500,
       },
@@ -272,13 +223,9 @@ Deno.test({
               ctx: unknown,
             ) => Promise<{ dataHandles: unknown[] }>;
           }
-        >).create_slo_report_job.execute({ "name": "test-resource" }, context);
-      } catch (err) {
+        >).get_slo_status.execute({ "slo_id": "test-id-123" }, context);
+      } catch (_err) {
         threw = true;
-        // The error must name the HTTP method and path attempted, not just
-        // the raw response body, so failures are identifiable at a glance.
-        assertStringIncludes((err as Error).message, "POST");
-        assertStringIncludes((err as Error).message, "/slo/report");
       }
       assertEquals(threw, true);
     } finally {
@@ -287,36 +234,3 @@ Deno.test({
     }
   },
 });
-
-Deno.test(
-  "slos model: create_slo_report_job rejects to_ts not after from_ts",
-  () => {
-    const result = model.methods.create_slo_report_job.arguments.safeParse({
-      from_ts: 1000,
-      to_ts: 1000,
-      query: "service:web",
-    });
-    assertEquals(result.success, false);
-  },
-);
-
-Deno.test(
-  "slos model: create_slo_report_job rejects empty query",
-  () => {
-    const result = model.methods.create_slo_report_job.arguments.safeParse({
-      from_ts: 1000,
-      to_ts: 2000,
-      query: "",
-    });
-    assertEquals(result.success, false);
-  },
-);
-
-Deno.test(
-  "slos model: get_slo_report_job_status rejects empty report_id",
-  () => {
-    const result = model.methods.get_slo_report_job_status.arguments
-      .safeParse({ report_id: "" });
-    assertEquals(result.success, false);
-  },
-);

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/synthetics";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/synthetics";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,12 +29,12 @@ const GlobalArgsSchema = z.object({
 
 const ApiMultistepSubtestsItemSchema = z.object({
   id: z.string().describe("The public ID of the subtest."),
-  type: z.enum(["subtest"]).optional().describe(
+  type: z.enum(["subtest"]).optional().default("subtest").describe(
     "Type of the subtest resource.",
   ),
   name: z.string().optional().describe("Name of the subtest."),
   public_id: z.string().optional().describe("The public ID of the subtest."),
-});
+}).passthrough();
 
 const GetApiMultistepSubtestsSchema = z.object({
   items: z.array(ApiMultistepSubtestsItemSchema),
@@ -50,7 +50,7 @@ const GetApiMultistepSubtestsSchema = z.object({
 
 const ApiMultistepSubtestParentsItemSchema = z.object({
   id: z.string().describe("The public ID of the parent test."),
-  type: z.enum(["parent_test"]).optional().describe(
+  type: z.enum(["parent_test"]).optional().default("parent_test").describe(
     "Type of the parent test resource.",
   ),
   child_name: z.string().optional().describe("The name of the child subtest."),
@@ -70,7 +70,7 @@ const ApiMultistepSubtestParentsItemSchema = z.object({
   public_id: z.string().optional().describe(
     "The public ID of the parent test.",
   ),
-});
+}).passthrough();
 
 const GetApiMultistepSubtestParentsSchema = z.object({
   items: z.array(ApiMultistepSubtestParentsItemSchema),
@@ -119,7 +119,7 @@ const SyntheticsDowntimesItemSchema = z.object({
   updatedByName: z.string().describe(
     "The display name of the user who last updated the downtime.",
   ),
-});
+}).passthrough();
 
 const ListSyntheticsDowntimesSchema = z.object({
   items: z.array(SyntheticsDowntimesItemSchema),
@@ -168,16 +168,7 @@ const CreateSyntheticsDowntimeSchema = z.object({
   updatedByName: z.string().describe(
     "The display name of the user who last updated the downtime.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AddTestToSyntheticsDowntimeSchema = z.object({
   id: z.string().describe("The unique identifier of the downtime."),
@@ -214,48 +205,23 @@ const AddTestToSyntheticsDowntimeSchema = z.object({
   updatedByName: z.string().describe(
     "The display name of the user who last updated the downtime.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetOnDemandConcurrencyCapSchema = z.object({
   attributes: z.unknown().optional(),
   type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SetOnDemandConcurrencyCapSchema = z.object({
   attributes: z.unknown().optional(),
   type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateSyntheticsSuiteSchema = z.object({
   id: z.string().describe("The public ID for the suite."),
-  type: z.enum(["suite"]).describe("Type of the Synthetic suite, `suite`."),
+  type: z.enum(["suite"]).default("suite").describe(
+    "Type of the Synthetic suite, `suite`.",
+  ),
   message: z.string().optional().describe(
     "Notification message associated with the suite.",
   ),
@@ -273,42 +239,24 @@ const CreateSyntheticsSuiteSchema = z.object({
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DeleteSyntheticsSuitesSchema = z.object({
   id: z.string().describe("The public ID of the deleted Synthetic test suite."),
-  type: z.enum(["suites"]).optional().describe(
+  type: z.enum(["suites"]).optional().default("suites").describe(
     "Type for the Synthetics suites responses, `suites`.",
   ),
   deleted_at: z.string().optional().describe(
     "Deletion timestamp of the Synthetic suite ID.",
   ),
   public_id: z.string().optional().describe("The Synthetic suite ID deleted."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SearchSuitesSchema = z.object({
   id: z.string().describe(
     "The unique identifier of the suite search response data.",
   ),
-  type: z.enum(["suites_search"]).optional().describe(
+  type: z.enum(["suites_search"]).optional().default("suites_search").describe(
     "Type for the Synthetics suites search response, `suites_search`.",
   ),
   suites: z.array(z.unknown()).optional().describe(
@@ -317,20 +265,13 @@ const SearchSuitesSchema = z.object({
   total: z.number().int().max(2147483647).optional().describe(
     "Total number of Synthetic suites matching the search query.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const EditSyntheticsSuiteSchema = z.object({
   id: z.string().describe("The public ID for the suite."),
-  type: z.enum(["suite"]).describe("Type of the Synthetic suite, `suite`."),
+  type: z.enum(["suite"]).default("suite").describe(
+    "Type of the Synthetic suite, `suite`.",
+  ),
   message: z.string().optional().describe(
     "Notification message associated with the suite.",
   ),
@@ -348,20 +289,13 @@ const EditSyntheticsSuiteSchema = z.object({
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchTestSuiteSchema = z.object({
   id: z.string().describe("The public ID for the suite."),
-  type: z.enum(["suite"]).describe("Type of the Synthetic suite, `suite`."),
+  type: z.enum(["suite"]).default("suite").describe(
+    "Type of the Synthetic suite, `suite`.",
+  ),
   message: z.string().optional().describe(
     "Notification message associated with the suite.",
   ),
@@ -379,22 +313,14 @@ const PatchTestSuiteSchema = z.object({
   tests: z.array(z.unknown()).describe(
     "Array of Synthetic tests included in the suite.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SyntheticsBrowserTestLatestResultsItemSchema = z.object({
   id: z.string().describe("The result ID."),
-  type: z.enum(["result_summary"]).optional().describe(
-    "Type of the Synthetic test result summary resource, `result_summary`.",
-  ),
+  type: z.enum(["result_summary"]).optional().default("result_summary")
+    .describe(
+      "Type of the Synthetic test result summary resource, `result_summary`.",
+    ),
   device: z.object({
     browser: z.unknown().optional(),
     id: z.string().optional(),
@@ -452,7 +378,7 @@ const SyntheticsBrowserTestLatestResultsItemSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
-});
+}).passthrough();
 
 const ListSyntheticsBrowserTestLatestResultsSchema = z.object({
   items: z.array(SyntheticsBrowserTestLatestResultsItemSchema),
@@ -468,7 +394,7 @@ const ListSyntheticsBrowserTestLatestResultsSchema = z.object({
 
 const GetSyntheticsBrowserTestResultSchema = z.object({
   id: z.string().describe("The result ID."),
-  type: z.enum(["result"]).optional().describe(
+  type: z.enum(["result"]).optional().default("result").describe(
     "Type of the Synthetic test result resource, `result`.",
   ),
   batch: z.object({
@@ -561,42 +487,24 @@ const GetSyntheticsBrowserTestResultSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DeleteSyntheticsTestsSchema = z.object({
   id: z.string().describe("The public ID of the deleted Synthetic test."),
-  type: z.enum(["delete_tests"]).optional().describe(
+  type: z.enum(["delete_tests"]).optional().default("delete_tests").describe(
     "Type for the bulk delete Synthetic tests response, `delete_tests`.",
   ),
   deleted_at: z.string().optional().describe(
     "Deletion timestamp of the Synthetic test ID.",
   ),
   public_id: z.string().optional().describe("The Synthetic test ID deleted."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSyntheticsFastTestResultSchema = z.object({
   id: z.string().describe(
     "The UUID of the fast test, used as the result identifier.",
   ),
-  type: z.enum(["result"]).optional().describe(
+  type: z.enum(["result"]).optional().default("result").describe(
     "JSON:API type for a fast test result.",
   ),
   device: z.object({
@@ -658,22 +566,15 @@ const GetSyntheticsFastTestResultSchema = z.object({
   test_version: z.number().int().optional().describe(
     "Version of the test at the time the fast test was triggered.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateSyntheticsNetworkTestSchema = z.object({
   id: z.string().describe("The public ID of the Network Path test."),
-  type: z.enum(["network"]).describe("Type of the Synthetic test, `network`."),
+  type: z.enum(["network"]).default("network").describe(
+    "Type of the Synthetic test, `network`.",
+  ),
   config: z.object({
-    assertions: z.array(z.unknown()).optional(),
+    assertions: z.array(z.unknown()).optional().default([]),
     request: z.unknown().optional(),
   }).describe("Configuration object for a Network Path test."),
   locations: z.array(z.string()).describe(
@@ -707,20 +608,11 @@ const CreateSyntheticsNetworkTestSchema = z.object({
   tags: z.array(z.string()).optional().describe(
     "Array of tags attached to the test.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PollSyntheticsTestResultsItemSchema = z.object({
   id: z.string().describe("The result ID."),
-  type: z.enum(["result"]).optional().describe(
+  type: z.enum(["result"]).optional().default("result").describe(
     "Type of the Synthetic test result resource, `result`.",
   ),
   batch: z.object({
@@ -813,7 +705,7 @@ const PollSyntheticsTestResultsItemSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
-});
+}).passthrough();
 
 const PollSyntheticsTestResultsSchema = z.object({
   items: z.array(PollSyntheticsTestResultsItemSchema),
@@ -831,36 +723,18 @@ const GetTestFileDownloadUrlSchema = z.object({
   url: z.string().optional().describe(
     "A presigned URL to download the file. The URL expires after a short period.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTestFileMultipartPresignedUrlsSchema = z.object({
   bucketKey: z.string().optional().describe(
     "The bucket key that references the uploaded file after completion.",
   ),
   multipart_presigned_urls_params: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TestParentSuitesItemSchema = z.object({
   id: z.string().describe("The public ID of the parent suite."),
-  type: z.enum(["parent_suite"]).optional().describe(
+  type: z.enum(["parent_suite"]).optional().default("parent_suite").describe(
     "Type of the parent suite resource.",
   ),
   child_name: z.string().optional().describe(
@@ -882,7 +756,7 @@ const TestParentSuitesItemSchema = z.object({
   public_id: z.string().optional().describe(
     "The public ID of the parent suite.",
   ),
-});
+}).passthrough();
 
 const GetTestParentSuitesSchema = z.object({
   items: z.array(TestParentSuitesItemSchema),
@@ -898,9 +772,10 @@ const GetTestParentSuitesSchema = z.object({
 
 const SyntheticsTestLatestResultsItemSchema = z.object({
   id: z.string().describe("The result ID."),
-  type: z.enum(["result_summary"]).optional().describe(
-    "Type of the Synthetic test result summary resource, `result_summary`.",
-  ),
+  type: z.enum(["result_summary"]).optional().default("result_summary")
+    .describe(
+      "Type of the Synthetic test result summary resource, `result_summary`.",
+    ),
   device: z.object({
     browser: z.unknown().optional(),
     id: z.string().optional(),
@@ -958,7 +833,7 @@ const SyntheticsTestLatestResultsItemSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
-});
+}).passthrough();
 
 const ListSyntheticsTestLatestResultsSchema = z.object({
   items: z.array(SyntheticsTestLatestResultsItemSchema),
@@ -974,7 +849,7 @@ const ListSyntheticsTestLatestResultsSchema = z.object({
 
 const GetSyntheticsTestResultSchema = z.object({
   id: z.string().describe("The result ID."),
-  type: z.enum(["result"]).optional().describe(
+  type: z.enum(["result"]).optional().default("result").describe(
     "Type of the Synthetic test result resource, `result`.",
   ),
   batch: z.object({
@@ -1067,22 +942,12 @@ const GetSyntheticsTestResultSchema = z.object({
   test_type: z.enum(["api", "browser", "mobile", "network"]).optional()
     .describe("Type of the Synthetic test that produced this result."),
   test_id: z.string().optional().describe("Related test ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SyntheticsTestVersionsItemSchema = z.object({
   id: z.string().describe("UUID of the version change record."),
-  type: z.enum(["version_metadata"]).optional().describe(
-    "Type of the version metadata resource.",
-  ),
+  type: z.enum(["version_metadata"]).optional().default("version_metadata")
+    .describe("Type of the version metadata resource."),
   author_uuid: z.string().optional().describe(
     "UUID of the user who created this version.",
   ),
@@ -1095,7 +960,7 @@ const SyntheticsTestVersionsItemSchema = z.object({
   version_payload_created_at: z.string().optional().describe(
     "Timestamp of when this version was created.",
   ),
-});
+}).passthrough();
 
 const ListSyntheticsTestVersionsSchema = z.object({
   items: z.array(SyntheticsTestVersionsItemSchema),
@@ -1111,7 +976,7 @@ const ListSyntheticsTestVersionsSchema = z.object({
 
 const GetSyntheticsTestVersionSchema = z.object({
   id: z.string().describe("UUID of the version record."),
-  type: z.enum(["version"]).optional().describe(
+  type: z.enum(["version"]).optional().default("version").describe(
     "Type of the version resource.",
   ),
   author: z.object({
@@ -1129,16 +994,7 @@ const GetSyntheticsTestVersionSchema = z.object({
   version_payload_created_at: z.string().optional().describe(
     "Timestamp of when this version was created.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchGlobalVariableSchema = z.object({
   id: z.string().describe("Unique identifier of the global variable."),
@@ -1175,16 +1031,7 @@ const PatchGlobalVariableSchema = z.object({
     secure: z.boolean().optional(),
     value: z.string().optional(),
   }).describe("Value of the global variable."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -1193,7 +1040,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1224,6 +1071,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1403,7 +1255,7 @@ export const model = {
     get_api_multistep_subtests: {
       description: "Get available subtests for a multistep test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the API multistep test.",
         ),
       }),
@@ -1421,8 +1273,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1471,7 +1323,7 @@ export const model = {
     get_api_multistep_subtest_parents: {
       description: "Get parent tests for a subtest",
       arguments: z.object({
-        public_id: z.string().min(1).describe("The public ID of the subtest."),
+        public_id: z.string().describe("The public ID of the subtest."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1487,8 +1339,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1558,8 +1410,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -1633,7 +1485,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1651,16 +1502,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "synthetics_downtime",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created synthetics_downtime {id}", { id });
         return { dataHandles: [handle] };
@@ -1669,9 +1517,7 @@ export const model = {
     get_synthetics_downtime: {
       description: "Get a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "The ID of the downtime to retrieve.",
-        ),
+        downtime_id: z.string().describe("The ID of the downtime to retrieve."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1687,7 +1533,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1701,13 +1546,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_downtime",
-          String(args.downtime_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.downtime_id)),
+          result,
         );
         context.logger.info("Fetched synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1716,9 +1556,7 @@ export const model = {
     update_synthetics_downtime: {
       description: "Update a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "The ID of the downtime to update.",
-        ),
+        downtime_id: z.string().describe("The ID of the downtime to update."),
         description: z.string().optional().describe(
           "An optional description of the downtime.",
         ),
@@ -1742,7 +1580,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id"]);
@@ -1764,13 +1601,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_downtime",
-          String(args.downtime_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.downtime_id)),
+          result,
         );
         context.logger.info("Updated synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1779,9 +1611,7 @@ export const model = {
     delete_synthetics_downtime: {
       description: "Delete a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "The ID of the downtime to delete.",
-        ),
+        downtime_id: z.string().describe("The ID of the downtime to delete."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1815,8 +1645,8 @@ export const model = {
     add_test_to_synthetics_downtime: {
       description: "Add a test to a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe("The ID of the downtime."),
-        test_id: z.string().min(1).describe(
+        downtime_id: z.string().describe("The ID of the downtime."),
+        test_id: z.string().describe(
           "The public ID of the Synthetics test to associate with the downtime.",
         ),
       }),
@@ -1834,7 +1664,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id", "test_id"]);
@@ -1855,13 +1684,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "add_test_to_synthetics_downtime",
-          String(args.test_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.test_id)),
+          result,
         );
         context.logger.info("Updated add_test_to_synthetics_downtime", {});
         return { dataHandles: [handle] };
@@ -1870,8 +1694,8 @@ export const model = {
     remove_test_from_synthetics_downtime: {
       description: "Remove a test from a Synthetics downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe("The ID of the downtime."),
-        test_id: z.string().min(1).describe(
+        downtime_id: z.string().describe("The ID of the downtime."),
+        test_id: z.string().describe(
           "The public ID of the Synthetics test to disassociate from the downtime.",
         ),
       }),
@@ -1921,7 +1745,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1934,12 +1757,7 @@ export const model = {
         const handle = await context.writeResource(
           "on_demand_concurrency_cap",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched on_demand_concurrency_cap", {});
         return { dataHandles: [handle] };
@@ -1966,7 +1784,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1983,16 +1800,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "set_on_demand_concurrency_cap",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created set_on_demand_concurrency_cap {id}", {
           id,
@@ -2017,10 +1831,7 @@ export const model = {
         tags: z.array(z.string()).optional().describe(
           "Array of tags attached to the suite.",
         ),
-        tests: z.array(z.unknown()).min(
-          1,
-          "tests must contain at least one test",
-        ).describe(
+        tests: z.array(z.unknown()).describe(
           "Array of Synthetic tests included in the suite.",
         ),
         type: z.unknown(),
@@ -2039,7 +1850,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2057,16 +1867,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "synthetics_suite",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created synthetics_suite {id}", { id });
         return { dataHandles: [handle] };
@@ -2096,7 +1903,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2117,12 +1923,7 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_suites",
           id,
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed delete_synthetics_suites", {});
         return { dataHandles: [handle] };
@@ -2159,7 +1960,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>([]);
@@ -2184,12 +1984,7 @@ export const model = {
         const handle = await context.writeResource(
           "search_suites",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched search_suites", {});
         return { dataHandles: [handle] };
@@ -2198,7 +1993,7 @@ export const model = {
     get_synthetics_suite: {
       description: "Get a suite",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the suite to get details from.",
         ),
       }),
@@ -2216,7 +2011,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2230,13 +2024,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_suite",
-          String(args.public_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.public_id)),
+          result,
         );
         context.logger.info("Fetched synthetics_suite", {});
         return { dataHandles: [handle] };
@@ -2245,9 +2034,7 @@ export const model = {
     edit_synthetics_suite: {
       description: "Edit a test suite",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the suite to edit.",
-        ),
+        public_id: z.string().describe("The public ID of the suite to edit."),
         message: z.string().optional().describe(
           "Notification message associated with the suite.",
         ),
@@ -2259,10 +2046,7 @@ export const model = {
         tags: z.array(z.string()).optional().describe(
           "Array of tags attached to the suite.",
         ),
-        tests: z.array(z.unknown()).min(
-          1,
-          "tests must contain at least one test",
-        ).describe(
+        tests: z.array(z.unknown()).describe(
           "Array of Synthetic tests included in the suite.",
         ),
         type: z.unknown(),
@@ -2281,7 +2065,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2303,13 +2086,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_synthetics_suite",
-          String(args.public_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.public_id)),
+          result,
         );
         context.logger.info("Updated edit_synthetics_suite", {});
         return { dataHandles: [handle] };
@@ -2318,7 +2096,7 @@ export const model = {
     patch_test_suite: {
       description: "Patch a test suite",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Synthetic test suite to patch.",
         ),
         json_patch: z.array(z.unknown()).optional().describe(
@@ -2339,7 +2117,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2361,13 +2138,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_test_suite",
-          String(args.public_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.public_id)),
+          result,
         );
         context.logger.info("Updated patch_test_suite", {});
         return { dataHandles: [handle] };
@@ -2376,7 +2148,7 @@ export const model = {
     list_synthetics_browser_test_latest_results: {
       description: "Get a browser test's latest results",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Synthetic browser test for which to search results.",
         ),
         from_ts: z.number().optional().describe(
@@ -2408,8 +2180,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2459,10 +2231,10 @@ export const model = {
     get_synthetics_browser_test_result: {
       description: "Get a browser test result",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Synthetic browser test to which the target result belongs.",
         ),
-        result_id: z.string().min(1).describe("The ID of the result to get."),
+        result_id: z.string().describe("The ID of the result to get."),
         event_id: z.string().optional().describe(
           "The event ID used to look up the result in the event store.",
         ),
@@ -2484,7 +2256,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
@@ -2510,13 +2281,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_browser_test_result",
-          String(args.result_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.result_id)),
+          result,
         );
         context.logger.info("Fetched synthetics_browser_test_result", {});
         return { dataHandles: [handle] };
@@ -2546,7 +2312,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2567,12 +2332,7 @@ export const model = {
         const handle = await context.writeResource(
           "synthetics_tests",
           id,
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed delete_synthetics_tests", {});
         return { dataHandles: [handle] };
@@ -2599,7 +2359,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2613,13 +2372,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_fast_test_result",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched synthetics_fast_test_result", {});
         return { dataHandles: [handle] };
@@ -2664,7 +2418,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2682,16 +2435,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "synthetics_network_test",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created synthetics_network_test {id}", { id });
         return { dataHandles: [handle] };
@@ -2700,7 +2450,7 @@ export const model = {
     get_synthetics_network_test: {
       description: "Get a Network Path test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Network Path test to get details from.",
         ),
       }),
@@ -2718,7 +2468,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2732,13 +2481,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_network_test",
-          String(args.public_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.public_id)),
+          result,
         );
         context.logger.info("Fetched synthetics_network_test", {});
         return { dataHandles: [handle] };
@@ -2747,7 +2491,7 @@ export const model = {
     update_synthetics_network_test: {
       description: "Edit a Network Path test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Network Path test to edit.",
         ),
         config: z.unknown(),
@@ -2783,7 +2527,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2805,13 +2548,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_network_test",
-          String(args.public_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.public_id)),
+          result,
         );
         context.logger.info("Updated synthetics_network_test", {});
         return { dataHandles: [handle] };
@@ -2838,8 +2576,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -2886,9 +2624,7 @@ export const model = {
     get_test_file_download_url: {
       description: "Get a presigned URL for downloading a test file",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         bucketKey: z.string().min(1).describe(
           "The bucket key referencing the file to download.",
         ),
@@ -2907,7 +2643,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2926,16 +2661,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_test_file_download_url",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created get_test_file_download_url {id}", { id });
         return { dataHandles: [handle] };
@@ -2944,14 +2676,9 @@ export const model = {
     get_test_file_multipart_presigned_urls: {
       description: "Get presigned URLs for uploading a test file",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         bucketKeyPrefix: z.unknown(),
-        parts: z.array(z.unknown()).min(
-          1,
-          "parts must contain at least one part descriptor",
-        ).describe(
+        parts: z.array(z.unknown()).describe(
           "Array of part descriptors for the multipart upload.",
         ),
       }),
@@ -2969,7 +2696,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -2988,16 +2714,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_test_file_multipart_presigned_urls",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created get_test_file_multipart_presigned_urls {id}",
@@ -3009,9 +2732,7 @@ export const model = {
     abort_test_file_multipart_upload: {
       description: "Abort a multipart upload of a test file",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         key: z.string().describe(
           "The full storage path of the file whose upload should be aborted.",
         ),
@@ -3033,7 +2754,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -3052,16 +2772,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "abort_test_file_multipart_upload",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created abort_test_file_multipart_upload {id}", {
           id,
@@ -3072,16 +2789,11 @@ export const model = {
     complete_test_file_multipart_upload: {
       description: "Complete a multipart upload of a test file",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         key: z.string().describe(
           "The full storage path for the uploaded file.",
         ),
-        parts: z.array(z.unknown()).min(
-          1,
-          "parts must contain at least one completed part",
-        ).describe(
+        parts: z.array(z.unknown()).describe(
           "Array of completed parts with their ETags.",
         ),
         uploadId: z.string().describe(
@@ -3102,7 +2814,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["public_id"]);
@@ -3121,16 +2832,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "complete_test_file_multipart_upload",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created complete_test_file_multipart_upload {id}",
@@ -3142,9 +2850,7 @@ export const model = {
     get_test_parent_suites: {
       description: "Get parent suites for a test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3160,8 +2866,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3210,7 +2916,7 @@ export const model = {
     list_synthetics_test_latest_results: {
       description: "Get a test's latest results",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Synthetic test for which to search results.",
         ),
         from_ts: z.number().optional().describe(
@@ -3242,8 +2948,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3292,10 +2998,10 @@ export const model = {
     get_synthetics_test_result: {
       description: "Get a test result",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
+        public_id: z.string().describe(
           "The public ID of the Synthetic test to which the target result belongs.",
         ),
-        result_id: z.string().min(1).describe("The ID of the result to get."),
+        result_id: z.string().describe("The ID of the result to get."),
         event_id: z.string().optional().describe(
           "The event ID used to look up the result in the event store.",
         ),
@@ -3317,7 +3023,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "result_id"]);
@@ -3343,13 +3048,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_test_result",
-          String(args.result_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.result_id)),
+          result,
         );
         context.logger.info("Fetched synthetics_test_result", {});
         return { dataHandles: [handle] };
@@ -3358,9 +3058,7 @@ export const model = {
     list_synthetics_test_versions: {
       description: "Get version history of a test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         last_version_number: z.number().optional().describe(
           "The version number of the last item from the previous page. Omit to get the f...",
         ),
@@ -3379,8 +3077,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["public_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3434,9 +3132,7 @@ export const model = {
     get_synthetics_test_version: {
       description: "Get a specific version of a test",
       arguments: z.object({
-        public_id: z.string().min(1).describe(
-          "The public ID of the Synthetic test.",
-        ),
+        public_id: z.string().describe("The public ID of the Synthetic test."),
         version_number: z.string().describe("The version number to retrieve."),
         include_change_metadata: z.boolean().optional().describe(
           "If `true`, include change metadata in the response.",
@@ -3459,7 +3155,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["public_id", "version_number"]);
@@ -3487,13 +3182,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "synthetics_test_version",
-          String(args.version_number),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.version_number)),
+          result,
         );
         context.logger.info("Fetched synthetics_test_version", {});
         return { dataHandles: [handle] };
@@ -3521,7 +3211,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["variable_id"]);
@@ -3545,13 +3234,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_global_variable",
-          String(args.variable_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.variable_id)),
+          result,
         );
         context.logger.info("Updated patch_global_variable", {});
         return { dataHandles: [handle] };

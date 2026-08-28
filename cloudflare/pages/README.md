@@ -45,7 +45,7 @@ swamp model create @webframp/cloudflare/pages cf-pages \
 ## Development
 
 ```bash
-cd cloudflare/pages
+cd ../../cloudflare/pages
 deno task check
 deno task lint
 deno task fmt

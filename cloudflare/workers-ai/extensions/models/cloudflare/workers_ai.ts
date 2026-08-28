@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/workers-ai";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/workers-ai";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -38,16 +38,7 @@ const GetCreditBalanceSchema = z.object({
     lastFailedAt: z.number().nullable(),
     threshold: z.number().nullable(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetInvoiceHistorySchema = z.object({
   invoices: z.array(z.object({
@@ -72,16 +63,7 @@ const GetInvoiceHistorySchema = z.object({
     per_page: z.number(),
     total_count: z.number(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetInvoicePreviewSchema = z.object({
   amount_due: z.number(),
@@ -111,16 +93,7 @@ const GetInvoicePreviewSchema = z.object({
   period_end: z.number(),
   period_start: z.number(),
   status: z.enum(["draft", "open", "paid", "uncollectible", "void"]),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSpendingLimitSchema = z.object({
   config: z.object({
@@ -129,16 +102,7 @@ const GetSpendingLimitSchema = z.object({
     strategy: z.string().nullable(),
   }),
   enabled: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateTopupSchema = z.object({
   brand: z.string().optional().describe("Card brand (visa, mastercard, etc.)."),
@@ -148,16 +112,7 @@ const CreateTopupSchema = z.object({
   last4: z.string().optional().describe("Last 4 digits of card."),
   onboarding: z.boolean().describe("Whether the user was already onboarded."),
   payment_intent_id: z.string().describe("Stripe invoice ID."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTopupConfigSchema = z.object({
   amount: z.number().nullable(),
@@ -165,30 +120,12 @@ const GetTopupConfigSchema = z.object({
   error: z.string().nullable(),
   lastFailedAt: z.number().nullable(),
   threshold: z.number().nullable(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAigBillingSetTopupConfigSchema = z.object({
   amount: z.number(),
   threshold: z.number(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTopupLimitsSchema = z.object({
   currency: z.string().describe("ISO 4217 currency code."),
@@ -196,30 +133,12 @@ const GetTopupLimitsSchema = z.object({
   min_cents: z.number().int().describe(
     "Minimum allowed top-up amount in cents.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAigBillingCheckTopupStatusSchema = z.object({
   payment_intent_id: z.string(),
   status: z.enum(["completed", "pending"]),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetUsageHistorySchema = z.object({
   history: z.array(z.object({
@@ -228,16 +147,7 @@ const GetUsageHistorySchema = z.object({
     id: z.string(),
     start_time: z.number(),
   })),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccountProviderItemSchema = z.object({
   base_url: z.string(),
@@ -255,7 +165,7 @@ const AccountProviderItemSchema = z.object({
   name: z.string(),
   position: z.number().int().optional(),
   slug: z.string(),
-});
+}).passthrough();
 
 const ListAccountProviderSchema = z.object({
   items: z.array(AccountProviderItemSchema),
@@ -271,19 +181,21 @@ const ListAccountProviderSchema = z.object({
 
 const AccountProviderCostItemSchema = z.object({
   account_provider_id: z.string(),
-  changed_by: z.string().optional(),
+  changed_by: z.string().optional().default("manual"),
   cost_in: z.number().optional(),
   cost_out: z.number().optional(),
-  cost_type: z.string().optional(),
+  cost_type: z.string().optional().default("tokens"),
   created_at: z.string(),
   enable: z.boolean().optional(),
   id: z.string(),
   model: z.string(),
-  model_rule: z.enum(["equals", "starts-with", "contains"]).optional(),
+  model_rule: z.enum(["equals", "starts-with", "contains"]).optional().default(
+    "equals",
+  ),
   modified_at: z.string(),
   token_pricing: z.string().optional(),
   weight: z.number().int().optional(),
-});
+}).passthrough();
 
 const ListAccountProviderCostSchema = z.object({
   items: z.array(AccountProviderCostItemSchema),
@@ -299,28 +211,21 @@ const ListAccountProviderCostSchema = z.object({
 
 const GetAigConfigFetchAccountProviderCostSchema = z.object({
   account_provider_id: z.string(),
-  changed_by: z.string().optional(),
+  changed_by: z.string().optional().default("manual"),
   cost_in: z.number().optional(),
   cost_out: z.number().optional(),
-  cost_type: z.string().optional(),
+  cost_type: z.string().optional().default("tokens"),
   created_at: z.string(),
   enable: z.boolean().optional(),
   id: z.string(),
   model: z.string(),
-  model_rule: z.enum(["equals", "starts-with", "contains"]).optional(),
+  model_rule: z.enum(["equals", "starts-with", "contains"]).optional().default(
+    "equals",
+  ),
   modified_at: z.string(),
   token_pricing: z.string().optional(),
   weight: z.number().int().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAigConfigFetchAccountProviderSchema = z.object({
   base_url: z.string(),
@@ -338,16 +243,7 @@ const GetAigConfigFetchAccountProviderSchema = z.object({
   name: z.string(),
   position: z.number().int().optional(),
   slug: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const EvaluatorsItemSchema = z.object({
   created_at: z.string(),
@@ -358,7 +254,7 @@ const EvaluatorsItemSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   type: z.string(),
-});
+}).passthrough();
 
 const ListEvaluatorsSchema = z.object({
   items: z.array(EvaluatorsItemSchema),
@@ -429,7 +325,9 @@ const GatewayItemSchema = z.object({
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
     }),
   }).nullable().optional(),
-  id: z.string().min(1).max(64).describe("gateway id"),
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   is_default: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
@@ -440,7 +338,7 @@ const GatewayItemSchema = z.object({
   modified_at: z.string(),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
-    content_type: z.enum(["json", "protobuf"]).optional(),
+    content_type: z.enum(["json", "protobuf"]).optional().default("json"),
     headers: z.record(z.string(), z.string().max(4096)),
     url: z.string().max(2048),
   })).nullable().optional(),
@@ -455,10 +353,11 @@ const GatewayItemSchema = z.object({
   retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
     .describe("Maximum number of retry attempts for failed requests (1-5)"),
   spend_limits: z.object({
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     rules: z.array(z.object({
-      enabled: z.boolean().optional(),
-      id: z.string().min(1).optional(),
+      enabled: z.boolean().optional().default(true),
+      id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
+        .default("49a87635"),
       limit: z.number().min(0),
       limitType: z.enum(["cost"]),
       metadata: z.record(
@@ -481,9 +380,9 @@ const GatewayItemSchema = z.object({
         mode: z.enum(["filter"]),
         values: z.array(z.string()),
       }).optional(),
-      technique: z.enum(["fixed", "sliding"]).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional().default("sliding"),
       window: z.number().int().min(0),
-    })).optional(),
+    })).optional().default([]),
   }).nullable().optional(),
   store_id: z.string().nullable().optional(),
   stripe: z.object({
@@ -492,11 +391,12 @@ const GatewayItemSchema = z.object({
       payload: z.string(),
     })),
   }).nullable().optional(),
-  workers_ai_billing_mode: z.enum(["postpaid"]).optional().describe(
-    "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
-  ),
+  workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
+    .describe(
+      "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
+    ),
   zdr: z.boolean().optional(),
-});
+}).passthrough();
 
 const ListGatewaySchema = z.object({
   items: z.array(GatewayItemSchema),
@@ -532,11 +432,13 @@ const DatasetItemSchema = z.object({
     operator: z.enum(["eq", "contains", "lt", "gt"]),
     value: z.array(z.union([z.string(), z.number(), z.boolean()])),
   })),
-  gateway_id: z.string().min(1).max(64).describe("gateway id"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
-});
+}).passthrough();
 
 const ListDatasetSchema = z.object({
   items: z.array(DatasetItemSchema),
@@ -572,20 +474,13 @@ const GetAigConfigFetchDatasetSchema = z.object({
     operator: z.enum(["eq", "contains", "lt", "gt"]),
     value: z.array(z.union([z.string(), z.number(), z.boolean()])),
   })),
-  gateway_id: z.string().min(1).max(64).describe("gateway id"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const EvaluationsItemSchema = z.object({
   created_at: z.string(),
@@ -613,12 +508,16 @@ const EvaluationsItemSchema = z.object({
       operator: z.enum(["eq", "contains", "lt", "gt"]),
       value: z.array(z.union([z.string(), z.number(), z.boolean()])),
     })),
-    gateway_id: z.string().min(1).max(64),
+    gateway_id: z.string().min(1).max(64).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
     id: z.string(),
     modified_at: z.string(),
     name: z.string(),
   })),
-  gateway_id: z.string().min(1).max(64).describe("gateway id"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
@@ -635,7 +534,7 @@ const EvaluationsItemSchema = z.object({
     total_logs: z.number(),
   })),
   total_logs: z.number(),
-});
+}).passthrough();
 
 const ListEvaluationsSchema = z.object({
   items: z.array(EvaluationsItemSchema),
@@ -675,12 +574,16 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
       operator: z.enum(["eq", "contains", "lt", "gt"]),
       value: z.array(z.union([z.string(), z.number(), z.boolean()])),
     })),
-    gateway_id: z.string().min(1).max(64),
+    gateway_id: z.string().min(1).max(64).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
     id: z.string(),
     modified_at: z.string(),
     name: z.string(),
   })),
-  gateway_id: z.string().min(1).max(64).describe("gateway id"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
@@ -697,16 +600,7 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
     total_logs: z.number(),
   })),
   total_logs: z.number(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GatewayLogsItemSchema = z.object({
   cached: z.boolean(),
@@ -728,7 +622,7 @@ const GatewayLogsItemSchema = z.object({
   success: z.boolean(),
   tokens_in: z.number().int().nullable(),
   tokens_out: z.number().int().nullable(),
-});
+}).passthrough();
 
 const ListGatewayLogsSchema = z.object({
   items: z.array(GatewayLogsItemSchema),
@@ -768,65 +662,28 @@ const GetGatewayLogDetailSchema = z.object({
   success: z.boolean(),
   tokens_in: z.number().int().nullable(),
   tokens_out: z.number().int().nullable(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const PatchGatewayLogSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const PatchGatewayLogSchema = z.object({}).passthrough();
 
-const GetGatewayLogRequestSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const GetGatewayLogRequestSchema = z.object({}).passthrough();
 
-const GetGatewayLogResponseSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const GetGatewayLogResponseSchema = z.object({}).passthrough();
 
 const ProvidersItemSchema = z.object({
   alias: z.string(),
   default_config: z.boolean(),
-  gateway_id: z.string().min(1).max(64).describe("gateway id"),
+  gateway_id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   id: z.string(),
   modified_at: z.string(),
   provider_slug: z.string(),
   rate_limit: z.number().optional(),
-  rate_limit_period: z.number().optional(),
+  rate_limit_period: z.number().optional().default(60),
   secret_id: z.string(),
   secret_preview: z.string(),
-});
+}).passthrough();
 
 const ListProvidersSchema = z.object({
   items: z.array(ProvidersItemSchema),
@@ -926,16 +783,7 @@ const ListGatewayDynamicRoutesSchema = z.object({
     })),
   }),
   success: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
   created_at: z.string(),
@@ -1037,16 +885,7 @@ const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
     is_valid: z.boolean().optional(),
     version_id: z.string(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetGatewayDynamicRouteSchema = z.object({
   created_at: z.string(),
@@ -1148,16 +987,7 @@ const GetGatewayDynamicRouteSchema = z.object({
     is_valid: z.boolean().optional(),
     version_id: z.string(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListGatewayDynamicRouteDeploymentsSchema = z.object({
   data: z.object({
@@ -1172,16 +1002,7 @@ const ListGatewayDynamicRouteDeploymentsSchema = z.object({
     per_page: z.number(),
   }),
   success: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
   created_at: z.string(),
@@ -1271,16 +1092,7 @@ const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListGatewayDynamicRouteVersionsSchema = z.object({
   data: z.object({
@@ -1297,16 +1109,7 @@ const ListGatewayDynamicRouteVersionsSchema = z.object({
     })),
   }),
   success: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
   created_at: z.string(),
@@ -1396,16 +1199,7 @@ const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
   id: z.string(),
   modified_at: z.string(),
   name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetGatewayDynamicRouteVersionSchema = z.object({
   active: z.enum(["true", "false"]),
@@ -1499,16 +1293,7 @@ const GetGatewayDynamicRouteVersionSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   version_id: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetGatewayUrlSchema = z.string();
 
@@ -1569,7 +1354,9 @@ const GetAigConfigFetchGatewaySchema = z.object({
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
     }),
   }).nullable().optional(),
-  id: z.string().min(1).max(64).describe("gateway id"),
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("gateway id"),
   is_default: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
@@ -1580,7 +1367,7 @@ const GetAigConfigFetchGatewaySchema = z.object({
   modified_at: z.string(),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
-    content_type: z.enum(["json", "protobuf"]).optional(),
+    content_type: z.enum(["json", "protobuf"]).optional().default("json"),
     headers: z.record(z.string(), z.string().max(4096)),
     url: z.string().max(2048),
   })).nullable().optional(),
@@ -1595,10 +1382,11 @@ const GetAigConfigFetchGatewaySchema = z.object({
   retry_max_attempts: z.number().int().min(1).max(5).nullable().optional()
     .describe("Maximum number of retry attempts for failed requests (1-5)"),
   spend_limits: z.object({
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     rules: z.array(z.object({
-      enabled: z.boolean().optional(),
-      id: z.string().min(1).optional(),
+      enabled: z.boolean().optional().default(true),
+      id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
+        .default("422c671d"),
       limit: z.number().min(0),
       limitType: z.enum(["cost"]),
       metadata: z.record(
@@ -1621,9 +1409,9 @@ const GetAigConfigFetchGatewaySchema = z.object({
         mode: z.enum(["filter"]),
         values: z.array(z.string()),
       }).optional(),
-      technique: z.enum(["fixed", "sliding"]).optional(),
+      technique: z.enum(["fixed", "sliding"]).optional().default("sliding"),
       window: z.number().int().min(0),
-    })).optional(),
+    })).optional().default([]),
   }).nullable().optional(),
   store_id: z.string().nullable().optional(),
   stripe: z.object({
@@ -1632,20 +1420,12 @@ const GetAigConfigFetchGatewaySchema = z.object({
       payload: z.string(),
     })),
   }).nullable().optional(),
-  workers_ai_billing_mode: z.enum(["postpaid"]).optional().describe(
-    "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
-  ),
+  workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
+    .describe(
+      "Controls how Workers AI inference calls routed through this gateway are billed. Only 'postpaid' i...",
+    ),
   zdr: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const InstancesItemSchema = z.object({
   ai_gateway_id: z.string().nullable().optional(),
@@ -1682,13 +1462,13 @@ const InstancesItemSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  cache: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
     "close_enough",
     "flexible_friend",
     "anything_goes",
-  ]).optional(),
+  ]).optional().default("close_enough"),
   cache_ttl: z.union([
     z.union([z.literal(600)]),
     z.union([z.literal(1800)]),
@@ -1700,10 +1480,10 @@ const InstancesItemSchema = z.object({
     z.union([z.literal(172800)]),
     z.union([z.literal(259200)]),
     z.union([z.literal(518400)]),
-  ]).optional().describe(
+  ]).optional().default(172800).describe(
     "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
   ),
-  chunk_overlap: z.number().int().min(0).max(30).optional(),
+  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
@@ -1725,45 +1505,53 @@ const InstancesItemSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  enable: z.boolean().optional(),
-  engine_version: z.number().optional(),
-  fusion_method: z.enum(["max", "rrf"]).optional(),
-  hybrid_search_enabled: z.boolean().optional().describe(
+  enable: z.boolean().optional().default(true),
+  engine_version: z.number().optional().default(3),
+  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
+  hybrid_search_enabled: z.boolean().optional().default(false).describe(
     "Deprecated — use index_method instead.",
   ),
-  id: z.string().min(1).max(64).describe(
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
     keyword: z.boolean(),
     vector: z.boolean(),
-  }).optional().describe(
+  }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
   indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+      "porter",
+    ),
   }).nullable().optional(),
   last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional(),
+  max_num_results: z.number().int().min(1).max(50).optional().default(10),
   metadata: z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
-  namespace: z.string().nullable().optional(),
-  paused: z.boolean().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).nullable().optional(),
+  paused: z.boolean().optional().default(false),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
     chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     mcp: z.object({
-      description: z.string().optional(),
-      disabled: z.boolean().optional(),
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     rate_limit: z.object({
       period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -1771,10 +1559,10 @@ const InstancesItemSchema = z.object({
       technique: z.enum(["fixed", "sliding"]).optional(),
     }).optional(),
     search_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
   }).optional(),
-  reranking: z.boolean().optional(),
+  reranking: z.boolean().optional().default(false),
   reranking_model: z.union([
     z.literal("@cf/baai/bge-reranker-base"),
     z.literal(""),
@@ -1820,29 +1608,36 @@ const InstancesItemSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  rewrite_query: z.boolean().optional(),
-  score_threshold: z.number().min(0).max(1).optional(),
+  rewrite_query: z.boolean().optional().default(false),
+  score_threshold: z.number().min(0).max(1).optional().default(0.4),
   source: z.string().nullable().optional(),
   source_params: z.object({
-    exclude_items: z.array(z.string().max(512)).optional(),
-    include_items: z.array(z.string().max(512)).optional(),
+    exclude_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    include_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
     prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional(),
+    r2_jurisdiction: z.string().optional().default("default"),
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200),
           selector: z.string().min(1).max(200),
         })).optional(),
-        include_headers: z.record(z.string(), z.string().max(8192)).optional(),
-        include_images: z.boolean().optional(),
+        include_headers: z.record(
+          z.string(),
+          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+        ).optional(),
+        include_images: z.boolean().optional().default(false),
         specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional(),
+        use_browser_rendering: z.boolean().optional().default(true),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional(),
-    }).optional(),
+      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
+    }).optional().default({ "parse_type": "sitemap" }),
   }).nullable().optional(),
-  status: z.string().optional(),
+  status: z.string().optional().default("waiting"),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -1852,13 +1647,13 @@ const InstancesItemSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().describe(
+  ]).optional().default(21600).describe(
     "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
   ),
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
-});
+}).passthrough();
 
 const ListInstancesSchema = z.object({
   items: z.array(InstancesItemSchema),
@@ -1907,13 +1702,13 @@ const CreateInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  cache: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
     "close_enough",
     "flexible_friend",
     "anything_goes",
-  ]).optional(),
+  ]).optional().default("close_enough"),
   cache_ttl: z.union([
     z.union([z.literal(600)]),
     z.union([z.literal(1800)]),
@@ -1925,10 +1720,10 @@ const CreateInstanceSchema = z.object({
     z.union([z.literal(172800)]),
     z.union([z.literal(259200)]),
     z.union([z.literal(518400)]),
-  ]).optional().describe(
+  ]).optional().default(172800).describe(
     "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
   ),
-  chunk_overlap: z.number().int().min(0).max(30).optional(),
+  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
@@ -1950,45 +1745,53 @@ const CreateInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  enable: z.boolean().optional(),
-  engine_version: z.number().optional(),
-  fusion_method: z.enum(["max", "rrf"]).optional(),
-  hybrid_search_enabled: z.boolean().optional().describe(
+  enable: z.boolean().optional().default(true),
+  engine_version: z.number().optional().default(3),
+  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
+  hybrid_search_enabled: z.boolean().optional().default(false).describe(
     "Deprecated — use index_method instead.",
   ),
-  id: z.string().min(1).max(64).describe(
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
     keyword: z.boolean(),
     vector: z.boolean(),
-  }).optional().describe(
+  }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
   indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+      "porter",
+    ),
   }).nullable().optional(),
   last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional(),
+  max_num_results: z.number().int().min(1).max(50).optional().default(10),
   metadata: z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
-  namespace: z.string().nullable().optional(),
-  paused: z.boolean().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).nullable().optional(),
+  paused: z.boolean().optional().default(false),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
     chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     mcp: z.object({
-      description: z.string().optional(),
-      disabled: z.boolean().optional(),
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     rate_limit: z.object({
       period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -1996,10 +1799,10 @@ const CreateInstanceSchema = z.object({
       technique: z.enum(["fixed", "sliding"]).optional(),
     }).optional(),
     search_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
   }).optional(),
-  reranking: z.boolean().optional(),
+  reranking: z.boolean().optional().default(false),
   reranking_model: z.union([
     z.literal("@cf/baai/bge-reranker-base"),
     z.literal(""),
@@ -2045,29 +1848,36 @@ const CreateInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  rewrite_query: z.boolean().optional(),
-  score_threshold: z.number().min(0).max(1).optional(),
+  rewrite_query: z.boolean().optional().default(false),
+  score_threshold: z.number().min(0).max(1).optional().default(0.4),
   source: z.string().nullable().optional(),
   source_params: z.object({
-    exclude_items: z.array(z.string().max(512)).optional(),
-    include_items: z.array(z.string().max(512)).optional(),
+    exclude_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    include_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
     prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional(),
+    r2_jurisdiction: z.string().optional().default("default"),
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200),
           selector: z.string().min(1).max(200),
         })).optional(),
-        include_headers: z.record(z.string(), z.string().max(8192)).optional(),
-        include_images: z.boolean().optional(),
+        include_headers: z.record(
+          z.string(),
+          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+        ).optional(),
+        include_images: z.boolean().optional().default(false),
         specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional(),
+        use_browser_rendering: z.boolean().optional().default(true),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional(),
-    }).optional(),
+      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
+    }).optional().default({ "parse_type": "sitemap" }),
   }).nullable().optional(),
-  status: z.string().optional(),
+  status: z.string().optional().default("waiting"),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -2077,22 +1887,13 @@ const CreateInstanceSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().describe(
+  ]).optional().default(21600).describe(
     "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
   ),
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAiSearchFetchInstanceSchema = z.object({
   ai_gateway_id: z.string().nullable().optional(),
@@ -2129,13 +1930,13 @@ const GetAiSearchFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  cache: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
     "close_enough",
     "flexible_friend",
     "anything_goes",
-  ]).optional(),
+  ]).optional().default("close_enough"),
   cache_ttl: z.union([
     z.union([z.literal(600)]),
     z.union([z.literal(1800)]),
@@ -2147,10 +1948,10 @@ const GetAiSearchFetchInstanceSchema = z.object({
     z.union([z.literal(172800)]),
     z.union([z.literal(259200)]),
     z.union([z.literal(518400)]),
-  ]).optional().describe(
+  ]).optional().default(172800).describe(
     "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
   ),
-  chunk_overlap: z.number().int().min(0).max(30).optional(),
+  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
@@ -2172,45 +1973,53 @@ const GetAiSearchFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  enable: z.boolean().optional(),
-  engine_version: z.number().optional(),
-  fusion_method: z.enum(["max", "rrf"]).optional(),
-  hybrid_search_enabled: z.boolean().optional().describe(
+  enable: z.boolean().optional().default(true),
+  engine_version: z.number().optional().default(3),
+  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
+  hybrid_search_enabled: z.boolean().optional().default(false).describe(
     "Deprecated — use index_method instead.",
   ),
-  id: z.string().min(1).max(64).describe(
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
     keyword: z.boolean(),
     vector: z.boolean(),
-  }).optional().describe(
+  }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
   indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+      "porter",
+    ),
   }).nullable().optional(),
   last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional(),
+  max_num_results: z.number().int().min(1).max(50).optional().default(10),
   metadata: z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
-  namespace: z.string().nullable().optional(),
-  paused: z.boolean().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).nullable().optional(),
+  paused: z.boolean().optional().default(false),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
     chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     mcp: z.object({
-      description: z.string().optional(),
-      disabled: z.boolean().optional(),
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     rate_limit: z.object({
       period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -2218,10 +2027,10 @@ const GetAiSearchFetchInstanceSchema = z.object({
       technique: z.enum(["fixed", "sliding"]).optional(),
     }).optional(),
     search_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
   }).optional(),
-  reranking: z.boolean().optional(),
+  reranking: z.boolean().optional().default(false),
   reranking_model: z.union([
     z.literal("@cf/baai/bge-reranker-base"),
     z.literal(""),
@@ -2267,29 +2076,36 @@ const GetAiSearchFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  rewrite_query: z.boolean().optional(),
-  score_threshold: z.number().min(0).max(1).optional(),
+  rewrite_query: z.boolean().optional().default(false),
+  score_threshold: z.number().min(0).max(1).optional().default(0.4),
   source: z.string().nullable().optional(),
   source_params: z.object({
-    exclude_items: z.array(z.string().max(512)).optional(),
-    include_items: z.array(z.string().max(512)).optional(),
+    exclude_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    include_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
     prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional(),
+    r2_jurisdiction: z.string().optional().default("default"),
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200),
           selector: z.string().min(1).max(200),
         })).optional(),
-        include_headers: z.record(z.string(), z.string().max(8192)).optional(),
-        include_images: z.boolean().optional(),
+        include_headers: z.record(
+          z.string(),
+          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+        ).optional(),
+        include_images: z.boolean().optional().default(false),
         specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional(),
+        use_browser_rendering: z.boolean().optional().default(true),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional(),
-    }).optional(),
+      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
+    }).optional().default({ "parse_type": "sitemap" }),
   }).nullable().optional(),
-  status: z.string().optional(),
+  status: z.string().optional().default("waiting"),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -2299,22 +2115,13 @@ const GetAiSearchFetchInstanceSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().describe(
+  ]).optional().default(21600).describe(
     "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
   ),
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAiSearchInstanceChatCompletionSchema = z.object({
   choices: z.array(z.object({
@@ -2359,16 +2166,7 @@ const CreateAiSearchInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const JobsItemSchema = z.object({
   description: z.string().optional(),
@@ -2378,7 +2176,7 @@ const JobsItemSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
-});
+}).passthrough();
 
 const ListJobsSchema = z.object({
   items: z.array(JobsItemSchema),
@@ -2400,16 +2198,7 @@ const CreateJobSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
   description: z.string().optional(),
@@ -2419,23 +2208,14 @@ const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const JobLogsItemSchema = z.object({
   created_at: z.number(),
   id: z.number().int(),
   message: z.string(),
   message_type: z.number().int(),
-});
+}).passthrough();
 
 const ListJobLogsSchema = z.object({
   items: z.array(JobLogsItemSchema),
@@ -2471,16 +2251,7 @@ const CreateAiSearchInstanceSearchSchema = z.object({
   })),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAiSearchStatsSchema = z.object({
   completed: z.number().int().optional(),
@@ -2508,24 +2279,15 @@ const GetAiSearchStatsSchema = z.object({
   queued: z.number().int().optional(),
   running: z.number().int().optional(),
   skipped: z.number().int().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const NamespacesItemSchema = z.object({
   created_at: z.string(),
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string(),
-});
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+}).passthrough();
 
 const ListNamespacesSchema = z.object({
   items: z.array(NamespacesItemSchema),
@@ -2544,34 +2306,16 @@ const CreateNamespaceSchema = z.object({
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+}).passthrough();
 
 const GetAiSearchFetchNamespaceSchema = z.object({
   created_at: z.string(),
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+}).passthrough();
 
 const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
   choices: z.array(z.object({
@@ -2621,16 +2365,7 @@ const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   ai_gateway_id: z.string().nullable().optional(),
@@ -2667,13 +2402,13 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  cache: z.boolean().optional(),
+  cache: z.boolean().optional().default(true),
   cache_threshold: z.enum([
     "super_strict_match",
     "close_enough",
     "flexible_friend",
     "anything_goes",
-  ]).optional(),
+  ]).optional().default("close_enough"),
   cache_ttl: z.union([
     z.union([z.literal(600)]),
     z.union([z.literal(1800)]),
@@ -2685,10 +2420,10 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.union([z.literal(172800)]),
     z.union([z.literal(259200)]),
     z.union([z.literal(518400)]),
-  ]).optional().describe(
+  ]).optional().default(172800).describe(
     "Cache entry TTL in seconds. Allowed values: 600 (10min), 1800 (30min), 3600 (1h), 7200 (2h), 2160...",
   ),
-  chunk_overlap: z.number().int().min(0).max(30).optional(),
+  chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
@@ -2710,45 +2445,53 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  enable: z.boolean().optional(),
-  engine_version: z.number().optional(),
-  fusion_method: z.enum(["max", "rrf"]).optional(),
-  hybrid_search_enabled: z.boolean().optional().describe(
+  enable: z.boolean().optional().default(true),
+  engine_version: z.number().optional().default(3),
+  fusion_method: z.enum(["max", "rrf"]).optional().default("rrf"),
+  hybrid_search_enabled: z.boolean().optional().default(false).describe(
     "Deprecated — use index_method instead.",
   ),
-  id: z.string().min(1).max(64).describe(
+  id: z.string().min(1).max(64).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
     keyword: z.boolean(),
     vector: z.boolean(),
-  }).optional().describe(
+  }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
   indexing_options: z.object({
-    keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+    keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+      "porter",
+    ),
   }).nullable().optional(),
   last_activity: z.string().nullable().optional(),
-  max_num_results: z.number().int().min(1).max(50).optional(),
+  max_num_results: z.number().int().min(1).max(50).optional().default(10),
   metadata: z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
-  namespace: z.string().nullable().optional(),
-  paused: z.boolean().optional(),
+  namespace: z.string().regex(
+    new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+  ).nullable().optional(),
+  paused: z.boolean().optional().default(false),
   public_endpoint_id: z.string().nullable().optional(),
   public_endpoint_params: z.object({
     authorized_hosts: z.array(z.string()).optional(),
     chat_completions_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     custom_domains: z.array(z.string().min(1).max(253)).nullable().optional(),
-    enabled: z.boolean().optional(),
+    enabled: z.boolean().optional().default(false),
     mcp: z.object({
-      description: z.string().optional(),
-      disabled: z.boolean().optional(),
+      description: z.string().optional().default(
+        "Finds exactly what you're looking for",
+      ),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
     rate_limit: z.object({
       period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -2756,10 +2499,10 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
       technique: z.enum(["fixed", "sliding"]).optional(),
     }).optional(),
     search_endpoint: z.object({
-      disabled: z.boolean().optional(),
+      disabled: z.boolean().optional().default(false),
     }).optional(),
   }).optional(),
-  reranking: z.boolean().optional(),
+  reranking: z.boolean().optional().default(false),
   reranking_model: z.union([
     z.literal("@cf/baai/bge-reranker-base"),
     z.literal(""),
@@ -2805,29 +2548,36 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.literal(""),
     z.literal(null),
   ]).nullable().optional(),
-  rewrite_query: z.boolean().optional(),
-  score_threshold: z.number().min(0).max(1).optional(),
+  rewrite_query: z.boolean().optional().default(false),
+  score_threshold: z.number().min(0).max(1).optional().default(0.4),
   source: z.string().nullable().optional(),
   source_params: z.object({
-    exclude_items: z.array(z.string().max(512)).optional(),
-    include_items: z.array(z.string().max(512)).optional(),
+    exclude_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
+    include_items: z.array(
+      z.string().max(512).regex(new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$")),
+    ).optional(),
     prefix: z.string().optional(),
-    r2_jurisdiction: z.string().optional(),
+    r2_jurisdiction: z.string().optional().default("default"),
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
           path: z.string().min(1).max(200),
           selector: z.string().min(1).max(200),
         })).optional(),
-        include_headers: z.record(z.string(), z.string().max(8192)).optional(),
-        include_images: z.boolean().optional(),
+        include_headers: z.record(
+          z.string(),
+          z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+        ).optional(),
+        include_images: z.boolean().optional().default(false),
         specific_sitemaps: z.array(z.string()).optional(),
-        use_browser_rendering: z.boolean().optional(),
+        use_browser_rendering: z.boolean().optional().default(true),
       }).optional(),
-      parse_type: z.enum(["sitemap", "crawl"]).optional(),
-    }).optional(),
+      parse_type: z.enum(["sitemap", "crawl"]).optional().default("sitemap"),
+    }).optional().default({ "parse_type": "sitemap" }),
   }).nullable().optional(),
-  status: z.string().optional(),
+  status: z.string().optional().default("waiting"),
   sync_interval: z.union([
     z.union([z.literal(900)]),
     z.union([z.literal(1800)]),
@@ -2837,34 +2587,15 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     z.union([z.literal(21600)]),
     z.union([z.literal(43200)]),
     z.union([z.literal(86400)]),
-  ]).optional().describe(
+  ]).optional().default(21600).describe(
     "Interval between automatic syncs, in seconds. Allowed values: 900 (15min), 1800 (30min), 3600 (1h...",
   ),
   token_id: z.string().optional(),
   type: z.union([z.literal("r2"), z.literal("web-crawler"), z.literal(null)])
     .nullable().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const UpdateAiSearchMoveInstanceSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const UpdateAiSearchMoveInstanceSchema = z.object({}).passthrough();
 
 const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
   choices: z.array(z.object({
@@ -2909,16 +2640,7 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ItemsItemSchema = z.object({
   checksum: z.string(),
@@ -2946,7 +2668,7 @@ const ItemsItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
-});
+}).passthrough();
 
 const ListItemsSchema = z.object({
   items: z.array(ItemsItemSchema),
@@ -2986,16 +2708,7 @@ const CreateOrUpdateItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetItemSchema = z.object({
   checksum: z.string(),
@@ -3023,16 +2736,7 @@ const GetItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
   checksum: z.string(),
@@ -3060,16 +2764,7 @@ const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
     "skipped",
     "outdated",
   ]),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ItemChunksItemSchema = z.object({
   end_byte: z.number().optional(),
@@ -3081,7 +2776,7 @@ const ItemChunksItemSchema = z.object({
   }),
   start_byte: z.number().optional(),
   text: z.string(),
-});
+}).passthrough();
 
 const ListItemChunksSchema = z.object({
   items: z.array(ItemChunksItemSchema),
@@ -3103,7 +2798,7 @@ const AiSearchNamespaceInstanceLogsItemItemSchema = z.object({
   message: z.string().nullable(),
   processingTimeMs: z.number().int().nullable(),
   timestamp: z.string(),
-});
+}).passthrough();
 
 const ListAiSearchNamespaceInstanceLogsItemSchema = z.object({
   items: z.array(AiSearchNamespaceInstanceLogsItemItemSchema),
@@ -3125,16 +2820,7 @@ const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
   last_seen_at: z.string().optional(),
   source: z.enum(["user", "schedule"]),
   started_at: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
@@ -3158,16 +2844,7 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
   })),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAiSearchNamespaceStatsSchema = z.object({
   completed: z.number().int().optional(),
@@ -3195,16 +2872,7 @@ const GetAiSearchNamespaceStatsSchema = z.object({
   queued: z.number().int().optional(),
   running: z.number().int().optional(),
   skipped: z.number().int().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
@@ -3233,28 +2901,19 @@ const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
   })).optional(),
   query_kind: z.enum(["text", "image", "multimodal"]),
   search_query: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TokensItemSchema = z.object({
   cf_api_id: z.string(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().optional().default(true),
   id: z.string(),
-  legacy: z.boolean().optional(),
+  legacy: z.boolean().optional().default(true),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
   name: z.string(),
-});
+}).passthrough();
 
 const ListTokensSchema = z.object({
   items: z.array(TokensItemSchema),
@@ -3272,24 +2931,15 @@ const GetAiSearchFetchTokensSchema = z.object({
   cf_api_id: z.string(),
   created_at: z.string(),
   created_by: z.string().nullable().optional(),
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().optional().default(true),
   id: z.string(),
-  legacy: z.boolean().optional(),
+  legacy: z.boolean().optional().default(true),
   modified_at: z.string(),
   modified_by: z.string().nullable().optional(),
   name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const WorkersAiSearchAuthorItemSchema = z.object({});
+const WorkersAiSearchAuthorItemSchema = z.object({}).passthrough();
 
 const ListWorkersAiSearchAuthorSchema = z.object({
   items: z.array(WorkersAiSearchAuthorItemSchema),
@@ -3310,16 +2960,7 @@ const ListFinetunesSchema = z.object({
   model: z.string(),
   modified_at: z.string(),
   name: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateFinetuneSchema = z.object({
   created_at: z.string(),
@@ -3329,16 +2970,7 @@ const CreateFinetuneSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   public: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PublicFinetunesItemSchema = z.object({
   created_at: z.string(),
@@ -3348,7 +2980,7 @@ const PublicFinetunesItemSchema = z.object({
   modified_at: z.string(),
   name: z.string(),
   public: z.boolean(),
-});
+}).passthrough();
 
 const ListPublicFinetunesSchema = z.object({
   items: z.array(PublicFinetunesItemSchema),
@@ -3373,16 +3005,7 @@ const GetModelSchemaSchema = z.object({
     description: z.string(),
     type: z.string(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetWorkersAiSearchModelSchema = z.union([
   z.object({
@@ -3396,1107 +3019,271 @@ const GetWorkersAiSearchModelSchema = z.union([
   }),
 ]);
 
-const CreateWorkersAiPostRunGenericSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunGenericSchema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema = z.object(
-  {},
-);
+const CreateWorkersAiPostRunCfAi4bharatIndictrans2EnIndic1bSchema = z.object({})
+  .passthrough();
 
 const CreateWorkersAiPostRunCfAi4bharatNonomniIndictrans2EnIndic1bSchema = z
-  .object({});
+  .object({}).passthrough();
 
-const WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfAisingaporeGemmaSeaLionV427bItSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfBaaiBgeBaseEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiBgeBaseEnV15Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfBaaiBgeLargeEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiBgeLargeEnV15Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfBaaiBgeM3Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiBgeM3Schema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfBaaiBgeRerankerBaseSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfBaaiBgeSmallEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiBgeSmallEnV15Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiNonomniBgeBaseEnV15Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiNonomniBgeLargeEnV15Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfBaaiNonomniBgeM3Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiNonomniBgeM3Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfBaaiNonomniBgeSmallEnV15Schema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux1SchnellSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2DevSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein4bSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfBlackForestLabsFlux2Klein9bSchema = z.object({})
+  .passthrough();
 
 const CreateWorkersAiPostRunCfBytedanceStableDiffusionXlLightningSchema = z
-  .object({});
+  .object({}).passthrough();
 
-const CreateWorkersAiPostRunCfDeepgramAura1Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfDeepgramAura1Schema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfDeepgramAura2EnSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfDeepgramAura2EnSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfDeepgramAura2EsSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfDeepgramAura2EsSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfDeepgramFluxSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfDeepgramFluxSchema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfDeepgramNova3Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfDeepgramNova3Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfDeepseekAiDeepseekMath7bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfDeepseekAiDeepseekR1DistillQwen32bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfDefogSqlcoder7b2Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfDefogSqlcoder7b2Schema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfFacebookBartLargeCnnSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfFacebookNonomniBartLargeCnnSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfFblgitUnaCybertron7bV2Bf16Schema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfGoogleEmbeddinggemma300mSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfGoogleGemma2bItLoraSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfGoogleGemma2bItLoraSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfGoogleGemma312bItSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfGoogleGemma312bItSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfGoogleGemma426bA4bItSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfGoogleGemma426bA4bItSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfGoogleGemma7bItLoraSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfGoogleGemma7bItLoraSchema = z.object({}).passthrough();
 
 const CreateWorkersAiPostRunCfGoogleNonomniEmbeddinggemma300mSchema = z.object(
   {},
-);
+).passthrough();
 
-const CreateWorkersAiPostRunCfHuggingfaceDistilbertSst2Int8Schema = z.object(
-  {},
-);
+const CreateWorkersAiPostRunCfHuggingfaceDistilbertSst2Int8Schema = z.object({})
+  .passthrough();
 
 const CreateWorkersAiPostRunCfHuggingfaceNonomniDistilbertSst2Int8Schema = z
-  .object({});
+  .object({}).passthrough();
 
-const WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfIbmGraniteGranite40HMicroSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfLeonardoLucidOriginSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfLeonardoLucidOriginSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfLeonardoPhoenix10Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfLeonardoPhoenix10Schema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfLykonDreamshaper8LcmSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlamaLlama27bChatHfLoraSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama27bChatFp16Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama27bChatFp16Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMetaLlama27bChatInt8Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama27bChatInt8Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMetaLlama38bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama38bInstructSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMetaLlama38bInstructAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama38bInstructAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama3170bInstructFp8FastSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama318bInstructAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama318bInstructAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama318bInstructFp8Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama318bInstructFp8Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama318bInstructFp8FastSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama3211bVisionInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama321bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama321bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama323bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama323bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama3370bInstructFp8FastSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaLlama4Scout17b16eInstructSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfMetaLlamaGuard38bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMetaM2m10012bSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMicrosoftPhi2Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMistralMistral7bInstructV01Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMistralMistral7bInstructV02LoraSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMistralaiMistralSmall3124bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfMoonshotaiKimiK25Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMoonshotaiKimiK25Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMoonshotaiKimiK26Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMoonshotaiKimiK26Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfMoonshotaiKimiK27CodeSchema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfMyshellAiMelottsSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfMyshellAiMelottsSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfNvidiaNemotron3120bA12bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfNvidiaNemotronSpeechStreamingEn06bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfOpenaiGptOss120bSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfOpenaiGptOss20bSchema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfOpenaiWhisperLargeV3TurboSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfOpenchatOpenchat350106Schema = z.object({})
+  .passthrough();
 
-const CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfPfnetPlamoEmbedding1bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfQwenQwen1505bChatSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen1505bChatSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfQwenQwen1518bChatSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen1518bChatSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfQwenQwen1514bChatAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen1514bChatAwqSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfQwenQwen157bChatAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen157bChatAwqSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen25Coder32bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfQwenQwen330bA3bFp8Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwen330bA3bFp8Schema = z.object({}).passthrough();
 
-const CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const CreateWorkersAiPostRunCfQwenQwen3Embedding06bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfQwenQwq32bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfQwenQwq32bSchema = z.object({}).passthrough();
 
 const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15Img2imgSchema = z
-  .object({});
+  .object({}).passthrough();
 
 const CreateWorkersAiPostRunCfRunwaymlStableDiffusionV15InpaintingSchema = z
-  .object({});
+  .object({}).passthrough();
 
 const CreateWorkersAiPostRunCfStabilityaiStableDiffusionXlBase10Schema = z
-  .object({});
+  .object({}).passthrough();
 
-const WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfTheblokeDiscolmGerman7bV1AwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfTiiuaeFalcon7bInstructSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfTinyllamaTinyllama11bChatV10Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunCfZaiOrgGlm47FlashSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfZaiOrgGlm47FlashSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunCfZaiOrgGlm52Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunCfZaiOrgGlm52Schema = z.object({}).passthrough();
 
-const WorkersAiPostRunHfGoogleGemma7bItSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfGoogleGemma7bItSchema = z.object({}).passthrough();
 
-const WorkersAiPostRunHfMistralMistral7bInstructV02Schema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfMistralMistral7bInstructV02Schema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfNexusflowStarlingLm7bBetaSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfNousresearchHermes2ProMistral7bSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeDeepseekCoder67bBaseAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeDeepseekCoder67bInstructAwqSchema = z.object(
-  {},
-);
+const WorkersAiPostRunHfTheblokeDeepseekCoder67bInstructAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeLlama213bChatAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeMistral7bInstructV01AwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeNeuralChat7bV31AwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeOpenhermes25Mistral7bAwqSchema = z.object({})
+  .passthrough();
 
-const WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const WorkersAiPostRunHfTheblokeZephyr7bBetaAwqSchema = z.object({})
+  .passthrough();
 
 const WorkersAiPostRunModelSchema = z.union([
   z.array(z.object({
@@ -4546,9 +3333,9 @@ const WorkersAiPostRunModelSchema = z.union([
         name: z.string().optional(),
       })).optional(),
       usage: z.object({
-        completion_tokens: z.number().optional(),
-        prompt_tokens: z.number().optional(),
-        total_tokens: z.number().optional(),
+        completion_tokens: z.number().optional().default(0),
+        prompt_tokens: z.number().optional().default(0),
+        total_tokens: z.number().optional().default(0),
       }).optional(),
     }),
     z.string(),
@@ -4571,7 +3358,7 @@ const WorkersAiPostRunModelSchema = z.union([
   }),
 ]);
 
-const WorkersAiSearchTaskItemSchema = z.object({});
+const WorkersAiSearchTaskItemSchema = z.object({}).passthrough();
 
 const ListWorkersAiSearchTaskSchema = z.object({
   items: z.array(WorkersAiSearchTaskItemSchema),
@@ -4588,7 +3375,7 @@ const ListWorkersAiSearchTaskSchema = z.object({
 const GetToMarkdownSupportedItemSchema = z.object({
   extension: z.string(),
   mimeType: z.string(),
-});
+}).passthrough();
 
 const GetToMarkdownSupportedSchema = z.object({
   items: z.array(GetToMarkdownSupportedItemSchema),
@@ -4609,7 +3396,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -4635,6 +3422,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -5817,7 +4609,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5828,12 +4619,7 @@ export const model = {
         const handle = await context.writeResource(
           "credit_balance",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched credit_balance", {});
         return { dataHandles: [handle] };
@@ -5860,7 +4646,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5871,12 +4656,7 @@ export const model = {
         const handle = await context.writeResource(
           "invoice_history",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched invoice_history", {});
         return { dataHandles: [handle] };
@@ -5899,7 +4679,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5910,12 +4689,7 @@ export const model = {
         const handle = await context.writeResource(
           "invoice_preview",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched invoice_preview", {});
         return { dataHandles: [handle] };
@@ -5938,7 +4712,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5949,12 +4722,7 @@ export const model = {
         const handle = await context.writeResource(
           "spending_limit",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched spending_limit", {});
         return { dataHandles: [handle] };
@@ -6010,7 +4778,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6022,13 +4789,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("topup", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("topup", id, result);
         context.logger.info("Created topup {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -6050,7 +4814,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6061,12 +4824,7 @@ export const model = {
         const handle = await context.writeResource(
           "topup_config",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched topup_config", {});
         return { dataHandles: [handle] };
@@ -6096,7 +4854,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6108,16 +4865,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "aig_billing_set_topup_config",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created aig_billing_set_topup_config {id}", {
           id,
@@ -6171,7 +4925,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6182,12 +4935,7 @@ export const model = {
         const handle = await context.writeResource(
           "topup_limits",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched topup_limits", {});
         return { dataHandles: [handle] };
@@ -6214,7 +4962,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6226,16 +4973,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "aig_billing_check_topup_status",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created aig_billing_check_topup_status {id}", {
           id,
@@ -6270,7 +5014,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6281,12 +5024,7 @@ export const model = {
         const handle = await context.writeResource(
           "usage_history",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched usage_history", {});
         return { dataHandles: [handle] };
@@ -6315,8 +5053,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -6363,7 +5101,7 @@ export const model = {
         headers: z.string().max(8192).optional(),
         js_example: z.string().optional(),
         link: z.string().optional(),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
         position: z.number().int().optional(),
         slug: z.string(),
       }),
@@ -6381,7 +5119,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6393,16 +5130,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "account_provider",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created account_provider {id}", { id });
         return { dataHandles: [handle] };
@@ -6433,8 +5167,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -6513,7 +5247,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6525,16 +5258,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "account_provider_cost",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created account_provider_cost {id}", { id });
         return { dataHandles: [handle] };
@@ -6543,7 +5273,7 @@ export const model = {
     get_aig_config_fetch_account_provider_cost: {
       description: "Fetch a Account Provider Cost",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6559,7 +5289,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6569,13 +5298,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "aig_config_fetch_account_provider_cost",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info(
           "Fetched aig_config_fetch_account_provider_cost",
@@ -6587,7 +5311,7 @@ export const model = {
     update_account_provider_cost: {
       description: "Update a Account Provider Cost",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         cost_in: z.number().optional(),
         cost_out: z.number().optional(),
         cost_type: z.string().optional(),
@@ -6623,7 +5347,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6641,13 +5364,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "account_provider_cost",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated account_provider_cost", {});
         return { dataHandles: [handle] };
@@ -6656,7 +5374,7 @@ export const model = {
     delete_account_provider_cost: {
       description: "Delete a Account Provider Cost",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6687,7 +5405,7 @@ export const model = {
     get_aig_config_fetch_account_provider: {
       description: "Fetch a Account Provider",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6703,7 +5421,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6713,13 +5430,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "aig_config_fetch_account_provider",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched aig_config_fetch_account_provider", {});
         return { dataHandles: [handle] };
@@ -6728,7 +5440,7 @@ export const model = {
     update_account_provider: {
       description: "Update a Account Provider",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         base_url: z.string().optional(),
         beta: z.boolean().optional(),
         curl_example: z.string().optional(),
@@ -6756,7 +5468,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6774,13 +5485,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "account_provider",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated account_provider", {});
         return { dataHandles: [handle] };
@@ -6789,7 +5495,7 @@ export const model = {
     delete_account_provider: {
       description: "Delete a Account Provider",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6839,8 +5545,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -6897,8 +5603,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -6976,7 +5682,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6988,13 +5693,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("gateway", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("gateway", id, result);
         context.logger.info("Created gateway {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7002,7 +5704,7 @@ export const model = {
     list_dataset: {
       description: "List Datasets",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         page: z.number().optional(),
         per_page: z.number().optional(),
         name: z.string().optional(),
@@ -7023,8 +5725,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -7061,7 +5763,7 @@ export const model = {
     create_dataset: {
       description: "Create a new Dataset",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         enable: z.boolean(),
         filters: z.array(z.object({
           key: z.enum([
@@ -7082,7 +5784,7 @@ export const model = {
           operator: z.enum(["eq", "contains", "lt", "gt"]),
           value: z.array(z.union([z.string(), z.number(), z.boolean()])),
         })),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7098,7 +5800,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7114,13 +5815,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("dataset", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("dataset", id, result);
         context.logger.info("Created dataset {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7128,8 +5826,8 @@ export const model = {
     get_aig_config_fetch_dataset: {
       description: "Fetch a Dataset",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7145,7 +5843,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7155,13 +5852,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "aig_config_fetch_dataset",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched aig_config_fetch_dataset", {});
         return { dataHandles: [handle] };
@@ -7170,8 +5862,8 @@ export const model = {
     update_dataset: {
       description: "Update a Dataset",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
         enable: z.boolean(),
         filters: z.array(z.object({
           key: z.enum([
@@ -7192,7 +5884,7 @@ export const model = {
           operator: z.enum(["eq", "contains", "lt", "gt"]),
           value: z.array(z.union([z.string(), z.number(), z.boolean()])),
         })),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7208,7 +5900,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7226,13 +5917,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "dataset",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated dataset", {});
         return { dataHandles: [handle] };
@@ -7241,8 +5927,8 @@ export const model = {
     delete_dataset: {
       description: "Delete a Dataset",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7273,7 +5959,7 @@ export const model = {
     list_evaluations: {
       description: "List Evaluations",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         page: z.number().optional(),
         per_page: z.number().optional(),
         name: z.string().optional(),
@@ -7294,8 +5980,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -7334,10 +6020,10 @@ export const model = {
     create_evaluations: {
       description: "Create a new Evaluation",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         dataset_ids: z.array(z.string()),
         evaluation_type_ids: z.array(z.string()),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7353,7 +6039,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7369,13 +6054,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("evaluations", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("evaluations", id, result);
         context.logger.info("Created evaluations {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7383,8 +6065,8 @@ export const model = {
     get_aig_config_fetch_evaluations: {
       description: "Fetch a Evaluation",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7400,7 +6082,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7410,13 +6091,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "aig_config_fetch_evaluations",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched aig_config_fetch_evaluations", {});
         return { dataHandles: [handle] };
@@ -7425,8 +6101,8 @@ export const model = {
     delete_evaluations: {
       description: "Delete a Evaluation",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7457,7 +6133,7 @@ export const model = {
     list_gateway_logs: {
       description: "List Gateway Logs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         search: z.string().optional(),
         page: z.number().optional(),
         per_page: z.number().optional(),
@@ -7508,8 +6184,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -7548,7 +6224,7 @@ export const model = {
     delete_gateway_logs: {
       description: "Delete Gateway Logs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         order_by: z.enum([
           "created_at",
           "provider",
@@ -7608,8 +6284,8 @@ export const model = {
     get_gateway_log_detail: {
       description: "Get Gateway Log Detail",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string(),
+        gateway_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7625,7 +6301,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7635,13 +6310,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_log_detail",
-          String(args.gateway_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gateway_id)),
+          result,
         );
         context.logger.info("Fetched gateway_log_detail", {});
         return { dataHandles: [handle] };
@@ -7650,8 +6320,8 @@ export const model = {
     patch_gateway_log: {
       description: "Patch Gateway Log",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string(),
+        gateway_id: z.string(),
         feedback: z.number().min(-1).max(1).nullable().optional(),
         metadata: z.record(
           z.string(),
@@ -7673,7 +6343,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7691,13 +6360,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_gateway_log",
-          String(args.gateway_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gateway_id)),
+          result,
         );
         context.logger.info("Updated patch_gateway_log", {});
         return { dataHandles: [handle] };
@@ -7706,8 +6370,8 @@ export const model = {
     get_gateway_log_request: {
       description: "Get Gateway Log Request",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string(),
+        gateway_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7723,7 +6387,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7733,13 +6396,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_log_request",
-          String(args.gateway_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gateway_id)),
+          result,
         );
         context.logger.info("Fetched gateway_log_request", {});
         return { dataHandles: [handle] };
@@ -7748,8 +6406,8 @@ export const model = {
     get_gateway_log_response: {
       description: "Get Gateway Log Response",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        id: z.string(),
+        gateway_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7765,7 +6423,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7775,13 +6432,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_log_response",
-          String(args.gateway_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gateway_id)),
+          result,
         );
         context.logger.info("Fetched gateway_log_response", {});
         return { dataHandles: [handle] };
@@ -7790,7 +6442,7 @@ export const model = {
     list_providers: {
       description: "List Provider Configs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         page: z.number().optional(),
         per_page: z.number().optional(),
       }),
@@ -7808,8 +6460,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["gateway_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -7848,7 +6500,7 @@ export const model = {
     create_providers: {
       description: "Create a new Provider Configs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         alias: z.string(),
         default_config: z.boolean(),
         provider_slug: z.string(),
@@ -7871,7 +6523,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7887,13 +6538,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("providers", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("providers", id, result);
         context.logger.info("Created providers {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7901,8 +6549,8 @@ export const model = {
     update_providers: {
       description: "Update a Provider Configs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
         secret: z.string(),
       }),
       execute: async (
@@ -7919,7 +6567,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7937,13 +6584,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "providers",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated providers", {});
         return { dataHandles: [handle] };
@@ -7952,8 +6594,8 @@ export const model = {
     delete_providers: {
       description: "Delete a Provider Configs",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7984,7 +6626,7 @@ export const model = {
     list_gateway_dynamic_routes: {
       description: "List all AI Gateway Dynamic Routes.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         page: z.number().optional().describe("Page number"),
         per_page: z.number().optional().describe("Number of routes per page"),
       }),
@@ -8002,7 +6644,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8012,13 +6653,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_routes",
-          String(args.gateway_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gateway_id)),
+          result,
         );
         context.logger.info("Fetched list_gateway_dynamic_routes", {});
         return { dataHandles: [handle] };
@@ -8027,7 +6663,7 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route: {
       description: "Create a new AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
+        gateway_id: z.string(),
         elements: z.array(z.union([
           z.object({
             id: z.string(),
@@ -8110,7 +6746,7 @@ export const model = {
             type: z.enum(["end"]),
           }),
         ])),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8126,7 +6762,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8142,16 +6777,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route {id}",
@@ -8163,8 +6795,8 @@ export const model = {
     get_gateway_dynamic_route: {
       description: "Get an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8180,7 +6812,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8190,13 +6821,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_dynamic_route",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched gateway_dynamic_route", {});
         return { dataHandles: [handle] };
@@ -8205,9 +6831,9 @@ export const model = {
     update_gateway_dynamic_route: {
       description: "Update an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
-        name: z.string().min(1, "name must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8223,7 +6849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8241,13 +6866,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_dynamic_route",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated gateway_dynamic_route", {});
         return { dataHandles: [handle] };
@@ -8256,8 +6876,8 @@ export const model = {
     delete_gateway_dynamic_route: {
       description: "Delete an AI Gateway Dynamic Route.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8288,8 +6908,8 @@ export const model = {
     list_gateway_dynamic_route_deployments: {
       description: "List all AI Gateway Dynamic Route Deployments.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8305,7 +6925,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8315,13 +6934,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_deployments",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info(
           "Fetched list_gateway_dynamic_route_deployments",
@@ -8333,9 +6947,9 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route_deployment: {
       description: "Create a new AI Gateway Dynamic Route Deployment.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
-        version_id: z.string().min(1, "version_id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
+        version_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8351,7 +6965,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8367,16 +6980,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_deployment",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route_deployment {id}",
@@ -8388,8 +6998,8 @@ export const model = {
     list_gateway_dynamic_route_versions: {
       description: "List all AI Gateway Dynamic Route Versions.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8405,7 +7015,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8415,13 +7024,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_versions",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched list_gateway_dynamic_route_versions", {});
         return { dataHandles: [handle] };
@@ -8430,8 +7034,8 @@ export const model = {
     create_aig_config_post_gateway_dynamic_route_version: {
       description: "Create a new AI Gateway Dynamic Route Version.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
         elements: z.array(z.union([
           z.object({
             id: z.string(),
@@ -8529,7 +7133,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8545,16 +7148,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_version",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created aig_config_post_gateway_dynamic_route_version {id}",
@@ -8566,9 +7166,9 @@ export const model = {
     get_gateway_dynamic_route_version: {
       description: "Get an AI Gateway Dynamic Route Version.",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        id: z.string().min(1, "id must not be empty"),
-        version_id: z.string().min(1, "version_id must not be empty"),
+        gateway_id: z.string(),
+        id: z.string(),
+        version_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8584,7 +7184,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8594,13 +7193,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_dynamic_route_version",
-          String(args.version_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.version_id)),
+          result,
         );
         context.logger.info("Fetched gateway_dynamic_route_version", {});
         return { dataHandles: [handle] };
@@ -8609,8 +7203,8 @@ export const model = {
     get_gateway_url: {
       description: "Get Gateway URL",
       arguments: z.object({
-        gateway_id: z.string().min(1, "gateway_id must not be empty"),
-        provider: z.string().min(1, "provider must not be empty"),
+        gateway_id: z.string(),
+        provider: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8626,7 +7220,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8636,13 +7229,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway_url",
-          String(args.provider),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.provider)),
+          result,
         );
         context.logger.info("Fetched gateway_url", {});
         return { dataHandles: [handle] };
@@ -8651,7 +7239,7 @@ export const model = {
     get_aig_config_fetch_gateway: {
       description: "Fetch a Gateway",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8667,7 +7255,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8677,13 +7264,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "aig_config_fetch_gateway",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched aig_config_fetch_gateway", {});
         return { dataHandles: [handle] };
@@ -8692,7 +7274,7 @@ export const model = {
     update_gateway: {
       description: "Update a Gateway",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         authentication: z.boolean().optional(),
         cache_invalidate_on_update: z.boolean(),
         cache_ttl: z.number().int().min(0).nullable(),
@@ -8756,7 +7338,7 @@ export const model = {
         logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
         otel: z.array(z.object({
           authorization: z.string().max(256).optional(),
-          content_type: z.enum(["json", "protobuf"]).optional(),
+          content_type: z.enum(["json", "protobuf"]).optional().default("json"),
           headers: z.record(z.string(), z.string().max(4096)),
           url: z.string().max(2048),
         })).nullable().optional(),
@@ -8773,10 +7355,11 @@ export const model = {
             "Maximum number of retry attempts for failed requests (1-5)",
           ),
         spend_limits: z.object({
-          enabled: z.boolean().optional(),
+          enabled: z.boolean().optional().default(false),
           rules: z.array(z.object({
-            enabled: z.boolean().optional(),
-            id: z.string().min(1).optional(),
+            enabled: z.boolean().optional().default(true),
+            id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$"))
+              .optional().default("f584b3b9"),
             limit: z.number().min(0),
             limitType: z.enum(["cost"]),
             metadata: z.record(
@@ -8799,9 +7382,11 @@ export const model = {
               mode: z.enum(["filter"]),
               values: z.array(z.string()),
             }).optional(),
-            technique: z.enum(["fixed", "sliding"]).optional(),
+            technique: z.enum(["fixed", "sliding"]).optional().default(
+              "sliding",
+            ),
             window: z.number().int().min(0),
-          })).optional(),
+          })).optional().default([]),
         }).nullable().optional(),
         store_id: z.string().nullable().optional(),
         stripe: z.object({
@@ -8829,7 +7414,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8847,13 +7431,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gateway",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated gateway", {});
         return { dataHandles: [handle] };
@@ -8862,7 +7441,7 @@ export const model = {
     delete_gateway: {
       description: "Delete a Gateway",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8920,8 +7499,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -9047,7 +7626,9 @@ export const model = {
           "Controls which storage backends are used during indexing. Defaults to vector-...",
         ),
         indexing_options: z.object({
-          keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+            "porter",
+          ),
         }).nullable().optional(),
         max_num_results: z.number().int().min(1).max(50).optional(),
         metadata: z.object({
@@ -9057,14 +7638,16 @@ export const model = {
         public_endpoint_params: z.object({
           authorized_hosts: z.array(z.string()).optional(),
           chat_completions_endpoint: z.object({
-            disabled: z.boolean().optional(),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
           custom_domains: z.array(z.string().min(1).max(253)).nullable()
             .optional(),
-          enabled: z.boolean().optional(),
+          enabled: z.boolean().optional().default(false),
           mcp: z.object({
-            description: z.string().optional(),
-            disabled: z.boolean().optional(),
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
           rate_limit: z.object({
             period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -9072,7 +7655,7 @@ export const model = {
             technique: z.enum(["fixed", "sliding"]).optional(),
           }).optional(),
           search_endpoint: z.object({
-            disabled: z.boolean().optional(),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
         }).optional(),
         reranking: z.boolean().optional(),
@@ -9126,24 +7709,36 @@ export const model = {
         score_threshold: z.number().min(0).max(1).optional(),
         source: z.string().nullable().optional(),
         source_params: z.object({
-          exclude_items: z.array(z.string().max(512)).optional(),
-          include_items: z.array(z.string().max(512)).optional(),
+          exclude_items: z.array(
+            z.string().max(512).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          include_items: z.array(
+            z.string().max(512).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
           prefix: z.string().optional(),
-          r2_jurisdiction: z.string().optional(),
+          r2_jurisdiction: z.string().optional().default("default"),
           web_crawler: z.object({
             parse_options: z.object({
               content_selector: z.array(z.object({
                 path: z.string().min(1).max(200),
                 selector: z.string().min(1).max(200),
               })).optional(),
-              include_headers: z.record(z.string(), z.string().max(8192))
-                .optional(),
-              include_images: z.boolean().optional(),
+              include_headers: z.record(
+                z.string(),
+                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+              ).optional(),
+              include_images: z.boolean().optional().default(false),
               specific_sitemaps: z.array(z.string()).optional(),
-              use_browser_rendering: z.boolean().optional(),
+              use_browser_rendering: z.boolean().optional().default(true),
             }).optional(),
-            parse_type: z.enum(["sitemap", "crawl"]).optional(),
-          }).optional(),
+            parse_type: z.enum(["sitemap", "crawl"]).optional().default(
+              "sitemap",
+            ),
+          }).optional().default({ "parse_type": "sitemap" }),
         }).nullable().optional(),
         sync_interval: z.union([
           z.union([z.literal(900)]),
@@ -9178,7 +7773,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -9190,13 +7784,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("instance", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("instance", id, result);
         context.logger.info("Created instance {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -9204,7 +7795,7 @@ export const model = {
     get_ai_search_fetch_instance: {
       description: "Get an AI Search instance.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9220,7 +7811,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9230,13 +7820,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_fetch_instance",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched ai_search_fetch_instance", {});
         return { dataHandles: [handle] };
@@ -9245,7 +7830,7 @@ export const model = {
     update_instance: {
       description: "Update an AI Search instance.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         ai_gateway_id: z.string().nullable().optional(),
         ai_search_model: z.union([
           z.literal("@cf/meta/llama-3.3-70b-instruct-fp8-fast"),
@@ -9330,7 +7915,9 @@ export const model = {
           "Controls which storage backends are used during indexing. Defaults to vector-...",
         ),
         indexing_options: z.object({
-          keyword_tokenizer: z.enum(["porter", "trigram"]).optional(),
+          keyword_tokenizer: z.enum(["porter", "trigram"]).optional().default(
+            "porter",
+          ),
         }).nullable().optional(),
         max_num_results: z.number().int().min(1).max(50).optional(),
         metadata: z.object({
@@ -9341,14 +7928,16 @@ export const model = {
         public_endpoint_params: z.object({
           authorized_hosts: z.array(z.string()).optional(),
           chat_completions_endpoint: z.object({
-            disabled: z.boolean().optional(),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
           custom_domains: z.array(z.string().min(1).max(253)).nullable()
             .optional(),
-          enabled: z.boolean().optional(),
+          enabled: z.boolean().optional().default(false),
           mcp: z.object({
-            description: z.string().optional(),
-            disabled: z.boolean().optional(),
+            description: z.string().optional().default(
+              "Finds exactly what you're looking for",
+            ),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
           rate_limit: z.object({
             period_ms: z.number().int().min(60000).max(3600000).optional(),
@@ -9356,7 +7945,7 @@ export const model = {
             technique: z.enum(["fixed", "sliding"]).optional(),
           }).optional(),
           search_endpoint: z.object({
-            disabled: z.boolean().optional(),
+            disabled: z.boolean().optional().default(false),
           }).optional(),
         }).optional(),
         reranking: z.boolean().optional(),
@@ -9410,24 +7999,36 @@ export const model = {
         score_threshold: z.number().min(0).max(1).optional(),
         source: z.string().nullable().optional(),
         source_params: z.object({
-          exclude_items: z.array(z.string().max(512)).optional(),
-          include_items: z.array(z.string().max(512)).optional(),
+          exclude_items: z.array(
+            z.string().max(512).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
+          include_items: z.array(
+            z.string().max(512).regex(
+              new RegExp("^[*/\\\\]?[\\w\\-/.\\\\?*:=&%]+$"),
+            ),
+          ).optional(),
           prefix: z.string().optional(),
-          r2_jurisdiction: z.string().optional(),
+          r2_jurisdiction: z.string().optional().default("default"),
           web_crawler: z.object({
             parse_options: z.object({
               content_selector: z.array(z.object({
                 path: z.string().min(1).max(200),
                 selector: z.string().min(1).max(200),
               })).optional(),
-              include_headers: z.record(z.string(), z.string().max(8192))
-                .optional(),
-              include_images: z.boolean().optional(),
+              include_headers: z.record(
+                z.string(),
+                z.string().max(8192).regex(new RegExp("^[\\t\\x20-\\x7E]*$")),
+              ).optional(),
+              include_images: z.boolean().optional().default(false),
               specific_sitemaps: z.array(z.string()).optional(),
-              use_browser_rendering: z.boolean().optional(),
+              use_browser_rendering: z.boolean().optional().default(true),
             }).optional(),
-            parse_type: z.enum(["sitemap", "crawl"]).optional(),
-          }).optional(),
+            parse_type: z.enum(["sitemap", "crawl"]).optional().default(
+              "sitemap",
+            ),
+          }).optional().default({ "parse_type": "sitemap" }),
         }).nullable().optional(),
         summarization: z.boolean().optional(),
         summarization_model: z.union([
@@ -9494,7 +8095,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9512,13 +8112,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "instance",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated instance", {});
         return { dataHandles: [handle] };
@@ -9527,7 +8122,7 @@ export const model = {
     delete_instance: {
       description: "Delete an AI Search instance.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9611,7 +8206,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -9623,14 +8218,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }).optional(),
         messages: z.array(z.object({
@@ -9702,7 +8300,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9718,16 +8315,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_instance_chat_completion",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created ai_search_instance_chat_completion {id}", {
           id,
@@ -9758,8 +8352,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -9815,7 +8409,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9831,13 +8424,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("job", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("job", id, result);
         context.logger.info("Created job {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -9848,7 +8438,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string().min(1, "job_id must not be empty"),
+        job_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9864,7 +8454,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9874,13 +8463,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "job",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info("Fetched job", {});
         return { dataHandles: [handle] };
@@ -9892,7 +8476,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string().min(1, "job_id must not be empty"),
+        job_id: z.string(),
         action: z.enum(["cancel"]),
       }),
       execute: async (
@@ -9909,7 +8493,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9927,13 +8510,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_instance_change_job_status",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info("Updated ai_search_instance_change_job_status", {});
         return { dataHandles: [handle] };
@@ -9945,7 +8523,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string().min(1, "job_id must not be empty"),
+        job_id: z.string(),
         page: z.number().optional(),
         per_page: z.number().optional(),
       }),
@@ -9963,8 +8541,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "job_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -10056,7 +8634,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -10068,14 +8646,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }).optional(),
         messages: z.array(z.object({
@@ -10117,7 +8698,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10133,16 +8713,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_instance_search",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created ai_search_instance_search {id}", { id });
         return { dataHandles: [handle] };
@@ -10169,7 +8746,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10179,13 +8755,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_stats",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched ai_search_stats", {});
         return { dataHandles: [handle] };
@@ -10214,8 +8785,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -10257,7 +8828,9 @@ export const model = {
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
         ),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string().regex(
+          new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10273,7 +8846,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -10285,13 +8857,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("namespace", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("namespace", id, result);
         context.logger.info("Created namespace {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -10299,7 +8868,7 @@ export const model = {
     get_ai_search_fetch_namespace: {
       description: "Read namespace.",
       arguments: z.object({
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10315,7 +8884,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10325,13 +8893,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_fetch_namespace",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Fetched ai_search_fetch_namespace", {});
         return { dataHandles: [handle] };
@@ -10340,7 +8903,7 @@ export const model = {
     update_namespace: {
       description: "Update namespace.",
       arguments: z.object({
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
         description: z.string().max(256).nullable().optional().describe(
           "Optional description for the namespace. Max 256 characters.",
         ),
@@ -10359,7 +8922,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10377,13 +8939,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "namespace",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Updated namespace", {});
         return { dataHandles: [handle] };
@@ -10392,7 +8949,7 @@ export const model = {
     delete_namespace: {
       description: "Delete namespace.",
       arguments: z.object({
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10434,7 +8991,11 @@ export const model = {
             ]).optional(),
             enabled: z.boolean().optional(),
           }).optional(),
-          instance_ids: z.array(z.string().min(1).max(64)),
+          instance_ids: z.array(
+            z.string().min(1).max(64).regex(
+              new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+            ),
+          ),
           query_rewrite: z.object({
             enabled: z.boolean().optional(),
             model: z.union([
@@ -10475,7 +9036,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -10487,14 +9048,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }),
         messages: z.array(z.object({
@@ -10566,7 +9130,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10582,16 +9145,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_chat_completion",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created ai_search_namespace_multi_instance_chat_completion {id}",
@@ -10603,7 +9163,7 @@ export const model = {
     get_ai_search_namespace_fetch_instance: {
       description: "Get an AI Search instance.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -10620,7 +9180,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -10630,13 +9189,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_namespace_fetch_instance",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Fetched ai_search_namespace_fetch_instance", {});
         return { dataHandles: [handle] };
@@ -10647,9 +9201,9 @@ export const model = {
       arguments: z.object({
         name: z.string().describe("Current namespace of the instance."),
         id: z.string().describe("Instance id."),
-        new_namespace: z.string().describe(
-          "Target namespace to move the instance into.",
-        ),
+        new_namespace: z.string().regex(
+          new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
+        ).describe("Target namespace to move the instance into."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -10665,7 +9219,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10683,13 +9236,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_move_instance",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated ai_search_move_instance", {});
         return { dataHandles: [handle] };
@@ -10752,7 +9300,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -10764,14 +9312,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }).optional(),
         messages: z.array(z.object({
@@ -10843,7 +9394,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -10859,16 +9409,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_namespace_instance_chat_completion",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created ai_search_namespace_instance_chat_completion {id}",
@@ -10925,8 +9472,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "name", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -10989,7 +9536,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11007,13 +9553,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_or_update_item",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Updated create_or_update_item", {});
         return { dataHandles: [handle] };
@@ -11025,7 +9566,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string().min(1, "item_id must not be empty"),
+        item_id: z.string(),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -11042,7 +9583,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11052,13 +9592,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "item",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Fetched item", {});
         return { dataHandles: [handle] };
@@ -11070,7 +9605,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string().min(1, "item_id must not be empty"),
+        item_id: z.string(),
         name: z.string().describe("Namespace name"),
         next_action: z.enum(["INDEX"]),
         wait_for_completion: z.boolean().optional().describe(
@@ -11091,7 +9626,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11109,13 +9643,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_namespace_instance_sync_item",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info(
           "Updated ai_search_namespace_instance_sync_item",
@@ -11130,7 +9659,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string().min(1, "item_id must not be empty"),
+        item_id: z.string(),
         name: z.string().describe("Namespace name"),
       }),
       execute: async (
@@ -11165,7 +9694,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string().min(1, "item_id must not be empty"),
+        item_id: z.string(),
         name: z.string().describe("Namespace name"),
         limit: z.number().optional(),
         offset: z.number().optional(),
@@ -11184,8 +9713,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
           "id",
@@ -11233,7 +9762,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        item_id: z.string().min(1, "item_id must not be empty"),
+        item_id: z.string(),
         name: z.string().describe("Namespace name"),
         limit: z.number().optional(),
         cursor: z.string().optional(),
@@ -11252,8 +9781,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id", "item_id", "name"]);
         for (const [k, v] of Object.entries(args)) {
@@ -11297,7 +9826,7 @@ export const model = {
         id: z.string().describe(
           "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
         ),
-        job_id: z.string().min(1, "job_id must not be empty"),
+        job_id: z.string(),
         name: z.string().describe("Namespace name"),
         action: z.enum(["cancel"]),
       }),
@@ -11315,7 +9844,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11333,13 +9861,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_namespace_instance_change_job_status",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info(
           "Updated ai_search_namespace_instance_change_job_status",
@@ -11405,7 +9928,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -11417,14 +9940,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }).optional(),
         messages: z.array(z.object({
@@ -11466,7 +9992,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11482,16 +10007,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_namespace_instance_search",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created ai_search_namespace_instance_search {id}",
@@ -11522,7 +10044,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11532,13 +10053,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_namespace_stats",
-          String(args.name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.name)),
+          result,
         );
         context.logger.info("Fetched ai_search_namespace_stats", {});
         return { dataHandles: [handle] };
@@ -11558,7 +10074,11 @@ export const model = {
             ]).optional(),
             enabled: z.boolean().optional(),
           }).optional(),
-          instance_ids: z.array(z.string().min(1).max(64)),
+          instance_ids: z.array(
+            z.string().min(1).max(64).regex(
+              new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+            ),
+          ),
           query_rewrite: z.object({
             enabled: z.boolean().optional(),
             model: z.union([
@@ -11599,7 +10119,7 @@ export const model = {
           }).optional(),
           reranking: z.object({
             enabled: z.boolean().optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
             model: z.union([
               z.enum(["@cf/baai/bge-reranker-base"]),
               z.enum([""]),
@@ -11611,14 +10131,17 @@ export const model = {
                 .optional(),
               field: z.string().min(1).max(64),
             })).optional(),
-            context_expansion: z.number().int().min(0).max(3).optional(),
+            context_expansion: z.number().int().min(0).max(3).optional()
+              .default(0),
             filters: z.record(z.string(), z.unknown()).optional(),
             fusion_method: z.enum(["max", "rrf"]).optional(),
             keyword_match_mode: z.enum(["and", "or"]).optional(),
-            match_threshold: z.number().min(0).max(1).optional(),
-            max_num_results: z.number().int().min(1).max(50).optional(),
+            match_threshold: z.number().min(0).max(1).optional().default(0.4),
+            max_num_results: z.number().int().min(1).max(50).optional().default(
+              10,
+            ),
             retrieval_type: z.enum(["vector", "keyword", "hybrid"]).optional(),
-            return_on_failure: z.boolean().optional(),
+            return_on_failure: z.boolean().optional().default(true),
           }).optional(),
         }),
         messages: z.array(z.object({
@@ -11660,7 +10183,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11676,16 +10198,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_search",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created ai_search_namespace_multi_instance_search {id}",
@@ -11717,8 +10236,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -11758,7 +10277,7 @@ export const model = {
         cf_api_id: z.string(),
         cf_api_key: z.string(),
         legacy: z.boolean().optional(),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11774,7 +10293,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -11786,13 +10304,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tokens", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("tokens", id, result);
         context.logger.info("Created tokens {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -11800,7 +10315,7 @@ export const model = {
     get_ai_search_fetch_tokens: {
       description: "Read token.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11816,7 +10331,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -11826,13 +10340,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ai_search_fetch_tokens",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched ai_search_fetch_tokens", {});
         return { dataHandles: [handle] };
@@ -11841,11 +10350,11 @@ export const model = {
     update_tokens: {
       description: "Update token.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         cf_api_id: z.string(),
         cf_api_key: z.string(),
         legacy: z.boolean().optional(),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11861,7 +10370,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -11879,13 +10387,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tokens",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated tokens", {});
         return { dataHandles: [handle] };
@@ -11894,7 +10397,7 @@ export const model = {
     delete_tokens: {
       description: "Delete token.",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -11939,8 +10442,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -11997,7 +10500,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12008,12 +10510,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_finetunes",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_finetunes", {});
         return { dataHandles: [handle] };
@@ -12024,7 +10521,7 @@ export const model = {
       arguments: z.object({
         description: z.string().optional(),
         model: z.string(),
-        name: z.string().min(1, "name must not be empty"),
+        name: z.string(),
         public: z.boolean().optional(),
       }),
       execute: async (
@@ -12041,7 +10538,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -12053,13 +10549,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("finetune", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("finetune", id, result);
         context.logger.info("Created finetune {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -12085,8 +10578,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -12141,7 +10634,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12152,12 +10644,7 @@ export const model = {
         const handle = await context.writeResource(
           "model_schema",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched model_schema", {});
         return { dataHandles: [handle] };
@@ -12196,7 +10683,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -12207,12 +10693,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_search_model",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched workers_ai_search_model", {});
         return { dataHandles: [handle] };
@@ -12250,7 +10731,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -12262,16 +10742,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_generic",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created workers_ai_post_run_generic {id}", { id });
         return { dataHandles: [handle] };
@@ -12336,7 +10813,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12360,16 +10836,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b {id}",
@@ -12438,7 +10911,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12462,16 +10934,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b {id}",
@@ -12489,18 +10958,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(2000),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -12510,7 +10979,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(2000),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -12522,15 +10991,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -12568,18 +11037,18 @@ export const model = {
               z.object({
                 frequency_penalty: z.number().min(-2).max(2).optional(),
                 lora: z.string().optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 presence_penalty: z.number().min(-2).max(2).optional(),
                 prompt: z.string().min(1),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.6),
                 top_k: z.number().int().min(1).max(50).optional(),
                 top_p: z.number().min(0.001).max(1).optional(),
               }),
@@ -12589,21 +11058,21 @@ export const model = {
                   code: z.string(),
                   name: z.string(),
                 })).optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 messages: z.array(z.object({
                   content: z.union([z.unknown(), z.unknown()]),
                   role: z.string(),
                 })),
                 presence_penalty: z.number().min(-2).max(2).optional(),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.6),
                 tools: z.array(z.union([
                   z.object({
                     description: z.unknown(),
@@ -12636,7 +11105,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12659,12 +11127,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
@@ -12680,12 +11143,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -12705,7 +11168,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12728,12 +11190,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_base_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_base_en_v1_5",
@@ -12749,12 +11206,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -12774,7 +11231,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12797,12 +11253,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_large_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_large_en_v1_5",
@@ -12822,11 +11273,11 @@ export const model = {
               text: z.string().min(1).optional(),
             })),
             query: z.string().min(1).optional(),
-            truncate_inputs: z.boolean().optional(),
+            truncate_inputs: z.boolean().optional().default(false),
           }),
           z.object({
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            truncate_inputs: z.boolean().optional(),
+            truncate_inputs: z.boolean().optional().default(false),
           }),
           z.object({
             requests: z.array(z.union([
@@ -12835,11 +11286,11 @@ export const model = {
                   text: z.string().min(1).optional(),
                 })),
                 query: z.string().min(1).optional(),
-                truncate_inputs: z.boolean().optional(),
+                truncate_inputs: z.boolean().optional().default(false),
               }),
               z.object({
                 text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-                truncate_inputs: z.boolean().optional(),
+                truncate_inputs: z.boolean().optional().default(false),
               }),
             ])),
           }),
@@ -12859,7 +11310,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -12882,12 +11332,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_m3",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_cf_baai_bge_m3", {});
         return { dataHandles: [handle] };
@@ -12924,7 +11369,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -12948,16 +11392,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_reranker_base",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_baai_bge_reranker_base {id}",
@@ -12973,12 +11414,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -12998,7 +11439,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13021,12 +11461,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_small_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_bge_small_en_v1_5",
@@ -13042,12 +11477,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -13067,7 +11502,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13090,12 +11524,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
@@ -13111,12 +11540,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -13136,7 +11565,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13159,12 +11587,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
@@ -13184,11 +11607,11 @@ export const model = {
               text: z.string().min(1).optional(),
             })),
             query: z.string().min(1).optional(),
-            truncate_inputs: z.boolean().optional(),
+            truncate_inputs: z.boolean().optional().default(false),
           }),
           z.object({
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-            truncate_inputs: z.boolean().optional(),
+            truncate_inputs: z.boolean().optional().default(false),
           }),
           z.object({
             requests: z.array(z.union([
@@ -13197,11 +11620,11 @@ export const model = {
                   text: z.string().min(1).optional(),
                 })),
                 query: z.string().min(1).optional(),
-                truncate_inputs: z.boolean().optional(),
+                truncate_inputs: z.boolean().optional().default(false),
               }),
               z.object({
                 text: z.union([z.string().min(1), z.array(z.string().min(1))]),
-                truncate_inputs: z.boolean().optional(),
+                truncate_inputs: z.boolean().optional().default(false),
               }),
             ])),
           }),
@@ -13221,7 +11644,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13244,12 +11666,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_m3",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_m3",
@@ -13265,12 +11682,12 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            pooling: z.enum(["mean", "cls"]).optional(),
+            pooling: z.enum(["mean", "cls"]).optional().default("mean"),
             text: z.union([z.string().min(1), z.array(z.string().min(1))]),
           }),
           z.object({
             requests: z.array(z.object({
-              pooling: z.enum(["mean", "cls"]).optional(),
+              pooling: z.enum(["mean", "cls"]).optional().default("mean"),
               text: z.union([z.string().min(1), z.array(z.string().min(1))]),
             })),
           }),
@@ -13290,7 +11707,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -13313,12 +11729,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
@@ -13353,7 +11764,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13377,16 +11787,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_1_schnell",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_1_schnell {id}",
@@ -13419,7 +11826,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13443,16 +11849,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_dev",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_dev {id}",
@@ -13485,7 +11888,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13509,16 +11911,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b {id}",
@@ -13551,7 +11950,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13575,16 +11973,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b {id}",
@@ -13646,7 +12041,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13670,16 +12064,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning {id}",
@@ -13705,7 +12096,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -13716,12 +12106,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura",
@@ -13747,7 +12132,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -13758,12 +12142,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1",
@@ -13825,7 +12204,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -13849,16 +12227,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_1",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_1 {id}",
@@ -13885,7 +12260,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -13896,12 +12270,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
@@ -13927,7 +12296,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -13938,12 +12306,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2",
@@ -13970,7 +12333,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -13981,12 +12343,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
@@ -14078,7 +12435,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14102,16 +12458,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_en",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_2_en {id}",
@@ -14138,7 +12491,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14149,12 +12501,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
@@ -14181,7 +12528,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14192,12 +12538,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
@@ -14259,7 +12600,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14283,16 +12623,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_es",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_aura_2_es {id}",
@@ -14318,7 +12655,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14329,12 +12665,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_flux",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_flux",
@@ -14357,18 +12688,18 @@ export const model = {
         eot_threshold: z.string().optional().describe(
           "End-of-turn confidence required to finish a turn. Valid Values 0.5 - 0.9.",
         ),
-        eot_timeout_ms: z.string().optional().describe(
-          "A turn will be finished when this much time has passed after speech, regardle...",
-        ),
+        eot_timeout_ms: z.string().regex(new RegExp("^[0-9]+$")).optional()
+          .describe(
+            "A turn will be finished when this much time has passed after speech, regardle...",
+          ),
         keyterm: z.string().optional().describe(
           "Keyterm prompting can improve recognition of specialized terminology. Pass mu...",
         ),
         mip_opt_out: z.enum(["true", "false"]).optional().describe(
           "Opts out requests from the Deepgram Model Improvement Program. Refer to Deepg...",
         ),
-        sample_rate: z.string().optional().describe(
-          "Sample rate of the audio stream in Hz.",
-        ),
+        sample_rate: z.string().regex(new RegExp("^[0-9]+$")).optional()
+          .describe("Sample rate of the audio stream in Hz."),
         tag: z.string().optional().describe(
           "Label your requests for the purpose of identification during usage reporting",
         ),
@@ -14387,7 +12718,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14411,16 +12741,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_flux",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_flux {id}",
@@ -14446,7 +12773,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14457,12 +12783,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3",
@@ -14609,7 +12930,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -14633,16 +12953,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_nova_3",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_deepgram_nova_3 {id}",
@@ -14669,7 +12986,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14680,12 +12996,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
@@ -14712,7 +13023,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -14723,12 +13033,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
@@ -14746,18 +13051,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -14767,7 +13072,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -14779,15 +13084,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -14836,7 +13141,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14859,12 +13163,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
@@ -14883,18 +13182,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -14904,7 +13203,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -14916,15 +13215,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -14973,7 +13272,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -14996,12 +13294,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
@@ -15019,18 +13312,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -15040,7 +13333,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -15052,15 +13345,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -15109,7 +13402,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15132,12 +13424,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_defog_sqlcoder_7b_2",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_defog_sqlcoder_7b_2",
@@ -15172,7 +13459,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -15196,16 +13482,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_bart_large_cnn",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_facebook_bart_large_cnn {id}",
@@ -15240,7 +13523,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -15264,16 +13546,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn {id}",
@@ -15291,18 +13570,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -15312,7 +13591,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -15324,15 +13603,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -15381,7 +13660,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15404,12 +13682,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
@@ -15439,7 +13712,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -15463,16 +13735,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_embeddinggemma_300m",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_google_embeddinggemma_300m {id}",
@@ -15490,18 +13759,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -15511,7 +13780,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -15523,15 +13792,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -15580,7 +13849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15603,12 +13871,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_2b_it_lora",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_2b_it_lora",
@@ -15626,14 +13889,14 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(0).max(2).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -15644,7 +13907,7 @@ export const model = {
               name: z.string(),
             })).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -15659,11 +13922,11 @@ export const model = {
               role: z.string().optional(),
             })),
             presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -15712,7 +13975,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15735,12 +13997,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_3_12b_it",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_3_12b_it",
@@ -15769,7 +14026,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -15796,12 +14052,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
@@ -15819,18 +14070,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -15840,7 +14091,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -15852,15 +14103,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -15909,7 +14160,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -15932,12 +14182,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_7b_it_lora",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_google_gemma_7b_it_lora",
@@ -15969,7 +14214,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -15993,16 +14237,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m {id}",
@@ -16032,7 +14273,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16056,16 +14296,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8 {id}",
@@ -16096,7 +14333,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16120,16 +14356,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8 {id}",
@@ -16147,18 +14380,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -16168,7 +14401,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -16180,15 +14413,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -16237,7 +14470,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16260,12 +14492,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
@@ -16315,7 +14542,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16339,16 +14565,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_lucid_origin",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_leonardo_lucid_origin {id}",
@@ -16398,7 +14621,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16422,16 +14644,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_phoenix_1_0",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_leonardo_phoenix_1_0 {id}",
@@ -16493,7 +14712,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -16517,16 +14735,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_lykon_dreamshaper_8_lcm",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_lykon_dreamshaper_8_lcm {id}",
@@ -16544,18 +14759,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -16565,7 +14780,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -16577,15 +14792,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -16634,7 +14849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16657,12 +14871,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
@@ -16680,18 +14889,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -16701,7 +14910,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -16713,15 +14922,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -16770,7 +14979,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16793,12 +15001,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
@@ -16816,18 +15019,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -16837,7 +15040,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -16849,15 +15052,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -16906,7 +15109,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -16929,12 +15131,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
@@ -16952,18 +15149,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -16973,7 +15170,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -16985,15 +15182,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17042,7 +15239,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17065,12 +15261,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct",
@@ -17088,18 +15279,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17109,7 +15300,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17121,15 +15312,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17178,7 +15369,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17201,12 +15391,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
@@ -17224,18 +15409,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17245,7 +15430,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17257,15 +15442,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17314,7 +15499,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17337,12 +15521,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
@@ -17360,18 +15539,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17381,7 +15560,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17393,15 +15572,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17450,7 +15629,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17473,12 +15651,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
@@ -17496,18 +15669,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17517,7 +15690,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17529,15 +15702,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17586,7 +15759,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17609,12 +15781,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
@@ -17632,18 +15799,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17653,7 +15820,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17665,15 +15832,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17722,7 +15889,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17745,12 +15911,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
@@ -17769,14 +15930,14 @@ export const model = {
             frequency_penalty: z.number().min(0).max(2).optional(),
             image: z.union([z.array(z.number()), z.string()]).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1).max(131072),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -17787,7 +15948,7 @@ export const model = {
               name: z.string(),
             })).optional(),
             image: z.union([z.array(z.number()), z.string()]).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17800,7 +15961,7 @@ export const model = {
                 })),
                 z.object({
                   image_url: z.object({
-                    url: z.string().optional(),
+                    url: z.string().regex(new RegExp("^data:*")).optional(),
                   }).optional(),
                   text: z.string().optional(),
                   type: z.string().optional(),
@@ -17812,8 +15973,8 @@ export const model = {
             presence_penalty: z.number().min(0).max(2).optional(),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17862,7 +16023,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -17885,12 +16045,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
@@ -17908,18 +16063,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -17929,7 +16084,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -17941,15 +16096,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -17998,7 +16153,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18021,12 +16175,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
@@ -18044,18 +16193,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -18065,7 +16214,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18077,15 +16226,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -18134,7 +16283,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18157,12 +16305,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
@@ -18180,18 +16323,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -18201,7 +16344,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18213,15 +16356,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -18258,7 +16401,7 @@ export const model = {
             requests: z.array(z.object({
               external_reference: z.string().optional(),
               frequency_penalty: z.number().min(0).max(2).optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               presence_penalty: z.number().min(0).max(2).optional(),
               prompt: z.string().min(1).optional(),
               repetition_penalty: z.number().min(0).max(2).optional(),
@@ -18267,8 +16410,8 @@ export const model = {
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               top_p: z.number().min(0).max(2).optional(),
             })).optional(),
           }),
@@ -18288,7 +16431,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18311,12 +16453,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
@@ -18334,18 +16471,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(0).max(2).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -18356,7 +16493,7 @@ export const model = {
               name: z.string(),
             })).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18369,7 +16506,7 @@ export const model = {
                 })),
                 z.object({
                   image_url: z.object({
-                    url: z.string().optional(),
+                    url: z.string().regex(new RegExp("^data:*")).optional(),
                   }).optional(),
                   text: z.string().optional(),
                   type: z.string().optional(),
@@ -18379,15 +16516,15 @@ export const model = {
               tool_call_id: z.string().optional(),
             })),
             presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -18425,18 +16562,18 @@ export const model = {
               z.object({
                 frequency_penalty: z.number().min(0).max(2).optional(),
                 guided_json: z.object({}).optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 presence_penalty: z.number().min(0).max(2).optional(),
                 prompt: z.string().min(1),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.15),
                 top_k: z.number().int().min(1).max(50).optional(),
                 top_p: z.number().min(0).max(2).optional(),
               }),
@@ -18447,23 +16584,24 @@ export const model = {
                   name: z.string(),
                 })).optional(),
                 guided_json: z.object({}).optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 messages: z.array(z.object({
                   content: z.union([z.unknown(), z.unknown(), z.unknown()])
                     .optional(),
                   role: z.string().optional(),
-                  tool_call_id: z.string().optional(),
+                  tool_call_id: z.string().regex(new RegExp("[a-zA-Z0-9]{9}"))
+                    .optional(),
                 })),
                 presence_penalty: z.number().min(0).max(2).optional(),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.15),
                 tools: z.array(z.union([
                   z.object({
                     description: z.unknown(),
@@ -18496,7 +16634,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18519,12 +16656,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
@@ -18570,7 +16702,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -18594,16 +16725,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_guard_3_8b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_meta_llama_guard_3_8b {id}",
@@ -18619,13 +16747,13 @@ export const model = {
         tags: z.string().optional(),
         body: z.union([
           z.object({
-            source_lang: z.string().optional(),
+            source_lang: z.string().optional().default("en"),
             target_lang: z.string(),
             text: z.string().min(1),
           }),
           z.object({
             requests: z.array(z.object({
-              source_lang: z.string().optional(),
+              source_lang: z.string().optional().default("en"),
               target_lang: z.string(),
               text: z.string().min(1),
             })),
@@ -18646,7 +16774,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18669,12 +16796,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_m2m100_1_2b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_meta_m2m100_1_2b",
@@ -18692,18 +16814,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -18713,7 +16835,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18725,15 +16847,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -18782,7 +16904,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18805,12 +16926,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_microsoft_phi_2",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_microsoft_phi_2",
@@ -18828,18 +16944,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -18849,7 +16965,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18861,15 +16977,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -18918,7 +17034,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -18941,12 +17056,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
@@ -18964,18 +17074,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -18985,7 +17095,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -18997,15 +17107,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -19054,7 +17164,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19077,12 +17186,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
@@ -19101,14 +17205,14 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(0).max(2).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -19119,7 +17223,7 @@ export const model = {
               name: z.string(),
             })).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -19132,7 +17236,7 @@ export const model = {
                 })),
                 z.object({
                   image_url: z.object({
-                    url: z.string().optional(),
+                    url: z.string().regex(new RegExp("^data:*")).optional(),
                   }).optional(),
                   text: z.string().optional(),
                   type: z.string().optional(),
@@ -19142,11 +17246,11 @@ export const model = {
               tool_call_id: z.string().optional(),
             })),
             presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -19195,7 +17299,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19218,12 +17321,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
@@ -19252,7 +17350,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19279,12 +17376,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_5",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_5",
@@ -19313,7 +17405,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19340,12 +17431,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_6",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_6",
@@ -19374,7 +17460,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19401,12 +17486,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
@@ -19441,7 +17521,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -19465,16 +17544,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_myshell_ai_melotts",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_myshell_ai_melotts {id}",
@@ -19500,8 +17576,8 @@ export const model = {
               ]),
             }).optional(),
             chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional(),
-              enable_thinking: z.boolean().optional(),
+              clear_thinking: z.boolean().optional().default(false),
+              enable_thinking: z.boolean().optional().default(true),
             }).optional(),
             frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
             function_call: z.union([
@@ -19525,7 +17601,7 @@ export const model = {
               .optional(),
             model: z.string().optional(),
             n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional(),
+            parallel_tool_calls: z.boolean().optional().default(true),
             prediction: z.object({
               content: z.union([
                 z.string(),
@@ -19626,7 +17702,8 @@ export const model = {
             top_p: z.number().min(0).max(1).nullable().optional(),
             user: z.string().optional(),
             web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              search_context_size: z.enum(["low", "medium", "high"]).optional()
+                .default("medium"),
               user_location: z.object({
                 approximate: z.object({
                   city: z.string().optional(),
@@ -19649,8 +17726,8 @@ export const model = {
               ]),
             }).optional(),
             chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional(),
-              enable_thinking: z.boolean().optional(),
+              clear_thinking: z.boolean().optional().default(false),
+              enable_thinking: z.boolean().optional().default(true),
             }).optional(),
             frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
             function_call: z.union([
@@ -19761,7 +17838,7 @@ export const model = {
               .optional(),
             model: z.string().optional(),
             n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional(),
+            parallel_tool_calls: z.boolean().optional().default(true),
             prediction: z.object({
               content: z.union([
                 z.string(),
@@ -19861,7 +17938,8 @@ export const model = {
             top_p: z.number().min(0).max(1).nullable().optional(),
             user: z.string().optional(),
             web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              search_context_size: z.enum(["low", "medium", "high"]).optional()
+                .default("medium"),
               user_location: z.object({
                 approximate: z.object({
                   city: z.string().optional(),
@@ -19889,7 +17967,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -19912,12 +17989,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
@@ -19945,7 +18017,6 @@ export const model = {
             };
           },
         ) => {
-          const startMs = Date.now();
           const { apiToken, accountId } = context.globalArgs;
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
@@ -19956,12 +18027,7 @@ export const model = {
           const handle = await context.writeResource(
             "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
             "latest",
-            {
-              ...result,
-              fetchedAt: new Date().toISOString(),
-              durationMs: Date.now() - startMs,
-              collectedBy: EXTENSION_NAME,
-            },
+            result,
           );
           context.logger.info(
             "Fetched workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
@@ -19985,9 +18051,10 @@ export const model = {
           }),
           z.object({
             audio: z.string(),
-            channels: z.number().int().optional(),
-            encoding: z.enum(["wav", "flac", "ogg", "linear16"]).optional(),
-            sample_rate: z.number().int().optional(),
+            channels: z.number().int().optional().default(1),
+            encoding: z.enum(["wav", "flac", "ogg", "linear16"]).optional()
+              .default("wav"),
+            sample_rate: z.number().int().optional().default(16000),
           }),
         ]),
       }),
@@ -20005,7 +18072,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20028,12 +18094,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
@@ -20052,18 +18113,18 @@ export const model = {
             z.object({
               frequency_penalty: z.number().min(-2).max(2).optional(),
               lora: z.string().optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               presence_penalty: z.number().min(-2).max(2).optional(),
               prompt: z.string().min(1),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               top_k: z.number().int().min(1).max(50).optional(),
               top_p: z.number().min(0.001).max(1).optional(),
             }),
@@ -20073,7 +18134,7 @@ export const model = {
                 code: z.string(),
                 name: z.string(),
               })).optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               messages: z.array(z.object({
                 content: z.union([
                   z.string(),
@@ -20085,15 +18146,15 @@ export const model = {
                 role: z.string(),
               })),
               presence_penalty: z.number().min(-2).max(2).optional(),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               tools: z.array(z.union([
                 z.object({
                   description: z.string(),
@@ -20153,7 +18214,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20176,12 +18236,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_120b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openai_gpt_oss_120b",
@@ -20200,18 +18255,18 @@ export const model = {
             z.object({
               frequency_penalty: z.number().min(-2).max(2).optional(),
               lora: z.string().optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               presence_penalty: z.number().min(-2).max(2).optional(),
               prompt: z.string().min(1),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               top_k: z.number().int().min(1).max(50).optional(),
               top_p: z.number().min(0.001).max(1).optional(),
             }),
@@ -20221,7 +18276,7 @@ export const model = {
                 code: z.string(),
                 name: z.string(),
               })).optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               messages: z.array(z.object({
                 content: z.union([
                   z.string(),
@@ -20233,15 +18288,15 @@ export const model = {
                 role: z.string(),
               })),
               presence_penalty: z.number().min(-2).max(2).optional(),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               tools: z.array(z.union([
                 z.object({
                   description: z.string(),
@@ -20301,7 +18356,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20324,12 +18378,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_20b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openai_gpt_oss_20b",
@@ -20398,7 +18447,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -20422,16 +18470,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_whisper_large_v3_turbo",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_openai_whisper_large_v3_turbo {id}",
@@ -20449,18 +18494,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -20470,7 +18515,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -20482,15 +18527,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -20539,7 +18584,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20562,12 +18606,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openchat_openchat_3_5_0106",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_openchat_openchat_3_5_0106",
@@ -20599,7 +18638,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -20623,16 +18661,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_pfnet_plamo_embedding_1b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_pfnet_plamo_embedding_1b {id}",
@@ -20659,7 +18694,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -20670,12 +18704,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
@@ -20702,7 +18731,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -20713,12 +18741,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
@@ -20736,18 +18759,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -20757,7 +18780,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -20769,15 +18792,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -20826,7 +18849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20849,12 +18871,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
@@ -20872,18 +18889,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -20893,7 +18910,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -20905,15 +18922,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -20962,7 +18979,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -20985,12 +19001,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
@@ -21008,18 +19019,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -21029,7 +19040,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -21041,15 +19052,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -21098,7 +19109,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21121,12 +19131,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
@@ -21144,18 +19149,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -21165,7 +19170,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -21177,15 +19182,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -21234,7 +19239,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21257,12 +19261,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
@@ -21280,18 +19279,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(0).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -21301,21 +19300,21 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.string(),
               role: z.string(),
             })),
             presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -21364,7 +19363,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21387,12 +19385,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
@@ -21410,18 +19403,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(2000),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -21431,7 +19424,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(2000),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -21443,15 +19436,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -21489,18 +19482,18 @@ export const model = {
               z.object({
                 frequency_penalty: z.number().min(-2).max(2).optional(),
                 lora: z.string().optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 presence_penalty: z.number().min(-2).max(2).optional(),
                 prompt: z.string().min(1),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.6),
                 top_k: z.number().int().min(1).max(50).optional(),
                 top_p: z.number().min(0.001).max(1).optional(),
               }),
@@ -21510,21 +19503,21 @@ export const model = {
                   code: z.string(),
                   name: z.string(),
                 })).optional(),
-                max_tokens: z.number().int().optional(),
+                max_tokens: z.number().int().optional().default(256),
                 messages: z.array(z.object({
                   content: z.union([z.unknown(), z.unknown()]),
                   role: z.string(),
                 })),
                 presence_penalty: z.number().min(-2).max(2).optional(),
-                raw: z.boolean().optional(),
+                raw: z.boolean().optional().default(false),
                 repetition_penalty: z.number().min(0).max(2).optional(),
                 response_format: z.object({
                   json_schema: z.unknown().optional(),
                   type: z.enum(["json_object", "json_schema"]).optional(),
                 }).optional(),
                 seed: z.number().int().min(1).max(9999999999).optional(),
-                stream: z.boolean().optional(),
-                temperature: z.number().min(0).max(5).optional(),
+                stream: z.boolean().optional().default(false),
+                temperature: z.number().min(0).max(5).optional().default(0.6),
                 tools: z.array(z.union([
                   z.object({
                     description: z.unknown(),
@@ -21557,7 +19550,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21580,12 +19572,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
@@ -21623,7 +19610,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -21647,16 +19633,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b {id}",
@@ -21674,14 +19657,14 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(0).max(2).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(0).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0).max(2).optional(),
           }),
@@ -21692,7 +19675,7 @@ export const model = {
               name: z.string(),
             })).optional(),
             guided_json: z.object({}).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -21705,7 +19688,7 @@ export const model = {
                 })),
                 z.object({
                   image_url: z.object({
-                    url: z.string().optional(),
+                    url: z.string().regex(new RegExp("^data:*")).optional(),
                   }).optional(),
                   text: z.string().optional(),
                   type: z.string().optional(),
@@ -21715,11 +19698,11 @@ export const model = {
               tool_call_id: z.string().optional(),
             })),
             presence_penalty: z.number().min(0).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.15),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -21768,7 +19751,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -21791,12 +19773,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwq_32b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_cf_qwen_qwq_32b", {});
         return { dataHandles: [handle] };
@@ -21855,7 +19832,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -21879,16 +19855,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img {id}",
@@ -21951,7 +19924,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -21975,16 +19947,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting {id}",
@@ -22047,7 +20016,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -22071,16 +20039,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0 {id}",
@@ -22107,7 +20072,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -22118,12 +20082,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_sven_test_pipe_http",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_sven_test_pipe_http",
@@ -22150,7 +20109,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -22161,12 +20119,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_test_hello_world_cog",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched workers_ai_post_websocket_run_cf_test_hello_world_cog",
@@ -22184,18 +20137,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -22205,7 +20158,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -22217,15 +20170,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -22274,7 +20227,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -22297,12 +20249,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
@@ -22320,18 +20267,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -22341,7 +20288,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -22353,15 +20300,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -22410,7 +20357,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -22433,12 +20379,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
@@ -22456,18 +20397,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -22477,7 +20418,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -22489,15 +20430,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -22546,7 +20487,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -22569,12 +20509,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
@@ -22600,8 +20535,8 @@ export const model = {
               ]),
             }).optional(),
             chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional(),
-              enable_thinking: z.boolean().optional(),
+              clear_thinking: z.boolean().optional().default(false),
+              enable_thinking: z.boolean().optional().default(true),
             }).optional(),
             frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
             function_call: z.union([
@@ -22625,7 +20560,7 @@ export const model = {
               .optional(),
             model: z.string().optional(),
             n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional(),
+            parallel_tool_calls: z.boolean().optional().default(true),
             prediction: z.object({
               content: z.union([
                 z.string(),
@@ -22726,7 +20661,8 @@ export const model = {
             top_p: z.number().min(0).max(1).nullable().optional(),
             user: z.string().optional(),
             web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              search_context_size: z.enum(["low", "medium", "high"]).optional()
+                .default("medium"),
               user_location: z.object({
                 approximate: z.object({
                   city: z.string().optional(),
@@ -22749,8 +20685,8 @@ export const model = {
               ]),
             }).optional(),
             chat_template_kwargs: z.object({
-              clear_thinking: z.boolean().optional(),
-              enable_thinking: z.boolean().optional(),
+              clear_thinking: z.boolean().optional().default(false),
+              enable_thinking: z.boolean().optional().default(true),
             }).optional(),
             frequency_penalty: z.number().min(-2).max(2).nullable().optional(),
             function_call: z.union([
@@ -22861,7 +20797,7 @@ export const model = {
               .optional(),
             model: z.string().optional(),
             n: z.number().int().min(1).max(128).nullable().optional(),
-            parallel_tool_calls: z.boolean().optional(),
+            parallel_tool_calls: z.boolean().optional().default(true),
             prediction: z.object({
               content: z.union([
                 z.string(),
@@ -22961,7 +20897,8 @@ export const model = {
             top_p: z.number().min(0).max(1).nullable().optional(),
             user: z.string().optional(),
             web_search_options: z.object({
-              search_context_size: z.enum(["low", "medium", "high"]).optional(),
+              search_context_size: z.enum(["low", "medium", "high"]).optional()
+                .default("medium"),
               user_location: z.object({
                 approximate: z.object({
                   city: z.string().optional(),
@@ -22989,7 +20926,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23012,12 +20948,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_4_7_flash",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_zai_org_glm_4_7_flash",
@@ -23046,7 +20977,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -23073,12 +21003,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_5_2",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_cf_zai_org_glm_5_2",
@@ -23096,18 +21021,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23117,7 +21042,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23129,15 +21054,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23186,7 +21111,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23209,12 +21133,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_google_gemma_7b_it",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_google_gemma_7b_it",
@@ -23232,18 +21151,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23253,7 +21172,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23265,15 +21184,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23322,7 +21241,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23345,12 +21263,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
@@ -23368,18 +21281,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23389,7 +21302,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23401,15 +21314,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23458,7 +21371,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23481,12 +21393,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
@@ -23504,18 +21411,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23525,7 +21432,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23537,15 +21444,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23594,7 +21501,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23617,12 +21523,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
@@ -23640,18 +21541,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23661,7 +21562,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23673,15 +21574,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23730,7 +21631,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23753,12 +21653,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
@@ -23777,18 +21672,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23798,7 +21693,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23810,15 +21705,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -23867,7 +21762,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -23890,12 +21784,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
@@ -23913,18 +21802,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -23934,7 +21823,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -23946,15 +21835,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -24003,7 +21892,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24026,12 +21914,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
@@ -24049,18 +21932,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -24070,7 +21953,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -24082,15 +21965,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -24139,7 +22022,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24162,12 +22044,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
@@ -24185,18 +22062,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -24206,7 +22083,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -24218,15 +22095,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -24275,7 +22152,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24298,12 +22174,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
@@ -24321,18 +22192,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -24342,7 +22213,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -24354,15 +22225,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -24411,7 +22282,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24434,12 +22304,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
@@ -24457,18 +22322,18 @@ export const model = {
           z.object({
             frequency_penalty: z.number().min(-2).max(2).optional(),
             lora: z.string().optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             presence_penalty: z.number().min(-2).max(2).optional(),
             prompt: z.string().min(1),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             top_k: z.number().int().min(1).max(50).optional(),
             top_p: z.number().min(0.001).max(1).optional(),
           }),
@@ -24478,7 +22343,7 @@ export const model = {
               code: z.string(),
               name: z.string(),
             })).optional(),
-            max_tokens: z.number().int().optional(),
+            max_tokens: z.number().int().optional().default(256),
             messages: z.array(z.object({
               content: z.union([
                 z.string(),
@@ -24490,15 +22355,15 @@ export const model = {
               role: z.string(),
             })),
             presence_penalty: z.number().min(-2).max(2).optional(),
-            raw: z.boolean().optional(),
+            raw: z.boolean().optional().default(false),
             repetition_penalty: z.number().min(0).max(2).optional(),
             response_format: z.object({
               json_schema: z.unknown().optional(),
               type: z.enum(["json_object", "json_schema"]).optional(),
             }).optional(),
             seed: z.number().int().min(1).max(9999999999).optional(),
-            stream: z.boolean().optional(),
-            temperature: z.number().min(0).max(5).optional(),
+            stream: z.boolean().optional().default(false),
+            temperature: z.number().min(0).max(5).optional().default(0.6),
             tools: z.array(z.union([
               z.object({
                 description: z.string(),
@@ -24547,7 +22412,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24570,12 +22434,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
@@ -24587,26 +22446,26 @@ export const model = {
     workers_ai_post_run_model: {
       description: "Execute AI model",
       arguments: z.object({
-        model_name: z.string().min(1, "model_name must not be empty"),
+        model_name: z.string(),
         body: z.union([
           z.object({
             text: z.string().min(1),
           }),
           z.object({
-            guidance: z.number().optional(),
+            guidance: z.number().optional().default(7.5),
             height: z.number().int().min(256).max(2048).optional(),
             image: z.array(z.number()).optional(),
             image_b64: z.string().optional(),
             mask: z.array(z.number()).optional(),
             negative_prompt: z.string().optional(),
-            num_steps: z.number().int().max(20).optional(),
+            num_steps: z.number().int().max(20).optional().default(20),
             prompt: z.string().min(1),
             seed: z.number().int().optional(),
-            strength: z.number().optional(),
+            strength: z.number().optional().default(1),
             width: z.number().int().min(256).max(2048).optional(),
           }),
           z.object({
-            lang: z.string().optional(),
+            lang: z.string().optional().default("en"),
             prompt: z.string().min(1),
           }),
           z.object({
@@ -24636,18 +22495,18 @@ export const model = {
             z.object({
               frequency_penalty: z.number().min(-2).max(2).optional(),
               lora: z.string().optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               presence_penalty: z.number().min(-2).max(2).optional(),
               prompt: z.string().min(1),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               top_k: z.number().int().min(1).max(50).optional(),
               top_p: z.number().min(0.001).max(1).optional(),
             }),
@@ -24657,7 +22516,7 @@ export const model = {
                 code: z.string(),
                 name: z.string(),
               })).optional(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(256),
               messages: z.array(z.object({
                 content: z.union([
                   z.string(),
@@ -24669,15 +22528,15 @@ export const model = {
                 role: z.string(),
               })),
               presence_penalty: z.number().min(-2).max(2).optional(),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().min(0).max(2).optional(),
               response_format: z.object({
                 json_schema: z.unknown().optional(),
                 type: z.enum(["json_object", "json_schema"]).optional(),
               }).optional(),
               seed: z.number().int().min(1).max(9999999999).optional(),
-              stream: z.boolean().optional(),
-              temperature: z.number().min(0).max(5).optional(),
+              stream: z.boolean().optional().default(false),
+              temperature: z.number().min(0).max(5).optional().default(0.6),
               tools: z.array(z.union([
                 z.object({
                   description: z.string(),
@@ -24706,23 +22565,23 @@ export const model = {
             }),
           ]),
           z.object({
-            source_lang: z.string().optional(),
+            source_lang: z.string().optional().default("en"),
             target_lang: z.string(),
             text: z.string().min(1),
           }),
           z.object({
             input_text: z.string().min(1),
-            max_length: z.number().int().optional(),
+            max_length: z.number().int().optional().default(1024),
           }),
           z.union([
             z.string(),
             z.object({
               frequency_penalty: z.number().optional(),
               image: z.union([z.array(z.number()), z.string()]),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(512),
               presence_penalty: z.number().optional(),
               prompt: z.string().optional(),
-              raw: z.boolean().optional(),
+              raw: z.boolean().optional().default(false),
               repetition_penalty: z.number().optional(),
               seed: z.number().optional(),
               temperature: z.number().optional(),
@@ -24735,7 +22594,7 @@ export const model = {
               frequency_penalty: z.number().optional(),
               ignore_eos: z.boolean().optional(),
               image: z.string(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(512),
               presence_penalty: z.number().optional(),
               prompt: z.string().min(1),
               repetition_penalty: z.number().optional(),
@@ -24748,7 +22607,7 @@ export const model = {
               frequency_penalty: z.number().optional(),
               ignore_eos: z.boolean().optional(),
               image: z.string(),
-              max_tokens: z.number().int().optional(),
+              max_tokens: z.number().int().optional().default(512),
               messages: z.array(z.object({
                 content: z.union([
                   z.string(),
@@ -24788,7 +22647,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -24803,12 +22661,7 @@ export const model = {
         const handle = await context.writeResource(
           "workers_ai_post_run_model",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_model", {});
         return { dataHandles: [handle] };
@@ -24831,8 +22684,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -24889,8 +22742,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/api-shield"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Cloudflare API Shield — schema validation, endpoint discovery, sequence rules"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -14,9 +14,6 @@ additionalFiles:
   - README.md
   - LICENSE.md
 labels:
-  - api
-  - api-security
-  - api-shield
   - cloudflare
-  - protection
-  - security
+  - api-shield
+  - api-security

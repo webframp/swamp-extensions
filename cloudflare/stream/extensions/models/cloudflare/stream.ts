@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/stream";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/stream";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -62,7 +62,7 @@ const VideosItemSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListVideosSchema = z.object({
   items: z.array(VideosItemSchema),
@@ -117,7 +117,7 @@ const CreateStreamVideoClippingClipVideosGivenAStartAndEndTimeSchema = z.object(
     uploaded: z.unknown().optional(),
     watermark: z.unknown().optional(),
   },
-);
+).passthrough();
 
 const CreateStreamVideosUploadVideosFromAUrlSchema = z.object({
   allowedOrigins: z.unknown().optional(),
@@ -158,16 +158,7 @@ const CreateStreamVideosUploadVideosFromAUrlSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateStreamVideosUploadVideosViaDirectUploadUrLsSchema = z.object({
   scheduledDeletion: z.unknown().optional(),
@@ -176,16 +167,7 @@ const CreateStreamVideosUploadVideosViaDirectUploadUrLsSchema = z.object({
     "The URL an unauthenticated upload can use for a single `HTTP POST multipart/form-data` request.",
   ),
   watermark: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SigningKeysItemSchema = z.object({
   created: z.unknown().optional(),
@@ -193,7 +175,7 @@ const SigningKeysItemSchema = z.object({
   key_id: z.string().optional().describe(
     "The unique identifier for the signing key.",
   ),
-});
+}).passthrough();
 
 const ListSigningKeysSchema = z.object({
   items: z.array(SigningKeysItemSchema),
@@ -215,16 +197,7 @@ const ListLiveInputsSchema = z.object({
   total: z.number().int().optional().describe(
     "The total number of live inputs that match the provided filters.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateALiveInputSchema = z.object({
   created: z.unknown().optional(),
@@ -243,16 +216,7 @@ const CreateALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
   created: z.unknown().optional(),
@@ -271,16 +235,7 @@ const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const StreamLiveInputsDisableALiveInputSchema = z.object({
   created: z.unknown().optional(),
@@ -299,16 +254,7 @@ const StreamLiveInputsDisableALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const StreamLiveInputsEnableALiveInputSchema = z.object({
   created: z.unknown().optional(),
@@ -327,23 +273,14 @@ const StreamLiveInputsEnableALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AllOutputsAssociatedWithASpecifiedLiveInputItemSchema = z.object({
   enabled: z.unknown().optional(),
   streamKey: z.unknown().optional(),
   uid: z.unknown().optional(),
   url: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListAllOutputsAssociatedWithASpecifiedLiveInputSchema = z.object({
   items: z.array(AllOutputsAssociatedWithASpecifiedLiveInputItemSchema),
@@ -362,32 +299,14 @@ const CreateANewOutputConnectedToALiveInputSchema = z.object({
   streamKey: z.unknown().optional(),
   uid: z.unknown().optional(),
   url: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAnOutputSchema = z.object({
   enabled: z.unknown().optional(),
   streamKey: z.unknown().optional(),
   uid: z.unknown().optional(),
   url: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
   created: z.unknown().optional(),
@@ -406,16 +325,7 @@ const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
   uid: z.unknown().optional(),
   webRTC: z.unknown().optional(),
   webRTCPlayback: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetStreamVideosStorageUsageSchema = z.object({
   creator: z.unknown().optional(),
@@ -428,16 +338,7 @@ const GetStreamVideosStorageUsageSchema = z.object({
   videoCount: z.number().int().optional().describe(
     "The total count of videos associated with the account.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAccountStreamUsageItemSchema = z.object({
   streamMinutesViewed: z.number().int().optional().describe(
@@ -446,7 +347,7 @@ const GetAccountStreamUsageItemSchema = z.object({
   ts: z.number().int().optional().describe(
     "Unix timestamp (epoch seconds) for the start of this time period.",
   ),
-});
+}).passthrough();
 
 const GetAccountStreamUsageSchema = z.object({
   items: z.array(GetAccountStreamUsageItemSchema),
@@ -472,7 +373,7 @@ const WatermarkProfilesItemSchema = z.object({
   size: z.unknown().optional(),
   uid: z.unknown().optional(),
   width: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListWatermarkProfilesSchema = z.object({
   items: z.array(WatermarkProfilesItemSchema),
@@ -498,16 +399,7 @@ const CreateWatermarkProfilesViaBasicUploadSchema = z.object({
   size: z.unknown().optional(),
   uid: z.unknown().optional(),
   width: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetStreamWatermarkProfileWatermarkProfileDetailsSchema = z.object({
   created: z.unknown().optional(),
@@ -521,16 +413,7 @@ const GetStreamWatermarkProfileWatermarkProfileDetailsSchema = z.object({
   size: z.unknown().optional(),
   uid: z.unknown().optional(),
   width: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetStreamWebhookViewWebhooksSchema = z.object({
   modified: z.string().optional().describe(
@@ -545,16 +428,7 @@ const GetStreamWebhookViewWebhooksSchema = z.object({
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateWebhooksSchema = z.object({
   modified: z.string().optional().describe(
@@ -569,16 +443,7 @@ const CreateWebhooksSchema = z.object({
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
   allowedOrigins: z.unknown().optional(),
@@ -619,16 +484,7 @@ const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateVideoDetailsSchema = z.object({
   allowedOrigins: z.unknown().optional(),
@@ -669,70 +525,34 @@ const UpdateVideoDetailsSchema = z.object({
   uploadExpiry: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   watermark: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListAudioTracksSchema = z.object({
   audio: z.array(z.unknown()).optional().describe(
     "Array of audio tracks for the video.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAddAudioTrackSchema = z.object({
   default: z.unknown().optional(),
   label: z.unknown().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateEditAudioTracksSchema = z.object({
   default: z.unknown().optional(),
   label: z.unknown().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CaptionsOrSubtitlesItemSchema = z.object({
   generated: z.unknown().optional(),
   label: z.unknown().optional(),
   language: z.unknown().optional(),
   status: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListCaptionsOrSubtitlesSchema = z.object({
   items: z.array(CaptionsOrSubtitlesItemSchema),
@@ -751,16 +571,7 @@ const GetCaptionOrSubtitleForLanguageSchema = z.object({
   label: z.unknown().optional(),
   language: z.unknown().optional(),
   status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const StreamSubtitlesCaptionsGenerateCaptionOrSubtitleForLanguageSchema = z
   .object({
@@ -768,7 +579,7 @@ const StreamSubtitlesCaptionsGenerateCaptionOrSubtitleForLanguageSchema = z
     label: z.unknown().optional(),
     language: z.unknown().optional(),
     status: z.unknown().optional(),
-  });
+  }).passthrough();
 
 const ListDownloadsSchema = z.object({
   audio: z.unknown().optional().describe(
@@ -777,16 +588,7 @@ const ListDownloadsSchema = z.object({
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateDownloadsSchema = z.object({
   audio: z.unknown().optional().describe(
@@ -795,16 +597,7 @@ const CreateDownloadsSchema = z.object({
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateTypeSpecificDownloadsSchema = z.object({
   audio: z.unknown().optional().describe(
@@ -813,31 +606,13 @@ const CreateTypeSpecificDownloadsSchema = z.object({
   default: z.unknown().optional().describe(
     "The default video download. Only present if this download type has been created.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateSignedUrlTokensForVideosSchema = z.object({
   token: z.string().optional().describe(
     "The signed token used with the signed URLs feature.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -846,7 +621,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -872,6 +647,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1130,8 +910,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1184,7 +964,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -1204,12 +983,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_initiate_video_uploads_using_tus",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_videos_initiate_video_uploads_using_tus",
@@ -1253,7 +1027,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1265,16 +1038,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "stream_video_clipping_clip_videos_given_a_start_and_end_time",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created stream_video_clipping_clip_videos_given_a_start_and_end_time {id}",
@@ -1317,7 +1087,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1329,16 +1098,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "stream_videos_upload_videos_from_a_url",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created stream_videos_upload_videos_from_a_url {id}",
@@ -1376,7 +1142,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1388,16 +1153,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "stream_videos_upload_videos_via_direct_upload_ur_ls",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created stream_videos_upload_videos_via_direct_upload_ur_ls {id}",
@@ -1423,8 +1185,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1477,7 +1239,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1489,12 +1250,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_signing_keys",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_signing_keys", {});
         return { dataHandles: [handle] };
@@ -1503,7 +1259,7 @@ export const model = {
     delete_signing_keys: {
       description: "Delete signing keys",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1550,7 +1306,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1561,12 +1316,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_live_inputs",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_live_inputs", {});
         return { dataHandles: [handle] };
@@ -1596,7 +1346,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1608,13 +1357,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_live_input", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("a_live_input", id, result);
         context.logger.info("Created a_live_input {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1622,10 +1368,7 @@ export const model = {
     get_stream_live_inputs_retrieve_a_live_input: {
       description: "Retrieve a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1641,7 +1384,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1651,13 +1393,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_live_inputs_retrieve_a_live_input",
-          String(args.live_input_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.live_input_identifier)),
+          result,
         );
         context.logger.info(
           "Fetched stream_live_inputs_retrieve_a_live_input",
@@ -1669,10 +1406,7 @@ export const model = {
     update_a_live_input: {
       description: "Update a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
         defaultCreator: z.unknown().optional(),
         deleteRecordingAfterDays: z.unknown().optional(),
         enabled: z.unknown().optional(),
@@ -1694,7 +1428,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1712,13 +1445,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "a_live_input",
-          String(args.live_input_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.live_input_identifier)),
+          result,
         );
         context.logger.info("Updated a_live_input", {});
         return { dataHandles: [handle] };
@@ -1727,10 +1455,7 @@ export const model = {
     delete_a_live_input: {
       description: "Delete a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1763,10 +1488,7 @@ export const model = {
     stream_live_inputs_disable_a_live_input: {
       description: "Disable a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1782,7 +1504,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1794,12 +1515,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_disable_a_live_input",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_disable_a_live_input",
@@ -1811,10 +1527,7 @@ export const model = {
     stream_live_inputs_enable_a_live_input: {
       description: "Enable a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1830,7 +1543,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1842,12 +1554,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_enable_a_live_input",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_enable_a_live_input",
@@ -1859,10 +1566,7 @@ export const model = {
     list_all_outputs_associated_with_a_specified_live_input: {
       description: "List all outputs associated with a specified live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1878,8 +1582,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
           "live_input_identifier",
@@ -1927,10 +1631,7 @@ export const model = {
     create_a_new_output_connected_to_a_live_input: {
       description: "Create a new output, connected to a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
         enabled: z.unknown().optional(),
         streamKey: z.unknown(),
         url: z.unknown(),
@@ -1949,7 +1650,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1965,16 +1665,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "a_new_output_connected_to_a_live_input",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created a_new_output_connected_to_a_live_input {id}",
@@ -1986,14 +1683,8 @@ export const model = {
     update_an_output: {
       description: "Update an output",
       arguments: z.object({
-        output_identifier: z.string().min(
-          1,
-          "output_identifier must not be empty",
-        ),
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        output_identifier: z.string(),
+        live_input_identifier: z.string(),
         enabled: z.unknown(),
       }),
       execute: async (
@@ -2010,7 +1701,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2031,13 +1721,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "an_output",
-          String(args.live_input_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.live_input_identifier)),
+          result,
         );
         context.logger.info("Updated an_output", {});
         return { dataHandles: [handle] };
@@ -2046,14 +1731,8 @@ export const model = {
     delete_an_output: {
       description: "Delete an output",
       arguments: z.object({
-        output_identifier: z.string().min(
-          1,
-          "output_identifier must not be empty",
-        ),
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        output_identifier: z.string(),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2086,10 +1765,7 @@ export const model = {
     stream_live_inputs_rotate_keys_for_a_live_input: {
       description: "Rotate keys for a live input",
       arguments: z.object({
-        live_input_identifier: z.string().min(
-          1,
-          "live_input_identifier must not be empty",
-        ),
+        live_input_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2105,7 +1781,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -2117,12 +1792,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_live_inputs_rotate_keys_for_a_live_input",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_live_inputs_rotate_keys_for_a_live_input",
@@ -2150,7 +1820,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2161,12 +1830,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_videos_storage_usage",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched stream_videos_storage_usage", {});
         return { dataHandles: [handle] };
@@ -2189,8 +1853,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2247,8 +1911,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2314,7 +1978,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2326,16 +1989,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "watermark_profiles_via_basic_upload",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created watermark_profiles_via_basic_upload {id}",
@@ -2347,7 +2007,7 @@ export const model = {
     get_stream_watermark_profile_watermark_profile_details: {
       description: "Watermark profile details",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2363,7 +2023,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2373,13 +2032,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_watermark_profile_watermark_profile_details",
-          String(args.identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identifier)),
+          result,
         );
         context.logger.info(
           "Fetched stream_watermark_profile_watermark_profile_details",
@@ -2391,7 +2045,7 @@ export const model = {
     delete_watermark_profiles: {
       description: "Delete watermark profiles",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2436,7 +2090,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2447,12 +2100,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_webhook_view_webhooks",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched stream_webhook_view_webhooks", {});
         return { dataHandles: [handle] };
@@ -2480,7 +2128,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -2495,12 +2142,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_webhooks",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated create_webhooks", {});
         return { dataHandles: [handle] };
@@ -2538,7 +2180,7 @@ export const model = {
     get_stream_videos_retrieve_video_details: {
       description: "Retrieve video details",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2554,7 +2196,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2564,13 +2205,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_videos_retrieve_video_details",
-          String(args.identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identifier)),
+          result,
         );
         context.logger.info("Fetched stream_videos_retrieve_video_details", {});
         return { dataHandles: [handle] };
@@ -2579,7 +2215,7 @@ export const model = {
     update_video_details: {
       description: "Edit video details",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
         allowedOrigins: z.unknown().optional(),
         creator: z.unknown().optional(),
         maxDurationSeconds: z.unknown().optional(),
@@ -2614,7 +2250,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2633,12 +2268,7 @@ export const model = {
         const handle = await context.writeResource(
           "update_video_details",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed update_video_details", {});
         return { dataHandles: [handle] };
@@ -2647,7 +2277,7 @@ export const model = {
     delete_video: {
       description: "Delete video",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2678,7 +2308,7 @@ export const model = {
     list_audio_tracks: {
       description: "List additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2694,7 +2324,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2704,13 +2333,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_audio_tracks",
-          String(args.identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identifier)),
+          result,
         );
         context.logger.info("Fetched list_audio_tracks", {});
         return { dataHandles: [handle] };
@@ -2719,7 +2343,7 @@ export const model = {
     create_add_audio_track: {
       description: "Add audio tracks to a video",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
         label: z.unknown(),
         url: z.string().optional().describe(
           "An audio track URL. The server must be publicly routable and support `HTTP HE...",
@@ -2739,7 +2363,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2755,16 +2378,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "add_audio_track",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created add_audio_track {id}", { id });
         return { dataHandles: [handle] };
@@ -2773,11 +2393,8 @@ export const model = {
     update_edit_audio_tracks: {
       description: "Edit additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
-        audio_identifier: z.string().min(
-          1,
-          "audio_identifier must not be empty",
-        ),
+        identifier: z.string(),
+        audio_identifier: z.string(),
         default: z.unknown().optional(),
         label: z.unknown().optional(),
       }),
@@ -2795,7 +2412,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2813,13 +2429,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_audio_tracks",
-          String(args.audio_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.audio_identifier)),
+          result,
         );
         context.logger.info("Updated edit_audio_tracks", {});
         return { dataHandles: [handle] };
@@ -2828,11 +2439,8 @@ export const model = {
     delete_audio_tracks: {
       description: "Delete additional audio tracks on a video",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
-        audio_identifier: z.string().min(
-          1,
-          "audio_identifier must not be empty",
-        ),
+        identifier: z.string(),
+        audio_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2865,7 +2473,7 @@ export const model = {
     list_captions_or_subtitles: {
       description: "List captions or subtitles",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2881,8 +2489,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["identifier", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2925,8 +2533,8 @@ export const model = {
     get_caption_or_subtitle_for_language: {
       description: "List captions or subtitles for a provided language",
       arguments: z.object({
-        language: z.string().min(1, "language must not be empty"),
-        identifier: z.string().min(1, "identifier must not be empty"),
+        language: z.string(),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2942,7 +2550,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -2952,13 +2559,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "caption_or_subtitle_for_language",
-          String(args.identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identifier)),
+          result,
         );
         context.logger.info("Fetched caption_or_subtitle_for_language", {});
         return { dataHandles: [handle] };
@@ -2967,8 +2569,8 @@ export const model = {
     delete_captions_or_subtitles: {
       description: "Delete captions or subtitles",
       arguments: z.object({
-        language: z.string().min(1, "language must not be empty"),
-        identifier: z.string().min(1, "identifier must not be empty"),
+        language: z.string(),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3000,8 +2602,8 @@ export const model = {
       description:
         "Generate captions or subtitles for a provided language via AI",
       arguments: z.object({
-        language: z.string().min(1, "language must not be empty"),
-        identifier: z.string().min(1, "identifier must not be empty"),
+        language: z.string(),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3017,7 +2619,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -3029,12 +2630,7 @@ export const model = {
         const handle = await context.writeResource(
           "stream_subtitles_captions_generate_caption_or_subtitle_for_language",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed stream_subtitles_captions_generate_caption_or_subtitle_for_language",
@@ -3046,7 +2642,7 @@ export const model = {
     list_downloads: {
       description: "List downloads",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3062,7 +2658,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -3072,13 +2667,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_downloads",
-          String(args.identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identifier)),
+          result,
         );
         context.logger.info("Fetched list_downloads", {});
         return { dataHandles: [handle] };
@@ -3087,7 +2677,7 @@ export const model = {
     create_downloads: {
       description: "Create downloads",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3103,7 +2693,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -3115,12 +2704,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_downloads",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_downloads", {});
         return { dataHandles: [handle] };
@@ -3129,7 +2713,7 @@ export const model = {
     delete_downloads: {
       description: "Delete downloads",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3160,8 +2744,8 @@ export const model = {
     create_type_specific_downloads: {
       description: "Create download",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
-        download_type: z.string().min(1, "download_type must not be empty"),
+        identifier: z.string(),
+        download_type: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3177,7 +2761,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -3189,12 +2772,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_type_specific_downloads",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_type_specific_downloads", {});
         return { dataHandles: [handle] };
@@ -3203,8 +2781,8 @@ export const model = {
     delete_type_specific_downloads: {
       description: "Delete download",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
-        download_type: z.string().min(1, "download_type must not be empty"),
+        identifier: z.string(),
+        download_type: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3237,7 +2815,7 @@ export const model = {
     create_signed_url_tokens_for_videos: {
       description: "Create signed URL tokens for videos",
       arguments: z.object({
-        identifier: z.string().min(1, "identifier must not be empty"),
+        identifier: z.string(),
         accessRules: z.array(z.unknown()).optional().describe(
           "The optional list of access rule constraints on the token. Access can be bloc...",
         ),
@@ -3248,7 +2826,7 @@ export const model = {
           "The optional unix epoch timestamp that specficies the time after a token is n...",
         ),
         flags: z.object({
-          original: z.boolean().optional(),
+          original: z.boolean().optional().default(false),
         }).optional().describe("Optional flags for the signed token."),
         nbf: z.number().int().optional().describe(
           "The optional unix epoch timestamp that specifies the time before a the token ...",
@@ -3271,7 +2849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3287,16 +2864,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "signed_url_tokens_for_videos",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created signed_url_tokens_for_videos {id}", {
           id,

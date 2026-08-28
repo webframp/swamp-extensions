@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/magic-transit"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -15,8 +15,6 @@ additionalFiles:
   - LICENSE.md
 labels:
   - cloudflare
-  - ddos
   - magic-transit
   - network
-  - networking
-  - security
+  - ddos

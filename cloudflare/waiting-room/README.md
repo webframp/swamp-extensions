@@ -46,7 +46,7 @@ swamp model create @webframp/cloudflare/waiting-room cf-waiting-room \
 ## Development
 
 ```bash
-cd cloudflare/waiting-room
+cd ../../cloudflare/waiting-room
 deno task check
 deno task lint
 deno task fmt

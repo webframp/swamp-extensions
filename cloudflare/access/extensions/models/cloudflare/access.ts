@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/access";
 
@@ -18,31 +18,37 @@ const EXTENSION_NAME = "@webframp/cloudflare/access";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
 const PortalsItemSchema = z.object({
-  allow_code_mode: z.boolean().optional().describe(
+  allow_code_mode: z.boolean().optional().default(true).describe(
     "Allow remote code execution in Dynamic Workers (beta)",
   ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
   description: z.string().max(512).optional(),
-  hostname: z.string(),
-  id: z.string().min(1).max(32).describe("portal id"),
+  hostname: z.string().regex(
+    new RegExp(
+      "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
+    ),
+  ),
+  id: z.string().min(1).max(32).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("portal id"),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
   name: z.string().max(350),
-  secure_web_gateway: z.boolean().optional().describe(
+  secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
   ),
   servers: z.array(z.object({
     auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
-    default_disabled: z.boolean().optional(),
+    default_disabled: z.boolean().optional().default(false),
     description: z.string().max(512).nullable().optional(),
     error: z.string().optional(),
     error_details: z.object({
@@ -53,18 +59,24 @@ const PortalsItemSchema = z.object({
       status_code: z.number().optional(),
     }).optional(),
     hostname: z.string(),
-    id: z.string().min(1).max(32),
-    is_shared_oauth_callback_enabled: z.boolean().optional(),
+    id: z.string().min(1).max(32).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
+    is_shared_oauth_callback_enabled: z.boolean().optional().default(false),
     last_successful_sync: z.string().optional(),
     last_synced: z.string().optional(),
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
     name: z.string().max(350),
-    on_behalf: z.boolean().optional(),
+    on_behalf: z.boolean().optional().default(true),
     prompts: z.array(z.record(z.string(), z.unknown())),
-    secure_web_gateway: z.boolean().optional(),
-    server_id: z.string().min(1).max(32),
-    status: z.enum(["waiting", "ready", "stale", "error"]).optional(),
+    secure_web_gateway: z.boolean().optional().default(false),
+    server_id: z.string().min(1).max(32).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
+    status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
+      "waiting",
+    ),
     tools: z.array(z.record(z.string(), z.unknown())),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
@@ -83,7 +95,7 @@ const PortalsItemSchema = z.object({
       server_description: z.string().optional(),
     })).optional(),
   })),
-});
+}).passthrough();
 
 const ListPortalsSchema = z.object({
   items: z.array(PortalsItemSchema),
@@ -98,25 +110,31 @@ const ListPortalsSchema = z.object({
 });
 
 const GetMcpPortalsApiFetchGatewaysSchema = z.object({
-  allow_code_mode: z.boolean().optional().describe(
+  allow_code_mode: z.boolean().optional().default(true).describe(
     "Allow remote code execution in Dynamic Workers (beta)",
   ),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
   description: z.string().max(512).optional(),
-  hostname: z.string(),
-  id: z.string().min(1).max(32).describe("portal id"),
+  hostname: z.string().regex(
+    new RegExp(
+      "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
+    ),
+  ),
+  id: z.string().min(1).max(32).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("portal id"),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
   name: z.string().max(350),
-  secure_web_gateway: z.boolean().optional().describe(
+  secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
   ),
   servers: z.array(z.object({
     auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
-    default_disabled: z.boolean().optional(),
+    default_disabled: z.boolean().optional().default(false),
     description: z.string().max(512).nullable().optional(),
     error: z.string().optional(),
     error_details: z.object({
@@ -127,18 +145,24 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
       status_code: z.number().optional(),
     }).optional(),
     hostname: z.string(),
-    id: z.string().min(1).max(32),
-    is_shared_oauth_callback_enabled: z.boolean().optional(),
+    id: z.string().min(1).max(32).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
+    is_shared_oauth_callback_enabled: z.boolean().optional().default(false),
     last_successful_sync: z.string().optional(),
     last_synced: z.string().optional(),
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
     name: z.string().max(350),
-    on_behalf: z.boolean().optional(),
+    on_behalf: z.boolean().optional().default(true),
     prompts: z.array(z.record(z.string(), z.unknown())),
-    secure_web_gateway: z.boolean().optional(),
-    server_id: z.string().min(1).max(32),
-    status: z.enum(["waiting", "ready", "stale", "error"]).optional(),
+    secure_web_gateway: z.boolean().optional().default(false),
+    server_id: z.string().min(1).max(32).regex(
+      new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+    ),
+    status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
+      "waiting",
+    ),
     tools: z.array(z.record(z.string(), z.unknown())),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
@@ -157,16 +181,7 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
       server_description: z.string().optional(),
     })).optional(),
   })),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ServersItemSchema = z.object({
   auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
@@ -182,36 +197,43 @@ const ServersItemSchema = z.object({
     status_code: z.number().optional(),
   }).optional(),
   hostname: z.string(),
-  id: z.string().min(1).max(32).describe("server id"),
-  is_shared_oauth_callback_enabled: z.boolean().optional().describe(
-    "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
-  ),
+  id: z.string().min(1).max(32).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("server id"),
+  is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
+    .describe(
+      "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
+    ),
   last_successful_sync: z.string().optional(),
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
   name: z.string().max(350),
   prompts: z.array(z.record(z.string(), z.unknown())),
-  secure_web_gateway: z.boolean().optional().describe(
+  secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
   ),
-  status: z.enum(["waiting", "ready", "stale", "error"]).optional().describe(
-    "Current sync state of the server",
-  ),
+  status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
+    "waiting",
+  ).describe("Current sync state of the server"),
   tools: z.array(z.record(z.string(), z.unknown())),
   updated_prompts: z.array(z.object({
-    alias: z.string().max(40).optional(),
+    alias: z.string().max(40).regex(
+      new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+    ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string(),
   })).optional(),
   updated_tools: z.array(z.object({
-    alias: z.string().max(40).optional(),
+    alias: z.string().max(40).regex(
+      new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+    ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string(),
   })).optional(),
-});
+}).passthrough();
 
 const ListServersSchema = z.object({
   items: z.array(ServersItemSchema),
@@ -239,45 +261,43 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     status_code: z.number().optional(),
   }).optional(),
   hostname: z.string(),
-  id: z.string().min(1).max(32).describe("server id"),
-  is_shared_oauth_callback_enabled: z.boolean().optional().describe(
-    "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
-  ),
+  id: z.string().min(1).max(32).regex(
+    new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+  ).describe("server id"),
+  is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
+    .describe(
+      "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
+    ),
   last_successful_sync: z.string().optional(),
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
   name: z.string().max(350),
   prompts: z.array(z.record(z.string(), z.unknown())),
-  secure_web_gateway: z.boolean().optional().describe(
+  secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
   ),
-  status: z.enum(["waiting", "ready", "stale", "error"]).optional().describe(
-    "Current sync state of the server",
-  ),
+  status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
+    "waiting",
+  ).describe("Current sync state of the server"),
   tools: z.array(z.record(z.string(), z.unknown())),
   updated_prompts: z.array(z.object({
-    alias: z.string().max(40).optional(),
+    alias: z.string().max(40).regex(
+      new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+    ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string(),
   })).optional(),
   updated_tools: z.array(z.object({
-    alias: z.string().max(40).optional(),
+    alias: z.string().max(40).regex(
+      new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+    ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
     name: z.string(),
   })).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const McpPortalsApiSyncServerSchema = z.object({
   error: z.string().optional(),
@@ -289,31 +309,323 @@ const McpPortalsApiSyncServerSchema = z.object({
     status_code: z.number().optional(),
   }).optional(),
   status: z.enum(["waiting", "ready", "stale", "error"]).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessApplicationsItemSchema = z.union([
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    saas_app: z.union([z.unknown(), z.unknown()]).optional(),
+    scim_config: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("App Launcher"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    app_launcher_logo_url: z.unknown().optional(),
+    bg_color: z.unknown().optional(),
+    footer_links: z.unknown().optional(),
+    header_bg_color: z.unknown().optional(),
+    landing_page_design: z.unknown().optional(),
+    skip_app_launcher_login_page: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Warp Login App"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Clientless Web Isolation"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Gateway Proxy"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    domain: z.string().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    name: z.unknown().optional(),
+    type: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
 ]);
 
 const ListAccessApplicationsSchema = z.object({
@@ -329,26 +641,327 @@ const ListAccessApplicationsSchema = z.object({
 });
 
 const AccessApplicationsAddAnApplicationSchema = z.union([
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    saas_app: z.union([z.unknown(), z.unknown()]).optional(),
+    scim_config: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("App Launcher"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    app_launcher_logo_url: z.unknown().optional(),
+    bg_color: z.unknown().optional(),
+    footer_links: z.unknown().optional(),
+    header_bg_color: z.unknown().optional(),
+    landing_page_design: z.unknown().optional(),
+    skip_app_launcher_login_page: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Warp Login App"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Clientless Web Isolation"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Gateway Proxy"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    domain: z.string().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    name: z.unknown().optional(),
+    type: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
 ]);
 
 const ShortLivedCertificateCAsItemSchema = z.object({
   aud: z.unknown().optional(),
   id: z.unknown().optional(),
   public_key: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListShortLivedCertificateCAsSchema = z.object({
   items: z.array(ShortLivedCertificateCAsItemSchema),
@@ -363,35 +976,327 @@ const ListShortLivedCertificateCAsSchema = z.object({
 });
 
 const GetAnAccessApplicationSchema = z.union([
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
-  z.object({}),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    saas_app: z.union([z.unknown(), z.unknown()]).optional(),
+    scim_config: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("App Launcher"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    app_launcher_logo_url: z.unknown().optional(),
+    bg_color: z.unknown().optional(),
+    footer_links: z.unknown().optional(),
+    header_bg_color: z.unknown().optional(),
+    landing_page_design: z.unknown().optional(),
+    skip_app_launcher_login_page: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Warp Login App"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Clientless Web Isolation"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    name: z.unknown().optional().default("Gateway Proxy"),
+    session_duration: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    domain: z.string().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    name: z.unknown().optional(),
+    type: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    target_criteria: z.array(z.unknown()).optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allow_iframe: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    app_launcher_visible: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    cors_headers: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown(),
+    eager_redirect_cookie_setting: z.unknown().optional(),
+    enable_binding_cookie: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    mfa_config: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    path_cookie_attribute: z.unknown().optional(),
+    read_service_tokens_from_header: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    self_hosted_domains: z.unknown().optional(),
+    service_auth_401_redirect: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    skip_interstitial: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    use_clientless_isolation_app_launcher_url: z.unknown().optional(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
+  z.object({
+    aud: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    updated_at: z.unknown().optional(),
+    allow_authenticate_via_warp: z.unknown().optional(),
+    allowed_idps: z.unknown().optional(),
+    auto_redirect_to_identity: z.unknown().optional(),
+    custom_deny_message: z.unknown().optional(),
+    custom_deny_url: z.unknown().optional(),
+    custom_non_identity_deny_url: z.unknown().optional(),
+    custom_pages: z.unknown().optional(),
+    destinations: z.unknown().optional(),
+    domain: z.unknown().optional(),
+    http_only_cookie_attribute: z.unknown().optional(),
+    logo_url: z.unknown().optional(),
+    name: z.unknown().optional(),
+    oauth_configuration: z.unknown().optional(),
+    options_preflight_bypass: z.unknown().optional(),
+    same_site_cookie_attribute: z.unknown().optional(),
+    scim_config: z.unknown().optional(),
+    session_duration: z.unknown().optional(),
+    tags: z.unknown().optional(),
+    type: z.unknown(),
+    policies: z.array(z.unknown()).optional(),
+  }),
 ]);
 
 const GetAShortLivedCertificateCaSchema = z.object({
   aud: z.unknown().optional(),
   id: z.unknown().optional(),
   public_key: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessAppPoliciesItemSchema = z.object({
   created_at: z.unknown().optional(),
@@ -403,7 +1308,7 @@ const AccessAppPoliciesItemSchema = z.object({
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   precedence: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListAccessAppPoliciesSchema = z.object({
   items: z.array(AccessAppPoliciesItemSchema),
@@ -427,16 +1332,7 @@ const CreateAnAccessPolicySchema = z.object({
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   precedence: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAccessPoliciesConvertReusableSchema = z.object({
   created_at: z.unknown().optional(),
@@ -448,16 +1344,7 @@ const UpdateAccessPoliciesConvertReusableSchema = z.object({
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   precedence: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAccessApplicationsTestAccessPoliciesSchema = z.object({
   app_state: z.object({
@@ -483,21 +1370,12 @@ const GetAccessApplicationsTestAccessPoliciesSchema = z.object({
     user_uuid: z.unknown().optional(),
     version: z.number().int().optional(),
   }).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListItemSchema = z.object({
   aaguid: z.unknown(),
   name: z.unknown(),
-});
+}).passthrough();
 
 const ListSchema = z.object({
   items: z.array(ListItemSchema),
@@ -521,7 +1399,7 @@ const MtlsCertificatesItemSchema = z.object({
   ),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListMtlsCertificatesSchema = z.object({
   items: z.array(MtlsCertificatesItemSchema),
@@ -545,16 +1423,7 @@ const CreateAccessMtlsAuthenticationAddAnMtlsCertificateSchema = z.object({
   ),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const MtlsCertificatesHostnameSettingsItemSchema = z.object({
   china_network: z.boolean().describe(
@@ -564,7 +1433,7 @@ const MtlsCertificatesHostnameSettingsItemSchema = z.object({
     "Client Certificate Forwarding is a feature that takes the client cert provided by the eyeball to ...",
   ),
   hostname: z.string().describe("The hostname that these settings apply to."),
-});
+}).passthrough();
 
 const ListMtlsCertificatesHostnameSettingsSchema = z.object({
   items: z.array(MtlsCertificatesHostnameSettingsItemSchema),
@@ -588,16 +1457,7 @@ const GetAnMtlsCertificateSchema = z.object({
   ),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CustomPagesItemSchema = z.object({
   app_count: z.unknown().optional(),
@@ -606,7 +1466,7 @@ const CustomPagesItemSchema = z.object({
   type: z.unknown(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListCustomPagesSchema = z.object({
   items: z.array(CustomPagesItemSchema),
@@ -627,23 +1487,14 @@ const CreateACustomPageSchema = z.object({
   type: z.unknown(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SshCaItemSchema = z.object({
   id: z.string().optional().describe("The key ID of this certificate."),
   public_key: z.string().optional().describe(
     "The public key of this certificate.",
   ),
-});
+}).passthrough();
 
 const ListSshCaSchema = z.object({
   items: z.array(SshCaItemSchema),
@@ -662,16 +1513,7 @@ const AccessGatewayCaAddAnSshCaSchema = z.object({
   public_key: z.string().optional().describe(
     "The public key of this certificate.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessGroupsItemSchema = z.object({
   created_at: z.unknown().optional(),
@@ -682,7 +1524,7 @@ const AccessGroupsItemSchema = z.object({
   name: z.unknown().optional(),
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListAccessGroupsSchema = z.object({
   items: z.array(AccessGroupsItemSchema),
@@ -705,33 +1547,504 @@ const CreateAnAccessGroupSchema = z.object({
   name: z.unknown().optional(),
   require: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessIdentityProvidersItemSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    config: z.object({}),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      attributes: z.array(z.string()).optional(),
+      email_attribute_name: z.string().optional(),
+      enable_encryption: z.boolean().optional().default(false),
+      header_attributes: z.array(z.object({
+        attribute_name: z.string().optional(),
+        header_name: z.string().optional(),
+      })).optional(),
+      idp_public_certs: z.array(z.string()).optional(),
+      issuer_url: z.string().optional(),
+      sign_request: z.boolean().optional().default(false),
+      sso_target_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["onetimepin"]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+      restrict_to_account_members: z.boolean().optional().default(false),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["cloudflare"]),
+  }),
 ]);
 
 const ListAccessIdentityProvidersSchema = z.object({
@@ -747,39 +2060,999 @@ const ListAccessIdentityProvidersSchema = z.object({
 });
 
 const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    config: z.object({}),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      attributes: z.array(z.string()).optional(),
+      email_attribute_name: z.string().optional(),
+      enable_encryption: z.boolean().optional().default(false),
+      header_attributes: z.array(z.object({
+        attribute_name: z.string().optional(),
+        header_name: z.string().optional(),
+      })).optional(),
+      idp_public_certs: z.array(z.string()).optional(),
+      issuer_url: z.string().optional(),
+      sign_request: z.boolean().optional().default(false),
+      sso_target_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["onetimepin"]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+      restrict_to_account_members: z.boolean().optional().default(false),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["cloudflare"]),
+  }),
 ]);
 
 const GetAnAccessIdentityProviderSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    config: z.object({}),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      attributes: z.array(z.string()).optional(),
+      email_attribute_name: z.string().optional(),
+      enable_encryption: z.boolean().optional().default(false),
+      header_attributes: z.array(z.object({
+        attribute_name: z.string().optional(),
+        header_name: z.string().optional(),
+      })).optional(),
+      idp_public_certs: z.array(z.string()).optional(),
+      issuer_url: z.string().optional(),
+      sign_request: z.boolean().optional().default(false),
+      sso_target_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.unknown(),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum([
+      "onetimepin",
+      "azureAD",
+      "saml",
+      "centrify",
+      "facebook",
+      "github",
+      "google-apps",
+      "google",
+      "linkedin",
+      "oidc",
+      "okta",
+      "onelogin",
+      "pingone",
+      "yandex",
+      "cloudflare",
+    ]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["onetimepin"]),
+  }),
+  z.object({
+    config: z.object({
+      redirect_url: z.string().optional(),
+      restrict_to_account_members: z.boolean().optional().default(false),
+    }),
+    id: z.unknown().optional(),
+    name: z.unknown(),
+    read_only: z.boolean().optional(),
+    saml_certificate_set: z.unknown().optional(),
+    saml_certificate_set_id: z.string().optional(),
+    scim_config: z.object({
+      enabled: z.boolean().optional().default(false),
+      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+        .optional().default("no_action"),
+      scim_base_url: z.string().optional(),
+      seat_deprovision: z.boolean().optional().default(false),
+      secret: z.string().optional(),
+      user_deprovision: z.boolean().optional().default(false),
+    }).optional(),
+    type: z.enum(["cloudflare"]),
+  }),
 ]);
 
 const CreateSamlCertificateForIdentityProviderSchema = z.object({
@@ -796,16 +3069,7 @@ const CreateSamlCertificateForIdentityProviderSchema = z.object({
   updated_at: z.string().describe(
     "Timestamp when the certificate set was last updated (e.g., during rotation)",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ScimGroupResourcesItemSchema = z.object({
   displayName: z.string().optional().describe(
@@ -817,7 +3081,7 @@ const ScimGroupResourcesItemSchema = z.object({
   schemas: z.array(z.string()).optional().describe(
     "The list of URIs which indicate the attributes contained within a SCIM resource.",
   ),
-});
+}).passthrough();
 
 const ListScimGroupResourcesSchema = z.object({
   items: z.array(ScimGroupResourcesItemSchema),
@@ -851,7 +3115,7 @@ const ScimUserResourcesItemSchema = z.object({
   schemas: z.array(z.string()).optional().describe(
     "The list of URIs which indicate the attributes contained within a SCIM resource.",
   ),
-});
+}).passthrough();
 
 const ListScimUserResourcesSchema = z.object({
   items: z.array(ScimUserResourcesItemSchema),
@@ -869,61 +3133,25 @@ const CreateSchema = z.object({
   created_at: z.unknown(),
   id: z.unknown().describe("UID of the IdP federation grant."),
   idp_id: z.string().describe("UID of the identity provider being federated."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSchema = z.object({
   created_at: z.unknown(),
   id: z.unknown().describe("UID of the IdP federation grant."),
   idp_id: z.string().describe("UID of the identity provider being federated."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTheAccessKeyConfigurationSchema = z.object({
   days_until_next_rotation: z.unknown().optional(),
   key_rotation_interval_days: z.unknown().optional(),
   last_key_rotation_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessKeyConfigurationRotateAccessKeysSchema = z.object({
   days_until_next_rotation: z.unknown().optional(),
   key_rotation_interval_days: z.unknown().optional(),
   last_key_rotation_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAccessAuthenticationLogsItemSchema = z.object({
   action: z.unknown().optional(),
@@ -935,7 +3163,7 @@ const GetAccessAuthenticationLogsItemSchema = z.object({
   ip_address: z.unknown().optional(),
   ray_id: z.unknown().optional(),
   user_email: z.unknown().optional(),
-});
+}).passthrough();
 
 const GetAccessAuthenticationLogsSchema = z.object({
   items: z.array(GetAccessAuthenticationLogsItemSchema),
@@ -979,7 +3207,7 @@ const AccessScimUpdateLogsItemSchema = z.object({
     "The email address of the SCIM User resource if it exists.",
   ),
   status: z.string().optional().describe("The status of the SCIM request."),
-});
+}).passthrough();
 
 const ListAccessScimUpdateLogsSchema = z.object({
   items: z.array(AccessScimUpdateLogsItemSchema),
@@ -1012,31 +3240,13 @@ const GetYourZeroTrustOrganizationSchema = z.object({
   updated_at: z.unknown().optional(),
   user_seat_expiration_inactive_time: z.unknown().optional(),
   warp_auth_session_duration: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetYourZeroTrustOrganizationDohSettingsSchema = z.object({
   doh_jwt_duration: z.string().optional().describe(
     "The duration the DoH JWT is valid for. Must be in the format `300ms` or `2h45m`. Valid time units...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateZeroTrustOrganizationRevokeAllAccessTokensForAUserSchema = z.union([
   z.literal(true),
@@ -1054,7 +3264,7 @@ const AccessReusablePoliciesItemSchema = z.object({
   updated_at: z.unknown().optional(),
   app_count: z.unknown().optional(),
   reusable: z.union([z.literal(true)]).optional(),
-});
+}).passthrough();
 
 const ListAccessReusablePoliciesSchema = z.object({
   items: z.array(AccessReusablePoliciesItemSchema),
@@ -1079,30 +3289,12 @@ const CreateAnAccessReusablePolicySchema = z.object({
   updated_at: z.unknown().optional(),
   app_count: z.unknown().optional(),
   reusable: z.union([z.literal(true)]).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAccessPolicyTestsSchema = z.object({
   id: z.unknown().optional(),
   status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAnUpdateSchema = z.object({
   id: z.unknown().optional(),
@@ -1115,23 +3307,14 @@ const GetAnUpdateSchema = z.object({
   users_approved: z.unknown().optional(),
   users_blocked: z.unknown().optional(),
   users_errored: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAUserPageItemSchema = z.object({
   email: z.unknown().optional(),
   id: z.unknown().optional(),
   name: z.unknown().optional(),
   status: z.unknown().optional(),
-});
+}).passthrough();
 
 const GetAUserPageSchema = z.object({
   items: z.array(GetAUserPageItemSchema),
@@ -1155,7 +3338,7 @@ const CertificateSetsItemSchema = z.object({
   ),
   uid: z.string().describe("Unique identifier for the certificate set"),
   updated_at: z.string().describe("When the certificate set was last updated"),
-});
+}).passthrough();
 
 const ListCertificateSetsSchema = z.object({
   items: z.array(CertificateSetsItemSchema),
@@ -1179,16 +3362,7 @@ const GetCertificateSetSchema = z.object({
   ),
   uid: z.string().describe("Unique identifier for the certificate set"),
   updated_at: z.string().describe("When the certificate set was last updated"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessSamlCertificatesRotateCertificateSchema = z.object({
   created_at: z.string().describe("When the certificate set was created"),
@@ -1200,16 +3374,7 @@ const AccessSamlCertificatesRotateCertificateSchema = z.object({
   ),
   uid: z.string().describe("Unique identifier for the certificate set"),
   updated_at: z.string().describe("When the certificate set was last updated"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAUserSeatSchema = z.object({
   access_seat: z.unknown().optional(),
@@ -1217,16 +3382,7 @@ const UpdateAUserSeatSchema = z.object({
   gateway_seat: z.unknown().optional(),
   seat_uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ServiceTokensItemSchema = z.object({
   client_id: z.unknown().optional(),
@@ -1237,7 +3393,7 @@ const ServiceTokensItemSchema = z.object({
   last_seen_at: z.unknown().optional(),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListServiceTokensSchema = z.object({
   items: z.array(ServiceTokensItemSchema),
@@ -1259,16 +3415,7 @@ const CreateAServiceTokenSchema = z.object({
   id: z.string().optional().describe("The ID of the service token."),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AccessServiceTokensRefreshAServiceTokenSchema = z.object({
   client_id: z.unknown().optional(),
@@ -1279,16 +3426,7 @@ const AccessServiceTokensRefreshAServiceTokenSchema = z.object({
   last_seen_at: z.unknown().optional(),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAccessServiceTokensRotateAServiceTokenSchema = z.object({
   client_id: z.unknown().optional(),
@@ -1298,16 +3436,7 @@ const CreateAccessServiceTokensRotateAServiceTokenSchema = z.object({
   id: z.string().optional().describe("The ID of the service token."),
   name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TagsItemSchema = z.object({
   app_count: z.number().int().optional().describe(
@@ -1316,7 +3445,7 @@ const TagsItemSchema = z.object({
   created_at: z.unknown().optional(),
   name: z.unknown(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListTagsSchema = z.object({
   items: z.array(TagsItemSchema),
@@ -1337,16 +3466,7 @@ const CreateTagSchema = z.object({
   created_at: z.unknown().optional(),
   name: z.unknown(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetATagSchema = z.object({
   app_count: z.number().int().optional().describe(
@@ -1355,16 +3475,7 @@ const GetATagSchema = z.object({
   created_at: z.unknown().optional(),
   name: z.unknown(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetUsersItemSchema = z.object({
   access_seat: z.unknown().optional(),
@@ -1378,7 +3489,7 @@ const GetUsersItemSchema = z.object({
   seat_uid: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const GetUsersSchema = z.object({
   items: z.array(GetUsersItemSchema),
@@ -1404,16 +3515,7 @@ const CreateUserSchema = z.object({
   seat_uid: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetActiveSessionsItemSchema = z.object({
   expiration: z.number().int().optional(),
@@ -1433,7 +3535,7 @@ const GetActiveSessionsItemSchema = z.object({
     ttl: z.number().int().optional(),
   }).optional(),
   name: z.string().optional(),
-});
+}).passthrough();
 
 const GetActiveSessionsSchema = z.object({
   items: z.array(GetActiveSessionsItemSchema),
@@ -1476,21 +3578,12 @@ const GetActiveSessionSchema = z.object({
   user_uuid: z.string().optional(),
   version: z.number().optional(),
   isActive: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetFailedLoginsItemSchema = z.object({
   expiration: z.number().int().optional(),
   metadata: z.object({}).optional(),
-});
+}).passthrough();
 
 const GetFailedLoginsSchema = z.object({
   items: z.array(GetFailedLoginsItemSchema),
@@ -1532,16 +3625,7 @@ const GetLastSeenIdentitySchema = z.object({
   service_token_status: z.boolean().optional(),
   user_uuid: z.string().optional(),
   version: z.number().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -1550,7 +3634,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1581,6 +3665,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2000,32 +4089,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/ai-controls/mcp/portals`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list MCP Portals (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/ai-controls/mcp/portals`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2053,23 +4131,33 @@ export const model = {
           "Allow remote code execution in Dynamic Workers (beta)",
         ),
         description: z.string().max(512).optional(),
-        hostname: z.string().min(1, "hostname must not be empty"),
+        hostname: z.string().regex(
+          new RegExp(
+            "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
+          ),
+        ),
         name: z.string().max(350),
         secure_web_gateway: z.boolean().optional().describe(
           "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
         ),
         servers: z.array(z.object({
-          default_disabled: z.boolean().optional(),
-          on_behalf: z.boolean().optional(),
-          server_id: z.string().min(1).max(32),
+          default_disabled: z.boolean().optional().default(false),
+          on_behalf: z.boolean().optional().default(true),
+          server_id: z.string().min(1).max(32).regex(
+            new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+          ),
           updated_prompts: z.array(z.object({
-            alias: z.string().max(40).optional(),
+            alias: z.string().max(40).regex(
+              new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+            ).optional(),
             description: z.string().optional(),
             enabled: z.boolean().optional(),
             name: z.string(),
           })).optional(),
           updated_tools: z.array(z.object({
-            alias: z.string().max(40).optional(),
+            alias: z.string().max(40).regex(
+              new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+            ).optional(),
             description: z.string().optional(),
             enabled: z.boolean().optional(),
             name: z.string(),
@@ -2090,35 +4178,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/ai-controls/mcp/portals`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a new MCP Portal (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/ai-controls/mcp/portals`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("portals", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("portals", id, result);
         context.logger.info("Created portals {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -2126,7 +4200,7 @@ export const model = {
     get_mcp_portals_api_fetch_gateways: {
       description: "Read details of an MCP Portal",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2142,33 +4216,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to read details of an MCP Portal (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+        );
 
         const handle = await context.writeResource(
           "mcp_portals_api_fetch_gateways",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched mcp_portals_api_fetch_gateways", {});
         return { dataHandles: [handle] };
@@ -2177,28 +4235,38 @@ export const model = {
     update_portals: {
       description: "Update a MCP Portal",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         allow_code_mode: z.boolean().optional().describe(
           "Allow remote code execution in Dynamic Workers (beta)",
         ),
         description: z.string().max(512).optional(),
-        hostname: z.string().optional(),
+        hostname: z.string().regex(
+          new RegExp(
+            "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
+          ),
+        ).optional(),
         name: z.string().max(350).optional(),
         secure_web_gateway: z.boolean().optional().describe(
           "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
         ),
         servers: z.array(z.object({
-          default_disabled: z.boolean().optional(),
-          on_behalf: z.boolean().optional(),
-          server_id: z.string().min(1).max(32),
+          default_disabled: z.boolean().optional().default(false),
+          on_behalf: z.boolean().optional().default(true),
+          server_id: z.string().min(1).max(32).regex(
+            new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
+          ),
           updated_prompts: z.array(z.object({
-            alias: z.string().max(40).optional(),
+            alias: z.string().max(40).regex(
+              new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+            ).optional(),
             description: z.string().optional(),
             enabled: z.boolean().optional(),
             name: z.string(),
           })).optional(),
           updated_tools: z.array(z.object({
-            alias: z.string().max(40).optional(),
+            alias: z.string().max(40).regex(
+              new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+            ).optional(),
             description: z.string().optional(),
             enabled: z.boolean().optional(),
             name: z.string(),
@@ -2219,7 +4287,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2228,32 +4295,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a MCP Portal (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "portals",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated portals", {});
         return { dataHandles: [handle] };
@@ -2262,7 +4314,7 @@ export const model = {
     delete_portals: {
       description: "Delete a MCP Portal",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2279,20 +4331,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a MCP Portal (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/ai-controls/mcp/portals/${args.id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.id });
         return { dataHandles: [] };
@@ -2319,32 +4363,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/ai-controls/mcp/servers`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list MCP Servers (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/ai-controls/mcp/servers`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2371,7 +4404,7 @@ export const model = {
         auth_credentials: z.string().optional(),
         auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
         description: z.string().max(512).nullable().optional(),
-        hostname: z.string().min(1, "hostname must not be empty"),
+        hostname: z.string(),
         is_shared_oauth_callback_enabled: z.boolean().optional().describe(
           "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback...",
         ),
@@ -2380,13 +4413,17 @@ export const model = {
           "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
         ),
         updated_prompts: z.array(z.object({
-          alias: z.string().max(40).optional(),
+          alias: z.string().max(40).regex(
+            new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+          ).optional(),
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
         })).optional(),
         updated_tools: z.array(z.object({
-          alias: z.string().max(40).optional(),
+          alias: z.string().max(40).regex(
+            new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+          ).optional(),
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
@@ -2406,35 +4443,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/ai-controls/mcp/servers`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a new MCP Server (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/ai-controls/mcp/servers`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("servers", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("servers", id, result);
         context.logger.info("Created servers {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -2442,7 +4465,7 @@ export const model = {
     get_mcp_portals_api_fetch_servers: {
       description: "Read the details of a MCP Server",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2458,33 +4481,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to read the details of a MCP Server (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+        );
 
         const handle = await context.writeResource(
           "mcp_portals_api_fetch_servers",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Fetched mcp_portals_api_fetch_servers", {});
         return { dataHandles: [handle] };
@@ -2493,7 +4500,7 @@ export const model = {
     update_servers: {
       description: "Update a MCP Server",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
         auth_credentials: z.string().optional(),
         description: z.string().max(512).nullable().optional(),
         is_shared_oauth_callback_enabled: z.boolean().optional().describe(
@@ -2504,13 +4511,17 @@ export const model = {
           "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
         ),
         updated_prompts: z.array(z.object({
-          alias: z.string().max(40).optional(),
+          alias: z.string().max(40).regex(
+            new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+          ).optional(),
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
         })).optional(),
         updated_tools: z.array(z.object({
-          alias: z.string().max(40).optional(),
+          alias: z.string().max(40).regex(
+            new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
+          ).optional(),
           description: z.string().optional(),
           enabled: z.boolean().optional(),
           name: z.string(),
@@ -2530,7 +4541,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2539,32 +4549,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a MCP Server (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "servers",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated servers", {});
         return { dataHandles: [handle] };
@@ -2573,7 +4568,7 @@ export const model = {
     delete_servers: {
       description: "Delete a MCP Server",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2590,20 +4585,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a MCP Server (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.id });
         return { dataHandles: [] };
@@ -2612,7 +4599,7 @@ export const model = {
     mcp_portals_api_sync_server: {
       description: "Sync MCP Server Capabilities",
       arguments: z.object({
-        id: z.string().min(1, "id must not be empty"),
+        id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2628,34 +4615,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}/sync`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to sync MCP Server Capabilities (accountId=${accountId} id=${args.id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/ai-controls/mcp/servers/${args.id}/sync`,
+        );
 
         const handle = await context.writeResource(
           "mcp_portals_api_sync_server",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed mcp_portals_api_sync_server", {});
         return { dataHandles: [handle] };
@@ -2685,32 +4656,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/apps`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access applications (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/apps`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2754,35 +4714,19 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/apps`,
-            args,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to add an Access application (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/apps`,
+          args,
+        );
 
         const handle = await context.writeResource(
           "access_applications_add_an_application",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_applications_add_an_application",
@@ -2810,32 +4754,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/apps/ca`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list short-lived certificate CAs (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/apps/ca`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2865,7 +4798,7 @@ export const model = {
     get_an_access_application: {
       description: "Get an Access application",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2881,33 +4814,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/apps/${args.app_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access application (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/apps/${args.app_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_access_application",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Fetched an_access_application", {});
         return { dataHandles: [handle] };
@@ -2916,7 +4833,7 @@ export const model = {
     update_an_access_application: {
       description: "Update an Access application",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2932,7 +4849,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2941,32 +4857,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/apps/${args.app_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an Access application (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/apps/${args.app_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_access_application",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Updated an_access_application", {});
         return { dataHandles: [handle] };
@@ -2975,7 +4876,7 @@ export const model = {
     delete_an_access_application: {
       description: "Delete an Access application",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2992,20 +4893,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/apps/${args.app_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an Access application (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/apps/${args.app_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.app_id });
         return { dataHandles: [] };
@@ -3014,7 +4907,7 @@ export const model = {
     get_a_short_lived_certificate_ca: {
       description: "Get a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3030,33 +4923,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+        );
 
         const handle = await context.writeResource(
           "a_short_lived_certificate_ca",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Fetched a_short_lived_certificate_ca", {});
         return { dataHandles: [handle] };
@@ -3065,7 +4942,7 @@ export const model = {
     create_a_short_lived_certificate_ca: {
       description: "Create a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3081,34 +4958,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+        );
 
         const handle = await context.writeResource(
           "create_a_short_lived_certificate_ca",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_a_short_lived_certificate_ca", {});
         return { dataHandles: [handle] };
@@ -3117,7 +4978,7 @@ export const model = {
     delete_a_short_lived_certificate_ca: {
       description: "Delete a short-lived certificate CA",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3134,20 +4995,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a short-lived certificate CA (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/apps/${args.app_id}/ca`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.app_id });
         return { dataHandles: [] };
@@ -3173,32 +5026,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["app_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access application policies (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3250,7 +5092,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3259,33 +5100,20 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create an Access application policy (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "an_access_policy",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created an_access_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -3311,33 +5139,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_access_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Fetched an_access_policy", {});
         return { dataHandles: [handle] };
@@ -3369,7 +5181,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3378,32 +5189,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_access_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated an_access_policy", {});
         return { dataHandles: [handle] };
@@ -3430,20 +5226,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an Access application policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
@@ -3469,7 +5257,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3478,32 +5265,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}/make_reusable`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to convert an Access application policy to a reusable policy (accountId=${accountId} app_id=${args.app_id} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/apps/${args.app_id}/policies/${args.policy_id}/make_reusable`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "access_policies_convert_reusable",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated access_policies_convert_reusable", {});
         return { dataHandles: [handle] };
@@ -3512,7 +5284,7 @@ export const model = {
     access_applications_revoke_service_tokens: {
       description: "Revoke application tokens",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3528,34 +5300,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/apps/${args.app_id}/revoke_tokens`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to revoke application tokens (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/apps/${args.app_id}/revoke_tokens`,
+        );
 
         const handle = await context.writeResource(
           "access_applications_revoke_service_tokens",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_applications_revoke_service_tokens",
@@ -3567,7 +5323,7 @@ export const model = {
     update_access_application_settings: {
       description: "Update Access application settings",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
         allow_iframe: z.unknown().optional(),
         skip_interstitial: z.unknown().optional(),
       }),
@@ -3585,7 +5341,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3594,32 +5349,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/apps/${args.app_id}/settings`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Access application settings (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/apps/${args.app_id}/settings`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "access_application_settings",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Updated access_application_settings", {});
         return { dataHandles: [handle] };
@@ -3628,7 +5368,7 @@ export const model = {
     get_access_applications_test_access_policies: {
       description: "Test Access policies",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3644,33 +5384,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/apps/${args.app_id}/user_policy_checks`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to test Access policies (accountId=${accountId} app_id=${args.app_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/apps/${args.app_id}/user_policy_checks`,
+        );
 
         const handle = await context.writeResource(
           "access_applications_test_access_policies",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info(
           "Fetched access_applications_test_access_policies",
@@ -3696,32 +5420,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/authenticator_device_aaguids`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list authenticator device AAGUIDs (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/authenticator_device_aaguids`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3761,32 +5474,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/certificates`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list mTLS certificates (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/certificates`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3834,38 +5536,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/certificates`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to add an mTLS certificate (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/certificates`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "access_mtls_authentication_add_an_mtls_certificate",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created access_mtls_authentication_add_an_mtls_certificate {id}",
@@ -3891,32 +5579,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/certificates/settings`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list all mTLS hostname settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/certificates/settings`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3963,37 +5640,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/certificates/settings`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an mTLS certificate's hostname settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/certificates/settings`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_mtls_certificate_settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated an_mtls_certificate_settings", {});
         return { dataHandles: [handle] };
@@ -4002,7 +5663,7 @@ export const model = {
     get_an_mtls_certificate: {
       description: "Get an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4018,33 +5679,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_mtls_certificate",
-          String(args.certificate_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.certificate_id)),
+          result,
         );
         context.logger.info("Fetched an_mtls_certificate", {});
         return { dataHandles: [handle] };
@@ -4053,7 +5698,7 @@ export const model = {
     update_an_mtls_certificate: {
       description: "Update an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
         associated_hostnames: z.unknown(),
         name: z.unknown().optional(),
       }),
@@ -4071,7 +5716,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4080,32 +5724,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_mtls_certificate",
-          String(args.certificate_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.certificate_id)),
+          result,
         );
         context.logger.info("Updated an_mtls_certificate", {});
         return { dataHandles: [handle] };
@@ -4114,7 +5743,7 @@ export const model = {
     delete_an_mtls_certificate: {
       description: "Delete an mTLS certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4131,20 +5760,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an mTLS certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/certificates/${args.certificate_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.certificate_id,
@@ -4171,32 +5792,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/custom_pages`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list custom pages (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/custom_pages`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -4244,35 +5854,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/custom_pages`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a custom page (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/custom_pages`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_custom_page", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("a_custom_page", id, result);
         context.logger.info("Created a_custom_page {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -4280,7 +5876,7 @@ export const model = {
     get_a_custom_page: {
       description: "Get a custom page",
       arguments: z.object({
-        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
+        custom_page_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4296,33 +5892,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+        );
 
         const handle = await context.writeResource(
           "a_custom_page",
-          String(args.custom_page_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.custom_page_id)),
+          result,
         );
         context.logger.info("Fetched a_custom_page", {});
         return { dataHandles: [handle] };
@@ -4331,7 +5911,7 @@ export const model = {
     update_a_custom_page: {
       description: "Update a custom page",
       arguments: z.object({
-        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
+        custom_page_id: z.string(),
         app_count: z.unknown().optional(),
         created_at: z.unknown().optional(),
         custom_html: z.string().describe("Custom page HTML."),
@@ -4354,7 +5934,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4363,32 +5942,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "a_custom_page",
-          String(args.custom_page_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.custom_page_id)),
+          result,
         );
         context.logger.info("Updated a_custom_page", {});
         return { dataHandles: [handle] };
@@ -4397,7 +5961,7 @@ export const model = {
     delete_a_custom_page: {
       description: "Delete a custom page",
       arguments: z.object({
-        custom_page_id: z.string().min(1, "custom_page_id must not be empty"),
+        custom_page_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4414,20 +5978,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a custom page (accountId=${accountId} custom_page_id=${args.custom_page_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/custom_pages/${args.custom_page_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.custom_page_id,
@@ -4452,32 +6008,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/gateway_ca`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list SSH Certificate Authorities (CA) (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/gateway_ca`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -4515,34 +6060,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/gateway_ca`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to add a new SSH Certificate Authority (CA) (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/gateway_ca`,
+        );
 
         const handle = await context.writeResource(
           "access_gateway_ca_add_an_ssh_ca",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed access_gateway_ca_add_an_ssh_ca", {});
         return { dataHandles: [handle] };
@@ -4551,7 +6080,7 @@ export const model = {
     delete_an_ssh_ca: {
       description: "Delete an SSH Certificate Authority (CA)",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4568,20 +6097,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/gateway_ca/${args.certificate_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an SSH Certificate Authority (CA) (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/gateway_ca/${args.certificate_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.certificate_id,
@@ -4609,32 +6130,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/groups`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access groups (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/groups`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -4680,38 +6190,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/groups`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create an Access group (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/groups`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "an_access_group",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created an_access_group {id}", { id });
         return { dataHandles: [handle] };
@@ -4720,7 +6216,7 @@ export const model = {
     get_an_access_group: {
       description: "Get an Access group",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty"),
+        group_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4736,33 +6232,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/groups/${args.group_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access group (accountId=${accountId} group_id=${args.group_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/groups/${args.group_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_access_group",
-          String(args.group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.group_id)),
+          result,
         );
         context.logger.info("Fetched an_access_group", {});
         return { dataHandles: [handle] };
@@ -4771,7 +6251,7 @@ export const model = {
     update_an_access_group: {
       description: "Update an Access group",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty"),
+        group_id: z.string(),
         exclude: z.unknown().optional(),
         include: z.unknown(),
         is_default: z.unknown().optional(),
@@ -4792,7 +6272,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4801,32 +6280,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/groups/${args.group_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an Access group (accountId=${accountId} group_id=${args.group_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/groups/${args.group_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_access_group",
-          String(args.group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.group_id)),
+          result,
         );
         context.logger.info("Updated an_access_group", {});
         return { dataHandles: [handle] };
@@ -4835,7 +6299,7 @@ export const model = {
     delete_an_access_group: {
       description: "Delete an Access group",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty"),
+        group_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4852,20 +6316,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/groups/${args.group_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an Access group (accountId=${accountId} group_id=${args.group_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/groups/${args.group_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.group_id });
         return { dataHandles: [] };
@@ -4891,32 +6347,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/identity_providers`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access identity providers (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/identity_providers`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -4960,35 +6405,19 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/identity_providers`,
-            args,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to add an Access identity provider (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/identity_providers`,
+          args,
+        );
 
         const handle = await context.writeResource(
           "access_identity_providers_add_an_access_identity_provider",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_identity_providers_add_an_access_identity_provider",
@@ -5000,10 +6429,7 @@ export const model = {
     get_an_access_identity_provider: {
       description: "Get an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5019,33 +6445,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_access_identity_provider",
-          String(args.identity_provider_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identity_provider_id)),
+          result,
         );
         context.logger.info("Fetched an_access_identity_provider", {});
         return { dataHandles: [handle] };
@@ -5054,10 +6464,7 @@ export const model = {
     update_an_access_identity_provider: {
       description: "Update an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5073,7 +6480,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5082,32 +6488,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_access_identity_provider",
-          String(args.identity_provider_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.identity_provider_id)),
+          result,
         );
         context.logger.info("Updated an_access_identity_provider", {});
         return { dataHandles: [handle] };
@@ -5116,10 +6507,7 @@ export const model = {
     delete_an_access_identity_provider: {
       description: "Delete an Access identity provider",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5136,20 +6524,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an Access identity provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.identity_provider_id,
@@ -5160,10 +6540,7 @@ export const model = {
     create_saml_certificate_for_identity_provider: {
       description: "Create SAML encryption certificate for Identity Provider",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5179,34 +6556,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/saml_certificate`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create SAML encryption certificate for Identity Provider (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/saml_certificate`,
+        );
 
         const handle = await context.writeResource(
           "create_saml_certificate_for_identity_provider",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed create_saml_certificate_for_identity_provider",
@@ -5218,10 +6579,7 @@ export const model = {
     list_scim_group_resources: {
       description: "List SCIM Group resources",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
         cf_resource_id: z.string().optional(),
         idp_resource_id: z.string().optional(),
         name: z.string().optional(),
@@ -5241,8 +6599,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
           "identity_provider_id",
@@ -5253,24 +6611,13 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list SCIM Group resources (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/groups`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -5300,10 +6647,7 @@ export const model = {
     list_scim_user_resources: {
       description: "List SCIM User resources",
       arguments: z.object({
-        identity_provider_id: z.string().min(
-          1,
-          "identity_provider_id must not be empty",
-        ),
+        identity_provider_id: z.string(),
         cf_resource_id: z.string().optional(),
         idp_resource_id: z.string().optional(),
         username: z.string().optional(),
@@ -5325,8 +6669,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
           "identity_provider_id",
@@ -5337,24 +6681,13 @@ export const model = {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list SCIM User resources (accountId=${accountId} identity_provider_id=${args.identity_provider_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/identity_providers/${args.identity_provider_id}/scim/users`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -5402,35 +6735,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/idp_federation_grants`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create an IdP federation grant (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/idp_federation_grants`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("create", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -5454,33 +6773,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an IdP federation grant (accountId=${accountId} grant_id=${args.grant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
+        );
 
         const handle = await context.writeResource(
           "get",
-          String(args.grant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.grant_id)),
+          result,
         );
         context.logger.info("Fetched get", {});
         return { dataHandles: [handle] };
@@ -5506,20 +6809,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an IdP federation grant (accountId=${accountId} grant_id=${args.grant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/idp_federation_grants/${args.grant_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.grant_id });
         return { dataHandles: [] };
@@ -5542,33 +6837,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/keys`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get the Access key configuration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/keys`,
+        );
 
         const handle = await context.writeResource(
           "the_access_key_configuration",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched the_access_key_configuration", {});
         return { dataHandles: [handle] };
@@ -5593,37 +6872,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/keys`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update the Access key configuration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/keys`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "the_access_key_configuration",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated the_access_key_configuration", {});
         return { dataHandles: [handle] };
@@ -5646,34 +6909,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/keys/rotate`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to rotate Access keys (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/keys/rotate`,
+        );
 
         const handle = await context.writeResource(
           "access_key_configuration_rotate_access_keys",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_key_configuration_rotate_access_keys",
@@ -5752,32 +6999,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/logs/access_requests`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get Access authentication logs (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/logs/access_requests`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -5835,32 +7071,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/logs/scim/updates`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access SCIM update logs (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/logs/scim/updates`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -5904,33 +7129,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/organizations`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get your Zero Trust organization (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/organizations`,
+        );
 
         const handle = await context.writeResource(
           "your_zero_trust_organization",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched your_zero_trust_organization", {});
         return { dataHandles: [handle] };
@@ -5969,38 +7178,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/organizations`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create your Zero Trust organization (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/organizations`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "your_zero_trust_organization",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created your_zero_trust_organization {id}", {
           id,
@@ -6042,37 +7237,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/organizations`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update your Zero Trust organization (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/organizations`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "your_zero_trust_organization",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated your_zero_trust_organization", {});
         return { dataHandles: [handle] };
@@ -6095,33 +7274,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/organizations/doh`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get your Zero Trust organization DoH settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/organizations/doh`,
+        );
 
         const handle = await context.writeResource(
           "your_zero_trust_organization_doh_settings",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched your_zero_trust_organization_doh_settings",
@@ -6152,37 +7315,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/organizations/doh`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update your Zero Trust organization DoH settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/organizations/doh`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "your_zero_trust_organization_doh_settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated your_zero_trust_organization_doh_settings",
@@ -6219,7 +7366,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6236,33 +7382,20 @@ export const model = {
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/organizations/revoke_user${qs}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to revoke all Access tokens for a user (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/organizations/revoke_user${qs}`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "zero_trust_organization_revoke_all_access_tokens_for_a_user",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created zero_trust_organization_revoke_all_access_tokens_for_a_user {id}",
@@ -6290,32 +7423,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/policies`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Access reusable policies (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/policies`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -6365,38 +7487,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/policies`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create an Access reusable policy (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/policies`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "an_access_reusable_policy",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created an_access_reusable_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -6405,7 +7513,7 @@ export const model = {
     get_an_access_reusable_policy: {
       description: "Get an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty"),
+        policy_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6421,33 +7529,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/policies/${args.policy_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/policies/${args.policy_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_access_reusable_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Fetched an_access_reusable_policy", {});
         return { dataHandles: [handle] };
@@ -6456,7 +7548,7 @@ export const model = {
     update_an_access_reusable_policy: {
       description: "Update an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty"),
+        policy_id: z.string(),
         decision: z.unknown(),
         exclude: z.unknown().optional(),
         include: z.unknown(),
@@ -6477,7 +7569,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6486,32 +7577,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/policies/${args.policy_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/policies/${args.policy_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "an_access_reusable_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated an_access_reusable_policy", {});
         return { dataHandles: [handle] };
@@ -6520,7 +7596,7 @@ export const model = {
     delete_an_access_reusable_policy: {
       description: "Delete an Access reusable policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty"),
+        policy_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6537,20 +7613,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/policies/${args.policy_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete an Access reusable policy (accountId=${accountId} policy_id=${args.policy_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/policies/${args.policy_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
@@ -6575,38 +7643,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/policy-tests`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to start Access policy test (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/policy-tests`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "access_policy_tests",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created access_policy_tests {id}", { id });
         return { dataHandles: [handle] };
@@ -6615,7 +7669,7 @@ export const model = {
     get_an_update: {
       description: "Get the current status of a given Access policy test",
       arguments: z.object({
-        policy_test_id: z.string().min(1, "policy_test_id must not be empty"),
+        policy_test_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6631,33 +7685,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get the current status of a given Access policy test (accountId=${accountId} policy_test_id=${args.policy_test_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}`,
+        );
 
         const handle = await context.writeResource(
           "an_update",
-          String(args.policy_test_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_test_id)),
+          result,
         );
         context.logger.info("Fetched an_update", {});
         return { dataHandles: [handle] };
@@ -6666,7 +7704,7 @@ export const model = {
     get_a_user_page: {
       description: "Get an Access policy test users page",
       arguments: z.object({
-        policy_test_id: z.string().min(1, "policy_test_id must not be empty"),
+        policy_test_id: z.string(),
         per_page: z.number().optional(),
         status: z.enum(["success", "fail", "error"]).optional().describe(
           "Filter users by their policy evaluation status.",
@@ -6686,32 +7724,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["policy_test_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}/users`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get an Access policy test users page (accountId=${accountId} policy_test_id=${args.policy_test_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/policy-tests/${args.policy_test_id}/users`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -6761,32 +7788,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/saml_certificates`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list SAML certificate sets (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/saml_certificates`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -6830,33 +7846,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get SAML certificate set (accountId=${accountId} saml_cert_set_id=${args.saml_cert_set_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}`,
+        );
 
         const handle = await context.writeResource(
           "certificate_set",
-          String(args.saml_cert_set_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.saml_cert_set_id)),
+          result,
         );
         context.logger.info("Fetched certificate_set", {});
         return { dataHandles: [handle] };
@@ -6883,34 +7883,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}/rotate`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to rotate SAML certificate (accountId=${accountId} saml_cert_set_id=${args.saml_cert_set_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/saml_certificates/${args.saml_cert_set_id}/rotate`,
+        );
 
         const handle = await context.writeResource(
           "access_saml_certificates_rotate_certificate",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_saml_certificates_rotate_certificate",
@@ -6921,7 +7905,9 @@ export const model = {
     },
     update_a_user_seat: {
       description: "Update a user seat",
-      arguments: z.object({}),
+      arguments: z.object({
+        items: z.array(z.unknown()),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -6936,37 +7922,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        const body = args;
+        const body = args.items;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/access/seats`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a user seat (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/access/seats`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "a_user_seat",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated a_user_seat", {});
         return { dataHandles: [handle] };
@@ -6992,32 +7962,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/service_tokens`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list service tokens (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/service_tokens`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -7062,38 +8021,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/service_tokens`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a service token (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/service_tokens`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "a_service_token",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created a_service_token {id}", { id });
         return { dataHandles: [handle] };
@@ -7102,10 +8047,7 @@ export const model = {
     get_a_service_token: {
       description: "Get a service token",
       arguments: z.object({
-        service_token_id: z.string().min(
-          1,
-          "service_token_id must not be empty",
-        ),
+        service_token_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7121,33 +8063,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+        );
 
         const handle = await context.writeResource(
           "a_service_token",
-          String(args.service_token_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.service_token_id)),
+          result,
         );
         context.logger.info("Fetched a_service_token", {});
         return { dataHandles: [handle] };
@@ -7156,10 +8082,7 @@ export const model = {
     update_a_service_token: {
       description: "Update a service token",
       arguments: z.object({
-        service_token_id: z.string().min(
-          1,
-          "service_token_id must not be empty",
-        ),
+        service_token_id: z.string(),
         client_secret_version: z.unknown().optional(),
         duration: z.unknown().optional(),
         name: z.unknown().optional(),
@@ -7179,7 +8102,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7188,32 +8110,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "a_service_token",
-          String(args.service_token_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.service_token_id)),
+          result,
         );
         context.logger.info("Updated a_service_token", {});
         return { dataHandles: [handle] };
@@ -7222,10 +8129,7 @@ export const model = {
     delete_a_service_token: {
       description: "Delete a service token",
       arguments: z.object({
-        service_token_id: z.string().min(
-          1,
-          "service_token_id must not be empty",
-        ),
+        service_token_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7242,20 +8146,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.service_token_id,
@@ -7266,10 +8162,7 @@ export const model = {
     access_service_tokens_refresh_a_service_token: {
       description: "Refresh a service token",
       arguments: z.object({
-        service_token_id: z.string().min(
-          1,
-          "service_token_id must not be empty",
-        ),
+        service_token_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7285,34 +8178,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/refresh`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to refresh a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/refresh`,
+        );
 
         const handle = await context.writeResource(
           "access_service_tokens_refresh_a_service_token",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed access_service_tokens_refresh_a_service_token",
@@ -7324,10 +8201,7 @@ export const model = {
     create_access_service_tokens_rotate_a_service_token: {
       description: "Rotate a service token",
       arguments: z.object({
-        service_token_id: z.string().min(
-          1,
-          "service_token_id must not be empty",
-        ),
+        service_token_id: z.string(),
         previous_client_secret_expires_at: z.string().optional().describe(
           "The expiration of the previous `client_secret`. If not provided, it defaults ...",
         ),
@@ -7346,7 +8220,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7355,33 +8228,20 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/rotate`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to rotate a service token (accountId=${accountId} service_token_id=${args.service_token_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/service_tokens/${args.service_token_id}/rotate`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "access_service_tokens_rotate_a_service_token",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created access_service_tokens_rotate_a_service_token {id}",
@@ -7409,32 +8269,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/tags`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list tags (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/tags`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -7474,35 +8323,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/tags`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a tag (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/tags`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tag", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("tag", id, result);
         context.logger.info("Created tag {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7510,7 +8345,7 @@ export const model = {
     get_a_tag: {
       description: "Get a tag",
       arguments: z.object({
-        tag_name: z.string().min(1, "tag_name must not be empty"),
+        tag_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7526,33 +8361,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/tags/${args.tag_name}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/tags/${args.tag_name}`,
+        );
 
         const handle = await context.writeResource(
           "a_tag",
-          String(args.tag_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tag_name)),
+          result,
         );
         context.logger.info("Fetched a_tag", {});
         return { dataHandles: [handle] };
@@ -7561,7 +8380,7 @@ export const model = {
     update_a_tag: {
       description: "Update a tag",
       arguments: z.object({
-        tag_name: z.string().min(1, "tag_name must not be empty"),
+        tag_name: z.string(),
         created_at: z.unknown().optional(),
         name: z.unknown(),
         updated_at: z.unknown().optional(),
@@ -7580,7 +8399,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7589,32 +8407,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/tags/${args.tag_name}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/tags/${args.tag_name}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "a_tag",
-          String(args.tag_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tag_name)),
+          result,
         );
         context.logger.info("Updated a_tag", {});
         return { dataHandles: [handle] };
@@ -7623,7 +8426,7 @@ export const model = {
     delete_a_tag: {
       description: "Delete a tag",
       arguments: z.object({
-        tag_name: z.string().min(1, "tag_name must not be empty"),
+        tag_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7640,20 +8443,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/tags/${args.tag_name}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a tag (accountId=${accountId} tag_name=${args.tag_name}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/tags/${args.tag_name}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.tag_name });
         return { dataHandles: [] };
@@ -7680,32 +8475,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/users`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get users (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/users`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -7748,35 +8532,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/access/users`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a user (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/access/users`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("user", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("user", id, result);
         context.logger.info("Created user {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7784,7 +8554,7 @@ export const model = {
     get_user: {
       description: "Get a user",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7800,33 +8570,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/users/${args.user_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a user (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/users/${args.user_id}`,
+        );
 
         const handle = await context.writeResource(
           "user",
-          String(args.user_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.user_id)),
+          result,
         );
         context.logger.info("Fetched user", {});
         return { dataHandles: [handle] };
@@ -7835,7 +8589,7 @@ export const model = {
     update_user: {
       description: "Update a user",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
         email: z.unknown(),
         name: z.unknown(),
       }),
@@ -7853,7 +8607,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7862,32 +8615,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/access/users/${args.user_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a user (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/access/users/${args.user_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "user",
-          String(args.user_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.user_id)),
+          result,
         );
         context.logger.info("Updated user", {});
         return { dataHandles: [handle] };
@@ -7896,7 +8634,7 @@ export const model = {
     delete_user: {
       description: "Delete a user",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7913,20 +8651,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/users/${args.user_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a user (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/users/${args.user_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.user_id });
         return { dataHandles: [] };
@@ -7935,7 +8665,7 @@ export const model = {
     get_active_sessions: {
       description: "Get active sessions",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7951,32 +8681,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["user_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/users/${args.user_id}/active_sessions`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get active sessions (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/users/${args.user_id}/active_sessions`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -8006,8 +8725,8 @@ export const model = {
     get_active_session: {
       description: "Get single active session",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
-        nonce: z.string().min(1, "nonce must not be empty"),
+        user_id: z.string(),
+        nonce: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8023,33 +8742,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/users/${args.user_id}/active_sessions/${args.nonce}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get single active session (accountId=${accountId} user_id=${args.user_id} nonce=${args.nonce}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/users/${args.user_id}/active_sessions/${args.nonce}`,
+        );
 
         const handle = await context.writeResource(
           "active_session",
-          String(args.nonce),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.nonce)),
+          result,
         );
         context.logger.info("Fetched active_session", {});
         return { dataHandles: [handle] };
@@ -8058,7 +8761,7 @@ export const model = {
     get_failed_logins: {
       description: "Get failed logins",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8074,32 +8777,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["user_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/access/users/${args.user_id}/failed_logins`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get failed logins (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/access/users/${args.user_id}/failed_logins`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -8129,7 +8821,7 @@ export const model = {
     get_last_seen_identity: {
       description: "Get last seen identity",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
+        user_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8145,33 +8837,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/access/users/${args.user_id}/last_seen_identity`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get last seen identity (accountId=${accountId} user_id=${args.user_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/access/users/${args.user_id}/last_seen_identity`,
+        );
 
         const handle = await context.writeResource(
           "last_seen_identity",
-          String(args.user_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.user_id)),
+          result,
         );
         context.logger.info("Fetched last_seen_identity", {});
         return { dataHandles: [handle] };
@@ -8180,11 +8856,8 @@ export const model = {
     delete_mfa_authenticator: {
       description: "Delete a user's MFA device",
       arguments: z.object({
-        user_id: z.string().min(1, "user_id must not be empty"),
-        authenticator_id: z.string().min(
-          1,
-          "authenticator_id must not be empty",
-        ),
+        user_id: z.string(),
+        authenticator_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8201,20 +8874,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/access/users/${args.user_id}/mfa_authenticators/${args.authenticator_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a user's MFA device (accountId=${accountId} user_id=${args.user_id} authenticator_id=${args.authenticator_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/access/users/${args.user_id}/mfa_authenticators/${args.authenticator_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.authenticator_id,

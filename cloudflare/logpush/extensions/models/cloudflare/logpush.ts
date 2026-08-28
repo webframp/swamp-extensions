@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/logpush";
 
@@ -18,22 +18,13 @@ const EXTENSION_NAME = "@webframp/cloudflare/logpush";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
-const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const GetAccountsAccountIdLogpushDatasetsDatasetIdFieldsSchema = z.object({})
+  .passthrough();
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -51,7 +42,7 @@ const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable();
+}).nullable().passthrough();
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -81,7 +72,7 @@ const GetAccountsAccountIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable();
+}).nullable().passthrough();
 
 const GetAccountsAccountIdLogpushJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushJobsItemSchema),
@@ -111,16 +102,7 @@ const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -138,16 +120,7 @@ const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -165,97 +138,34 @@ const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostAccountsAccountIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostAccountsAccountIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostAccountsAccountIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
-const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({})
+  .passthrough();
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -273,7 +183,7 @@ const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable();
+}).nullable().passthrough();
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -293,7 +203,7 @@ const GetZonesZoneIdLogpushEdgeJobsItemSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-}).nullable();
+}).nullable().passthrough();
 
 const GetZonesZoneIdLogpushEdgeJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushEdgeJobsItemSchema),
@@ -313,16 +223,7 @@ const CreatePostZonesZoneIdLogpushEdgeJobsSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -340,7 +241,7 @@ const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable();
+}).nullable().passthrough();
 
 const GetZonesZoneIdLogpushJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushJobsItemSchema),
@@ -370,16 +271,7 @@ const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -397,16 +289,7 @@ const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -424,85 +307,31 @@ const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostZonesZoneIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostZonesZoneIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-}).nullable();
+}).nullable().passthrough();
 
 // =============================================================================
 // Model Definition
@@ -511,7 +340,7 @@ const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
 /** Cloudflare Logpush — log jobs, destinations, field configurations */
 export const model = {
   type: "@webframp/cloudflare/logpush",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -537,6 +366,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -692,9 +526,7 @@ export const model = {
     get_accounts_account_id_logpush_datasets_dataset_id_fields: {
       description: "List fields",
       arguments: z.object({
-        dataset_id: z.string().min(1).describe(
-          "Dataset to query for available logpush fields.",
-        ),
+        dataset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -710,7 +542,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -720,13 +551,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "accounts_account_id_logpush_datasets_dataset_id_fields",
-          String(args.dataset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.dataset_id)),
+          result,
         );
         context.logger.info(
           "Fetched accounts_account_id_logpush_datasets_dataset_id_fields",
@@ -738,9 +564,7 @@ export const model = {
     get_accounts_account_id_logpush_datasets_dataset_id_jobs: {
       description: "List Logpush jobs for a dataset",
       arguments: z.object({
-        dataset_id: z.string().min(1).describe(
-          "Dataset to query for available logpush fields.",
-        ),
+        dataset_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -756,8 +580,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["dataset_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -815,8 +639,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -861,9 +685,7 @@ export const model = {
       description: "Create Logpush job",
       arguments: z.object({
         dataset: z.unknown().optional(),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
         frequency: z.unknown().optional(),
@@ -890,7 +712,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -902,16 +723,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_jobs",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_jobs {id}",
@@ -923,7 +741,7 @@ export const model = {
     get_accounts_account_id_logpush_jobs_job_id: {
       description: "Get Logpush job details",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
+        job_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -939,7 +757,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -949,13 +766,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "accounts_account_id_logpush_jobs_job_id",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info(
           "Fetched accounts_account_id_logpush_jobs_job_id",
@@ -967,7 +779,7 @@ export const model = {
     put_accounts_account_id_logpush_jobs_job_id: {
       description: "Update Logpush job",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
+        job_id: z.string(),
         destination_conf: z.unknown().optional(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
@@ -995,7 +807,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1013,13 +824,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_accounts_account_id_logpush_jobs_job_id",
-          String(args.job_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.job_id)),
+          result,
         );
         context.logger.info(
           "Updated put_accounts_account_id_logpush_jobs_job_id",
@@ -1031,7 +837,7 @@ export const model = {
     delete_accounts_account_id_logpush_jobs_job_id: {
       description: "Delete Logpush job",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
+        job_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1048,6 +854,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1061,9 +868,7 @@ export const model = {
     create_post_accounts_account_id_logpush_ownership: {
       description: "Get ownership challenge",
       arguments: z.object({
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1079,7 +884,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1091,16 +895,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_ownership",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_ownership {id}",
@@ -1112,9 +913,7 @@ export const model = {
     create_post_accounts_account_id_logpush_ownership_validate: {
       description: "Validate ownership challenge",
       arguments: z.object({
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
         ownership_challenge: z.unknown(),
       }),
       execute: async (
@@ -1131,7 +930,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1143,16 +941,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_ownership_validate",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_ownership_validate {id}",
@@ -1164,9 +959,7 @@ export const model = {
     delete_accounts_account_id_logpush_validate_destination: {
       description: "Validate destination",
       arguments: z.object({
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1182,7 +975,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1194,16 +986,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "delete_accounts_account_id_logpush_validate_destination",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created delete_accounts_account_id_logpush_validate_destination {id}",
@@ -1215,9 +1004,7 @@ export const model = {
     delete_accounts_account_id_logpush_validate_destination_exists: {
       description: "Check destination exists",
       arguments: z.object({
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1233,7 +1020,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1245,16 +1031,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "delete_accounts_account_id_logpush_validate_destination_exists",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created delete_accounts_account_id_logpush_validate_destination_exists {id}",
@@ -1282,7 +1065,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -1294,16 +1076,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_accounts_account_id_logpush_validate_origin",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_accounts_account_id_logpush_validate_origin {id}",
@@ -1315,10 +1094,8 @@ export const model = {
     get_zones_zone_id_logpush_datasets_dataset_id_fields: {
       description: "List fields",
       arguments: z.object({
-        dataset_id: z.string().min(1).describe(
-          "Dataset to query for available logpush fields.",
-        ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        dataset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1334,7 +1111,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1344,13 +1120,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "zones_zone_id_logpush_datasets_dataset_id_fields",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info(
           "Fetched zones_zone_id_logpush_datasets_dataset_id_fields",
@@ -1362,10 +1133,8 @@ export const model = {
     get_zones_zone_id_logpush_datasets_dataset_id_jobs: {
       description: "List Logpush jobs for a dataset",
       arguments: z.object({
-        dataset_id: z.string().min(1).describe(
-          "Dataset to query for available logpush fields.",
-        ),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        dataset_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1381,8 +1150,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set([
           "dataset_id",
@@ -1431,7 +1200,7 @@ export const model = {
     get_zones_zone_id_logpush_edge_jobs: {
       description: "List Instant Logs jobs",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1447,8 +1216,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["zone_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1492,7 +1261,7 @@ export const model = {
     create_post_zones_zone_id_logpush_edge_jobs: {
       description: "Create Instant Logs job",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
         fields: z.unknown().optional(),
         filter: z.unknown().optional(),
         sample: z.unknown().optional(),
@@ -1511,7 +1280,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1527,16 +1295,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_edge_jobs",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_edge_jobs {id}",
@@ -1548,7 +1313,7 @@ export const model = {
     get_zones_zone_id_logpush_jobs: {
       description: "List Logpush jobs",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1564,8 +1329,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["zone_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1608,11 +1373,9 @@ export const model = {
     create_post_zones_zone_id_logpush_jobs: {
       description: "Create Logpush job",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
         dataset: z.unknown().optional(),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        destination_conf: z.unknown(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
         frequency: z.unknown().optional(),
@@ -1639,7 +1402,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1655,16 +1417,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_jobs",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created post_zones_zone_id_logpush_jobs {id}", {
           id,
@@ -1675,8 +1434,8 @@ export const model = {
     get_zones_zone_id_logpush_jobs_job_id: {
       description: "Get Logpush job details",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        job_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1692,7 +1451,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1702,13 +1460,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "zones_zone_id_logpush_jobs_job_id",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info("Fetched zones_zone_id_logpush_jobs_job_id", {});
         return { dataHandles: [handle] };
@@ -1717,8 +1470,8 @@ export const model = {
     put_zones_zone_id_logpush_jobs_job_id: {
       description: "Update Logpush job",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        job_id: z.string(),
+        zone_id: z.string(),
         destination_conf: z.unknown().optional(),
         enabled: z.unknown().optional(),
         filter: z.unknown().optional(),
@@ -1746,7 +1499,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1764,13 +1516,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_zones_zone_id_logpush_jobs_job_id",
-          String(args.zone_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.zone_id)),
+          result,
         );
         context.logger.info(
           "Updated put_zones_zone_id_logpush_jobs_job_id",
@@ -1782,8 +1529,8 @@ export const model = {
     delete_zones_zone_id_logpush_jobs_job_id: {
       description: "Delete Logpush job",
       arguments: z.object({
-        job_id: z.string().min(1).describe("Logpush job identifier."),
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        job_id: z.string(),
+        zone_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1800,6 +1547,7 @@ export const model = {
         },
       ) => {
         const { apiToken } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1813,10 +1561,8 @@ export const model = {
     create_post_zones_zone_id_logpush_ownership: {
       description: "Get ownership challenge",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        zone_id: z.string(),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1832,7 +1578,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1848,16 +1593,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_ownership",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_ownership {id}",
@@ -1869,10 +1611,8 @@ export const model = {
     create_post_zones_zone_id_logpush_ownership_validate: {
       description: "Validate ownership challenge",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        zone_id: z.string(),
+        destination_conf: z.unknown(),
         ownership_challenge: z.unknown(),
       }),
       execute: async (
@@ -1889,7 +1629,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1905,16 +1644,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_ownership_validate",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_ownership_validate {id}",
@@ -1926,10 +1662,8 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_destination: {
       description: "Validate destination",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        zone_id: z.string(),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1945,7 +1679,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1961,16 +1694,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_destination",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_destination {id}",
@@ -1982,10 +1712,8 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_destination_exists: {
       description: "Check destination exists",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
-        destination_conf: z.unknown().describe(
-          "Uniquely identifies a resource (such as an S3 bucket) where log files are stored.",
-        ),
+        zone_id: z.string(),
+        destination_conf: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2001,7 +1729,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2017,16 +1744,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_destination_exists",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_destination_exists {id}",
@@ -2038,7 +1762,7 @@ export const model = {
     create_post_zones_zone_id_logpush_validate_origin: {
       description: "Validate origin",
       arguments: z.object({
-        zone_id: z.string().min(1).describe("Cloudflare zone identifier."),
+        zone_id: z.string(),
         logpull_options: z.unknown(),
       }),
       execute: async (
@@ -2055,7 +1779,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2071,16 +1794,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_zones_zone_id_logpush_validate_origin",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_zones_zone_id_logpush_validate_origin {id}",

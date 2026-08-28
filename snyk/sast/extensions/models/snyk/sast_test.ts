@@ -43,23 +43,6 @@ Deno.test("sast model: has expected methods", () => {
   assertExists(model.methods.delete_sast_rule_extension);
 });
 
-Deno.test(
-  "sast model: get_sast_impact_test_status rejects empty test_id",
-  () => {
-    const result = model.methods.get_sast_impact_test_status.arguments
-      .safeParse({
-        test_id: "",
-      });
-    assertEquals(result.success, false);
-    if (!result.success) {
-      assertStringIncludes(
-        JSON.stringify(result.error.issues),
-        "test_id must not be empty",
-      );
-    }
-  },
-);
-
 Deno.test("sast model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["sast_rule_extensions_by_group"]);

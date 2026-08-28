@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/durable-objects";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/durable-objects";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -29,7 +29,7 @@ const NamespacesItemSchema = z.object({
   name: z.string().optional(),
   script: z.string().optional(),
   use_sqlite: z.boolean().optional(),
-});
+}).passthrough();
 
 const ListNamespacesSchema = z.object({
   items: z.array(NamespacesItemSchema),
@@ -48,7 +48,7 @@ const ObjectsItemSchema = z.object({
     "Whether the Durable Object has stored data.",
   ),
   id: z.string().optional().describe("ID of the Durable Object."),
-});
+}).passthrough();
 
 const ListObjectsSchema = z.object({
   items: z.array(ObjectsItemSchema),
@@ -69,7 +69,7 @@ const ListObjectsSchema = z.object({
 /** Cloudflare Durable Objects — namespaces, object management, alarms */
 export const model = {
   type: "@webframp/cloudflare/durable-objects",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -95,6 +95,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -135,32 +140,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/workers/durable_objects/namespaces`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Durable Object namespaces for account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/workers/durable_objects/namespaces`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -186,7 +180,7 @@ export const model = {
     list_objects: {
       description: "List Objects",
       arguments: z.object({
-        id: z.string().min(1, "id (namespace ID) must not be empty"),
+        id: z.string(),
         limit: z.number().optional(),
         cursor: z.string().optional(),
       }),
@@ -204,8 +198,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -216,21 +210,11 @@ export const model = {
           ? `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects?${qs}`
           : `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            url,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list objects in Durable Object namespace ${args.id} (account ${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          url,
+        );
         const items = (result as { result?: unknown[] })?.result ??
           (Array.isArray(result) ? result : [result]);
 

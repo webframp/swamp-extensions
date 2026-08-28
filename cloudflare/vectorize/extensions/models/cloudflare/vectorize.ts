@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/vectorize";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/vectorize";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -33,7 +33,7 @@ const VectorizeIndexesItemSchema = z.object({
     "Specifies the timestamp the resource was modified as an ISO8601 string.",
   ),
   name: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListVectorizeIndexesSchema = z.object({
   items: z.array(VectorizeIndexesItemSchema),
@@ -57,45 +57,18 @@ const CreateVectorizeIndexSchema = z.object({
     "Specifies the timestamp the resource was modified as an ISO8601 string.",
   ),
   name: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DeleteVectorsByIdSchema = z.object({
   mutationId: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetVectorsByIdSchema = z.object({
   id: z.unknown().optional(),
   metadata: z.object({}).optional(),
   namespace: z.string().nullable().optional(),
   values: z.array(z.number()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetVectorizeIndexInfoSchema = z.object({
   dimensions: z.unknown().optional(),
@@ -106,29 +79,11 @@ const GetVectorizeIndexInfoSchema = z.object({
   vectorCount: z.number().int().optional().describe(
     "Specifies the number of vectors present in the index",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const VectorizeInsertVectorSchema = z.object({
   mutationId: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListVectorsSchema = z.object({
   count: z.number().int().describe(
@@ -145,58 +100,22 @@ const ListVectorsSchema = z.object({
   ),
   totalCount: z.number().int().describe("Total number of vectors in the index"),
   vectors: z.array(z.unknown()).describe("Array of vector items"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateMetadataIndexSchema = z.object({
   mutationId: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DeleteMetadataIndexSchema = z.object({
   mutationId: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListMetadataIndexesSchema = z.object({
   metadataIndexes: z.array(z.object({
     indexType: z.enum(["string", "number", "boolean"]).optional(),
     propertyName: z.string().optional(),
   })).optional().describe("Array of indexed metadata properties."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateVectorizeQueryVectorSchema = z.object({
   count: z.number().int().optional().describe(
@@ -209,29 +128,11 @@ const CreateVectorizeQueryVectorSchema = z.object({
     score: z.number().optional(),
     values: z.array(z.number()).nullable().optional(),
   })).optional().describe("Array of vectors matched by the search"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const VectorizeUpsertVectorSchema = z.object({
   mutationId: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -240,7 +141,7 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -271,6 +172,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -368,8 +274,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -430,7 +336,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -442,16 +347,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "vectorize_index",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created vectorize_index {id}", { id });
         return { dataHandles: [handle] };
@@ -460,7 +362,7 @@ export const model = {
     get_vectorize_index: {
       description: "Get Vectorize Index",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -476,7 +378,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -486,13 +387,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "vectorize_index",
-          String(args.index_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.index_name)),
+          result,
         );
         context.logger.info("Fetched vectorize_index", {});
         return { dataHandles: [handle] };
@@ -501,7 +397,7 @@ export const model = {
     delete_vectorize_index: {
       description: "Delete Vectorize Index",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -518,6 +414,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -531,7 +428,7 @@ export const model = {
     delete_vectors_by_id: {
       description: "Delete Vectors By Identifier",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         ids: z.array(z.unknown()).optional().describe(
           "A list of vector identifiers to delete from the index indicated by the path.",
         ),
@@ -550,7 +447,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -566,16 +462,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "delete_vectors_by_id",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created delete_vectors_by_id {id}", { id });
         return { dataHandles: [handle] };
@@ -584,7 +477,7 @@ export const model = {
     get_vectors_by_id: {
       description: "Get Vectors By Identifier",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         ids: z.array(z.unknown()).optional().describe(
           "A list of vector identifiers to retrieve from the index indicated by the path.",
         ),
@@ -603,7 +496,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -619,16 +511,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_vectors_by_id",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created get_vectors_by_id {id}", { id });
         return { dataHandles: [handle] };
@@ -637,7 +526,7 @@ export const model = {
     get_vectorize_index_info: {
       description: "Get Vectorize Index Info",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -653,7 +542,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -663,13 +551,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "vectorize_index_info",
-          String(args.index_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.index_name)),
+          result,
         );
         context.logger.info("Fetched vectorize_index_info", {});
         return { dataHandles: [handle] };
@@ -678,7 +561,7 @@ export const model = {
     vectorize_insert_vector: {
       description: "Insert Vectors",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         unparsable_behavior: z.enum(["error", "discard"]).optional(),
       }),
       execute: async (
@@ -695,7 +578,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -715,12 +597,7 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_insert_vector",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed vectorize_insert_vector", {});
         return { dataHandles: [handle] };
@@ -729,7 +606,7 @@ export const model = {
     list_vectors: {
       description: "List Vectors",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         count: z.number().optional(),
         cursor: z.string().optional(),
       }),
@@ -747,7 +624,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -757,13 +633,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_vectors",
-          String(args.index_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.index_name)),
+          result,
         );
         context.logger.info("Fetched list_vectors", {});
         return { dataHandles: [handle] };
@@ -772,7 +643,7 @@ export const model = {
     create_metadata_index: {
       description: "Create Metadata Index",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         indexType: z.enum(["string", "number", "boolean"]).describe(
           "Specifies the type of metadata property to index.",
         ),
@@ -794,7 +665,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -810,16 +680,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "metadata_index",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created metadata_index {id}", { id });
         return { dataHandles: [handle] };
@@ -828,7 +695,7 @@ export const model = {
     delete_metadata_index: {
       description: "Delete Metadata Index",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         propertyName: z.string().describe(
           "Specifies the metadata property for which the index must be deleted.",
         ),
@@ -847,7 +714,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -863,16 +729,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "delete_metadata_index",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created delete_metadata_index {id}", { id });
         return { dataHandles: [handle] };
@@ -881,7 +744,7 @@ export const model = {
     list_metadata_indexes: {
       description: "List Metadata Indexes",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -897,7 +760,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -907,13 +769,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_metadata_indexes",
-          String(args.index_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.index_name)),
+          result,
         );
         context.logger.info("Fetched list_metadata_indexes", {});
         return { dataHandles: [handle] };
@@ -922,7 +779,7 @@ export const model = {
     create_vectorize_query_vector: {
       description: "Query Vectors",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         filter: z.object({}).optional().describe(
           "A metadata filter expression used to limit nearest neighbor results.",
         ),
@@ -953,7 +810,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -969,16 +825,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "vectorize_query_vector",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created vectorize_query_vector {id}", { id });
         return { dataHandles: [handle] };
@@ -987,7 +840,7 @@ export const model = {
     vectorize_upsert_vector: {
       description: "Upsert Vectors",
       arguments: z.object({
-        index_name: z.string().min(1, "index_name must not be empty"),
+        index_name: z.string(),
         unparsable_behavior: z.enum(["error", "discard"]).optional(),
       }),
       execute: async (
@@ -1004,7 +857,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -1024,12 +876,7 @@ export const model = {
         const handle = await context.writeResource(
           "vectorize_upsert_vector",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed vectorize_upsert_vector", {});
         return { dataHandles: [handle] };

@@ -69,7 +69,7 @@ swamp model create @webframp/cloudflare/stream cf-stream \
 ## Development
 
 ```bash
-cd cloudflare/stream
+cd ../../cloudflare/stream
 deno task check
 deno task lint
 deno task fmt

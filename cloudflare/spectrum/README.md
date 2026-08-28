@@ -31,7 +31,7 @@ swamp model create @webframp/cloudflare/spectrum cf-spectrum \
 ## Development
 
 ```bash
-cd cloudflare/spectrum
+cd ../../cloudflare/spectrum
 deno task check
 deno task lint
 deno task fmt

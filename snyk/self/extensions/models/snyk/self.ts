@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/self";
 
@@ -28,22 +28,14 @@ const GetSelfSchema = z.object({
   type: z.enum(["user", "service_account", "app_instance"]).optional().describe(
     "Content type.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAccessRequestsItemSchema = z.object({
   id: z.string().describe("The Snyk ID of the access request."),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   status: z.enum(["pending", "expired"]),
-});
+}).passthrough();
 
 const GetAccessRequestsSchema = z.object({
   items: z.array(GetAccessRequestsItemSchema),
@@ -70,7 +62,7 @@ const GetUserInstalledAppsItemSchema = z.object({
   scopes: z.array(z.string().min(1)).optional().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
-});
+}).passthrough();
 
 const GetUserInstalledAppsSchema = z.object({
   items: z.array(GetUserInstalledAppsItemSchema),
@@ -94,7 +86,7 @@ const GetAppInstallsForUserItemSchema = z.object({
     "Timestamp at which this app was first installed at.",
   ),
   app_id: z.string().optional().describe("Related app ID"),
-});
+}).passthrough();
 
 const GetAppInstallsForUserSchema = z.object({
   items: z.array(GetAppInstallsForUserItemSchema),
@@ -112,7 +104,7 @@ const GetUserAppSessionsItemSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
   created_at: z.string(),
-});
+}).passthrough();
 
 const GetUserAppSessionsSchema = z.object({
   items: z.array(GetUserAppSessionsItemSchema),
@@ -139,7 +131,7 @@ const PersonalAccessTokenItemSchema = z.object({
   tenant_id: z.string().nullable().optional().describe(
     "Identifier of the tenant to which the Personal Access Token is scoped.",
   ),
-});
+}).passthrough();
 
 const ListPersonalAccessTokenSchema = z.object({
   items: z.array(PersonalAccessTokenItemSchema),
@@ -160,7 +152,7 @@ const ListPersonalAccessTokenSchema = z.object({
 /** Snyk Self — current user context, org listing, and app management */
 export const model = {
   type: "@webframp/snyk/self",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -191,6 +183,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -252,7 +249,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -261,12 +257,7 @@ export const model = {
           version,
         );
 
-        const handle = await context.writeResource("self", "latest", {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource("self", "latest", result);
         context.logger.info("Fetched self", {});
         return { dataHandles: [handle] };
       },
@@ -292,8 +283,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -349,8 +340,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -408,8 +399,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -451,9 +442,7 @@ export const model = {
     delete_user_app_install_by_id: {
       description: "Revoke a Snyk App by install ID",
       arguments: z.object({
-        install_id: z.string().min(1, "install_id must not be empty").describe(
-          "Install ID",
-        ),
+        install_id: z.string().describe("Install ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -484,9 +473,7 @@ export const model = {
     delete_revoke_user_installed_app: {
       description: "Revoke a Snyk App by app ID",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty").describe(
-          "App ID",
-        ),
+        app_id: z.string().describe("App ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -517,9 +504,7 @@ export const model = {
     get_user_app_sessions: {
       description: "Get a list of active OAuth sessions by app ID",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty").describe(
-          "App ID",
-        ),
+        app_id: z.string().describe("App ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -535,8 +520,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["app_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -578,12 +563,8 @@ export const model = {
     delete_revoke_user_app_session: {
       description: "Revoke the Snyk App session of an active user",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty").describe(
-          "App ID",
-        ),
-        session_id: z.string().min(1, "session_id must not be empty").describe(
-          "Session ID",
-        ),
+        app_id: z.string().describe("App ID"),
+        session_id: z.string().describe("Session ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -628,8 +609,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -671,10 +652,7 @@ export const model = {
     delete_personal_access_token: {
       description: "Deletes a personal access token",
       arguments: z.object({
-        personal_access_token_id: z.string().min(
-          1,
-          "personal_access_token_id must not be empty",
-        ).describe(
+        personal_access_token_id: z.string().describe(
           "The personal access token id",
         ),
       }),

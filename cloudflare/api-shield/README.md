@@ -54,7 +54,7 @@ swamp model create @webframp/cloudflare/api-shield cf-api-shield \
 ## Development
 
 ```bash
-cd cloudflare/api-shield
+cd ../../cloudflare/api-shield
 deno task check
 deno task lint
 deno task fmt

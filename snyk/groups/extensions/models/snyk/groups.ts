@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/groups";
 
@@ -25,8 +25,8 @@ const GlobalArgsSchema = z.object({
 const GroupsItemSchema = z.object({
   id: z.string(),
   type: z.string().optional().describe("Content type."),
-  name: z.string().min(1).describe("The name of the group."),
-});
+  name: z.string().describe("The name of the group."),
+}).passthrough();
 
 const ListGroupsSchema = z.object({
   items: z.array(GroupsItemSchema),
@@ -52,33 +52,15 @@ const GetGroupSchema = z.object({
   logo_url: z.string().optional().describe(
     "The URL of an image to use as the group's logo.",
   ),
-  name: z.string().min(1).describe("The name of the group."),
+  name: z.string().describe("The name of the group."),
   slug: z.string().optional().describe("A slug uniquely identifying the group"),
   updated_at: z.string().describe("The time the group was created."),
   tenant_id: z.string().optional().describe("Related tenant ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListGroupAuditLogsSchema = z.object({
   type: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GroupUserOrgMembershipsItemSchema = z.object({
   id: z.string(),
@@ -89,7 +71,7 @@ const GroupUserOrgMembershipsItemSchema = z.object({
   org_id: z.string().optional().describe("Related org ID"),
   role_id: z.string().optional().describe("Related role ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const ListGroupUserOrgMembershipsSchema = z.object({
   items: z.array(GroupUserOrgMembershipsItemSchema),
@@ -105,7 +87,8 @@ const ListGroupUserOrgMembershipsSchema = z.object({
 
 const OrgsInGroupItemSchema = z.object({
   id: z.string().describe("The Snyk ID of the organization."),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   access_requests_enabled: z.boolean().optional().describe(
     "Whether the organization permits access requests from users who are not members of the organization.",
   ),
@@ -118,14 +101,14 @@ const OrgsInGroupItemSchema = z.object({
   is_personal: z.boolean().describe(
     "Whether the organization is independent (that is, not part of a group).",
   ),
-  name: z.string().min(1).describe("The display name of the organization."),
+  name: z.string().describe("The display name of the organization."),
   slug: z.string().describe(
     "The canonical (unique and URL-friendly) name of the organization.",
   ),
   updated_at: z.string().optional().describe(
     "The time the organization was last modified.",
   ),
-});
+}).passthrough();
 
 const ListOrgsInGroupSchema = z.object({
   items: z.array(OrgsInGroupItemSchema),
@@ -144,12 +127,8 @@ const GroupPoliciesItemSchema = z.object({
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
   type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]).describe(
-    "The action to apply when this policy's conditions match",
-  ),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]).describe(
-    "The kind of action this policy performs",
-  ),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
+  action_type: z.enum(["ignore", "annotation", "severity-override"]),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -167,19 +146,17 @@ const GroupPoliciesItemSchema = z.object({
         z.unknown(),
       ]),
     ),
-    logical_operator: z.unknown().describe(
-      "How the listed conditions are combined (e.g. AND/OR)",
-    ),
-  }).describe("The set of conditions that must match for this policy to apply"),
-  created_at: z.string().describe("When the policy was created"),
+    logical_operator: z.unknown(),
+  }),
+  created_at: z.string(),
   created_by: z.object({
     email: z.string().nullable().optional(),
     id: z.string(),
     name: z.string(),
-  }).describe("The user who created the policy"),
-  name: z.string().describe("Name of the policy"),
-  updated_at: z.string().describe("When the policy was last updated"),
-});
+  }),
+  name: z.string(),
+  updated_at: z.string(),
+}).passthrough();
 
 const ListGroupPoliciesSchema = z.object({
   items: z.array(GroupPoliciesItemSchema),
@@ -198,12 +175,8 @@ const CreateGroupPolicySchema = z.object({
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
   type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]).describe(
-    "The action to apply when this policy's conditions match",
-  ),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]).describe(
-    "The kind of action this policy performs",
-  ),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
+  action_type: z.enum(["ignore", "annotation", "severity-override"]),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -221,28 +194,17 @@ const CreateGroupPolicySchema = z.object({
         z.unknown(),
       ]),
     ),
-    logical_operator: z.unknown().describe(
-      "How the listed conditions are combined (e.g. AND/OR)",
-    ),
-  }).describe("The set of conditions that must match for this policy to apply"),
-  created_at: z.string().describe("When the policy was created"),
+    logical_operator: z.unknown(),
+  }),
+  created_at: z.string(),
   created_by: z.object({
     email: z.string().nullable().optional(),
     id: z.string(),
     name: z.string(),
-  }).describe("The user who created the policy"),
-  name: z.string().describe("Name of the policy"),
-  updated_at: z.string().describe("When the policy was last updated"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  }),
+  name: z.string(),
+  updated_at: z.string(),
+}).passthrough();
 
 const AssignmentsItemSchema = z.object({
   id: z.string().describe("The unique identifier of the assignment."),
@@ -259,7 +221,7 @@ const AssignmentsItemSchema = z.object({
     "Related rule_extension ID",
   ),
   scope_id: z.string().optional().describe("Related scope ID"),
-});
+}).passthrough();
 
 const ListAssignmentsSchema = z.object({
   items: z.array(AssignmentsItemSchema),
@@ -311,7 +273,7 @@ const SecretsRuleExtensionsItemSchema = z.object({
   updated_by: z.string().describe(
     "User ID of the user who updated the Secrets rule extension",
   ),
-});
+}).passthrough();
 
 const ListSecretsRuleExtensionsSchema = z.object({
   items: z.array(SecretsRuleExtensionsItemSchema),
@@ -363,16 +325,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
   updated_by: z.string().describe(
     "User ID of the user who updated the Secrets rule extension",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -381,7 +334,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
 /** Snyk Groups — group management, orgs, members, and audit */
 export const model = {
   type: "@webframp/snyk/groups",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -391,7 +344,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -421,6 +373,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -525,8 +482,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -576,7 +533,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -585,12 +541,7 @@ export const model = {
           version,
         );
 
-        const handle = await context.writeResource("group", "latest", {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource("group", "latest", result);
         context.logger.info("Fetched group", {});
         return { dataHandles: [handle] };
       },
@@ -638,7 +589,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>([]);
@@ -661,12 +611,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_group_audit_logs",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_group_audit_logs", {});
         return { dataHandles: [handle] };
@@ -696,7 +641,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const pathKeys = new Set<string>([]);
@@ -719,12 +663,7 @@ export const model = {
         const handle = await context.writeResource(
           "group_export",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_group_export", {});
         return { dataHandles: [handle] };
@@ -749,7 +688,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -760,13 +698,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "group_export",
-          String(args.export_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.export_id)),
+          result,
         );
         context.logger.info("Fetched group_export", {});
         return { dataHandles: [handle] };
@@ -791,7 +724,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -802,13 +734,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "group_export_job_status",
-          String(args.export_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.export_id)),
+          result,
         );
         context.logger.info("Fetched group_export_job_status", {});
         return { dataHandles: [handle] };
@@ -837,8 +764,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -904,8 +831,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -957,8 +884,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1015,7 +942,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1031,13 +957,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("group_policy", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("group_policy", id, result);
         context.logger.info("Created group_policy {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1066,7 +989,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -1084,13 +1006,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "group_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated group_policy", {});
         return { dataHandles: [handle] };
@@ -1150,8 +1067,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1205,7 +1122,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1221,13 +1137,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("assignments", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("assignments", id, result);
         context.logger.info("Created assignments {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1295,8 +1208,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1354,7 +1267,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1370,16 +1282,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "secrets_rule_extension",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created secrets_rule_extension {id}", { id });
         return { dataHandles: [handle] };
@@ -1406,7 +1315,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1417,13 +1325,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "secrets_rule_extension",
-          String(args.rule_extension_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_extension_id)),
+          result,
         );
         context.logger.info("Fetched secrets_rule_extension", {});
         return { dataHandles: [handle] };
@@ -1451,7 +1354,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_extension_id"]);
@@ -1469,13 +1371,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "secrets_rule_extension",
-          String(args.rule_extension_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_extension_id)),
+          result,
         );
         context.logger.info("Updated secrets_rule_extension", {});
         return { dataHandles: [handle] };
@@ -1536,7 +1433,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["id"]);
@@ -1554,13 +1450,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "user",
-          String(args.id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.id)),
+          result,
         );
         context.logger.info("Updated user", {});
         return { dataHandles: [handle] };
