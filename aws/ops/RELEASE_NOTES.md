@@ -1,3 +1,13 @@
+## 2026.08.28.2
+
+**Fixed:** Re-pinned the eight bumped `@webframp/aws/*` leaf dependencies (logs,
+metrics, alarms, traces, inventory, networking, alarm-investigation,
+cost-explorer) to 2026.08.28.1 — the versions published in the prior sweep. The
+2026.08.28.1 release of this composite still pinned the pre-sweep 2026.08.26.x
+leaf versions (SDK 3.1114.0), so its dependency graph did not deliver the AWS SDK
+3.1120.0 bump it was bumped alongside. `@webframp/github` was not part of the
+sweep and remains at 2026.08.26.3. No schema or behavioral changes.
+
 ## 2026.08.28.1
 
 **Changed:** Bump @webframp/aws/logs 2026.08.20.1 → 2026.08.26.3

@@ -1,3 +1,11 @@
+## 2026.08.28.2
+
+**Fixed:** Re-pinned `@webframp/aws/bedrock-usage` to 2026.08.28.1 — the version
+published in the prior sweep. The 2026.08.28.1 release of this composite still
+pinned the pre-sweep 2026.08.26.2, so its dependency graph did not deliver the
+AWS SDK 3.1120.0 bump. The GCP, Azure, and Anthropic usage leaves were not part
+of the sweep and remain at 2026.08.26.2. No schema or behavioral changes.
+
 ## 2026.08.28.1
 
 **Changed:** Bump @webframp/aws/bedrock-usage 2026.08.20.1 → 2026.08.26.2

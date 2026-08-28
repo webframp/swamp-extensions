@@ -1,3 +1,11 @@
+## 2026.08.28.2
+
+**Fixed:** Re-pinned `@webframp/agentcore` to 2026.08.28.1 — the version
+published in the prior sweep. The 2026.08.28.1 release of this composite still
+pinned the pre-sweep 2026.08.26.3, so its dependency graph did not deliver the
+AWS SDK 3.1120.0 bump. `@webframp/container-image` was not part of the sweep and
+remains at 2026.08.26.2. No schema or behavioral changes.
+
 ## 2026.08.28.1
 
 **Changed:** Bump @webframp/container-image 2026.08.01.1 → 2026.08.26.2
