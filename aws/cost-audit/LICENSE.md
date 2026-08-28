@@ -168,11 +168,10 @@ APPENDIX: How to apply the Apache License to your work.
     boilerplate notice, with the fields enclosed by brackets "[]"
     replaced with your own identifying information. (Don't include
     the brackets!)  The text should be enclosed in the appropriate
-    comment syntax for the file format. Please also get an in-depth
-    understanding of how to best apply this license by referring to
-    the Apache License FAQ at http://www.apache.org/foundation/license-faq.html
+    comment syntax for the file format. Please also get in touch with
+    the Apache Software Foundation for more information.
 
-Copyright 2026 webframp
+Copyright 2026 Sean Escriva
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 this file except in compliance with the License. You may obtain a copy of the

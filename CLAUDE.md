@@ -66,6 +66,37 @@ All paths must be relative, no `..` segments, no absolute paths.
 - File names: `snake_case.ts`
 - Test files: `<name>_test.ts` next to implementation
 
+## Licensing
+
+Every extension is licensed under **Apache-2.0**, matching the repository root
+`LICENSE`. There is exactly one canonical form:
+
+- **License type:** Apache-2.0. No MIT, no other license. Each extension ships a
+  `LICENSE.md` containing the full Apache-2.0 text.
+- **Copyright line:** exactly `Copyright 2026 Sean Escriva` (Apache style, no
+  `(c)`). This is the only accepted holder string — not `webframp`, not a
+  variant with `(c)`.
+- **`LICENSE.md` is bundled, not the manifest `license:` field.** The registry
+  quality rubric earns the `has-license` point from a shipped license file at
+  the tarball root, so every extension lists `LICENSE.md` under
+  `additionalFiles:` (or the `paths.base: manifest` opt-in). Do **not** add a
+  top-level `license:` field to `manifest.yaml` — it is redundant with the
+  shipped file and creates drift.
+
+To verify repo-wide uniformity:
+
+```bash
+# Every LICENSE.md must be Apache (0 MIT) with the one canonical copyright line:
+grep -rl "MIT License" --include=LICENSE.md . | grep -v .swamp/    # → empty
+grep -rhoE "^Copyright .*" --include=LICENSE.md . | grep -v .swamp/ | sort -u
+# → exactly: Copyright 2026 Sean Escriva
+```
+
+A LICENSE.md change is a shipped-file change: bump the version, add the
+`RELEASE_NOTES.md` entry, and — for model extensions with an `upgrades:` array —
+append a no-op upgrade entry (identity `upgradeAttributes`) so the chain's final
+`toVersion` matches the new `version`.
+
 ## Testing Rules
 
 - Never rely on live cloud services in tests

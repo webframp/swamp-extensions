@@ -475,7 +475,7 @@ interface MethodContext {
 /** Document ingestion model powered by anydoc. */
 export const model = {
   type: "@webframp/anydoc-ingest",
-  version: "2026.08.26.3",
+  version: "2026.08.28.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     "scan": {

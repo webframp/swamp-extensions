@@ -85,7 +85,7 @@ Deno.test("model exports correct type and version", () => {
     model.type,
     "@webframp/elasticache-datastore-bootstrap/provisioner",
   );
-  assertEquals(model.version, "2026.08.27.1");
+  assertEquals(model.version, "2026.08.28.1");
 });
 
 Deno.test("model has provision method", () => {

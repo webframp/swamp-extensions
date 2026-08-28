@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/sast"
-version: "2026.08.26.2"
+version: "2026.08.28.1"
 description: "Snyk SAST — static application security testing results and management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

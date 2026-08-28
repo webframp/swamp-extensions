@@ -1198,7 +1198,7 @@ async function status(
 
 export const model = {
   type: "@webframp/github-issue-lifecycle" as const,
-  version: "2026.08.27.1",
+  version: "2026.08.28.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

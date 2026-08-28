@@ -298,7 +298,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/dynamodb-datastore-bootstrap/provisioner",
-  version: "2026.08.27.1",
+  version: "2026.08.28.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {
