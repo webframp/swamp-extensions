@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/monitors";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/monitors";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,16 +29,17 @@ const GlobalArgsSchema = z.object({
 
 const MonitorNotificationRulesItemSchema = z.object({
   id: z.string().describe("The ID of the monitor notification rule."),
-  type: z.enum(["monitor-notification-rule"]).optional().describe(
-    "Monitor notification rule resource type.",
+  type: z.enum(["monitor-notification-rule"]).optional().default(
+    "monitor-notification-rule",
+  ).describe("Monitor notification rule resource type."),
+  bundle_config: z.object({
+    duration: z.number().int().max(2147483647),
+  }).optional().describe(
+    "Use bundle config to enable alert bundling to reduce monitor signal noises. **Note**: This featur...",
   ),
   conditional_recipients: z.object({
-    conditions: z.array(z.unknown()).describe(
-      "Conditions for recipients to be notified.",
-    ),
-    fallback_recipients: z.unknown().optional().describe(
-      "Recipients to notify if no conditions are met.",
-    ),
+    conditions: z.array(z.unknown()),
+    fallback_recipients: z.unknown().optional(),
   }).optional().describe(
     "Use conditional recipients to define different recipients for different situations. Cannot be use...",
   ),
@@ -58,7 +59,7 @@ const MonitorNotificationRulesItemSchema = z.object({
     "A list of recipients to notify. Uses the same format as the monitor `message` field. Must not sta...",
   ),
   created_by_id: z.string().optional().describe("Related created_by ID"),
-});
+}).passthrough();
 
 const GetMonitorNotificationRulesSchema = z.object({
   items: z.array(MonitorNotificationRulesItemSchema),
@@ -74,16 +75,17 @@ const GetMonitorNotificationRulesSchema = z.object({
 
 const CreateMonitorNotificationRuleSchema = z.object({
   id: z.string().describe("The ID of the monitor notification rule."),
-  type: z.enum(["monitor-notification-rule"]).optional().describe(
-    "Monitor notification rule resource type.",
+  type: z.enum(["monitor-notification-rule"]).optional().default(
+    "monitor-notification-rule",
+  ).describe("Monitor notification rule resource type."),
+  bundle_config: z.object({
+    duration: z.number().int().max(2147483647),
+  }).optional().describe(
+    "Use bundle config to enable alert bundling to reduce monitor signal noises. **Note**: This featur...",
   ),
   conditional_recipients: z.object({
-    conditions: z.array(z.unknown()).describe(
-      "Conditions for recipients to be notified.",
-    ),
-    fallback_recipients: z.unknown().optional().describe(
-      "Recipients to notify if no conditions are met.",
-    ),
+    conditions: z.array(z.unknown()),
+    fallback_recipients: z.unknown().optional(),
   }).optional().describe(
     "Use conditional recipients to define different recipients for different situations. Cannot be use...",
   ),
@@ -103,27 +105,18 @@ const CreateMonitorNotificationRuleSchema = z.object({
     "A list of recipients to notify. Uses the same format as the monitor `message` field. Must not sta...",
   ),
   created_by_id: z.string().optional().describe("Related created_by ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const MonitorConfigPoliciesItemSchema = z.object({
   id: z.string().describe("ID of this monitor configuration policy."),
-  type: z.enum(["monitor-config-policy"]).optional().describe(
-    "Monitor configuration policy resource type.",
-  ),
+  type: z.enum(["monitor-config-policy"]).optional().default(
+    "monitor-config-policy",
+  ).describe("Monitor configuration policy resource type."),
   policy: z.unknown().optional().describe("Configuration for the policy."),
-  policy_type: z.enum(["tag"]).optional().describe(
+  policy_type: z.enum(["tag"]).optional().default("tag").describe(
     "The monitor configuration policy type.",
   ),
-});
+}).passthrough();
 
 const ListMonitorConfigPoliciesSchema = z.object({
   items: z.array(MonitorConfigPoliciesItemSchema),
@@ -139,23 +132,14 @@ const ListMonitorConfigPoliciesSchema = z.object({
 
 const CreateMonitorConfigPolicySchema = z.object({
   id: z.string().describe("ID of this monitor configuration policy."),
-  type: z.enum(["monitor-config-policy"]).optional().describe(
-    "Monitor configuration policy resource type.",
-  ),
+  type: z.enum(["monitor-config-policy"]).optional().default(
+    "monitor-config-policy",
+  ).describe("Monitor configuration policy resource type."),
   policy: z.unknown().optional().describe("Configuration for the policy."),
-  policy_type: z.enum(["tag"]).optional().describe(
+  policy_type: z.enum(["tag"]).optional().default("tag").describe(
     "The monitor configuration policy type.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -164,7 +148,7 @@ const CreateMonitorConfigPolicySchema = z.object({
 /** Datadog Monitors — monitor definitions, muting, status, and downtime management */
 export const model = {
   type: "@webframp/datadog/monitors",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -190,6 +174,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -249,8 +238,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -302,18 +291,11 @@ export const model = {
     create_monitor_notification_rule: {
       description: "Create a monitor notification rule",
       arguments: z.object({
-        conditional_recipients: z.unknown().optional().describe(
-          "Use conditional recipients to define different recipients for different situations.",
-        ),
-        filter: z.unknown().optional().describe(
-          "Specifies the matching criteria for monitor notifications.",
-        ),
-        name: z.unknown().describe(
-          "The name of the monitor notification rule.",
-        ),
-        recipients: z.unknown().optional().describe(
-          "A list of recipients to notify.",
-        ),
+        bundle_config: z.unknown().optional(),
+        conditional_recipients: z.unknown().optional(),
+        filter: z.unknown().optional(),
+        name: z.unknown(),
+        recipients: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -329,7 +311,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -349,16 +330,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "monitor_notification_rule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created monitor_notification_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -367,7 +345,7 @@ export const model = {
     get_monitor_notification_rule: {
       description: "Get a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
+        rule_id: z.string().describe(
           "ID of the monitor notification rule to fetch.",
         ),
         include: z.string().optional().describe(
@@ -388,7 +366,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -414,13 +391,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "monitor_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched monitor_notification_rule", {});
         return { dataHandles: [handle] };
@@ -429,21 +401,14 @@ export const model = {
     update_monitor_notification_rule: {
       description: "Update a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
+        rule_id: z.string().describe(
           "ID of the monitor notification rule to update.",
         ),
-        conditional_recipients: z.unknown().optional().describe(
-          "Use conditional recipients to define different recipients for different situations.",
-        ),
-        filter: z.unknown().optional().describe(
-          "Specifies the matching criteria for monitor notifications.",
-        ),
-        name: z.unknown().describe(
-          "The name of the monitor notification rule.",
-        ),
-        recipients: z.unknown().optional().describe(
-          "A list of recipients to notify.",
-        ),
+        bundle_config: z.unknown().optional(),
+        conditional_recipients: z.unknown().optional(),
+        filter: z.unknown().optional(),
+        name: z.unknown(),
+        recipients: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -459,7 +424,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["rule_id"]);
@@ -483,13 +447,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "monitor_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated monitor_notification_rule", {});
         return { dataHandles: [handle] };
@@ -498,7 +457,7 @@ export const model = {
     delete_monitor_notification_rule: {
       description: "Delete a monitor notification rule",
       arguments: z.object({
-        rule_id: z.string().min(1).describe(
+        rule_id: z.string().describe(
           "ID of the monitor notification rule to delete.",
         ),
       }),
@@ -548,8 +507,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -596,10 +555,8 @@ export const model = {
     create_monitor_config_policy: {
       description: "Create a monitor configuration policy",
       arguments: z.object({
-        policy: z.unknown().describe("Configuration for the policy."),
-        policy_type: z.unknown().describe(
-          "The monitor configuration policy type.",
-        ),
+        policy: z.unknown(),
+        policy_type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -615,7 +572,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -635,16 +591,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "monitor_config_policy",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created monitor_config_policy {id}", { id });
         return { dataHandles: [handle] };
@@ -653,7 +606,7 @@ export const model = {
     get_monitor_config_policy: {
       description: "Get a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().min(1).describe(
+        policy_id: z.string().describe(
           "ID of the monitor configuration policy.",
         ),
       }),
@@ -671,7 +624,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -685,13 +637,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "monitor_config_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Fetched monitor_config_policy", {});
         return { dataHandles: [handle] };
@@ -700,13 +647,11 @@ export const model = {
     update_monitor_config_policy: {
       description: "Edit a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().min(1).describe(
+        policy_id: z.string().describe(
           "ID of the monitor configuration policy.",
         ),
-        policy: z.unknown().describe("Configuration for the policy."),
-        policy_type: z.unknown().describe(
-          "The monitor configuration policy type.",
-        ),
+        policy: z.unknown(),
+        policy_type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -722,7 +667,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -746,13 +690,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "monitor_config_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated monitor_config_policy", {});
         return { dataHandles: [handle] };
@@ -761,7 +700,7 @@ export const model = {
     delete_monitor_config_policy: {
       description: "Delete a monitor configuration policy",
       arguments: z.object({
-        policy_id: z.string().min(1).describe(
+        policy_id: z.string().describe(
           "ID of the monitor configuration policy.",
         ),
       }),

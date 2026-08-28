@@ -4,6 +4,24 @@
 
 const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 
+/**
+ * Resolve the Cloudflare API token: an explicit token (typically from the
+ * model's vault-wireable apiToken global arg) takes precedence over the
+ * CLOUDFLARE_API_TOKEN environment variable. Throws a descriptive error when
+ * neither is set.
+ */
+function resolveToken(apiToken?: string): string {
+  const token = apiToken || Deno.env.get("CLOUDFLARE_API_TOKEN");
+  if (!token) {
+    throw new Error(
+      "Cloudflare API token not set. Provide the apiToken global argument " +
+        "(wireable with a vault.get(...) expression) or set the " +
+        "CLOUDFLARE_API_TOKEN environment variable.",
+    );
+  }
+  return token;
+}
+
 export interface CloudflareResponse<T> {
   success: boolean;
   errors: Array<{ code: number; message: string }>;
@@ -17,28 +35,84 @@ export interface CloudflareResponse<T> {
   };
 }
 
+/**
+ * Sanitize a resource instance name for swamp's data layer.
+ *
+ * Swamp rejects data-artifact instance names containing "/", "\", "..", or
+ * null bytes (path-traversal protection). Instance names are frequently derived
+ * from API-returned identifiers, which are attacker-influenceable, so every
+ * writeResource instance name is routed through this before it reaches the
+ * datastore.
+ */
+export function sanitizeInstanceName(name: string): string {
+  return name
+    .replace(/[/\\]/g, "_")
+    .replace(/\.\./g, "_")
+    .replace(/\0/g, "");
+}
+
+const MAX_RETRIES = 3;
+
+/**
+ * Perform a fetch with bounded retry on HTTP 429. Honors the `Retry-After`
+ * header when present (seconds), otherwise backs off linearly. Returns the
+ * final Response for the caller to inspect; does not throw on non-429 statuses.
+ */
+async function cfFetch(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch(url, init);
+    if (response.status !== 429) return response;
+
+    const retryAfter = response.headers.get("Retry-After");
+    const parsed = retryAfter ? Number(retryAfter) : NaN;
+    const delayMs = Number.isFinite(parsed)
+      ? parsed * 1000
+      : 1000 * (attempt + 1);
+    // Drain the body so the connection can be reused.
+    await response.text();
+    if (attempt < MAX_RETRIES) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    return response;
+  }
+  // Unreachable: the loop returns on the final attempt.
+  throw new Error(`Cloudflare API request failed: ${url}`);
+}
+
 export async function cfApi<T>(
   apiToken: string,
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
+  const token = resolveToken(apiToken);
   const url = `${CF_API_BASE}${path}`;
   const headers: Record<string, string> = {
-    "Authorization": `Bearer ${apiToken}`,
+    "Authorization": `Bearer ${token}`,
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(url, {
+  const response = await cfFetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  if (response.status === 429) {
+    await response.text();
+    throw new Error(
+      `Cloudflare API rate limited after ${MAX_RETRIES} retries: ${method} ${path}`,
+    );
+  }
+
   if (!response.ok) {
     const text = await response.text();
     throw new Error(
-      `Cloudflare API request failed: ${method} ${path} returned HTTP ${response.status} ${response.statusText}: ${
+      `Cloudflare API error: ${method} ${path} returned ${response.status} ${response.statusText}: ${
         text.slice(0, 500)
       }`,
     );
@@ -49,9 +123,7 @@ export async function cfApi<T>(
   if (!data.success) {
     const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") ||
       "Unknown error";
-    throw new Error(
-      `Cloudflare API request failed: ${method} ${path}: ${errorMsg}`,
-    );
+    throw new Error(`Cloudflare API error: ${method} ${path}: ${errorMsg}`);
   }
 
   return data.result;
@@ -70,6 +142,7 @@ export async function cfApiPaginated<T>(
   path: string,
   params?: Record<string, string>,
 ): Promise<PaginatedResult<T>> {
+  const token = resolveToken(apiToken);
   const allResults: T[] = [];
   let page = 1;
   const perPage = 50;
@@ -83,16 +156,23 @@ export async function cfApiPaginated<T>(
     });
 
     const url = `${CF_API_BASE}${path}?${queryParams}`;
-    const response = await fetch(url, {
+    const response = await cfFetch(url, {
       headers: {
-        "Authorization": `Bearer ${apiToken}`,
+        "Authorization": `Bearer ${token}`,
       },
     });
+
+    if (response.status === 429) {
+      await response.text();
+      throw new Error(
+        `Cloudflare API rate limited after ${MAX_RETRIES} retries: GET ${path}`,
+      );
+    }
 
     if (!response.ok) {
       const text = await response.text();
       throw new Error(
-        `Cloudflare API request failed: GET ${path} (page ${page}) returned HTTP ${response.status} ${response.statusText}: ${
+        `Cloudflare API error: GET ${path} returned ${response.status} ${response.statusText}: ${
           text.slice(0, 500)
         }`,
       );
@@ -103,9 +183,7 @@ export async function cfApiPaginated<T>(
     if (!data.success) {
       const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") ||
         "Unknown error";
-      throw new Error(
-        `Cloudflare API request failed: GET ${path} (page ${page}): ${errorMsg}`,
-      );
+      throw new Error(`Cloudflare API error: GET ${path}: ${errorMsg}`);
     }
 
     allResults.push(...(data.result ?? []));

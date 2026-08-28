@@ -130,7 +130,7 @@ swamp model create @webframp/cloudflare/access cf-access \
 ## Development
 
 ```bash
-cd cloudflare/access
+cd ../../cloudflare/access
 deno task check
 deno task lint
 deno task fmt

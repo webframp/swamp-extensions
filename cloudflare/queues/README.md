@@ -42,7 +42,7 @@ swamp model create @webframp/cloudflare/queues cf-queues \
 ## Development
 
 ```bash
-cd cloudflare/queues
+cd ../../cloudflare/queues
 deno task check
 deno task lint
 deno task fmt

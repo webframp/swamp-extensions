@@ -5,10 +5,15 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
+import {
+  ddApi,
+  ddApiPaginated,
+  ddApiPostPaginated,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/security-signals";
 
@@ -17,10 +22,10 @@ const EXTENSION_NAME = "@webframp/datadog/security-signals";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,7 +34,9 @@ const GlobalArgsSchema = z.object({
 
 const SecurityMonitoringSignalsItemSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal"]).optional().describe("The type of event."),
+  type: z.enum(["signal"]).optional().default("signal").describe(
+    "The type of event.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
     "A JSON object of attributes in the security signal.",
   ),
@@ -42,7 +49,7 @@ const SecurityMonitoringSignalsItemSchema = z.object({
   timestamp: z.string().optional().describe(
     "The timestamp of the security signal.",
   ),
-});
+}).passthrough();
 
 const ListSecurityMonitoringSignalsSchema = z.object({
   items: z.array(SecurityMonitoringSignalsItemSchema),
@@ -57,59 +64,28 @@ const ListSecurityMonitoringSignalsSchema = z.object({
 });
 
 const BulkEditSecurityMonitoringSignalsAssigneeSchema = z.object({
-  result: z.unknown().describe(
-    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
-  ),
+  result: z.unknown(),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BulkEditSecurityMonitoringSignalsStateSchema = z.object({
-  result: z.unknown().describe(
-    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
-  ),
+  result: z.unknown(),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BulkEditSecurityMonitoringSignalsSchema = z.object({
-  result: z.unknown().describe(
-    "The result of the bulk operation, mapping signal IDs to per-signal outcomes.",
-  ),
+  result: z.unknown(),
   status: z.string().describe("The status of the bulk operation."),
   type: z.string().describe("The type of the response."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SearchSecurityMonitoringSignalsItemSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal"]).optional().describe("The type of event."),
+  type: z.enum(["signal"]).optional().default("signal").describe(
+    "The type of event.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
     "A JSON object of attributes in the security signal.",
   ),
@@ -122,7 +98,7 @@ const SearchSecurityMonitoringSignalsItemSchema = z.object({
   timestamp: z.string().optional().describe(
     "The timestamp of the security signal.",
   ),
-});
+}).passthrough();
 
 const SearchSecurityMonitoringSignalsSchema = z.object({
   items: z.array(SearchSecurityMonitoringSignalsItemSchema),
@@ -138,7 +114,9 @@ const SearchSecurityMonitoringSignalsSchema = z.object({
 
 const GetSecurityMonitoringSignalSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal"]).optional().describe("The type of event."),
+  type: z.enum(["signal"]).optional().default("signal").describe(
+    "The type of event.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
     "A JSON object of attributes in the security signal.",
   ),
@@ -151,20 +129,12 @@ const GetSecurityMonitoringSignalSchema = z.object({
   timestamp: z.string().optional().describe(
     "The timestamp of the security signal.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const EditSecurityMonitoringSignalAssigneeSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal_metadata"]).optional().describe("The type of event."),
+  type: z.enum(["signal_metadata"]).optional().default("signal_metadata")
+    .describe("The type of event."),
   archive_comment: z.string().optional().describe(
     "Optional comment to display on archived signals.",
   ),
@@ -211,20 +181,12 @@ const EditSecurityMonitoringSignalAssigneeSchema = z.object({
     name: z.string().nullable().optional(),
     uuid: z.string(),
   }).optional().describe("Object representing a given user entity."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const EditSecurityMonitoringSignalIncidentsSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal_metadata"]).optional().describe("The type of event."),
+  type: z.enum(["signal_metadata"]).optional().default("signal_metadata")
+    .describe("The type of event."),
   archive_comment: z.string().optional().describe(
     "Optional comment to display on archived signals.",
   ),
@@ -271,16 +233,7 @@ const EditSecurityMonitoringSignalIncidentsSchema = z.object({
     name: z.string().nullable().optional(),
     uuid: z.string(),
   }).optional().describe("Object representing a given user entity."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const InvestigationLogQueriesMatchingSignalItemSchema = z.object({
   id: z.string().describe("The unique ID of the suggested action."),
@@ -300,7 +253,7 @@ const InvestigationLogQueriesMatchingSignalItemSchema = z.object({
     "The title of the recommended blog post.",
   ),
   url: z.string().optional().describe("The URL of the suggested action."),
-});
+}).passthrough();
 
 const GetInvestigationLogQueriesMatchingSignalSchema = z.object({
   items: z.array(InvestigationLogQueriesMatchingSignalItemSchema),
@@ -316,7 +269,8 @@ const GetInvestigationLogQueriesMatchingSignalSchema = z.object({
 
 const EditSecurityMonitoringSignalStateSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal_metadata"]).optional().describe("The type of event."),
+  type: z.enum(["signal_metadata"]).optional().default("signal_metadata")
+    .describe("The type of event."),
   archive_comment: z.string().optional().describe(
     "Optional comment to display on archived signals.",
   ),
@@ -363,16 +317,7 @@ const EditSecurityMonitoringSignalStateSchema = z.object({
     name: z.string().nullable().optional(),
     uuid: z.string(),
   }).optional().describe("Object representing a given user entity."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SuggestedActionsMatchingSignalItemSchema = z.object({
   id: z.string().describe("The unique ID of the suggested action."),
@@ -392,7 +337,7 @@ const SuggestedActionsMatchingSignalItemSchema = z.object({
     "The title of the recommended blog post.",
   ),
   url: z.string().optional().describe("The URL of the suggested action."),
-});
+}).passthrough();
 
 const GetSuggestedActionsMatchingSignalSchema = z.object({
   items: z.array(SuggestedActionsMatchingSignalItemSchema),
@@ -408,7 +353,8 @@ const GetSuggestedActionsMatchingSignalSchema = z.object({
 
 const EditSecurityMonitoringSignalSchema = z.object({
   id: z.string().describe("The unique ID of the security signal."),
-  type: z.enum(["signal_metadata"]).optional().describe("The type of event."),
+  type: z.enum(["signal_metadata"]).optional().default("signal_metadata")
+    .describe("The type of event."),
   archive_comment: z.string().optional().describe(
     "Optional comment to display on archived signals.",
   ),
@@ -455,16 +401,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
     name: z.string().nullable().optional(),
     uuid: z.string(),
   }).optional().describe("Object representing a given user entity."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -473,7 +410,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -504,6 +441,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -614,8 +556,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -687,7 +629,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -708,12 +649,7 @@ export const model = {
         const handle = await context.writeResource(
           "bulk_edit_security_monitoring_signals_assignee",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated bulk_edit_security_monitoring_signals_assignee",
@@ -739,7 +675,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -760,12 +695,7 @@ export const model = {
         const handle = await context.writeResource(
           "bulk_edit_security_monitoring_signals_state",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated bulk_edit_security_monitoring_signals_state",
@@ -791,7 +721,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -812,12 +741,7 @@ export const model = {
         const handle = await context.writeResource(
           "bulk_edit_security_monitoring_signals",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated bulk_edit_security_monitoring_signals",
@@ -829,15 +753,9 @@ export const model = {
     search_security_monitoring_signals: {
       description: "Get a list of security signals",
       arguments: z.object({
-        filter: z.unknown().optional().describe(
-          "Search filter criteria for the query, such as the query string and time range.",
-        ),
-        page: z.unknown().optional().describe(
-          "Pagination options for the search request, such as cursor and limit.",
-        ),
-        sort: z.unknown().optional().describe(
-          "The order in which the returned security signals are sorted.",
-        ),
+        filter: z.unknown().optional(),
+        page: z.unknown().optional(),
+        sort: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -853,8 +771,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -899,9 +817,7 @@ export const model = {
     get_security_monitoring_signal: {
       description: "Get a signal's details",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -917,7 +833,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -931,13 +846,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "security_monitoring_signal",
-          String(args.signal_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signal_id)),
+          result,
         );
         context.logger.info("Fetched security_monitoring_signal", {});
         return { dataHandles: [handle] };
@@ -946,15 +856,9 @@ export const model = {
     edit_security_monitoring_signal_assignee: {
       description: "Modify the triage assignee of a security signal",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
-        assignee: z.unknown().describe(
-          "Object representing a given user entity.",
-        ),
-        version: z.unknown().optional().describe(
-          "Version of the signal being updated, used for optimistic concurrency control.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
+        assignee: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -970,7 +874,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
@@ -992,13 +895,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_security_monitoring_signal_assignee",
-          String(args.signal_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signal_id)),
+          result,
         );
         context.logger.info(
           "Updated edit_security_monitoring_signal_assignee",
@@ -1010,18 +908,9 @@ export const model = {
     edit_security_monitoring_signal_incidents: {
       description: "Change the related incidents of a security signal",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
-        incident_ids: z.array(z.number().int()).min(
-          1,
-          "incident_ids must contain at least one incident ID",
-        ).describe(
-          "Array of incidents that are associated with this signal.",
-        ),
-        version: z.unknown().optional().describe(
-          "Version of the signal being updated, used for optimistic concurrency control.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
+        incident_ids: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1037,7 +926,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
@@ -1059,13 +947,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_security_monitoring_signal_incidents",
-          String(args.signal_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signal_id)),
+          result,
         );
         context.logger.info(
           "Updated edit_security_monitoring_signal_incidents",
@@ -1077,9 +960,7 @@ export const model = {
     get_investigation_log_queries_matching_signal: {
       description: "Get investigation queries for a signal",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1095,8 +976,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1146,19 +1027,11 @@ export const model = {
     edit_security_monitoring_signal_state: {
       description: "Change the triage state of a security signal",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
-        archive_comment: z.unknown().optional().describe(
-          "Optional comment to display on archived signals.",
-        ),
-        archive_reason: z.unknown().optional().describe(
-          "Reason a signal is archived.",
-        ),
-        state: z.unknown().describe("The new triage state of the signal."),
-        version: z.unknown().optional().describe(
-          "Version of the signal being updated, used for optimistic concurrency control.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
+        archive_comment: z.unknown().optional(),
+        archive_reason: z.unknown().optional(),
+        state: z.unknown(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1174,7 +1047,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
@@ -1196,13 +1068,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_security_monitoring_signal_state",
-          String(args.signal_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signal_id)),
+          result,
         );
         context.logger.info(
           "Updated edit_security_monitoring_signal_state",
@@ -1214,9 +1081,7 @@ export const model = {
     get_suggested_actions_matching_signal: {
       description: "Get suggested actions for a signal",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1232,8 +1097,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1282,24 +1147,12 @@ export const model = {
     edit_security_monitoring_signal: {
       description: "Update security signal triage state or assignee",
       arguments: z.object({
-        signal_id: z.string().min(1, "signal_id must not be empty").describe(
-          "The ID of the signal.",
-        ),
-        archive_comment: z.unknown().optional().describe(
-          "Optional comment to display on archived signals.",
-        ),
-        archive_reason: z.unknown().optional().describe(
-          "Reason a signal is archived.",
-        ),
-        assignee: z.unknown().optional().describe(
-          "Object representing a given user entity.",
-        ),
-        state: z.unknown().optional().describe(
-          "The new triage state of the signal.",
-        ),
-        version: z.unknown().optional().describe(
-          "Version of the signal being updated, used for optimistic concurrency control.",
-        ),
+        signal_id: z.string().describe("The ID of the signal."),
+        archive_comment: z.unknown().optional(),
+        archive_reason: z.unknown().optional(),
+        assignee: z.unknown().optional(),
+        state: z.unknown().optional(),
+        version: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1315,7 +1168,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["signal_id"]);
@@ -1337,13 +1189,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "edit_security_monitoring_signal",
-          String(args.signal_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signal_id)),
+          result,
         );
         context.logger.info("Updated edit_security_monitoring_signal", {});
         return { dataHandles: [handle] };

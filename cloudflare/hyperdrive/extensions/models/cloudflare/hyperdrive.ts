@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/hyperdrive";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/hyperdrive";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -36,7 +36,7 @@ const HyperdriveItemSchema = z.object({
   name: z.unknown(),
   origin: z.union([z.unknown(), z.unknown(), z.unknown()]),
   origin_connection_limit: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListHyperdriveSchema = z.object({
   items: z.array(HyperdriveItemSchema),
@@ -63,16 +63,7 @@ const PatchHyperdriveSchema = z.object({
   name: z.unknown(),
   origin: z.union([z.unknown(), z.unknown(), z.unknown()]),
   origin_connection_limit: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -81,7 +72,7 @@ const PatchHyperdriveSchema = z.object({
 /** Cloudflare Hyperdrive — database connection pooling configurations */
 export const model = {
   type: "@webframp/cloudflare/hyperdrive",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -107,6 +98,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -151,32 +147,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/hyperdrive/configs`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Hyperdrive configs for account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/hyperdrive/configs`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -228,48 +213,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-
-        if (
-          args.name === undefined || args.name === null || args.name === ""
-        ) {
-          throw new Error(
-            "create_hyperdrive requires a non-empty 'name' for the Hyperdrive configuration",
-          );
-        }
-        if (args.origin === undefined || args.origin === null) {
-          throw new Error(
-            "create_hyperdrive requires an 'origin' describing the database connection to pool",
-          );
-        }
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/hyperdrive/configs`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create Hyperdrive config '${args.name}' in account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/hyperdrive/configs`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("hyperdrive", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("hyperdrive", id, result);
         context.logger.info("Created hyperdrive {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -277,10 +235,7 @@ export const model = {
     get_hyperdrive: {
       description: "Get Hyperdrive",
       arguments: z.object({
-        hyperdrive_id: z.string().min(
-          1,
-          "hyperdrive_id must not be empty",
-        ).describe(
+        hyperdrive_id: z.string().describe(
           "The unique identifier of the Hyperdrive configuration.",
         ),
       }),
@@ -298,33 +253,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Hyperdrive config ${args.hyperdrive_id} in account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
+        );
 
         const handle = await context.writeResource(
           "hyperdrive",
-          String(args.hyperdrive_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.hyperdrive_id)),
+          result,
         );
         context.logger.info("Fetched hyperdrive", {});
         return { dataHandles: [handle] };
@@ -333,10 +272,7 @@ export const model = {
     update_hyperdrive: {
       description: "Update Hyperdrive",
       arguments: z.object({
-        hyperdrive_id: z.string().min(
-          1,
-          "hyperdrive_id must not be empty",
-        ).describe(
+        hyperdrive_id: z.string().describe(
           "The unique identifier of the Hyperdrive configuration.",
         ),
         caching: z.unknown().optional(),
@@ -365,7 +301,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -374,32 +309,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Hyperdrive config ${args.hyperdrive_id} in account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "hyperdrive",
-          String(args.hyperdrive_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.hyperdrive_id)),
+          result,
         );
         context.logger.info("Updated hyperdrive", {});
         return { dataHandles: [handle] };
@@ -408,10 +328,7 @@ export const model = {
     patch_hyperdrive: {
       description: "Patch Hyperdrive",
       arguments: z.object({
-        hyperdrive_id: z.string().min(
-          1,
-          "hyperdrive_id must not be empty",
-        ).describe(
+        hyperdrive_id: z.string().describe(
           "The unique identifier of the Hyperdrive configuration.",
         ),
         caching: z.unknown().optional(),
@@ -437,7 +354,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -446,32 +362,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to patch Hyperdrive config ${args.hyperdrive_id} in account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "patch_hyperdrive",
-          String(args.hyperdrive_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.hyperdrive_id)),
+          result,
         );
         context.logger.info("Updated patch_hyperdrive", {});
         return { dataHandles: [handle] };
@@ -480,10 +381,7 @@ export const model = {
     delete_hyperdrive: {
       description: "Delete Hyperdrive",
       arguments: z.object({
-        hyperdrive_id: z.string().min(
-          1,
-          "hyperdrive_id must not be empty",
-        ).describe(
+        hyperdrive_id: z.string().describe(
           "The unique identifier of the Hyperdrive configuration.",
         ),
       }),
@@ -502,20 +400,12 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete Hyperdrive config ${args.hyperdrive_id} in account ${accountId}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/hyperdrive/configs/${args.hyperdrive_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.hyperdrive_id,

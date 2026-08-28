@@ -5,60 +5,24 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi } from "./_lib/api.ts";
-
-const EXTENSION_NAME = "@webframp/datadog/slos";
+import { ddApi, sanitizeInstanceName } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
     .describe("Datadog site"),
-});
-
-const CreateSloReportJobSchema = z.object({
-  id: z.string().optional().describe("The ID of the report job."),
-  type: z.string().optional().describe("The type of ID."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
-
-const GetSloReportJobStatusSchema = z.object({
-  id: z.string().describe("The ID of the report job."),
-  type: z.string().optional().describe("The type of ID."),
-  status: z.enum([
-    "in_progress",
-    "completed",
-    "completed_with_errors",
-    "failed",
-  ]).optional().describe("The status of the SLO report job."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
 });
 
 const GetSloStatusSchema = z.object({
@@ -82,16 +46,7 @@ const GetSloStatusSchema = z.object({
   state: z.string().describe(
     "The current state of the SLO (for example, `breached`, `warning`, `ok`).",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -100,7 +55,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -128,21 +83,14 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
-    "slo_report_job": {
-      description: "Create a new SLO report",
-      schema: CreateSloReportJobSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "slo_report_job_status": {
-      description: "Get SLO report status",
-      schema: GetSloReportJobStatusSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "slo_status": {
       description: "Get SLO status",
       schema: GetSloStatusSchema,
@@ -152,128 +100,10 @@ export const model = {
   },
 
   methods: {
-    create_slo_report_job: {
-      description: "Create a new SLO report",
-      arguments: z.object({
-        from_ts: z.number().int().describe(
-          "The `from` timestamp for the report in epoch seconds.",
-        ),
-        interval: z.unknown().optional().describe(
-          "The reporting interval used to bucket the SLO report data (e.g. day, week, or month).",
-        ),
-        query: z.string().min(1, "query must not be empty").describe(
-          "The query string used to filter SLO results. Some examples of queries include...",
-        ),
-        timezone: z.string().optional().describe(
-          "The timezone used to determine the start and end of each interval. For exampl...",
-        ),
-        to_ts: z.number().int().describe(
-          "The `to` timestamp for the report in epoch seconds.",
-        ),
-      }).refine((v) => v.to_ts > v.from_ts, {
-        message: "to_ts must be greater than from_ts",
-        path: ["to_ts"],
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const startMs = Date.now();
-        const { apiKey, appKey, site } = context.globalArgs;
-        const attrs: Record<string, unknown> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) attrs[k] = v;
-        }
-        const body = { data: { attributes: attrs } };
-
-        const result = await ddApi(
-          apiKey,
-          appKey,
-          site,
-          "POST",
-          `/api/v2/slo/report`,
-          body,
-        );
-
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource(
-          "slo_report_job",
-          id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-        context.logger.info("Created slo_report_job {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    get_slo_report_job_status: {
-      description: "Get SLO report status",
-      arguments: z.object({
-        report_id: z.string().min(1, "report_id must not be empty").describe(
-          "The ID of the report job.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const startMs = Date.now();
-        const { apiKey, appKey, site } = context.globalArgs;
-        const result = await ddApi(
-          apiKey,
-          appKey,
-          site,
-          "GET",
-          `/api/v2/slo/report/${
-            encodeURIComponent(String(args.report_id))
-          }/status`,
-        );
-
-        const handle = await context.writeResource(
-          "slo_report_job_status",
-          String(args.report_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
-        context.logger.info("Fetched slo_report_job_status", {});
-        return { dataHandles: [handle] };
-      },
-    },
     get_slo_status: {
       description: "Get SLO status",
       arguments: z.object({
-        slo_id: z.string().min(1, "slo_id must not be empty").describe(
-          "The ID of the SLO.",
-        ),
+        slo_id: z.string().describe("The ID of the SLO."),
         from_ts: z.number().optional().describe(
           "The starting timestamp for the SLO status query in epoch seconds.",
         ),
@@ -298,7 +128,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["slo_id"]);
@@ -322,13 +151,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "slo_status",
-          String(args.slo_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.slo_id)),
+          result,
         );
         context.logger.info("Fetched slo_status", {});
         return { dataHandles: [handle] };

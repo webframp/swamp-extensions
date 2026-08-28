@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/tunnel";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/tunnel";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -37,7 +37,7 @@ const CloudflareTunnelsItemSchema = z.object({
   remote_config: z.unknown().optional(),
   status: z.unknown().optional(),
   tun_type: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListCloudflareTunnelsSchema = z.object({
   items: z.array(CloudflareTunnelsItemSchema),
@@ -65,16 +65,7 @@ const CreateACloudflareTunnelSchema = z.object({
   remote_config: z.unknown().optional(),
   status: z.unknown().optional(),
   tun_type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetConfigurationSchema = z.object({
   account_id: z.unknown().optional(),
@@ -83,16 +74,7 @@ const GetConfigurationSchema = z.object({
   source: z.unknown().optional(),
   tunnel_id: z.unknown().optional(),
   version: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PutConfigurationSchema = z.object({
   account_id: z.unknown().optional(),
@@ -101,16 +83,7 @@ const PutConfigurationSchema = z.object({
   source: z.unknown().optional(),
   tunnel_id: z.unknown().optional(),
   version: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CloudflareTunnelConnectionsItemSchema = z.object({
   arch: z.unknown().optional(),
@@ -120,7 +93,7 @@ const CloudflareTunnelConnectionsItemSchema = z.object({
   id: z.unknown().optional(),
   run_at: z.unknown().optional(),
   version: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListCloudflareTunnelConnectionsSchema = z.object({
   items: z.array(CloudflareTunnelConnectionsItemSchema),
@@ -142,22 +115,42 @@ const GetCloudflareTunnelConnectorSchema = z.object({
   id: z.unknown().optional(),
   run_at: z.unknown().optional(),
   version: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetACloudflareTunnelManagementTokenSchema = z.string();
 
 const GetACloudflareTunnelTokenSchema = z.string();
 
-const AllTunnelsItemSchema = z.union([z.unknown(), z.unknown()]);
+const AllTunnelsItemSchema = z.union([
+  z.object({
+    account_tag: z.unknown().optional(),
+    config_src: z.unknown().optional(),
+    connections: z.unknown().optional(),
+    conns_active_at: z.unknown().optional(),
+    conns_inactive_at: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    deleted_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    name: z.unknown().optional(),
+    remote_config: z.unknown().optional(),
+    status: z.unknown().optional(),
+    tun_type: z.unknown().optional(),
+  }),
+  z.object({
+    account_tag: z.unknown().optional(),
+    connections: z.unknown().optional(),
+    conns_active_at: z.unknown().optional(),
+    conns_inactive_at: z.unknown().optional(),
+    created_at: z.unknown().optional(),
+    deleted_at: z.unknown().optional(),
+    id: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    name: z.unknown().optional(),
+    status: z.unknown().optional(),
+    tun_type: z.unknown().optional(),
+  }),
+]);
 
 const ListAllTunnelsSchema = z.object({
   items: z.array(AllTunnelsItemSchema),
@@ -178,7 +171,7 @@ const ListAllTunnelsSchema = z.object({
 /** Cloudflare Tunnel — tunnel management, configurations, connections */
 export const model = {
   type: "@webframp/cloudflare/tunnel",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -209,6 +202,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -300,8 +298,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -362,7 +360,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -374,16 +371,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created a_cloudflare_tunnel {id}", { id });
         return { dataHandles: [handle] };
@@ -392,7 +386,7 @@ export const model = {
     get_a_cloudflare_tunnel: {
       description: "Get a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -408,7 +402,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -418,13 +411,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
-          String(args.tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tunnel_id)),
+          result,
         );
         context.logger.info("Fetched a_cloudflare_tunnel", {});
         return { dataHandles: [handle] };
@@ -433,7 +421,7 @@ export const model = {
     update_a_cloudflare_tunnel: {
       description: "Update a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
         name: z.unknown().optional(),
         tunnel_secret: z.unknown().optional(),
       }),
@@ -451,7 +439,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -469,13 +456,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "a_cloudflare_tunnel",
-          String(args.tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tunnel_id)),
+          result,
         );
         context.logger.info("Updated a_cloudflare_tunnel", {});
         return { dataHandles: [handle] };
@@ -484,7 +466,7 @@ export const model = {
     delete_a_cloudflare_tunnel: {
       description: "Delete a Cloudflare Tunnel",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -501,10 +483,18 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["tunnel_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
         await cfApi(
           apiToken,
           "DELETE",
           `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}`,
+          body,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.tunnel_id });
@@ -514,7 +504,7 @@ export const model = {
     get_configuration: {
       description: "Get configuration",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -530,7 +520,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -540,13 +529,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "configuration",
-          String(args.tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tunnel_id)),
+          result,
         );
         context.logger.info("Fetched configuration", {});
         return { dataHandles: [handle] };
@@ -555,7 +539,7 @@ export const model = {
     put_configuration: {
       description: "Put configuration",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
         config: z.unknown().optional(),
       }),
       execute: async (
@@ -572,7 +556,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -590,13 +573,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_configuration",
-          String(args.tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tunnel_id)),
+          result,
         );
         context.logger.info("Updated put_configuration", {});
         return { dataHandles: [handle] };
@@ -605,7 +583,7 @@ export const model = {
     list_cloudflare_tunnel_connections: {
       description: "List Cloudflare Tunnel connections",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -621,8 +599,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["tunnel_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -665,7 +643,7 @@ export const model = {
     delete_cloudflare_tunnel_clean_up_cloudflare_tunnel_connections: {
       description: "Clean up Cloudflare Tunnel connections",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
         client_id: z.string().optional(),
       }),
       execute: async (
@@ -683,10 +661,26 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["tunnel_id", "client_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["client_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}/connections`,
+          `/accounts/${accountId}/cfd_tunnel/${args.tunnel_id}/connections${qs}`,
+          body,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.tunnel_id });
@@ -696,8 +690,8 @@ export const model = {
     get_cloudflare_tunnel_connector: {
       description: "Get Cloudflare Tunnel connector",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
-        connector_id: z.string().min(1, "connector_id must not be empty"),
+        tunnel_id: z.string(),
+        connector_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -713,7 +707,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -723,13 +716,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cloudflare_tunnel_connector",
-          String(args.connector_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.connector_id)),
+          result,
         );
         context.logger.info("Fetched cloudflare_tunnel_connector", {});
         return { dataHandles: [handle] };
@@ -738,7 +726,7 @@ export const model = {
     get_a_cloudflare_tunnel_management_token: {
       description: "Get a Cloudflare Tunnel management token",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
         resources: z.array(z.unknown()),
       }),
       execute: async (
@@ -755,7 +743,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -771,16 +758,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_a_cloudflare_tunnel_management_token",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created get_a_cloudflare_tunnel_management_token {id}",
@@ -792,7 +776,7 @@ export const model = {
     get_a_cloudflare_tunnel_token: {
       description: "Get a Cloudflare Tunnel token",
       arguments: z.object({
-        tunnel_id: z.string().min(1, "tunnel_id must not be empty"),
+        tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -808,7 +792,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -818,13 +801,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "a_cloudflare_tunnel_token",
-          String(args.tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tunnel_id)),
+          result,
         );
         context.logger.info("Fetched a_cloudflare_tunnel_token", {});
         return { dataHandles: [handle] };
@@ -860,8 +838,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {

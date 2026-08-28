@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/slack";
 
@@ -30,16 +30,7 @@ const GetSlackDefaultNotificationSettingsSchema = z.object({
   ),
   target_channel_id: z.string(),
   target_channel_name: z.string().min(1),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSlackProjectNotificationSettingsCollectionItemSchema = z.object({
   id: z.string(),
@@ -53,7 +44,7 @@ const GetSlackProjectNotificationSettingsCollectionItemSchema = z.object({
   target_project_name: z.string().describe(
     "The target file name for the project.",
   ),
-});
+}).passthrough();
 
 const GetSlackProjectNotificationSettingsCollectionSchema = z.object({
   items: z.array(GetSlackProjectNotificationSettingsCollectionItemSchema),
@@ -79,16 +70,7 @@ const CreateSlackProjectNotificationSettingsSchema = z.object({
   target_project_name: z.string().describe(
     "The target file name for the project.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ChannelsItemSchema = z.object({
   id: z.string(),
@@ -99,7 +81,7 @@ const ChannelsItemSchema = z.object({
     "multiparty_direct_message",
   ]).optional().describe("Channel type"),
   name: z.string().optional().describe("Name of the Slack Channel"),
-});
+}).passthrough();
 
 const ListChannelsSchema = z.object({
   items: z.array(ChannelsItemSchema),
@@ -122,16 +104,7 @@ const GetChannelNameByIdSchema = z.object({
     "multiparty_direct_message",
   ]).optional().describe("Channel type"),
   name: z.string().optional().describe("Name of the Slack Channel"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -140,7 +113,7 @@ const GetChannelNameByIdSchema = z.object({
 /** Snyk Slack Integration — Slack app configuration and channel management */
 export const model = {
   type: "@webframp/snyk/slack",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -171,6 +144,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -228,7 +206,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -239,13 +216,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "slack_default_notification_settings",
-          String(args.bot_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.bot_id)),
+          result,
         );
         context.logger.info("Fetched slack_default_notification_settings", {});
         return { dataHandles: [handle] };
@@ -274,7 +246,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["bot_id"]);
@@ -293,12 +264,7 @@ export const model = {
         const handle = await context.writeResource(
           "slack_default_notification_settings",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed create_slack_default_notification_settings",
@@ -357,8 +323,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["bot_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -422,7 +388,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["project_id", "bot_id"]);
@@ -441,12 +406,7 @@ export const model = {
         const handle = await context.writeResource(
           "slack_project_notification_settings",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed create_slack_project_notification_settings",
@@ -484,7 +444,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["bot_id", "project_id"]);
@@ -502,13 +461,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "slack_project_notification_settings",
-          String(args.project_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_id)),
+          result,
         );
         context.logger.info("Updated slack_project_notification_settings", {});
         return { dataHandles: [handle] };
@@ -565,8 +519,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -621,7 +575,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -632,13 +585,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "channel_name_by_id",
-          String(args.tenant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
         );
         context.logger.info("Fetched channel_name_by_id", {});
         return { dataHandles: [handle] };

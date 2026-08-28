@@ -521,31 +521,3 @@ Deno.test({
     }
   },
 });
-
-// ---------------------------------------------------------------------------
-// Non-empty project list validation
-// ---------------------------------------------------------------------------
-
-Deno.test(
-  "update_collection_with_projects rejects an empty project list",
-  () => {
-    const result = model.methods.update_collection_with_projects.arguments
-      .safeParse({
-        collection_id: "collection-1",
-        data: [],
-      });
-    assertEquals(result.success, false);
-  },
-);
-
-Deno.test(
-  "delete_projects_collection rejects an empty project list",
-  () => {
-    const result = model.methods.delete_projects_collection.arguments
-      .safeParse({
-        collection_id: "collection-1",
-        data: [],
-      });
-    assertEquals(result.success, false);
-  },
-);

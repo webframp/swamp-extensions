@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/tests";
 
@@ -25,7 +25,7 @@ const GlobalArgsSchema = z.object({
 const FindingsItemSchema = z.object({
   id: z.string(),
   type: z.enum(["findings"]).optional(),
-  cause_of_failure: z.boolean().describe(
+  cause_of_failure: z.boolean().default(false).describe(
     "Did this finding cause the test outcome to fail?",
   ),
   component_key: z.object({}).optional(),
@@ -47,7 +47,7 @@ const FindingsItemSchema = z.object({
   ),
   problems: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().regex(new RegExp("^CWE-[0-9]+$")),
       source: z.enum(["cwe"]),
     }),
     z.object({
@@ -79,7 +79,7 @@ const FindingsItemSchema = z.object({
       source: z.enum(["snyk_code_rule"]),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().regex(new RegExp("^CVE-[0-9]+-[0-9]+$")),
       source: z.enum(["cve"]),
     }),
     z.object({
@@ -104,14 +104,18 @@ const FindingsItemSchema = z.object({
       ecosystem: z.unknown(),
       epss_details: z.unknown().optional(),
       exploit_details: z.unknown(),
-      id: z.string(),
+      id: z.string().regex(
+        new RegExp("(^SNYK(-[^-]+)+[-][0-9]+$)|(^[^:]+(:[^:]+)+$)"),
+      ),
       initially_fixed_in_versions: z.array(z.string()),
-      is_disputed: z.boolean().optional(),
-      is_fixable: z.boolean(),
-      is_malicious: z.boolean(),
-      is_proprietary: z.boolean().optional(),
-      is_social_media_trending: z.boolean(),
+      insights: z.unknown().optional(),
+      is_disputed: z.boolean().optional().default(false),
+      is_fixable: z.boolean().default(false),
+      is_malicious: z.boolean().default(false),
+      is_proprietary: z.boolean().optional().default(false),
+      is_social_media_trending: z.boolean().default(false),
       modified_at: z.string(),
+      module_name: z.string().optional(),
       package_full_name: z.string().optional(),
       package_name: z.string(),
       package_namespace: z.string().optional(),
@@ -141,7 +145,7 @@ const FindingsItemSchema = z.object({
       affected_versions: z.array(z.string()).optional(),
       created_at: z.string(),
       ecosystem: z.unknown(),
-      id: z.string(),
+      id: z.string().regex(new RegExp("^snyk(:[^:]+)+$")),
       instructions: z.array(z.object({
         content: z.string(),
         license: z.string(),
@@ -156,7 +160,7 @@ const FindingsItemSchema = z.object({
       source: z.enum(["snyk_license"]),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().regex(new RegExp("^SNYK-CC-([^-]+)+[-][0-9]+$")),
       source: z.enum(["snyk_cloud_rule"]),
     }),
     z.object({
@@ -202,7 +206,7 @@ const FindingsItemSchema = z.object({
   policy_id: z.string().optional().describe("Related policy ID"),
   project_id: z.string().optional().describe("Related project ID"),
   test_id: z.string().optional().describe("Related test ID"),
-});
+}).passthrough();
 
 const ListFindingsSchema = z.object({
   items: z.array(FindingsItemSchema),
@@ -223,7 +227,7 @@ const ListFindingsSchema = z.object({
 /** Snyk Tests — on-demand package and dependency vulnerability testing */
 export const model = {
   type: "@webframp/snyk/tests",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -254,6 +258,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -293,7 +302,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -309,13 +317,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("test", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("test", id, result);
         context.logger.info("Created test {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -341,7 +346,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -352,13 +356,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "test",
-          String(args.test_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.test_id)),
+          result,
         );
         context.logger.info("Fetched test", {});
         return { dataHandles: [handle] };
@@ -385,8 +384,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["test_id"]);
         for (const [k, v] of Object.entries(args)) {

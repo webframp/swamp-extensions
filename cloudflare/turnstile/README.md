@@ -29,7 +29,7 @@ swamp model create @webframp/cloudflare/turnstile cf-turnstile \
 ## Development
 
 ```bash
-cd cloudflare/turnstile
+cd ../../cloudflare/turnstile
 deno task check
 deno task lint
 deno task fmt

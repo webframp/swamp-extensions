@@ -5,10 +5,15 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
+import {
+  ddApi,
+  ddApiPaginated,
+  ddApiPostPaginated,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/logs";
 
@@ -17,46 +22,29 @@ const EXTENSION_NAME = "@webframp/datadog/logs";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
     .describe("Datadog site"),
 });
 
-const SubmitLogSchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const SubmitLogSchema = z.object({}).passthrough();
 
 const AggregateLogsSchema = z.object({
   buckets: z.array(z.unknown()).optional().describe(
     "The list of matching buckets, one item per bucket",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const LogsGetItemSchema = z.object({
   id: z.string().describe("Unique ID of the Log."),
-  type: z.enum(["log"]).optional().describe("Type of the event."),
+  type: z.enum(["log"]).optional().default("log").describe(
+    "Type of the event.",
+  ),
   attributes: z.record(z.string(), z.unknown()).optional().describe(
     "JSON object of attributes from your log.",
   ),
@@ -76,7 +64,7 @@ const LogsGetItemSchema = z.object({
     "Array of tags associated with your log.",
   ),
   timestamp: z.string().optional().describe("Timestamp of your log."),
-});
+}).passthrough();
 
 const ListLogsGetSchema = z.object({
   items: z.array(LogsGetItemSchema),
@@ -92,7 +80,9 @@ const ListLogsGetSchema = z.object({
 
 const LogsItemSchema = z.object({
   id: z.string().describe("Unique ID of the Log."),
-  type: z.enum(["log"]).optional().describe("Type of the event."),
+  type: z.enum(["log"]).optional().default("log").describe(
+    "Type of the event.",
+  ),
   attributes: z.record(z.string(), z.unknown()).optional().describe(
     "JSON object of attributes from your log.",
   ),
@@ -112,7 +102,7 @@ const LogsItemSchema = z.object({
     "Array of tags associated with your log.",
   ),
   timestamp: z.string().optional().describe("Timestamp of your log."),
-});
+}).passthrough();
 
 const ListLogsSchema = z.object({
   items: z.array(LogsItemSchema),
@@ -133,7 +123,7 @@ const ListLogsSchema = z.object({
 /** Datadog Logs — log search, aggregation, and analytics */
 export const model = {
   type: "@webframp/datadog/logs",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -164,6 +154,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -202,7 +197,7 @@ export const model = {
         ddtags: z.string().optional().describe(
           "Log tags can be passed as query parameters with `text/plain` content type.",
         ),
-        entries: z.array(z.record(z.string(), z.unknown())).min(1).describe(
+        entries: z.array(z.record(z.string(), z.unknown())).describe(
           "Array of items to submit",
         ),
       }),
@@ -220,7 +215,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         for (const [k, v] of Object.entries(args)) {
@@ -241,13 +235,10 @@ export const model = {
           args.entries,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("submit_log", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("submit_log", id, result);
         context.logger.info("Created submit_log {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -258,18 +249,12 @@ export const model = {
         compute: z.array(z.unknown()).optional().describe(
           "The list of metrics or timeseries to compute for the retrieved buckets.",
         ),
-        filter: z.unknown().optional().describe(
-          "The search and filter query settings.",
-        ),
+        filter: z.unknown().optional(),
         group_by: z.array(z.unknown()).optional().describe(
           "The rules for the group by",
         ),
-        options: z.unknown().optional().describe(
-          "Global query options that are used during the query.",
-        ),
-        page: z.unknown().optional().describe(
-          "Paging settings for the aggregation.",
-        ),
+        options: z.unknown().optional(),
+        page: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -285,7 +270,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -306,12 +290,7 @@ export const model = {
         const handle = await context.writeResource(
           "aggregate_logs",
           id,
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed aggregate_logs", {});
         return { dataHandles: [handle] };
@@ -351,8 +330,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -408,18 +387,10 @@ export const model = {
     list_logs: {
       description: "Search logs (POST)",
       arguments: z.object({
-        filter: z.unknown().optional().describe(
-          "Search filters for the logs query (query, from, to, indexes, storage_tier).",
-        ),
-        options: z.unknown().optional().describe(
-          "Global query options that are used during the query (e.g. timezone).",
-        ),
-        page: z.unknown().optional().describe(
-          "Paging attributes for listing logs.",
-        ),
-        sort: z.unknown().optional().describe(
-          "The sort order of the logs matching the query.",
-        ),
+        filter: z.unknown().optional(),
+        options: z.unknown().optional(),
+        page: z.unknown().optional(),
+        sort: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -435,8 +406,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {

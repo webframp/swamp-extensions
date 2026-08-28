@@ -351,3 +351,108 @@ Deno.test("generateModelSource: derives args from the body, not from pathParams"
   assertEquals(src.includes("${args.name}"), true);
   assertEquals(src.includes("_args: Record<string, unknown>"), false);
 });
+
+// ---------------------------------------------------------------------------
+// Reference-inspired hardening: instance-name sanitization + output passthrough.
+// ---------------------------------------------------------------------------
+
+Deno.test("generateModelSource: get-by-id sanitizes the instance name and imports the helper", () => {
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/operations/{operation_id}",
+    operationId: "api-shield-get-operation",
+    summary: "Retrieve operation",
+    pathParams: [
+      {
+        name: "operation_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  // The instance name derives from an API-influenced arg, so it must be routed
+  // through sanitizeInstanceName, and the helper must be imported.
+  assertEquals(
+    src.includes("sanitizeInstanceName(String(args.operation_id))"),
+    true,
+  );
+  assertEquals(src.includes("import { cfApi, sanitizeInstanceName }"), true);
+});
+
+Deno.test("generateModelSource: created resource id is sanitized", () => {
+  const op = makeOp({
+    httpMethod: "post",
+    path: "/zones/{zone_id}/api_gateway/user_schemas",
+    operationId: "api-shield-create-user-schema",
+    summary: "Create user schema",
+    requestBody: { type: "object", properties: { name: { type: "string" } } },
+    // deno-lint-ignore no-explicit-any
+  } as any);
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(
+    src.includes(
+      'sanitizeInstanceName((result as { id?: string }).id ?? "created")',
+    ),
+    true,
+  );
+});
+
+Deno.test("generateModelSource: list output item schema gets .passthrough()", () => {
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/operations",
+    operationId: "api-shield-list-operations",
+    summary: "List operations",
+    isCollection: true,
+    responseSchema: {
+      type: "object",
+      properties: { id: { type: "string" }, method: { type: "string" } },
+      // deno-lint-ignore no-explicit-any
+    } as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  // The item schema is a top-level object, so it must carry .passthrough() so
+  // unknown API fields survive validation.
+  assertEquals(src.includes("}).passthrough()"), true);
+});
+
+Deno.test("generateModelSource: nullable object schema gets passthrough before nullable", () => {
+  // A nullable object response must emit z.object({...}).passthrough().nullable(),
+  // never z.object({...}).nullable().passthrough() — ZodNullable has no
+  // .passthrough() and the latter fails to type-check.
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/settings/{setting_id}",
+    operationId: "api-shield-get-setting",
+    summary: "Retrieve setting",
+    pathParams: [
+      {
+        name: "setting_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    responseSchema: {
+      type: "object",
+      nullable: true,
+      properties: { enabled: { type: "boolean" } },
+      // deno-lint-ignore no-explicit-any
+    } as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(src.includes(".passthrough().nullable()"), true);
+  assertEquals(src.includes(".nullable().passthrough()"), false);
+});

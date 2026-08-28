@@ -36,6 +36,12 @@ interface GenerateOptions {
   services?: string[];
   outputBase?: string;
   version?: string;
+  /**
+   * Release-notes body for this run. Without it, regenerating an existing
+   * extension writes the default "initial release" text, which is false for
+   * every version after the first.
+   */
+  notes?: string;
 }
 
 function parseArgs(): GenerateOptions {
@@ -56,6 +62,12 @@ function parseArgs(): GenerateOptions {
         break;
       case "--version":
         opts.version = args[++i];
+        break;
+      case "--notes":
+        opts.notes = args[++i];
+        break;
+      case "--notes-file":
+        opts.notes = Deno.readTextFileSync(args[++i]);
         break;
     }
   }
@@ -275,7 +287,12 @@ async function main() {
     const manifest = generateManifest(config, version, modelFileName);
     const denoJson = generateDenoJson();
     const readme = generateReadme(config, methods);
-    const releaseNotes = generateReleaseNotes(config, version, methods.length);
+    const releaseNotes = generateReleaseNotes(
+      config,
+      version,
+      methods.length,
+      opts.notes,
+    );
     const swampYaml = generateSwampYaml();
     const gitignore = generateGitignore();
     const apiLib = generateApiLib();

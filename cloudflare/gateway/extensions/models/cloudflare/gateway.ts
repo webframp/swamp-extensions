@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/gateway";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/gateway";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -27,31 +27,13 @@ const GetZeroTrustAccountInformationSchema = z.object({
   gateway_tag: z.unknown().optional(),
   id: z.unknown().optional(),
   provider_name: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateZeroTrustAccountSchema = z.object({
   gateway_tag: z.unknown().optional(),
   id: z.unknown().optional(),
   provider_name: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ApplicationAndApplicationTypeMappingsItemSchema = z.union([
   z.object({
@@ -86,16 +68,7 @@ const ListSchema = z.object({
   in_review_apps: z.unknown().optional(),
   unapproved_apps: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateSchema = z.object({
   approved_apps: z.unknown().optional(),
@@ -103,48 +76,21 @@ const UpdateSchema = z.object({
   in_review_apps: z.unknown().optional(),
   unapproved_apps: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAuditSshSettingsSchema = z.object({
   created_at: z.unknown().optional(),
   public_key: z.unknown().optional(),
   seed_id: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ZeroTrustRotateSshAccountSeedSchema = z.object({
   created_at: z.unknown().optional(),
   public_key: z.unknown().optional(),
   seed_id: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CategoriesItemSchema = z.object({
   beta: z.unknown().optional(),
@@ -155,7 +101,7 @@ const CategoriesItemSchema = z.object({
   subcategories: z.array(z.unknown()).optional().describe(
     "Provide all subcategories for this category.",
   ),
-});
+}).passthrough();
 
 const ListCategoriesSchema = z.object({
   items: z.array(CategoriesItemSchema),
@@ -192,7 +138,7 @@ const ZeroTrustCertificatesItemSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustCertificatesSchema = z.object({
   items: z.array(ZeroTrustCertificatesItemSchema),
@@ -229,16 +175,7 @@ const CreateZeroTrustCertificateSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetZeroTrustCertificatesZeroTrustCertificateDetailsSchema = z.object({
   binding_status: z.unknown().optional(),
@@ -263,16 +200,7 @@ const GetZeroTrustCertificatesZeroTrustCertificateDetailsSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ZeroTrustCertificatesDeactivateZeroTrustCertificateSchema = z.object({
   binding_status: z.unknown().optional(),
@@ -297,16 +225,7 @@ const ZeroTrustCertificatesDeactivateZeroTrustCertificateSchema = z.object({
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetZeroTrustAccountConfigurationSchema = z.object({
   settings: z.object({
@@ -328,16 +247,7 @@ const GetZeroTrustAccountConfigurationSchema = z.object({
   }).optional().describe("Specify account settings."),
   created_at: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchZeroTrustAccountConfigurationSchema = z.object({
   settings: z.object({
@@ -359,16 +269,7 @@ const PatchZeroTrustAccountConfigurationSchema = z.object({
   }).optional().describe("Specify account settings."),
   created_at: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DnsDestinationIpsItemSchema = z.object({
   backup_ip: z.string(),
@@ -377,7 +278,7 @@ const DnsDestinationIpsItemSchema = z.object({
     "Specify whether the pair shared across multiple accounts (shared) or available exclusively to thi...",
   ),
   primary_ip: z.string(),
-});
+}).passthrough();
 
 const ListDnsDestinationIpsSchema = z.object({
   items: z.array(DnsDestinationIpsItemSchema),
@@ -405,7 +306,7 @@ const GetEgressCidrPairsItemSchema = z.object({
   ipv6_cidr: z.string().describe(
     "Specify the IPv6 network address of this egress CIDR pair.",
   ),
-});
+}).passthrough();
 
 const GetEgressCidrPairsSchema = z.object({
   items: z.array(GetEgressCidrPairsItemSchema),
@@ -428,7 +329,7 @@ const ZeroTrustListsItemSchema = z.object({
   name: z.unknown().optional(),
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustListsSchema = z.object({
   items: z.array(ZeroTrustListsItemSchema),
@@ -451,22 +352,13 @@ const ListDetailsSchema = z.object({
   name: z.unknown().optional(),
   type: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ItemsItemSchema = z.object({
   created_at: z.unknown().optional(),
   description: z.unknown().optional(),
   value: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListItemsSchema = z.object({
   items: z.array(ItemsItemSchema),
@@ -500,7 +392,7 @@ const ZeroTrustGatewayLocationsItemSchema = z.object({
   name: z.unknown().optional(),
   networks: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustGatewayLocationsSchema = z.object({
   items: z.array(ZeroTrustGatewayLocationsItemSchema),
@@ -534,16 +426,7 @@ const CreateZeroTrustGatewayLocationSchema = z.object({
   name: z.unknown().optional(),
   networks: z.unknown().optional(),
   updated_at: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetZeroTrustGatewayLocationsZeroTrustGatewayLocationDetailsSchema = z
   .object({
@@ -566,10 +449,10 @@ const GetZeroTrustGatewayLocationsZeroTrustGatewayLocationDetailsSchema = z
     name: z.unknown().optional(),
     networks: z.unknown().optional(),
     updated_at: z.unknown().optional(),
-  });
+  }).passthrough();
 
 const GetLoggingSettingsForTheZeroTrustAccountSchema = z.object({
-  redact_pii: z.boolean().optional().describe(
+  redact_pii: z.boolean().optional().default(false).describe(
     "Indicate whether to redact personally identifiable information from activity logging (PII fields ...",
   ),
   settings_by_rule_type: z.object({
@@ -577,16 +460,7 @@ const GetLoggingSettingsForTheZeroTrustAccountSchema = z.object({
     http: z.unknown().optional(),
     l4: z.unknown().optional(),
   }).optional().describe("Configure logging settings for each rule type."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ZeroTrustGatewayOperationsItemSchema = z.object({
   created_at: z.unknown().optional(),
@@ -604,7 +478,7 @@ const ZeroTrustGatewayOperationsItemSchema = z.object({
   status: z.enum(["pending", "active", "failed", "complete"]).optional()
     .describe("The status of the operation."),
   updated_at: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustGatewayOperationsSchema = z.object({
   items: z.array(ZeroTrustGatewayOperationsItemSchema),
@@ -635,7 +509,7 @@ const GetZeroTrustGatewayOperationsZeroTrustGatewayOperationDetailsSchema = z
     status: z.enum(["pending", "active", "failed", "complete"]).optional()
       .describe("The status of the operation."),
     updated_at: z.unknown().optional(),
-  });
+  }).passthrough();
 
 const CreatePacfileSchema = z.object({
   contents: z.unknown().optional(),
@@ -646,16 +520,7 @@ const CreatePacfileSchema = z.object({
   slug: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   url: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetZeroTrustGatewayPacfilesDetailsSchema = z.object({
   contents: z.unknown().optional(),
@@ -666,16 +531,7 @@ const GetZeroTrustGatewayPacfilesDetailsSchema = z.object({
   slug: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   url: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ProxyEndpointsItemSchema = z.union([
   z.object({
@@ -771,7 +627,7 @@ const ZeroTrustGatewayRulesItemSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustGatewayRulesSchema = z.object({
   items: z.array(ZeroTrustGatewayRulesItemSchema),
@@ -807,16 +663,7 @@ const CreateZeroTrustGatewayRuleSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchMultipleZeroTrustGatewayRulesSchema = z.object({
   action: z.unknown(),
@@ -840,16 +687,7 @@ const PatchMultipleZeroTrustGatewayRulesSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ZeroTrustGatewayRulesTenantItemSchema = z.object({
   action: z.unknown(),
@@ -873,7 +711,7 @@ const ZeroTrustGatewayRulesTenantItemSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListZeroTrustGatewayRulesTenantSchema = z.object({
   items: z.array(ZeroTrustGatewayRulesTenantItemSchema),
@@ -909,16 +747,7 @@ const GetZeroTrustGatewayRulesZeroTrustGatewayRuleDetailsSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchZeroTrustGatewayRuleSchema = z.object({
   action: z.unknown(),
@@ -942,16 +771,7 @@ const PatchZeroTrustGatewayRuleSchema = z.object({
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
   {
@@ -977,7 +797,7 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
     version: z.unknown().optional(),
     warning_status: z.unknown().optional(),
   },
-);
+).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -986,7 +806,7 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
 /** Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints */
 export const model = {
   type: "@webframp/cloudflare/gateway",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1017,6 +837,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1272,33 +1097,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust account information (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_account_information",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched zero_trust_account_information", {});
         return { dataHandles: [handle] };
@@ -1321,34 +1130,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create Zero Trust account (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway`,
+        );
 
         const handle = await context.writeResource(
           "create_zero_trust_account",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_zero_trust_account", {});
         return { dataHandles: [handle] };
@@ -1371,32 +1164,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/app_types`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list application and application type mappings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/app_types`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1441,30 +1223,14 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/apps/review_status`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list applications review statuses (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/apps/review_status`,
+        );
 
-        const handle = await context.writeResource("list", "latest", {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource("list", "latest", result);
         context.logger.info("Fetched list", {});
         return { dataHandles: [handle] };
       },
@@ -1490,34 +1256,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/apps/review_status`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update applications review statuses (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/apps/review_status`,
+          body,
+        );
 
-        const handle = await context.writeResource("update", "updated", {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource("update", "updated", result);
         context.logger.info("Updated update", {});
         return { dataHandles: [handle] };
       },
@@ -1539,33 +1289,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/audit_ssh_settings`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust SSH settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/audit_ssh_settings`,
+        );
 
         const handle = await context.writeResource(
           "audit_ssh_settings",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched audit_ssh_settings", {});
         return { dataHandles: [handle] };
@@ -1590,37 +1324,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/audit_ssh_settings`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Zero Trust SSH settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/audit_ssh_settings`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "audit_ssh_settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated audit_ssh_settings", {});
         return { dataHandles: [handle] };
@@ -1643,34 +1361,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/audit_ssh_settings/rotate_seed`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to rotate Zero Trust SSH account seed (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/audit_ssh_settings/rotate_seed`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_rotate_ssh_account_seed",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed zero_trust_rotate_ssh_account_seed", {});
         return { dataHandles: [handle] };
@@ -1693,32 +1395,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/categories`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list categories (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/categories`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1758,32 +1449,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/certificates`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust certificates (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/certificates`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1831,38 +1511,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/certificates`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create Zero Trust certificate (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/certificates`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "zero_trust_certificate",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created zero_trust_certificate {id}", { id });
         return { dataHandles: [handle] };
@@ -1871,7 +1537,7 @@ export const model = {
     get_zero_trust_certificates_zero_trust_certificate_details: {
       description: "Get Zero Trust certificate details",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1887,33 +1553,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/certificates/${args.certificate_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust certificate details (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/certificates/${args.certificate_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_certificates_zero_trust_certificate_details",
-          String(args.certificate_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.certificate_id)),
+          result,
         );
         context.logger.info(
           "Fetched zero_trust_certificates_zero_trust_certificate_details",
@@ -1925,7 +1575,7 @@ export const model = {
     delete_zero_trust_certificate: {
       description: "Delete Zero Trust certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1943,20 +1593,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/gateway/certificates/${args.certificate_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete Zero Trust certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/gateway/certificates/${args.certificate_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.certificate_id,
@@ -1967,7 +1608,7 @@ export const model = {
     zero_trust_certificates_activate_zero_trust_certificate: {
       description: "Activate a Zero Trust certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1983,34 +1624,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/certificates/${args.certificate_id}/activate`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to activate a Zero Trust certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/certificates/${args.certificate_id}/activate`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_certificates_activate_zero_trust_certificate",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_certificates_activate_zero_trust_certificate",
@@ -2022,7 +1647,7 @@ export const model = {
     zero_trust_certificates_deactivate_zero_trust_certificate: {
       description: "Deactivate a Zero Trust certificate",
       arguments: z.object({
-        certificate_id: z.string().min(1, "certificate_id must not be empty"),
+        certificate_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2038,34 +1663,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/certificates/${args.certificate_id}/deactivate`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to deactivate a Zero Trust certificate (accountId=${accountId} certificate_id=${args.certificate_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/certificates/${args.certificate_id}/deactivate`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_certificates_deactivate_zero_trust_certificate",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_certificates_deactivate_zero_trust_certificate",
@@ -2091,33 +1700,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/configuration`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust account configuration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/configuration`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_account_configuration",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched zero_trust_account_configuration", {});
         return { dataHandles: [handle] };
@@ -2158,37 +1751,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/configuration`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Zero Trust account configuration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/configuration`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_account_configuration",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated zero_trust_account_configuration", {});
         return { dataHandles: [handle] };
@@ -2229,37 +1806,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/gateway/configuration`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to patch Zero Trust account configuration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/gateway/configuration`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "patch_zero_trust_account_configuration",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated patch_zero_trust_account_configuration",
@@ -2285,32 +1846,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/dns_destination_ips`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust Gateway DNS destination IPv4 address pairs (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/dns_destination_ips`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2354,32 +1904,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/egress_cidr_pairs`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get gateway egress CIDRs pairs assigned to this account (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/egress_cidr_pairs`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2425,32 +1964,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/lists`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust lists (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/lists`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2476,7 +2004,7 @@ export const model = {
     list_details: {
       description: "Get Zero Trust list details",
       arguments: z.object({
-        list_id: z.string().min(1, "list_id must not be empty"),
+        list_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2492,33 +2020,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/lists/${args.list_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust list details (accountId=${accountId} list_id=${args.list_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/lists/${args.list_id}`,
+        );
 
         const handle = await context.writeResource(
           "list_details",
-          String(args.list_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.list_id)),
+          result,
         );
         context.logger.info("Fetched list_details", {});
         return { dataHandles: [handle] };
@@ -2527,7 +2039,7 @@ export const model = {
     list_items: {
       description: "Get Zero Trust list items",
       arguments: z.object({
-        list_id: z.string().min(1, "list_id must not be empty"),
+        list_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2543,32 +2055,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["list_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/lists/${args.list_id}/items`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust list items (accountId=${accountId} list_id=${args.list_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/lists/${args.list_id}/items`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2606,32 +2107,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/locations`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust Gateway locations (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/locations`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2683,38 +2173,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/locations`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a Zero Trust Gateway location (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/locations`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "zero_trust_gateway_location",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created zero_trust_gateway_location {id}", { id });
         return { dataHandles: [handle] };
@@ -2723,7 +2199,7 @@ export const model = {
     get_zero_trust_gateway_locations_zero_trust_gateway_location_details: {
       description: "Get Zero Trust Gateway location details",
       arguments: z.object({
-        location_id: z.string().min(1, "location_id must not be empty"),
+        location_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2739,33 +2215,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/locations/${args.location_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust Gateway location details (accountId=${accountId} location_id=${args.location_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/locations/${args.location_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_locations_zero_trust_gateway_location_details",
-          String(args.location_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.location_id)),
+          result,
         );
         context.logger.info(
           "Fetched zero_trust_gateway_locations_zero_trust_gateway_location_details",
@@ -2777,7 +2237,7 @@ export const model = {
     update_zero_trust_gateway_location: {
       description: "Update a Zero Trust Gateway location",
       arguments: z.object({
-        location_id: z.string().min(1, "location_id must not be empty"),
+        location_id: z.string(),
         client_default: z.unknown().optional(),
         dns_destination_ips_id: z.unknown().optional(),
         ecs_support: z.unknown().optional(),
@@ -2800,7 +2260,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2809,32 +2268,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/locations/${args.location_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a Zero Trust Gateway location (accountId=${accountId} location_id=${args.location_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/locations/${args.location_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_location",
-          String(args.location_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.location_id)),
+          result,
         );
         context.logger.info("Updated zero_trust_gateway_location", {});
         return { dataHandles: [handle] };
@@ -2843,7 +2287,7 @@ export const model = {
     delete_zero_trust_gateway_location: {
       description: "Delete a Zero Trust Gateway location",
       arguments: z.object({
-        location_id: z.string().min(1, "location_id must not be empty"),
+        location_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2861,20 +2305,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/gateway/locations/${args.location_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a Zero Trust Gateway location (accountId=${accountId} location_id=${args.location_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/gateway/locations/${args.location_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.location_id });
         return { dataHandles: [] };
@@ -2897,33 +2332,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/logging`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get logging settings for the Zero Trust account (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/logging`,
+        );
 
         const handle = await context.writeResource(
           "logging_settings_for_the_zero_trust_account",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched logging_settings_for_the_zero_trust_account",
@@ -2960,37 +2379,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/logging`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Zero Trust account logging settings (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/logging`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "logging_settings_for_the_zero_trust_account",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated logging_settings_for_the_zero_trust_account",
@@ -3016,32 +2419,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/operations`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust Gateway operations (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/operations`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3071,7 +2463,7 @@ export const model = {
     get_zero_trust_gateway_operations_zero_trust_gateway_operation_details: {
       description: "Zero Trust Gateway operation details",
       arguments: z.object({
-        operation_id: z.string().min(1, "operation_id must not be empty"),
+        operation_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3087,33 +2479,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/operations/${args.operation_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to zero Trust Gateway operation details (accountId=${accountId} operation_id=${args.operation_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/operations/${args.operation_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_operations_zero_trust_gateway_operation_details",
-          String(args.operation_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.operation_id)),
+          result,
         );
         context.logger.info(
           "Fetched zero_trust_gateway_operations_zero_trust_gateway_operation_details",
@@ -3146,35 +2522,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/pacfiles`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a PAC file (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/pacfiles`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("pacfile", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("pacfile", id, result);
         context.logger.info("Created pacfile {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -3182,7 +2544,7 @@ export const model = {
     get_zero_trust_gateway_pacfiles_details: {
       description: "Get a PAC file",
       arguments: z.object({
-        pacfile_id: z.string().min(1, "pacfile_id must not be empty"),
+        pacfile_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3198,33 +2560,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/pacfiles/${args.pacfile_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a PAC file (accountId=${accountId} pacfile_id=${args.pacfile_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/pacfiles/${args.pacfile_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_pacfiles_details",
-          String(args.pacfile_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.pacfile_id)),
+          result,
         );
         context.logger.info("Fetched zero_trust_gateway_pacfiles_details", {});
         return { dataHandles: [handle] };
@@ -3233,7 +2579,7 @@ export const model = {
     delete: {
       description: "Delete a PAC file",
       arguments: z.object({
-        pacfile_id: z.string().min(1, "pacfile_id must not be empty"),
+        pacfile_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3251,20 +2597,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/gateway/pacfiles/${args.pacfile_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a PAC file (accountId=${accountId} pacfile_id=${args.pacfile_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/gateway/pacfiles/${args.pacfile_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.pacfile_id });
         return { dataHandles: [] };
@@ -3287,32 +2624,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/proxy_endpoints`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list proxy endpoints (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/proxy_endpoints`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3363,38 +2689,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/proxy_endpoints`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a proxy endpoint (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/proxy_endpoints`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "proxy_endpoint",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created proxy_endpoint {id}", { id });
         return { dataHandles: [handle] };
@@ -3403,10 +2715,7 @@ export const model = {
     get_zero_trust_gateway_proxy_endpoints_proxy_endpoint_details: {
       description: "Get a proxy endpoint",
       arguments: z.object({
-        proxy_endpoint_id: z.string().min(
-          1,
-          "proxy_endpoint_id must not be empty",
-        ),
+        proxy_endpoint_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3422,33 +2731,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a proxy endpoint (accountId=${accountId} proxy_endpoint_id=${args.proxy_endpoint_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_proxy_endpoints_proxy_endpoint_details",
-          String(args.proxy_endpoint_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.proxy_endpoint_id)),
+          result,
         );
         context.logger.info(
           "Fetched zero_trust_gateway_proxy_endpoints_proxy_endpoint_details",
@@ -3460,10 +2753,7 @@ export const model = {
     update_proxy_endpoint: {
       description: "Update a proxy endpoint",
       arguments: z.object({
-        proxy_endpoint_id: z.string().min(
-          1,
-          "proxy_endpoint_id must not be empty",
-        ),
+        proxy_endpoint_id: z.string(),
         ips: z.unknown().optional(),
         name: z.unknown().optional(),
       }),
@@ -3481,7 +2771,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3490,32 +2779,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a proxy endpoint (accountId=${accountId} proxy_endpoint_id=${args.proxy_endpoint_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "proxy_endpoint",
-          String(args.proxy_endpoint_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.proxy_endpoint_id)),
+          result,
         );
         context.logger.info("Updated proxy_endpoint", {});
         return { dataHandles: [handle] };
@@ -3524,10 +2798,7 @@ export const model = {
     delete_proxy_endpoint: {
       description: "Delete a proxy endpoint",
       arguments: z.object({
-        proxy_endpoint_id: z.string().min(
-          1,
-          "proxy_endpoint_id must not be empty",
-        ),
+        proxy_endpoint_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3545,20 +2816,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a proxy endpoint (accountId=${accountId} proxy_endpoint_id=${args.proxy_endpoint_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/gateway/proxy_endpoints/${args.proxy_endpoint_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.proxy_endpoint_id,
@@ -3583,32 +2845,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/rules`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust Gateway rules (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/rules`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3665,38 +2916,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/rules`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a Zero Trust Gateway rule (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/rules`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "zero_trust_gateway_rule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created zero_trust_gateway_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -3727,37 +2964,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/gateway/rules`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to patch multiple Zero Trust Gateway rules (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/gateway/rules`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "patch_multiple_zero_trust_gateway_rules",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated patch_multiple_zero_trust_gateway_rules",
@@ -3784,32 +3005,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/accounts/${accountId}/gateway/rules/tenant`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list Zero Trust Gateway rules inherited from the parent account (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/accounts/${accountId}/gateway/rules/tenant`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -3839,7 +3049,7 @@ export const model = {
     get_zero_trust_gateway_rules_zero_trust_gateway_rule_details: {
       description: "Get Zero Trust Gateway rule details.",
       arguments: z.object({
-        rule_id: z.string().min(1, "rule_id must not be empty"),
+        rule_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -3855,33 +3065,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Zero Trust Gateway rule details. (accountId=${accountId} rule_id=${args.rule_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_zero_trust_gateway_rule_details",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info(
           "Fetched zero_trust_gateway_rules_zero_trust_gateway_rule_details",
@@ -3893,7 +3087,7 @@ export const model = {
     update_zero_trust_gateway_rule: {
       description: "Update a Zero Trust Gateway rule",
       arguments: z.object({
-        rule_id: z.string().min(1, "rule_id must not be empty"),
+        rule_id: z.string(),
         action: z.unknown(),
         description: z.unknown().optional(),
         device_posture: z.unknown().optional(),
@@ -3921,7 +3115,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3930,32 +3123,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a Zero Trust Gateway rule (accountId=${accountId} rule_id=${args.rule_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated zero_trust_gateway_rule", {});
         return { dataHandles: [handle] };
@@ -3964,7 +3142,7 @@ export const model = {
     patch_zero_trust_gateway_rule: {
       description: "Patch a Zero Trust Gateway rule",
       arguments: z.object({
-        rule_id: z.string().min(1, "rule_id must not be empty"),
+        rule_id: z.string(),
         description: z.unknown().optional(),
         enabled: z.unknown().optional(),
         name: z.unknown().optional(),
@@ -3984,7 +3162,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3993,32 +3170,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to patch a Zero Trust Gateway rule (accountId=${accountId} rule_id=${args.rule_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "patch_zero_trust_gateway_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated patch_zero_trust_gateway_rule", {});
         return { dataHandles: [handle] };
@@ -4027,7 +3189,7 @@ export const model = {
     delete_zero_trust_gateway_rule: {
       description: "Delete a Zero Trust Gateway rule",
       arguments: z.object({
-        rule_id: z.string().min(1, "rule_id must not be empty"),
+        rule_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4045,20 +3207,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a Zero Trust Gateway rule (accountId=${accountId} rule_id=${args.rule_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/gateway/rules/${args.rule_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.rule_id });
         return { dataHandles: [] };
@@ -4067,7 +3220,7 @@ export const model = {
     zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule: {
       description: "Reset the expiration of a Zero Trust Gateway Rule",
       arguments: z.object({
-        rule_id: z.string().min(1, "rule_id must not be empty"),
+        rule_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -4083,34 +3236,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/gateway/rules/${args.rule_id}/reset_expiration`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to reset the expiration of a Zero Trust Gateway Rule (accountId=${accountId} rule_id=${args.rule_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/gateway/rules/${args.rule_id}/reset_expiration`,
+        );
 
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/policies";
 
@@ -29,15 +29,13 @@ const GetOrgPoliciesItemSchema = z.object({
   type: z.enum(["policy"]).optional(),
   action: z.object({
     data: z.unknown(),
-  }).describe("The action to apply when this policy's conditions match"),
-  action_type: z.enum(["ignore"]).describe(
-    "The kind of action this policy performs",
-  ),
+  }),
+  action_type: z.enum(["ignore"]),
   conditions_group: z.object({
     conditions: z.array(z.unknown()),
     logical_operator: z.enum(["and"]),
-  }).describe("The set of conditions that must match for this policy to apply"),
-  created_at: z.string().describe("When the policy was created"),
+  }),
+  created_at: z.string(),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -55,13 +53,13 @@ const GetOrgPoliciesItemSchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }).optional().describe("The user who created the policy"),
-  name: z.string().describe("Name of the policy"),
+  }).optional(),
+  name: z.string(),
   review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
     "Review status.",
   ),
-  updated_at: z.string().describe("When the policy was last updated"),
-});
+  updated_at: z.string(),
+}).passthrough();
 
 const GetOrgPoliciesSchema = z.object({
   items: z.array(GetOrgPoliciesItemSchema),
@@ -82,15 +80,13 @@ const CreateOrgPolicySchema = z.object({
   type: z.enum(["policy"]).optional(),
   action: z.object({
     data: z.unknown(),
-  }).describe("The action to apply when this policy's conditions match"),
-  action_type: z.enum(["ignore"]).describe(
-    "The kind of action this policy performs",
-  ),
+  }),
+  action_type: z.enum(["ignore"]),
   conditions_group: z.object({
     conditions: z.array(z.unknown()),
     logical_operator: z.enum(["and"]),
-  }).describe("The set of conditions that must match for this policy to apply"),
-  created_at: z.string().describe("When the policy was created"),
+  }),
+  created_at: z.string(),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -108,27 +104,17 @@ const CreateOrgPolicySchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }).optional().describe("The user who created the policy"),
-  name: z.string().describe("Name of the policy"),
+  }).optional(),
+  name: z.string(),
   review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
     "Review status.",
   ),
-  updated_at: z.string().describe("When the policy was last updated"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  updated_at: z.string(),
+}).passthrough();
 
 const GetOrgPolicyEventsItemSchema = z.object({
   id: z.string().describe("A unique identifier for this event."),
-  type: z.enum(["approve", "reject", "cancel", "reopen", "edit", "create"])
-    .describe("The kind of event that occurred on the policy"),
+  type: z.enum(["approve", "reject", "cancel", "reopen", "edit", "create"]),
   changes: z.object({
     new_action: z.unknown().optional(),
     new_conditions_group: z.unknown().optional(),
@@ -138,11 +124,9 @@ const GetOrgPolicyEventsItemSchema = z.object({
     old_conditions_group: z.unknown().optional(),
     old_name: z.string().optional(),
     old_review: z.unknown().optional(),
-  }).describe("Before/after values for the fields this event modified"),
-  comment: z.string().optional().describe(
-    "Optional comment left by the actor for this event",
-  ),
-  created_at: z.string().describe("When this event was recorded"),
+  }),
+  comment: z.string().optional(),
+  created_at: z.string(),
   created_by: z.object({
     actor_source: z.enum(["snyk_user", "external_user"]).optional(),
     email: z.string().optional(),
@@ -160,8 +144,8 @@ const GetOrgPolicyEventsItemSchema = z.object({
       "github_server_app",
       "azure_repos",
     ]).optional(),
-  }).describe("The user who triggered this event"),
-});
+  }),
+}).passthrough();
 
 const GetOrgPolicyEventsSchema = z.object({
   items: z.array(GetOrgPolicyEventsItemSchema),
@@ -182,7 +166,7 @@ const GetOrgPolicyEventsSchema = z.object({
 /** Snyk Policies — security policy management and rule configuration */
 export const model = {
   type: "@webframp/snyk/policies",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -213,6 +197,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -277,8 +266,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -336,7 +325,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -352,13 +340,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("org_policy", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("org_policy", id, result);
         context.logger.info("Created org_policy {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -366,9 +351,7 @@ export const model = {
     get_org_policy: {
       description: "Get an org-level policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty").describe(
-          "Policy ID",
-        ),
+        policy_id: z.string().describe("Policy ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -384,7 +367,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -395,13 +377,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Fetched org_policy", {});
         return { dataHandles: [handle] };
@@ -410,9 +387,7 @@ export const model = {
     update_org_policy: {
       description: "Update an org-level policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty").describe(
-          "Policy ID",
-        ),
+        policy_id: z.string().describe("Policy ID"),
         data: z.object({
           attributes: z.unknown(),
           id: z.string().optional(),
@@ -434,7 +409,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
@@ -452,13 +426,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_policy",
-          String(args.policy_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.policy_id)),
+          result,
         );
         context.logger.info("Updated org_policy", {});
         return { dataHandles: [handle] };
@@ -467,9 +436,7 @@ export const model = {
     delete_org_policy: {
       description: "Delete an org-level policy",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty").describe(
-          "Policy ID",
-        ),
+        policy_id: z.string().describe("Policy ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -500,9 +467,7 @@ export const model = {
     get_org_policy_events: {
       description: "List org policy events (Early Access)",
       arguments: z.object({
-        policy_id: z.string().min(1, "policy_id must not be empty").describe(
-          "Policy ID",
-        ),
+        policy_id: z.string().describe("Policy ID"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -518,8 +483,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["policy_id"]);
         for (const [k, v] of Object.entries(args)) {

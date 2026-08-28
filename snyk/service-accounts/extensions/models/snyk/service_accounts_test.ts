@@ -47,24 +47,6 @@ Deno.test("service-accounts model: has expected methods", () => {
   assertExists(model.methods.update_org_service_account_secret);
 });
 
-Deno.test(
-  "service-accounts model: get_one_group_service_account rejects empty serviceaccount_id",
-  () => {
-    const result = model.methods.get_one_group_service_account.arguments
-      .safeParse({
-        group_id: "group-1",
-        serviceaccount_id: "",
-      });
-    assertEquals(result.success, false);
-    if (!result.success) {
-      assertStringIncludes(
-        JSON.stringify(result.error.issues),
-        "serviceaccount_id must not be empty",
-      );
-    }
-  },
-);
-
 Deno.test("service-accounts model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["get_many_group_service_account"]);

@@ -5,12 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi } from "./_lib/api.ts";
-
-const EXTENSION_NAME = "@webframp/snyk/issues";
+import { sanitizeInstanceName, snykApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -29,7 +27,7 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -55,6 +53,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -90,9 +93,7 @@ export const model = {
     list_group_issues: {
       description: "Get issues by group ID",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "Group ID",
-        ),
+        group_id: z.string().describe("Group ID"),
         scan_item_id: z.string().optional().describe(
           "A scan item id to filter issues through their scan item relationship.",
         ),
@@ -119,6 +120,9 @@ export const model = {
         ignored: z.boolean().optional().describe(
           "Whether an issue is ignored or not.",
         ),
+        include_code_flows: z.boolean().optional().describe(
+          "A filter to include data flows for Code issues.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -134,7 +138,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["group_id"]);
@@ -156,13 +159,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_group_issues",
-          String(args.group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.group_id)),
+          result,
         );
         context.logger.info("Fetched list_group_issues", {});
         return { dataHandles: [handle] };
@@ -171,11 +169,10 @@ export const model = {
     get_group_issue_by_issue_id: {
       description: "Get an issue",
       arguments: z.object({
-        group_id: z.string().min(1, "group_id must not be empty").describe(
-          "Group ID",
-        ),
-        issue_id: z.string().min(1, "issue_id must not be empty").describe(
-          "Issue ID",
+        group_id: z.string().describe("Group ID"),
+        issue_id: z.string().describe("Issue ID"),
+        include_code_flows: z.boolean().optional().describe(
+          "A filter to include data flows for Code issues.",
         ),
       }),
       execute: async (
@@ -192,24 +189,29 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const queryParts: string[] = [];
+        const excludeKeys = new Set<string>(["group_id", "issue_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/issues/${args.issue_id}`,
+          `/groups/${args.group_id}/issues/${args.issue_id}${qs}`,
           version,
         );
 
         const handle = await context.writeResource(
           "group_issue_by_issue_id",
-          String(args.issue_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.issue_id)),
+          result,
         );
         context.logger.info("Fetched group_issue_by_issue_id", {});
         return { dataHandles: [handle] };
@@ -244,6 +246,9 @@ export const model = {
         ignored: z.boolean().optional().describe(
           "Whether an issue is ignored or not.",
         ),
+        include_code_flows: z.boolean().optional().describe(
+          "A filter to include data flows for Code issues.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -259,7 +264,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>([]);
@@ -282,12 +286,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_org_issues",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_org_issues", {});
         return { dataHandles: [handle] };
@@ -296,8 +295,9 @@ export const model = {
     get_org_issue_by_issue_id: {
       description: "Get an issue",
       arguments: z.object({
-        issue_id: z.string().min(1, "issue_id must not be empty").describe(
-          "Issue ID",
+        issue_id: z.string().describe("Issue ID"),
+        include_code_flows: z.boolean().optional().describe(
+          "A filter to include data flows for Code issues.",
         ),
       }),
       execute: async (
@@ -314,24 +314,29 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const queryParts: string[] = [];
+        const excludeKeys = new Set<string>(["issue_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/issues/${args.issue_id}`,
+          `/orgs/${orgId}/issues/${args.issue_id}${qs}`,
           version,
         );
 
         const handle = await context.writeResource(
           "org_issue_by_issue_id",
-          String(args.issue_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.issue_id)),
+          result,
         );
         context.logger.info("Fetched org_issue_by_issue_id", {});
         return { dataHandles: [handle] };

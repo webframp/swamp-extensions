@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/magic-transit";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/magic-transit";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -49,7 +49,7 @@ const ListdnsprotectionrulesforaccountItemSchema = z.object({
   scope: z.string().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-});
+}).passthrough();
 
 const ListdnsprotectionrulesforaccountSchema = z.object({
   items: z.array(ListdnsprotectionrulesforaccountItemSchema),
@@ -89,16 +89,7 @@ const CreatednsprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetdnsprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -126,16 +117,7 @@ const GetdnsprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdatednsprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -163,16 +145,7 @@ const UpdatednsprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListallowlistprefixesforaccountItemSchema = z.object({
   comment: z.string().describe(
@@ -189,7 +162,7 @@ const ListallowlistprefixesforaccountItemSchema = z.object({
     "The last modification timestamp of the allowlist prefix.",
   ),
   prefix: z.string().describe("The allowlist prefix in CIDR format."),
-});
+}).passthrough();
 
 const ListallowlistprefixesforaccountSchema = z.object({
   items: z.array(ListallowlistprefixesforaccountItemSchema),
@@ -218,16 +191,7 @@ const CreateallowlistedprefixSchema = z.object({
     "The last modification timestamp of the allowlist prefix.",
   ),
   prefix: z.string().describe("The allowlist prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetallowlistprefixSchema = z.object({
   comment: z.string().describe(
@@ -244,16 +208,7 @@ const GetallowlistprefixSchema = z.object({
     "The last modification timestamp of the allowlist prefix.",
   ),
   prefix: z.string().describe("The allowlist prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateallowlistprefixSchema = z.object({
   comment: z.string().describe(
@@ -270,16 +225,7 @@ const UpdateallowlistprefixSchema = z.object({
     "The last modification timestamp of the allowlist prefix.",
   ),
   prefix: z.string().describe("The allowlist prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListprefixesforaccountItemSchema = z.object({
   comment: z.string().describe("A comment describing the prefix."),
@@ -292,7 +238,7 @@ const ListprefixesforaccountItemSchema = z.object({
     "The last modification timestamp of the prefix.",
   ),
   prefix: z.string().describe("The prefix in CIDR format."),
-});
+}).passthrough();
 
 const ListprefixesforaccountSchema = z.object({
   items: z.array(ListprefixesforaccountItemSchema),
@@ -317,16 +263,7 @@ const CreateprefixSchema = z.object({
     "The last modification timestamp of the prefix.",
   ),
   prefix: z.string().describe("The prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BulkcreateprefixesSchema = z.object({
   comment: z.string().describe("A comment describing the prefix."),
@@ -339,16 +276,7 @@ const BulkcreateprefixesSchema = z.object({
     "The last modification timestamp of the prefix.",
   ),
   prefix: z.string().describe("The prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetprefixSchema = z.object({
   comment: z.string().describe("A comment describing the prefix."),
@@ -361,16 +289,7 @@ const GetprefixSchema = z.object({
     "The last modification timestamp of the prefix.",
   ),
   prefix: z.string().describe("The prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateprefixSchema = z.object({
   comment: z.string().describe("A comment describing the prefix."),
@@ -383,16 +302,7 @@ const UpdateprefixSchema = z.object({
     "The last modification timestamp of the prefix.",
   ),
   prefix: z.string().describe("The prefix in CIDR format."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListsynprotectionfiltersforaccountItemSchema = z.object({
   created_on: z.string().describe(
@@ -406,7 +316,7 @@ const ListsynprotectionfiltersforaccountItemSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-});
+}).passthrough();
 
 const ListsynprotectionfiltersforaccountSchema = z.object({
   items: z.array(ListsynprotectionfiltersforaccountItemSchema),
@@ -432,16 +342,7 @@ const CreatesynprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetsynprotectionfilterSchema = z.object({
   created_on: z.string().describe(
@@ -455,16 +356,7 @@ const GetsynprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdatesynprotectionfilterSchema = z.object({
   created_on: z.string().describe(
@@ -478,16 +370,7 @@ const UpdatesynprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListsynprotectionrulesforaccountItemSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -515,7 +398,7 @@ const ListsynprotectionrulesforaccountItemSchema = z.object({
   scope: z.string().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-});
+}).passthrough();
 
 const ListsynprotectionrulesforaccountSchema = z.object({
   items: z.array(ListsynprotectionrulesforaccountItemSchema),
@@ -555,16 +438,7 @@ const CreatesynprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetsynprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -592,16 +466,7 @@ const GetsynprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdatesynprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -629,16 +494,7 @@ const UpdatesynprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListtcpflowprotectionfiltersforaccountItemSchema = z.object({
   created_on: z.string().describe(
@@ -652,7 +508,7 @@ const ListtcpflowprotectionfiltersforaccountItemSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-});
+}).passthrough();
 
 const ListtcpflowprotectionfiltersforaccountSchema = z.object({
   items: z.array(ListtcpflowprotectionfiltersforaccountItemSchema),
@@ -678,16 +534,7 @@ const CreatetcpflowprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GettcpflowprotectionfilterSchema = z.object({
   created_on: z.string().describe(
@@ -701,16 +548,7 @@ const GettcpflowprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdatetcpflowprotectionfilterSchema = z.object({
   created_on: z.string().describe(
@@ -724,16 +562,7 @@ const UpdatetcpflowprotectionfilterSchema = z.object({
   modified_on: z.string().describe(
     "The last modification timestamp of the expression filter.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListtcpflowprotectionrulesforaccountItemSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -758,7 +587,7 @@ const ListtcpflowprotectionrulesforaccountItemSchema = z.object({
   scope: z.string().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-});
+}).passthrough();
 
 const ListtcpflowprotectionrulesforaccountSchema = z.object({
   items: z.array(ListtcpflowprotectionrulesforaccountItemSchema),
@@ -795,16 +624,7 @@ const CreatetcpflowprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GettcpflowprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -829,16 +649,7 @@ const GettcpflowprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdatetcpflowprotectionruleSchema = z.object({
   burst_sensitivity: z.string().describe(
@@ -863,44 +674,34 @@ const UpdatetcpflowprotectionruleSchema = z.object({
   scope: z.string().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetprotectionstatusSchema = z.object({
   enabled: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateprotectionstatusSchema = z.object({
   enabled: z.boolean(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const AppsItemSchema = z.union([z.unknown(), z.unknown()]);
+const AppsItemSchema = z.union([
+  z.object({
+    account_app_id: z.unknown(),
+    hostnames: z.unknown().optional(),
+    ip_subnets: z.unknown().optional(),
+    name: z.unknown().optional(),
+    source_subnets: z.unknown().optional(),
+    type: z.unknown().optional(),
+  }),
+  z.object({
+    hostnames: z.unknown().optional(),
+    ip_subnets: z.unknown().optional(),
+    managed_app_id: z.unknown(),
+    name: z.unknown().optional(),
+    source_subnets: z.unknown().optional(),
+    type: z.unknown().optional(),
+  }),
+]);
 
 const ListAppsSchema = z.object({
   items: z.array(AppsItemSchema),
@@ -921,16 +722,7 @@ const CreateMagicAccountAppsAddAppSchema = z.object({
   name: z.unknown().optional(),
   source_subnets: z.unknown().optional(),
   type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAppSchema = z.object({
   account_app_id: z.unknown(),
@@ -939,16 +731,7 @@ const UpdateAppSchema = z.object({
   name: z.unknown().optional(),
   source_subnets: z.unknown().optional(),
   type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchAppSchema = z.object({
   account_app_id: z.unknown(),
@@ -957,20 +740,11 @@ const PatchAppSchema = z.object({
   name: z.unknown().optional(),
   source_subnets: z.unknown().optional(),
   type: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const FilterProfilesItemSchema = z.object({
   created_on: z.string().optional(),
-  description: z.string().max(1024).describe(
+  description: z.string().max(1024).default("").describe(
     "Description of the filter profile",
   ),
   id: z.unknown(),
@@ -982,7 +756,7 @@ const FilterProfilesItemSchema = z.object({
   targets: z.array(z.string()).describe(
     "List of CIDR prefixes. Each entry may carry an optional suffix that specifies which prefix length...",
   ),
-});
+}).passthrough();
 
 const ListFilterProfilesSchema = z.object({
   items: z.array(FilterProfilesItemSchema),
@@ -998,7 +772,7 @@ const ListFilterProfilesSchema = z.object({
 
 const CreateFilterProfileSchema = z.object({
   created_on: z.string().optional(),
-  description: z.string().max(1024).describe(
+  description: z.string().max(1024).default("").describe(
     "Description of the filter profile",
   ),
   id: z.unknown(),
@@ -1010,16 +784,7 @@ const CreateFilterProfileSchema = z.object({
   targets: z.array(z.string()).describe(
     "List of CIDR prefixes. Each entry may carry an optional suffix that specifies which prefix length...",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSettingsSchema = z.object({
   cloudflare_asn: z.number().int().min(1).describe(
@@ -1027,16 +792,7 @@ const GetSettingsSchema = z.object({
   ),
   modified_on: z.string().optional(),
   redistribute: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const Cf1SitesItemSchema = z.object({
   created_on: z.string().optional(),
@@ -1049,7 +805,7 @@ const Cf1SitesItemSchema = z.object({
   name: z.string().describe(
     "A human-provided name describing the CF1 Site that should be unique within the account.",
   ),
-});
+}).passthrough();
 
 const ListCf1SitesSchema = z.object({
   items: z.array(Cf1SitesItemSchema),
@@ -1074,16 +830,7 @@ const GetCf1SiteSchema = z.object({
   name: z.string().describe(
     "A human-provided name describing the CF1 Site that should be unique within the account.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const Cf1SiteRampsItemSchema = z.union([
   z.unknown(),
@@ -1115,57 +862,21 @@ const GetCf1SiteRampSchema = z.union([
 
 const ListInterconnectsSchema = z.object({
   interconnects: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateMultipleInterconnectsSchema = z.object({
   modified: z.boolean().optional(),
   modified_interconnects: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListInterconnectDetailsSchema = z.object({
   interconnect: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateInterconnectSchema = z.object({
   modified: z.boolean().optional(),
   modified_interconnect: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListItemSchema = z.object({
   description: z.string(),
@@ -1180,7 +891,7 @@ const ListItemSchema = z.object({
   name: z.string(),
   policy: z.string(),
   update_mode: z.unknown(),
-});
+}).passthrough();
 
 const ListSchema = z.object({
   items: z.array(ListItemSchema),
@@ -1207,16 +918,7 @@ const CreateSchema = z.object({
   name: z.string(),
   policy: z.string(),
   update_mode: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCatalogSyncsReadSchema = z.object({
   description: z.string(),
@@ -1231,16 +933,7 @@ const GetCatalogSyncsReadSchema = z.object({
   name: z.string(),
   policy: z.string(),
   update_mode: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateSchema = z.object({
   description: z.string(),
@@ -1255,16 +948,7 @@ const UpdateSchema = z.object({
   name: z.string(),
   policy: z.string(),
   update_mode: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchSchema = z.object({
   description: z.string(),
@@ -1279,31 +963,13 @@ const PatchSchema = z.object({
   name: z.string(),
   policy: z.string(),
   update_mode: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CatalogSyncsRefreshSchema = z.string();
 
 const GetOnrampsMwanAddrSpaceReadSchema = z.object({
   prefixes: z.array(z.unknown()),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetOnrampsReadSchema = z.object({
   attached_hubs: z.array(z.unknown()).optional(),
@@ -1337,16 +1003,7 @@ const GetOnrampsReadSchema = z.object({
   vpcs_by_id_unavailable: z.array(z.unknown()).optional().describe(
     "The list of vpc IDs for which resource details failed to generate.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetProvidersReadSchema = z.object({
   aws_arn: z.string().optional(),
@@ -1363,21 +1020,24 @@ const GetProvidersReadSchema = z.object({
   state: z.unknown(),
   state_v2: z.unknown(),
   status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetProvidersInitialSetupSchema = z.union([
-  z.unknown(),
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    aws_trust_policy: z.string(),
+    item_type: z.string(),
+  }),
+  z.object({
+    azure_consent_url: z.string(),
+    integration_identity_tag: z.string(),
+    item_type: z.string(),
+    tag_cli_command: z.string(),
+  }),
+  z.object({
+    integration_identity_tag: z.string(),
+    item_type: z.string(),
+    tag_cli_command: z.string(),
+  }),
 ]);
 
 const CreateResourcesCatalogPolicyPreviewSchema = z.string();
@@ -1404,16 +1064,7 @@ const GetResourcesCatalogReadSchema = z.object({
   tags: z.record(z.string(), z.string()),
   updated_at: z.string(),
   url: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSchema = z.object({
   activated: z.boolean(),
@@ -1432,19 +1083,10 @@ const GetSchema = z.object({
   last_updated: z.string(),
   license_key: z.string().optional(),
   notes: z.string(),
-  primary: z.boolean(),
+  primary: z.boolean().default(true),
   site_id: z.string().optional(),
   timezone: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateMconnConnectorsEditSchema = z.object({
   activated: z.boolean(),
@@ -1463,32 +1105,14 @@ const UpdateMconnConnectorsEditSchema = z.object({
   last_updated: z.string(),
   license_key: z.string().optional(),
   notes: z.string(),
-  primary: z.boolean(),
+  primary: z.boolean().default(true),
   site_id: z.string().optional(),
   timezone: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListGreTunnelsSchema = z.object({
   gre_tunnels: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateGreTunnelsSchema = z.object({
   automatic_return_routing: z.unknown().optional(),
@@ -1506,70 +1130,25 @@ const CreateGreTunnelsSchema = z.object({
   mtu: z.unknown().optional(),
   name: z.unknown(),
   ttl: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateMultipleGreTunnelsSchema = z.object({
   modified: z.boolean().optional(),
   modified_gre_tunnels: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListGreTunnelDetailsSchema = z.object({
   gre_tunnel: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateGreTunnelSchema = z.object({
   modified: z.boolean().optional(),
   modified_gre_tunnel: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListIpsecTunnelsSchema = z.object({
   ipsec_tunnels: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateIpsecTunnelsSchema = z.object({
   allow_null_cipher: z.unknown().optional(),
@@ -1589,30 +1168,12 @@ const CreateIpsecTunnelsSchema = z.object({
   name: z.unknown(),
   psk_metadata: z.unknown().optional(),
   replay_protection: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateMultipleIpsecTunnelsSchema = z.object({
   modified: z.boolean().optional(),
   modified_ipsec_tunnels: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateMagicIpsecTunnelsSetPreSharedKeysForIpsecTunnelsSchema = z.object({
   successfully_applied_psks: z.record(z.string(), z.unknown()).optional()
@@ -1620,71 +1181,26 @@ const CreateMagicIpsecTunnelsSetPreSharedKeysForIpsecTunnelsSchema = z.object({
   unapplied_psks: z.record(z.string(), z.string()).optional().describe(
     "Map of tunnel IDs to failure reasons for PSKs that could not be applied.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListIpsecTunnelDetailsSchema = z.object({
   ipsec_tunnel: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateIpsecTunnelSchema = z.object({
   modified: z.boolean().optional(),
   modified_ipsec_tunnel: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const MagicIpsecTunnelsGeneratePreSharedKeyPskForIpsecTunnelsSchema = z.object({
   ipsec_tunnel_id: z.unknown().optional(),
   psk: z.unknown().optional(),
   psk_metadata: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListRedundancyGroupsSchema = z.object({
   redundancy_groups: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateRedundancyGroupSchema = z.object({
   created_on: z.string().optional(),
@@ -1692,29 +1208,11 @@ const CreateRedundancyGroupSchema = z.object({
   id: z.string().optional().describe("Redundancy group identifier"),
   modified_on: z.string().optional(),
   name: z.string().optional().describe("Human-readable name"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListRoutesSchema = z.object({
   routes: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateRoutesSchema = z.object({
   created_on: z.unknown().optional(),
@@ -1726,57 +1224,21 @@ const CreateRoutesSchema = z.object({
   priority: z.unknown(),
   scope: z.unknown().optional(),
   weight: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateManyRoutesSchema = z.object({
   modified: z.boolean().optional(),
   modified_routes: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicStaticRoutesRouteDetailsSchema = z.object({
   route: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateRouteSchema = z.object({
   modified: z.boolean().optional(),
   modified_route: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const SitesItemSchema = z.object({
   connector_id: z.unknown().optional(),
@@ -1788,7 +1250,7 @@ const SitesItemSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   secondary_connector_id: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListSitesSchema = z.object({
   items: z.array(SitesItemSchema),
@@ -1812,16 +1274,7 @@ const CreateSiteSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   secondary_connector_id: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicSitesSiteDetailsSchema = z.object({
   connector_id: z.unknown().optional(),
@@ -1833,16 +1286,7 @@ const GetMagicSitesSiteDetailsSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   secondary_connector_id: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchSiteSchema = z.object({
   connector_id: z.unknown().optional(),
@@ -1854,16 +1298,7 @@ const PatchSiteSchema = z.object({
   location: z.unknown().optional(),
   name: z.unknown().optional(),
   secondary_connector_id: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AclsItemSchema = z.object({
   description: z.string().optional().describe("Description for the ACL."),
@@ -1874,7 +1309,7 @@ const AclsItemSchema = z.object({
   name: z.string().optional().describe("The name of the ACL."),
   protocols: z.array(z.enum(["tcp", "udp", "icmp"])).optional(),
   unidirectional: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListAclsSchema = z.object({
   items: z.array(AclsItemSchema),
@@ -1897,16 +1332,7 @@ const CreateAclSchema = z.object({
   name: z.string().optional().describe("The name of the ACL."),
   protocols: z.array(z.enum(["tcp", "udp", "icmp"])).optional(),
   unidirectional: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicSiteAclsAclDetailsSchema = z.object({
   description: z.string().optional().describe("Description for the ACL."),
@@ -1917,16 +1343,7 @@ const GetMagicSiteAclsAclDetailsSchema = z.object({
   name: z.string().optional().describe("The name of the ACL."),
   protocols: z.array(z.enum(["tcp", "udp", "icmp"])).optional(),
   unidirectional: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchAclSchema = z.object({
   description: z.string().optional().describe("Description for the ACL."),
@@ -1937,16 +1354,7 @@ const PatchAclSchema = z.object({
   name: z.string().optional().describe("The name of the ACL."),
   protocols: z.array(z.enum(["tcp", "udp", "icmp"])).optional(),
   unidirectional: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AppConfigsItemSchema = z.object({
   breakout: z.unknown().optional(),
@@ -1954,7 +1362,7 @@ const AppConfigsItemSchema = z.object({
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
   site_id: z.unknown(),
-});
+}).passthrough();
 
 const ListAppConfigsSchema = z.object({
   items: z.array(AppConfigsItemSchema),
@@ -1974,16 +1382,7 @@ const CreateMagicSiteAppConfigsAddAppConfigSchema = z.object({
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
   site_id: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateAppConfigSchema = z.object({
   breakout: z.unknown().optional(),
@@ -1991,16 +1390,7 @@ const UpdateAppConfigSchema = z.object({
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
   site_id: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchAppConfigSchema = z.object({
   breakout: z.unknown().optional(),
@@ -2008,16 +1398,7 @@ const PatchAppConfigSchema = z.object({
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
   site_id: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const LansItemSchema = z.object({
   bond_id: z.unknown().optional(),
@@ -2038,7 +1419,7 @@ const LansItemSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListLansSchema = z.object({
   items: z.array(LansItemSchema),
@@ -2071,16 +1452,7 @@ const CreateLanSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicSiteLansLanDetailsSchema = z.object({
   bond_id: z.unknown().optional(),
@@ -2101,16 +1473,7 @@ const GetMagicSiteLansLanDetailsSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchLanSchema = z.object({
   bond_id: z.unknown().optional(),
@@ -2131,16 +1494,7 @@ const PatchLanSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicSiteNetflowConfigDetailsSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
@@ -2156,16 +1510,7 @@ const GetMagicSiteNetflowConfigDetailsSchema = z.object({
   sampling_rate: z.number().int().min(1).max(10000).optional().describe(
     "Sampling rate for NetFlow records (1 = every packet, 1000 = 1 in 1000 packets). Defaults to 1.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateNetflowConfigSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
@@ -2181,16 +1526,7 @@ const CreateNetflowConfigSchema = z.object({
   sampling_rate: z.number().int().min(1).max(10000).optional().describe(
     "Sampling rate for NetFlow records (1 = every packet, 1000 = 1 in 1000 packets). Defaults to 1.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchNetflowConfigSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
@@ -2206,21 +1542,13 @@ const PatchNetflowConfigSchema = z.object({
   sampling_rate: z.number().int().min(1).max(10000).optional().describe(
     "Sampling rate for NetFlow records (1 = every packet, 1000 = 1 in 1000 packets). Defaults to 1.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const WansItemSchema = z.object({
-  health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
-    "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
-  ),
+  health_check_rate: z.enum(["low", "mid", "high"]).optional().default("mid")
+    .describe(
+      "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
+    ),
   id: z.unknown().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
@@ -2230,7 +1558,7 @@ const WansItemSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListWansSchema = z.object({
   items: z.array(WansItemSchema),
@@ -2245,9 +1573,10 @@ const ListWansSchema = z.object({
 });
 
 const CreateWanSchema = z.object({
-  health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
-    "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
-  ),
+  health_check_rate: z.enum(["low", "mid", "high"]).optional().default("mid")
+    .describe(
+      "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
+    ),
   id: z.unknown().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
@@ -2257,21 +1586,13 @@ const CreateWanSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMagicSiteWansWanDetailsSchema = z.object({
-  health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
-    "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
-  ),
+  health_check_rate: z.enum(["low", "mid", "high"]).optional().default("mid")
+    .describe(
+      "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
+    ),
   id: z.unknown().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
@@ -2281,21 +1602,13 @@ const GetMagicSiteWansWanDetailsSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchWanSchema = z.object({
-  health_check_rate: z.enum(["low", "mid", "high"]).optional().describe(
-    "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
-  ),
+  health_check_rate: z.enum(["low", "mid", "high"]).optional().default("mid")
+    .describe(
+      "Magic WAN health check rate for tunnels created on this link. The default value is `mid`.",
+    ),
   id: z.unknown().optional(),
   name: z.string().optional(),
   physport: z.unknown().optional(),
@@ -2305,16 +1618,7 @@ const PatchWanSchema = z.object({
   site_id: z.unknown().optional(),
   static_addressing: z.unknown().optional(),
   vlan_tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -2323,7 +1627,7 @@ const PatchWanSchema = z.object({
 /** Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec */
 export const model = {
   type: "@webframp/cloudflare/magic-transit",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -2354,6 +1658,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3004,7 +2313,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3028,8 +2337,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3105,7 +2414,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -3117,16 +2425,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "creatednsprotectionrule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created creatednsprotectionrule {id}", { id });
         return { dataHandles: [handle] };
@@ -3150,6 +2455,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3179,7 +2485,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -3189,13 +2494,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getdnsprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched getdnsprotectionrule", {});
         return { dataHandles: [handle] };
@@ -3234,7 +2534,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3252,13 +2551,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatednsprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated updatednsprotectionrule", {});
         return { dataHandles: [handle] };
@@ -3286,6 +2580,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3302,7 +2597,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3326,8 +2621,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3394,7 +2689,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -3406,16 +2700,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createallowlistedprefix",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created createallowlistedprefix {id}", { id });
         return { dataHandles: [handle] };
@@ -3439,6 +2730,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3468,7 +2760,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -3478,13 +2769,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getallowlistprefix",
-          String(args.prefix_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.prefix_id)),
+          result,
         );
         context.logger.info("Fetched getallowlistprefix", {});
         return { dataHandles: [handle] };
@@ -3517,7 +2803,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3535,13 +2820,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updateallowlistprefix",
-          String(args.prefix_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.prefix_id)),
+          result,
         );
         context.logger.info("Updated updateallowlistprefix", {});
         return { dataHandles: [handle] };
@@ -3569,6 +2849,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3585,7 +2866,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3609,8 +2890,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3673,7 +2954,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -3685,13 +2965,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("createprefix", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("createprefix", id, result);
         context.logger.info("Created createprefix {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -3714,6 +2991,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3726,7 +3004,9 @@ export const model = {
     },
     bulkcreateprefixes: {
       description: "Create multiple prefixes.",
-      arguments: z.object({}),
+      arguments: z.object({
+        items: z.array(z.unknown()),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -3741,25 +3021,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/magic/advanced_tcp_protection/configs/prefixes/bulk`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
           "bulkcreateprefixes",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed bulkcreateprefixes", {});
         return { dataHandles: [handle] };
@@ -3784,7 +3060,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -3794,13 +3069,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getprefix",
-          String(args.prefix_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.prefix_id)),
+          result,
         );
         context.logger.info("Fetched getprefix", {});
         return { dataHandles: [handle] };
@@ -3831,7 +3101,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -3849,13 +3118,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updateprefix",
-          String(args.prefix_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.prefix_id)),
+          result,
         );
         context.logger.info("Updated updateprefix", {});
         return { dataHandles: [handle] };
@@ -3881,6 +3145,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -3900,7 +3165,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -3924,8 +3189,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3988,7 +3253,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4000,16 +3264,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createsynprotectionfilter",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created createsynprotectionfilter {id}", { id });
         return { dataHandles: [handle] };
@@ -4033,6 +3294,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4062,7 +3324,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4072,13 +3333,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getsynprotectionfilter",
-          String(args.filter_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.filter_id)),
+          result,
         );
         context.logger.info("Fetched getsynprotectionfilter", {});
         return { dataHandles: [handle] };
@@ -4109,7 +3365,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4127,13 +3382,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatesynprotectionfilter",
-          String(args.filter_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.filter_id)),
+          result,
         );
         context.logger.info("Updated updatesynprotectionfilter", {});
         return { dataHandles: [handle] };
@@ -4159,6 +3409,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4175,7 +3426,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -4199,8 +3450,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -4276,7 +3527,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4288,16 +3538,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createsynprotectionrule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created createsynprotectionrule {id}", { id });
         return { dataHandles: [handle] };
@@ -4321,6 +3568,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4350,7 +3598,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4360,13 +3607,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "getsynprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched getsynprotectionrule", {});
         return { dataHandles: [handle] };
@@ -4405,7 +3647,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4423,13 +3664,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatesynprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated updatesynprotectionrule", {});
         return { dataHandles: [handle] };
@@ -4457,6 +3693,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4476,7 +3713,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -4500,8 +3737,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -4564,7 +3801,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4576,16 +3812,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createtcpflowprotectionfilter",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created createtcpflowprotectionfilter {id}", {
           id,
@@ -4611,6 +3844,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4640,7 +3874,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4650,13 +3883,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gettcpflowprotectionfilter",
-          String(args.filter_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.filter_id)),
+          result,
         );
         context.logger.info("Fetched gettcpflowprotectionfilter", {});
         return { dataHandles: [handle] };
@@ -4687,7 +3915,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4705,13 +3932,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatetcpflowprotectionfilter",
-          String(args.filter_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.filter_id)),
+          result,
         );
         context.logger.info("Updated updatetcpflowprotectionfilter", {});
         return { dataHandles: [handle] };
@@ -4737,6 +3959,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4753,7 +3976,7 @@ export const model = {
         page: z.number().optional().describe(
           "The page number for pagination. Defaults to 1.",
         ),
-        per_page: z.number().int().min(10).max(1000).optional().describe(
+        per_page: z.number().optional().describe(
           "The number of items per page. Must be between 10 and 1000. Defaults to 25.",
         ),
         order: z.string().optional().describe(
@@ -4777,8 +4000,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -4852,7 +4075,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -4864,16 +4086,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "createtcpflowprotectionrule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created createtcpflowprotectionrule {id}", { id });
         return { dataHandles: [handle] };
@@ -4897,6 +4116,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -4928,7 +4148,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -4938,13 +4157,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gettcpflowprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched gettcpflowprotectionrule", {});
         return { dataHandles: [handle] };
@@ -4980,7 +4194,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -4998,13 +4211,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "updatetcpflowprotectionrule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated updatetcpflowprotectionrule", {});
         return { dataHandles: [handle] };
@@ -5032,6 +4240,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5059,7 +4268,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5070,12 +4278,7 @@ export const model = {
         const handle = await context.writeResource(
           "getprotectionstatus",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched getprotectionstatus", {});
         return { dataHandles: [handle] };
@@ -5100,7 +4303,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -5115,12 +4317,7 @@ export const model = {
         const handle = await context.writeResource(
           "updateprotectionstatus",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated updateprotectionstatus", {});
         return { dataHandles: [handle] };
@@ -5143,8 +4340,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -5201,7 +4398,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -5213,16 +4409,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "magic_account_apps_add_app",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created magic_account_apps_add_app {id}", { id });
         return { dataHandles: [handle] };
@@ -5252,7 +4445,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5270,13 +4462,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "app",
-          String(args.account_app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.account_app_id)),
+          result,
         );
         context.logger.info("Updated app", {});
         return { dataHandles: [handle] };
@@ -5306,7 +4493,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5324,13 +4510,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_app",
-          String(args.account_app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.account_app_id)),
+          result,
         );
         context.logger.info("Updated patch_app", {});
         return { dataHandles: [handle] };
@@ -5356,6 +4537,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5385,8 +4567,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -5450,7 +4632,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -5462,16 +4643,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "filter_profile",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created filter_profile {id}", { id });
         return { dataHandles: [handle] };
@@ -5480,9 +4658,7 @@ export const model = {
     get_filter_profile: {
       description: "Get BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string().min(1).describe(
-          "CNI (connector network interconnect) profile identifier.",
-        ),
+        profile_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5498,7 +4674,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5508,13 +4683,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "filter_profile",
-          String(args.profile_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.profile_id)),
+          result,
         );
         context.logger.info("Fetched filter_profile", {});
         return { dataHandles: [handle] };
@@ -5523,9 +4693,7 @@ export const model = {
     update_filter_profile: {
       description: "Update BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string().min(1).describe(
-          "CNI (connector network interconnect) profile identifier.",
-        ),
+        profile_id: z.string(),
         description: z.string().max(1024).optional().describe(
           "Description of the filter profile",
         ),
@@ -5551,7 +4719,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5569,13 +4736,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "filter_profile",
-          String(args.profile_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.profile_id)),
+          result,
         );
         context.logger.info("Updated filter_profile", {});
         return { dataHandles: [handle] };
@@ -5584,9 +4746,7 @@ export const model = {
     delete_filter_profile: {
       description: "Delete BGP Filter Profile",
       arguments: z.object({
-        profile_id: z.string().min(1).describe(
-          "CNI (connector network interconnect) profile identifier.",
-        ),
+        profile_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5603,6 +4763,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5630,7 +4791,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5641,12 +4801,7 @@ export const model = {
         const handle = await context.writeResource(
           "settings",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched settings", {});
         return { dataHandles: [handle] };
@@ -5674,7 +4829,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -5689,12 +4843,7 @@ export const model = {
         const handle = await context.writeResource(
           "settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated settings", {});
         return { dataHandles: [handle] };
@@ -5717,8 +4866,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -5756,7 +4905,9 @@ export const model = {
     },
     create_cf1_sites: {
       description: "Create CF1 Sites",
-      arguments: z.object({}),
+      arguments: z.object({
+        items: z.array(z.unknown()),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -5771,25 +4922,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/accounts/${accountId}/magic/cf1_sites`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
           "create_cf1_sites",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_cf1_sites", {});
         return { dataHandles: [handle] };
@@ -5814,7 +4961,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -5824,13 +4970,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cf1_site",
-          String(args.cf1_site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.cf1_site_id)),
+          result,
         );
         context.logger.info("Fetched cf1_site", {});
         return { dataHandles: [handle] };
@@ -5862,7 +5003,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -5880,13 +5020,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cf1_site",
-          String(args.cf1_site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.cf1_site_id)),
+          result,
         );
         context.logger.info("Updated cf1_site", {});
         return { dataHandles: [handle] };
@@ -5912,6 +5047,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -5941,8 +5077,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["cf1_site_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -5982,6 +5118,7 @@ export const model = {
       description: "Create CF1 Site Ramps",
       arguments: z.object({
         cf1_site_id: z.string(),
+        items: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -5997,14 +5134,9 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["cf1_site_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.items;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6016,12 +5148,7 @@ export const model = {
         const handle = await context.writeResource(
           "create_cf1_site_ramps",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed create_cf1_site_ramps", {});
         return { dataHandles: [handle] };
@@ -6047,7 +5174,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6057,13 +5183,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cf1_site_ramp",
-          String(args.ramp_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ramp_id)),
+          result,
         );
         context.logger.info("Fetched cf1_site_ramp", {});
         return { dataHandles: [handle] };
@@ -6090,6 +5211,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -6117,7 +5239,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6128,12 +5249,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_interconnects",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_interconnects", {});
         return { dataHandles: [handle] };
@@ -6156,7 +5272,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6171,12 +5286,7 @@ export const model = {
         const handle = await context.writeResource(
           "multiple_interconnects",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated multiple_interconnects", {});
         return { dataHandles: [handle] };
@@ -6201,7 +5311,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6211,13 +5320,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_interconnect_details",
-          String(args.cf_interconnect_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.cf_interconnect_id)),
+          result,
         );
         context.logger.info("Fetched list_interconnect_details", {});
         return { dataHandles: [handle] };
@@ -6250,7 +5354,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6268,13 +5371,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "interconnect",
-          String(args.cf_interconnect_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.cf_interconnect_id)),
+          result,
         );
         context.logger.info("Updated interconnect", {});
         return { dataHandles: [handle] };
@@ -6297,8 +5395,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -6355,7 +5453,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6367,13 +5464,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("create", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -6381,7 +5475,7 @@ export const model = {
     get_catalog_syncs_read: {
       description: "Read Catalog Sync",
       arguments: z.object({
-        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
+        sync_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6397,7 +5491,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6407,13 +5500,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "catalog_syncs_read",
-          String(args.sync_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.sync_id)),
+          result,
         );
         context.logger.info("Fetched catalog_syncs_read", {});
         return { dataHandles: [handle] };
@@ -6422,7 +5510,7 @@ export const model = {
     update: {
       description: "Update Catalog Sync",
       arguments: z.object({
-        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
+        sync_id: z.string(),
         description: z.string().optional(),
         name: z.string().optional(),
         policy: z.string().optional(),
@@ -6442,7 +5530,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6460,13 +5547,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "update",
-          String(args.sync_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.sync_id)),
+          result,
         );
         context.logger.info("Updated update", {});
         return { dataHandles: [handle] };
@@ -6475,7 +5557,7 @@ export const model = {
     patch: {
       description: "Patch Catalog Sync",
       arguments: z.object({
-        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
+        sync_id: z.string(),
         description: z.string().optional(),
         name: z.string().optional(),
         policy: z.string().optional(),
@@ -6495,7 +5577,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -6513,13 +5594,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch",
-          String(args.sync_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.sync_id)),
+          result,
         );
         context.logger.info("Updated patch", {});
         return { dataHandles: [handle] };
@@ -6528,7 +5604,7 @@ export const model = {
     delete: {
       description: "Delete Catalog Sync",
       arguments: z.object({
-        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
+        sync_id: z.string(),
         delete_destination: z.boolean().optional(),
       }),
       execute: async (
@@ -6546,10 +5622,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["delete_destination"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}`,
+          `/accounts/${accountId}/magic/cloud/catalog-syncs/${args.sync_id}${qs}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.sync_id });
@@ -6559,7 +5644,7 @@ export const model = {
     catalog_syncs_refresh: {
       description: "Run Catalog Sync",
       arguments: z.object({
-        sync_id: z.string().min(1).describe("PCAP collection sync identifier."),
+        sync_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6575,7 +5660,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6587,12 +5671,7 @@ export const model = {
         const handle = await context.writeResource(
           "catalog_syncs_refresh",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed catalog_syncs_refresh", {});
         return { dataHandles: [handle] };
@@ -6615,7 +5694,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6626,12 +5704,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_mwan_addr_space_read",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched onramps_mwan_addr_space_read", {});
         return { dataHandles: [handle] };
@@ -6640,7 +5713,7 @@ export const model = {
     get_onramps_read: {
       description: "Read On-ramp",
       arguments: z.object({
-        onramp_id: z.string().min(1).describe("Onramp identifier."),
+        onramp_id: z.string(),
         status: z.boolean().optional(),
         vpcs: z.boolean().optional(),
         post_apply_resources: z.boolean().optional(),
@@ -6660,7 +5733,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6670,13 +5742,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "onramps_read",
-          String(args.onramp_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.onramp_id)),
+          result,
         );
         context.logger.info("Fetched onramps_read", {});
         return { dataHandles: [handle] };
@@ -6685,7 +5752,7 @@ export const model = {
     onramps_apply: {
       description: "Apply On-ramp",
       arguments: z.object({
-        onramp_id: z.string().min(1).describe("Onramp identifier."),
+        onramp_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6701,7 +5768,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6713,12 +5779,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_apply",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed onramps_apply", {});
         return { dataHandles: [handle] };
@@ -6727,7 +5788,7 @@ export const model = {
     onramps_plan: {
       description: "Plan On-ramp",
       arguments: z.object({
-        onramp_id: z.string().min(1).describe("Onramp identifier."),
+        onramp_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6743,7 +5804,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6755,12 +5815,7 @@ export const model = {
         const handle = await context.writeResource(
           "onramps_plan",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed onramps_plan", {});
         return { dataHandles: [handle] };
@@ -6783,7 +5838,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -6795,12 +5849,7 @@ export const model = {
         const handle = await context.writeResource(
           "providers_discover_all",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed providers_discover_all", {});
         return { dataHandles: [handle] };
@@ -6809,9 +5858,7 @@ export const model = {
     get_providers_read: {
       description: "Read Cloud Integration",
       arguments: z.object({
-        provider_id: z.string().min(1).describe(
-          "Network interconnect provider identifier.",
-        ),
+        provider_id: z.string(),
         status: z.boolean().optional(),
       }),
       execute: async (
@@ -6828,7 +5875,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6838,13 +5884,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "providers_read",
-          String(args.provider_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.provider_id)),
+          result,
         );
         context.logger.info("Fetched providers_read", {});
         return { dataHandles: [handle] };
@@ -6853,9 +5894,7 @@ export const model = {
     providers_discover: {
       description: "Run Discovery",
       arguments: z.object({
-        provider_id: z.string().min(1).describe(
-          "Network interconnect provider identifier.",
-        ),
+        provider_id: z.string(),
         v2: z.boolean().optional(),
       }),
       execute: async (
@@ -6872,7 +5911,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const queryParts: string[] = [];
@@ -6892,12 +5930,7 @@ export const model = {
         const handle = await context.writeResource(
           "providers_discover",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed providers_discover", {});
         return { dataHandles: [handle] };
@@ -6906,9 +5939,7 @@ export const model = {
     get_providers_initial_setup: {
       description: "Get Cloud Integration Setup Config",
       arguments: z.object({
-        provider_id: z.string().min(1).describe(
-          "Network interconnect provider identifier.",
-        ),
+        provider_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -6924,7 +5955,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -6934,13 +5964,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "providers_initial_setup",
-          String(args.provider_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.provider_id)),
+          result,
         );
         context.logger.info("Fetched providers_initial_setup", {});
         return { dataHandles: [handle] };
@@ -6965,7 +5990,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -6977,16 +6001,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "resources_catalog_policy_preview",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created resources_catalog_policy_preview {id}", {
           id,
@@ -7014,7 +6035,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7024,13 +6044,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "resources_catalog_read",
-          String(args.resource_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.resource_id)),
+          result,
         );
         context.logger.info("Fetched resources_catalog_read", {});
         return { dataHandles: [handle] };
@@ -7055,7 +6070,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7065,13 +6079,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "get",
-          String(args.connector_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.connector_id)),
+          result,
         );
         context.logger.info("Fetched get", {});
         return { dataHandles: [handle] };
@@ -7111,7 +6120,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7129,13 +6137,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "mconn_connectors_edit",
-          String(args.connector_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.connector_id)),
+          result,
         );
         context.logger.info("Updated mconn_connectors_edit", {});
         return { dataHandles: [handle] };
@@ -7158,7 +6161,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7169,12 +6171,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_gre_tunnels",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_gre_tunnels", {});
         return { dataHandles: [handle] };
@@ -7209,7 +6206,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7221,13 +6217,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("gre_tunnels", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("gre_tunnels", id, result);
         context.logger.info("Created gre_tunnels {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7249,7 +6242,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7264,12 +6256,7 @@ export const model = {
         const handle = await context.writeResource(
           "multiple_gre_tunnels",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated multiple_gre_tunnels", {});
         return { dataHandles: [handle] };
@@ -7278,7 +6265,7 @@ export const model = {
     list_gre_tunnel_details: {
       description: "List GRE Tunnel Details",
       arguments: z.object({
-        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
+        gre_tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7294,7 +6281,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7304,13 +6290,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_gre_tunnel_details",
-          String(args.gre_tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gre_tunnel_id)),
+          result,
         );
         context.logger.info("Fetched list_gre_tunnel_details", {});
         return { dataHandles: [handle] };
@@ -7319,7 +6300,7 @@ export const model = {
     update_gre_tunnel: {
       description: "Update GRE Tunnel",
       arguments: z.object({
-        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
+        gre_tunnel_id: z.string(),
         automatic_return_routing: z.unknown().optional(),
         cloudflare_gre_endpoint: z.unknown(),
         customer_gre_endpoint: z.unknown(),
@@ -7345,7 +6326,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7363,13 +6343,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "gre_tunnel",
-          String(args.gre_tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.gre_tunnel_id)),
+          result,
         );
         context.logger.info("Updated gre_tunnel", {});
         return { dataHandles: [handle] };
@@ -7378,7 +6353,7 @@ export const model = {
     delete_gre_tunnel: {
       description: "Delete GRE Tunnel",
       arguments: z.object({
-        gre_tunnel_id: z.string().min(1).describe("GRE tunnel identifier."),
+        gre_tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7395,6 +6370,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -7424,7 +6400,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7435,12 +6410,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_ipsec_tunnels",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_ipsec_tunnels", {});
         return { dataHandles: [handle] };
@@ -7476,7 +6446,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7488,13 +6457,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("ipsec_tunnels", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("ipsec_tunnels", id, result);
         context.logger.info("Created ipsec_tunnels {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -7516,7 +6482,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7531,12 +6496,7 @@ export const model = {
         const handle = await context.writeResource(
           "multiple_ipsec_tunnels",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated multiple_ipsec_tunnels", {});
         return { dataHandles: [handle] };
@@ -7564,7 +6524,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7588,16 +6547,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "magic_ipsec_tunnels_set_pre_shared_keys_for_ipsec_tunnels",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created magic_ipsec_tunnels_set_pre_shared_keys_for_ipsec_tunnels {id}",
@@ -7609,7 +6565,7 @@ export const model = {
     list_ipsec_tunnel_details: {
       description: "List IPsec tunnel details",
       arguments: z.object({
-        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
+        ipsec_tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7625,7 +6581,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7635,13 +6590,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_ipsec_tunnel_details",
-          String(args.ipsec_tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ipsec_tunnel_id)),
+          result,
         );
         context.logger.info("Fetched list_ipsec_tunnel_details", {});
         return { dataHandles: [handle] };
@@ -7650,7 +6600,7 @@ export const model = {
     update_ipsec_tunnel: {
       description: "Update IPsec Tunnel",
       arguments: z.object({
-        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
+        ipsec_tunnel_id: z.string(),
         automatic_return_routing: z.unknown().optional(),
         bgp: z.unknown().optional(),
         cloudflare_endpoint: z.unknown(),
@@ -7678,7 +6628,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7696,13 +6645,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "ipsec_tunnel",
-          String(args.ipsec_tunnel_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.ipsec_tunnel_id)),
+          result,
         );
         context.logger.info("Updated ipsec_tunnel", {});
         return { dataHandles: [handle] };
@@ -7711,7 +6655,7 @@ export const model = {
     delete_ipsec_tunnel: {
       description: "Delete IPsec Tunnel",
       arguments: z.object({
-        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
+        ipsec_tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7728,6 +6672,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -7743,7 +6688,7 @@ export const model = {
     magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels: {
       description: "Generate Pre-Shared Key (PSK) for IPsec tunnels",
       arguments: z.object({
-        ipsec_tunnel_id: z.string().min(1).describe("IPsec tunnel identifier."),
+        ipsec_tunnel_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7759,7 +6704,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -7771,12 +6715,7 @@ export const model = {
         const handle = await context.writeResource(
           "magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels",
@@ -7802,7 +6741,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7813,12 +6751,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_redundancy_groups",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_redundancy_groups", {});
         return { dataHandles: [handle] };
@@ -7851,7 +6784,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -7863,16 +6795,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "redundancy_group",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created redundancy_group {id}", { id });
         return { dataHandles: [handle] };
@@ -7881,9 +6810,7 @@ export const model = {
     get_redundancy_group: {
       description: "Get Redundancy Group Details",
       arguments: z.object({
-        redundancy_group_id: z.string().min(1).describe(
-          "Connector redundancy group identifier.",
-        ),
+        redundancy_group_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -7899,7 +6826,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -7909,13 +6835,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "redundancy_group",
-          String(args.redundancy_group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.redundancy_group_id)),
+          result,
         );
         context.logger.info("Fetched redundancy_group", {});
         return { dataHandles: [handle] };
@@ -7924,9 +6845,7 @@ export const model = {
     update_redundancy_group: {
       description: "Update a Redundancy Group",
       arguments: z.object({
-        redundancy_group_id: z.string().min(1).describe(
-          "Connector redundancy group identifier.",
-        ),
+        redundancy_group_id: z.string(),
         description: z.string().max(1024).optional().describe(
           "Optional description",
         ),
@@ -7951,7 +6870,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -7969,13 +6887,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "redundancy_group",
-          String(args.redundancy_group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.redundancy_group_id)),
+          result,
         );
         context.logger.info("Updated redundancy_group", {});
         return { dataHandles: [handle] };
@@ -7984,9 +6897,7 @@ export const model = {
     delete_redundancy_group: {
       description: "Delete a Redundancy Group",
       arguments: z.object({
-        redundancy_group_id: z.string().min(1).describe(
-          "Connector redundancy group identifier.",
-        ),
+        redundancy_group_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8003,6 +6914,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -8032,7 +6944,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8043,12 +6954,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_routes",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_routes", {});
         return { dataHandles: [handle] };
@@ -8078,7 +6984,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -8090,13 +6995,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("routes", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("routes", id, result);
         context.logger.info("Created routes {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -8120,7 +7022,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -8135,12 +7036,7 @@ export const model = {
         const handle = await context.writeResource(
           "many_routes",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated many_routes", {});
         return { dataHandles: [handle] };
@@ -8150,36 +7046,6 @@ export const model = {
       description: "Delete Many Routes",
       arguments: z.object({
         routes: z.array(z.unknown()),
-      }),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        await cfApi(
-          apiToken,
-          "DELETE",
-          `/accounts/${accountId}/magic/routes`,
-        );
-
-        context.logger.info("Deleted resource {id}", { id: "unknown" });
-        return { dataHandles: [] };
-      },
-    },
-    get_magic_static_routes_route_details: {
-      description: "Route Details",
-      arguments: z.object({
-        route_id: z.string().min(1).describe("Static route identifier."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8195,7 +7061,38 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/magic/routes`,
+          args,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: "unknown" });
+        return { dataHandles: [] };
+      },
+    },
+    get_magic_static_routes_route_details: {
+      description: "Route Details",
+      arguments: z.object({
+        route_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8205,13 +7102,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_static_routes_route_details",
-          String(args.route_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.route_id)),
+          result,
         );
         context.logger.info("Fetched magic_static_routes_route_details", {});
         return { dataHandles: [handle] };
@@ -8220,7 +7112,7 @@ export const model = {
     update_route: {
       description: "Update Route",
       arguments: z.object({
-        route_id: z.string().min(1).describe("Static route identifier."),
+        route_id: z.string(),
         description: z.unknown().optional(),
         nexthop: z.unknown(),
         prefix: z.unknown(),
@@ -8242,7 +7134,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8260,13 +7151,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "route",
-          String(args.route_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.route_id)),
+          result,
         );
         context.logger.info("Updated route", {});
         return { dataHandles: [handle] };
@@ -8275,7 +7161,7 @@ export const model = {
     delete_route: {
       description: "Delete Route",
       arguments: z.object({
-        route_id: z.string().min(1).describe("Static route identifier."),
+        route_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8292,6 +7178,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -8321,8 +7208,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -8382,7 +7269,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -8394,13 +7280,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("site", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("site", id, result);
         context.logger.info("Created site {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -8408,7 +7291,7 @@ export const model = {
     get_magic_sites_site_details: {
       description: "Site Details",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8424,7 +7307,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8434,13 +7316,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_sites_site_details",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Fetched magic_sites_site_details", {});
         return { dataHandles: [handle] };
@@ -8449,7 +7326,7 @@ export const model = {
     update_site: {
       description: "Update Site",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
         location: z.unknown().optional(),
@@ -8470,7 +7347,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8488,13 +7364,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "site",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Updated site", {});
         return { dataHandles: [handle] };
@@ -8503,7 +7374,7 @@ export const model = {
     patch_site: {
       description: "Patch Site",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         connector_id: z.unknown().optional(),
         description: z.string().optional(),
         location: z.unknown().optional(),
@@ -8524,7 +7395,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8542,13 +7412,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_site",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Updated patch_site", {});
         return { dataHandles: [handle] };
@@ -8557,7 +7422,7 @@ export const model = {
     delete_site: {
       description: "Delete Site",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8574,6 +7439,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -8587,7 +7453,7 @@ export const model = {
     list_acls: {
       description: "List Site ACLs",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8603,8 +7469,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["site_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -8641,7 +7507,7 @@ export const model = {
     create_acl: {
       description: "Create a new Site ACL",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown(),
@@ -8664,7 +7530,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8680,13 +7545,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("acl", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("acl", id, result);
         context.logger.info("Created acl {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -8694,8 +7556,8 @@ export const model = {
     get_magic_site_acls_acl_details: {
       description: "Site ACL Details",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        acl_id: z.string().min(1).describe("ACL identifier."),
+        site_id: z.string(),
+        acl_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8711,7 +7573,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -8721,13 +7582,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_site_acls_acl_details",
-          String(args.acl_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.acl_id)),
+          result,
         );
         context.logger.info("Fetched magic_site_acls_acl_details", {});
         return { dataHandles: [handle] };
@@ -8736,8 +7592,8 @@ export const model = {
     update_acl: {
       description: "Update Site ACL",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        acl_id: z.string().min(1).describe("ACL identifier."),
+        site_id: z.string(),
+        acl_id: z.string(),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown().optional(),
@@ -8760,7 +7616,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8778,13 +7633,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "acl",
-          String(args.acl_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.acl_id)),
+          result,
         );
         context.logger.info("Updated acl", {});
         return { dataHandles: [handle] };
@@ -8793,8 +7643,8 @@ export const model = {
     patch_acl: {
       description: "Patch Site ACL",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        acl_id: z.string().min(1).describe("ACL identifier."),
+        site_id: z.string(),
+        acl_id: z.string(),
         description: z.string().optional().describe("Description for the ACL."),
         forward_locally: z.unknown().optional(),
         lan_1: z.unknown().optional(),
@@ -8817,7 +7667,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8835,13 +7684,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_acl",
-          String(args.acl_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.acl_id)),
+          result,
         );
         context.logger.info("Updated patch_acl", {});
         return { dataHandles: [handle] };
@@ -8850,8 +7694,8 @@ export const model = {
     delete_acl: {
       description: "Delete Site ACL",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        acl_id: z.string().min(1).describe("ACL identifier."),
+        site_id: z.string(),
+        acl_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8868,6 +7712,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -8881,7 +7726,7 @@ export const model = {
     list_app_configs: {
       description: "List App Configs",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -8897,8 +7742,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["site_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -8937,7 +7782,7 @@ export const model = {
     create_magic_site_app_configs_add_app_config: {
       description: "Create a new App Config",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         breakout: z.unknown().optional(),
         preferred_wans: z.unknown().optional(),
         priority: z.unknown().optional(),
@@ -8956,7 +7801,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -8972,16 +7816,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "magic_site_app_configs_add_app_config",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created magic_site_app_configs_add_app_config {id}",
@@ -8993,7 +7834,7 @@ export const model = {
     update_app_config: {
       description: "Update an App Config",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         app_config_id: z.string(),
         account_app_id: z.unknown().optional(),
         breakout: z.unknown().optional(),
@@ -9015,7 +7856,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9033,13 +7873,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "app_config",
-          String(args.app_config_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_config_id)),
+          result,
         );
         context.logger.info("Updated app_config", {});
         return { dataHandles: [handle] };
@@ -9048,7 +7883,7 @@ export const model = {
     patch_app_config: {
       description: "Update an App Config",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         app_config_id: z.string(),
         account_app_id: z.unknown().optional(),
         breakout: z.unknown().optional(),
@@ -9070,7 +7905,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9088,13 +7922,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_app_config",
-          String(args.app_config_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_config_id)),
+          result,
         );
         context.logger.info("Updated patch_app_config", {});
         return { dataHandles: [handle] };
@@ -9103,7 +7932,7 @@ export const model = {
     delete_app_config: {
       description: "Delete App Config",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         app_config_id: z.string(),
       }),
       execute: async (
@@ -9121,6 +7950,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -9136,7 +7966,7 @@ export const model = {
     list_lans: {
       description: "List Site LANs",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9152,8 +7982,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["site_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -9190,7 +8020,7 @@ export const model = {
     create_lan: {
       description: "Create a new Site LAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         bond_id: z.unknown().optional(),
         ha_link: z.boolean().optional().describe(
           "mark true to use this LAN for HA probing. only works for site with HA turned ...",
@@ -9222,7 +8052,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9238,13 +8067,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("lan", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("lan", id, result);
         context.logger.info("Created lan {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -9252,8 +8078,8 @@ export const model = {
     get_magic_site_lans_lan_details: {
       description: "Site LAN Details",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        lan_id: z.string().min(1).describe("LAN identifier."),
+        site_id: z.string(),
+        lan_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9269,7 +8095,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9279,13 +8104,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_site_lans_lan_details",
-          String(args.lan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.lan_id)),
+          result,
         );
         context.logger.info("Fetched magic_site_lans_lan_details", {});
         return { dataHandles: [handle] };
@@ -9294,8 +8114,8 @@ export const model = {
     update_lan: {
       description: "Update Site LAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        lan_id: z.string().min(1).describe("LAN identifier."),
+        site_id: z.string(),
+        lan_id: z.string(),
         bond_id: z.unknown().optional(),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
@@ -9324,7 +8144,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9342,13 +8161,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "lan",
-          String(args.lan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.lan_id)),
+          result,
         );
         context.logger.info("Updated lan", {});
         return { dataHandles: [handle] };
@@ -9357,8 +8171,8 @@ export const model = {
     patch_lan: {
       description: "Patch Site LAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        lan_id: z.string().min(1).describe("LAN identifier."),
+        site_id: z.string(),
+        lan_id: z.string(),
         bond_id: z.unknown().optional(),
         is_breakout: z.boolean().optional().describe(
           "mark true to use this LAN for source-based breakout traffic",
@@ -9387,7 +8201,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9405,13 +8218,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_lan",
-          String(args.lan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.lan_id)),
+          result,
         );
         context.logger.info("Updated patch_lan", {});
         return { dataHandles: [handle] };
@@ -9420,8 +8228,8 @@ export const model = {
     delete_lan: {
       description: "Delete Site LAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        lan_id: z.string().min(1).describe("LAN identifier."),
+        site_id: z.string(),
+        lan_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9438,6 +8246,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -9451,7 +8260,7 @@ export const model = {
     get_magic_site_netflow_config_details: {
       description: "NetFlow Configuration Details",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9467,7 +8276,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9477,13 +8285,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_site_netflow_config_details",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Fetched magic_site_netflow_config_details", {});
         return { dataHandles: [handle] };
@@ -9492,7 +8295,7 @@ export const model = {
     create_netflow_config: {
       description: "Create NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -9523,7 +8326,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9539,16 +8341,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "netflow_config",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created netflow_config {id}", { id });
         return { dataHandles: [handle] };
@@ -9557,7 +8356,7 @@ export const model = {
     update_netflow_config: {
       description: "Update NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -9588,7 +8387,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9606,13 +8404,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "netflow_config",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Updated netflow_config", {});
         return { dataHandles: [handle] };
@@ -9621,7 +8414,7 @@ export const model = {
     patch_netflow_config: {
       description: "Update NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         active_timeout: z.number().int().min(1).max(5400).optional().describe(
           "Timeout in seconds for active flows.",
         ),
@@ -9652,7 +8445,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9670,13 +8462,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_netflow_config",
-          String(args.site_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.site_id)),
+          result,
         );
         context.logger.info("Updated patch_netflow_config", {});
         return { dataHandles: [handle] };
@@ -9685,7 +8472,7 @@ export const model = {
     delete_netflow_config: {
       description: "Delete NetFlow Configuration",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9702,6 +8489,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -9715,7 +8503,7 @@ export const model = {
     list_wans: {
       description: "List Site WANs",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9731,8 +8519,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["site_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -9769,7 +8557,7 @@ export const model = {
     create_wan: {
       description: "Create a new Site WAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
+        site_id: z.string(),
         name: z.string().optional(),
         physport: z.unknown(),
         priority: z.number().int().optional(),
@@ -9790,7 +8578,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9806,13 +8593,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("wan", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("wan", id, result);
         context.logger.info("Created wan {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -9820,8 +8604,8 @@ export const model = {
     get_magic_site_wans_wan_details: {
       description: "Site WAN Details",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        wan_id: z.string().min(1).describe("WAN identifier."),
+        site_id: z.string(),
+        wan_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9837,7 +8621,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -9847,13 +8630,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_site_wans_wan_details",
-          String(args.wan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.wan_id)),
+          result,
         );
         context.logger.info("Fetched magic_site_wans_wan_details", {});
         return { dataHandles: [handle] };
@@ -9862,8 +8640,8 @@ export const model = {
     update_wan: {
       description: "Update Site WAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        wan_id: z.string().min(1).describe("WAN identifier."),
+        site_id: z.string(),
+        wan_id: z.string(),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
@@ -9884,7 +8662,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9902,13 +8679,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "wan",
-          String(args.wan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.wan_id)),
+          result,
         );
         context.logger.info("Updated wan", {});
         return { dataHandles: [handle] };
@@ -9917,8 +8689,8 @@ export const model = {
     patch_wan: {
       description: "Patch Site WAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        wan_id: z.string().min(1).describe("WAN identifier."),
+        site_id: z.string(),
+        wan_id: z.string(),
         name: z.string().optional(),
         physport: z.unknown().optional(),
         priority: z.number().int().optional(),
@@ -9939,7 +8711,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -9957,13 +8728,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_wan",
-          String(args.wan_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.wan_id)),
+          result,
         );
         context.logger.info("Updated patch_wan", {});
         return { dataHandles: [handle] };
@@ -9972,8 +8738,8 @@ export const model = {
     delete_wan: {
       description: "Delete Site WAN",
       arguments: z.object({
-        site_id: z.string().min(1).describe("Magic WAN site identifier."),
-        wan_id: z.string().min(1).describe("WAN identifier."),
+        site_id: z.string(),
+        wan_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -9990,6 +8756,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/email-routing";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/email-routing";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   zoneId: z.string().describe("Cloudflare zone ID"),
 });
 
@@ -42,16 +42,7 @@ const GetDmarcReportsStatusSchema = z.object({
   status: z.unknown().optional(),
   tag: z.string().optional().describe("Use `zone_id` instead"),
   zone_id: z.string().optional().describe("Zone identifier"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateConfigureDmarcReportsSchema = z.object({
   approved_sources: z.array(z.unknown()).optional().describe(
@@ -72,16 +63,7 @@ const UpdateConfigureDmarcReportsSchema = z.object({
   status: z.unknown().optional(),
   tag: z.string().optional().describe("Use `zone_id` instead"),
   zone_id: z.string().optional().describe("Zone identifier"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetInspectSpfSchema = z.object({
   components: z.array(z.unknown()).describe(
@@ -95,16 +77,7 @@ const GetInspectSpfSchema = z.object({
   total_lookups: z.number().int().describe(
     "Total number of DNS lookups performed across all includes",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetEmailRoutingSettingsSchema = z.object({
   created: z.unknown().optional(),
@@ -116,16 +89,7 @@ const GetEmailRoutingSettingsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
   created: z.unknown().optional(),
@@ -137,20 +101,38 @@ const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    errors: z.unknown(),
+    messages: z.unknown(),
+    success: z.union([z.literal(true)]),
+    result_info: z.object({
+      count: z.number().optional(),
+      page: z.number().optional(),
+      per_page: z.number().optional(),
+      total_count: z.number().optional(),
+      total_pages: z.number().optional(),
+    }).optional(),
+    result: z.object({
+      errors: z.unknown().optional(),
+      record: z.array(z.unknown()).optional(),
+    }).optional(),
+  }),
+  z.object({
+    errors: z.unknown(),
+    messages: z.unknown(),
+    success: z.union([z.literal(true)]),
+    result_info: z.object({
+      count: z.number().optional(),
+      page: z.number().optional(),
+      per_page: z.number().optional(),
+      total_count: z.number().optional(),
+      total_pages: z.number().optional(),
+    }).optional(),
+    result: z.array(z.unknown()).optional(),
+  }),
 ]);
 
 const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
@@ -163,16 +145,7 @@ const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema = z.object({
   created: z.unknown().optional(),
@@ -184,16 +157,7 @@ const UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema = z.object({
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const RoutingRulesItemSchema = z.object({
   actions: z.unknown().optional(),
@@ -204,7 +168,7 @@ const RoutingRulesItemSchema = z.object({
   priority: z.unknown().optional(),
   source: z.unknown().optional(),
   tag: z.unknown().optional(),
-});
+}).passthrough();
 
 const ListRoutingRulesSchema = z.object({
   items: z.array(RoutingRulesItemSchema),
@@ -227,16 +191,7 @@ const CreateRoutingRuleSchema = z.object({
   priority: z.unknown().optional(),
   source: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCatchAllRuleSchema = z.object({
   actions: z.unknown().optional(),
@@ -246,16 +201,7 @@ const GetCatchAllRuleSchema = z.object({
   name: z.unknown().optional(),
   source: z.unknown().optional(),
   tag: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetPubliclistsuppressionzoneroutingItemSchema = z.object({
   created_at: z.string(),
@@ -263,8 +209,8 @@ const GetPubliclistsuppressionzoneroutingItemSchema = z.object({
   expires_at: z.string().nullable(),
   id: z.string(),
   reason: z.string(),
-  zones: z.array(z.string()).optional(),
-});
+  zones: z.array(z.string()).optional().default([]),
+}).passthrough();
 
 const GetPubliclistsuppressionzoneroutingSchema = z.object({
   items: z.array(GetPubliclistsuppressionzoneroutingItemSchema),
@@ -280,16 +226,7 @@ const GetPubliclistsuppressionzoneroutingSchema = z.object({
 
 const CreatePostPublicnewsuppressionzoneroutingSchema = z.object({
   id: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetPublicgetsuppressionzoneroutingSchema = z.object({
   created_at: z.string(),
@@ -297,17 +234,8 @@ const GetPublicgetsuppressionzoneroutingSchema = z.object({
   expires_at: z.string().nullable(),
   id: z.string(),
   reason: z.string(),
-  zones: z.array(z.string()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  zones: z.array(z.string()).optional().default([]),
+}).passthrough();
 
 const SendingSubdomainsItemSchema = z.object({
   created: z.unknown().optional(),
@@ -326,7 +254,7 @@ const SendingSubdomainsItemSchema = z.object({
     "The return-path domain used for bounce handling.",
   ),
   tag: z.unknown(),
-});
+}).passthrough();
 
 const ListSendingSubdomainsSchema = z.object({
   items: z.array(SendingSubdomainsItemSchema),
@@ -357,16 +285,7 @@ const CreateSendingSubdomainSchema = z.object({
     "The return-path domain used for bounce handling.",
   ),
   tag: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
   errors: z.array(z.unknown()).optional().describe(
@@ -375,16 +294,7 @@ const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
   records: z.array(z.unknown()).optional().describe(
     "DNS records that would be created for the subdomain.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSendingSubdomainDnsItemSchema = z.object({
   content: z.string().optional().describe("DNS record content."),
@@ -418,7 +328,7 @@ const GetSendingSubdomainDnsItemSchema = z.object({
     "TLSA",
     "URI",
   ]).optional().describe("DNS record type."),
-});
+}).passthrough();
 
 const GetSendingSubdomainDnsSchema = z.object({
   items: z.array(GetSendingSubdomainDnsItemSchema),
@@ -443,16 +353,7 @@ const EmailSendingSubdomainsFixSendingSubdomainDnsSchema = z.object({
     .optional().describe(
       "Aggregated DNS state for the subdomain. `unlocked` means desired records exist with correct conte...",
     ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSendingSubdomainDnsStatusSchema = z.object({
   errors: z.array(z.unknown()).optional().describe(
@@ -465,16 +366,7 @@ const GetSendingSubdomainDnsStatusSchema = z.object({
     .optional().describe(
       "Aggregated DNS state for the subdomain. `unlocked` means desired records exist with correct conte...",
     ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetPubliclistsuppressionzonesendingItemSchema = z.object({
   created_at: z.string(),
@@ -482,8 +374,8 @@ const GetPubliclistsuppressionzonesendingItemSchema = z.object({
   expires_at: z.string().nullable(),
   id: z.string(),
   reason: z.string(),
-  zones: z.array(z.string()).optional(),
-});
+  zones: z.array(z.string()).optional().default([]),
+}).passthrough();
 
 const GetPubliclistsuppressionzonesendingSchema = z.object({
   items: z.array(GetPubliclistsuppressionzonesendingItemSchema),
@@ -499,16 +391,7 @@ const GetPubliclistsuppressionzonesendingSchema = z.object({
 
 const CreatePostPublicnewsuppressionzonesendingSchema = z.object({
   id: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetPublicgetsuppressionzonesendingSchema = z.object({
   created_at: z.string(),
@@ -516,17 +399,8 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
   expires_at: z.string().nullable(),
   id: z.string(),
   reason: z.string(),
-  zones: z.array(z.string()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  zones: z.array(z.string()).optional().default([]),
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -535,7 +409,7 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -566,6 +440,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -729,33 +608,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/auth/dmarc-reports`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get DMARC Report Status (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/auth/dmarc-reports`,
+        );
 
         const handle = await context.writeResource(
           "dmarc_reports_status",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched dmarc_reports_status", {});
         return { dataHandles: [handle] };
@@ -785,37 +648,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/zones/${zoneId}/email/auth/dmarc-reports`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to configure DMARC Reports (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/zones/${zoneId}/email/auth/dmarc-reports`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "configure_dmarc_reports",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated configure_dmarc_reports", {});
         return { dataHandles: [handle] };
@@ -838,33 +685,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/auth/spf/inspect`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to inspect SPF Record (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/auth/spf/inspect`,
+        );
 
         const handle = await context.writeResource(
           "inspect_spf",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched inspect_spf", {});
         return { dataHandles: [handle] };
@@ -887,33 +718,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/routing`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get Email Routing settings (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/routing`,
+        );
 
         const handle = await context.writeResource(
           "email_routing_settings",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched email_routing_settings", {});
         return { dataHandles: [handle] };
@@ -949,37 +764,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/zones/${zoneId}/email/routing`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Email Routing settings (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/zones/${zoneId}/email/routing`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "email_routing_settings_replace_email_routing_settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated email_routing_settings_replace_email_routing_settings",
@@ -1018,37 +817,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/zones/${zoneId}/email/routing`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update Email Routing settings (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/zones/${zoneId}/email/routing`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "email_routing_settings",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated email_routing_settings", {});
         return { dataHandles: [handle] };
@@ -1073,33 +856,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/routing/dns`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to email Routing - DNS settings (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/routing/dns`,
+        );
 
         const handle = await context.writeResource(
           "email_routing_settings_email_routing_dns_settings",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched email_routing_settings_email_routing_dns_settings",
@@ -1127,38 +894,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/routing/dns`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to enable Email Routing (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/routing/dns`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "email_routing_settings_enable_email_routing_dns",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created email_routing_settings_enable_email_routing_dns {id}",
@@ -1186,37 +939,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/zones/${zoneId}/email/routing/dns`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to unlock Email Routing (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/zones/${zoneId}/email/routing/dns`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "email_routing_settings_unlock_email_routing_dns",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Updated email_routing_settings_unlock_email_routing_dns",
@@ -1231,7 +968,7 @@ export const model = {
         name: z.unknown().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1245,20 +982,13 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/zones/${zoneId}/email/routing/dns`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to disable Email Routing (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/zones/${zoneId}/email/routing/dns`,
+          args,
+        );
 
         context.logger.info("Deleted resource {id}", { id: "unknown" });
         return { dataHandles: [] };
@@ -1285,32 +1015,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/email/routing/rules`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list routing rules (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/email/routing/rules`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1358,35 +1077,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/routing/rules`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create routing rule (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/routing/rules`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("routing_rule", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("routing_rule", id, result);
         context.logger.info("Created routing_rule {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1408,33 +1113,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/routing/rules/catch_all`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get catch-all rule (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/routing/rules/catch_all`,
+        );
 
         const handle = await context.writeResource(
           "catch_all_rule",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched catch_all_rule", {});
         return { dataHandles: [handle] };
@@ -1464,37 +1153,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/zones/${zoneId}/email/routing/rules/catch_all`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update catch-all rule (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/zones/${zoneId}/email/routing/rules/catch_all`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "catch_all_rule",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated catch_all_rule", {});
         return { dataHandles: [handle] };
@@ -1503,7 +1176,7 @@ export const model = {
     get_routing_rule: {
       description: "Get routing rule",
       arguments: z.object({
-        rule_identifier: z.string().min(1, "rule_identifier must not be empty"),
+        rule_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1519,33 +1192,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get routing rule (zoneId=${zoneId} rule_identifier=${args.rule_identifier}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
+        );
 
         const handle = await context.writeResource(
           "routing_rule",
-          String(args.rule_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_identifier)),
+          result,
         );
         context.logger.info("Fetched routing_rule", {});
         return { dataHandles: [handle] };
@@ -1554,7 +1211,7 @@ export const model = {
     update_routing_rule: {
       description: "Update routing rule",
       arguments: z.object({
-        rule_identifier: z.string().min(1, "rule_identifier must not be empty"),
+        rule_identifier: z.string(),
         actions: z.unknown(),
         enabled: z.unknown().optional(),
         matchers: z.unknown(),
@@ -1577,7 +1234,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1586,32 +1242,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update routing rule (zoneId=${zoneId} rule_identifier=${args.rule_identifier}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "routing_rule",
-          String(args.rule_identifier),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_identifier)),
+          result,
         );
         context.logger.info("Updated routing_rule", {});
         return { dataHandles: [handle] };
@@ -1620,7 +1261,7 @@ export const model = {
     delete_routing_rule: {
       description: "Delete routing rule",
       arguments: z.object({
-        rule_identifier: z.string().min(1, "rule_identifier must not be empty"),
+        rule_identifier: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1637,20 +1278,12 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete routing rule (zoneId=${zoneId} rule_identifier=${args.rule_identifier}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/zones/${zoneId}/email/routing/rules/${args.rule_identifier}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.rule_identifier,
@@ -1680,32 +1313,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/email/routing/suppression`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list zone email suppressions (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/email/routing/suppression`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1736,9 +1358,7 @@ export const model = {
     create_post_publicnewsuppressionzonerouting: {
       description: "Create zone email suppression",
       arguments: z.object({
-        email: z.string().min(1, "email must not be empty").email(
-          "email must be a valid email address",
-        ),
+        email: z.string(),
         expires_at: z.string().nullable().optional(),
       }),
       execute: async (
@@ -1755,38 +1375,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/routing/suppression`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create zone email suppression (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/routing/suppression`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonerouting",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_publicnewsuppressionzonerouting {id}",
@@ -1798,7 +1404,7 @@ export const model = {
     get_publicgetsuppressionzonerouting: {
       description: "Get zone email suppression",
       arguments: z.object({
-        suppression_id: z.string().min(1, "suppression_id must not be empty"),
+        suppression_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1814,33 +1420,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get zone email suppression (zoneId=${zoneId} suppression_id=${args.suppression_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
+        );
 
         const handle = await context.writeResource(
           "publicgetsuppressionzonerouting",
-          String(args.suppression_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.suppression_id)),
+          result,
         );
         context.logger.info("Fetched publicgetsuppressionzonerouting", {});
         return { dataHandles: [handle] };
@@ -1849,7 +1439,7 @@ export const model = {
     delete_publicdeletesuppressionzonerouting: {
       description: "Delete zone email suppression",
       arguments: z.object({
-        suppression_id: z.string().min(1, "suppression_id must not be empty"),
+        suppression_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1866,20 +1456,12 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete zone email suppression (zoneId=${zoneId} suppression_id=${args.suppression_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/zones/${zoneId}/email/routing/suppression/${args.suppression_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.suppression_id,
@@ -1904,32 +1486,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/email/sending/subdomains`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list sending subdomains (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/email/sending/subdomains`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -1959,7 +1530,7 @@ export const model = {
     create_sending_subdomain: {
       description: "Create a sending subdomain",
       arguments: z.object({
-        name: z.string().min(1, "name must not be empty").describe(
+        name: z.string().describe(
           "The subdomain name. Must be within the zone.",
         ),
       }),
@@ -1977,38 +1548,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/sending/subdomains`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a sending subdomain (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/sending/subdomains`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "sending_subdomain",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created sending_subdomain {id}", { id });
         return { dataHandles: [handle] };
@@ -2017,7 +1574,7 @@ export const model = {
     create_email_sending_subdomains_preview_sending_subdomain: {
       description: "Preview sending subdomain DNS",
       arguments: z.object({
-        name: z.string().min(1, "name must not be empty").describe(
+        name: z.string().describe(
           "The subdomain name. Must be within the zone.",
         ),
       }),
@@ -2035,38 +1592,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/sending/subdomains/preview`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to preview sending subdomain DNS (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/sending/subdomains/preview`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "email_sending_subdomains_preview_sending_subdomain",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created email_sending_subdomains_preview_sending_subdomain {id}",
@@ -2078,7 +1621,7 @@ export const model = {
     get_sending_subdomain: {
       description: "Get a sending subdomain",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2094,33 +1637,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get a sending subdomain (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
+        );
 
         const handle = await context.writeResource(
           "sending_subdomain",
-          String(args.subdomain_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.subdomain_id)),
+          result,
         );
         context.logger.info("Fetched sending_subdomain", {});
         return { dataHandles: [handle] };
@@ -2129,7 +1656,7 @@ export const model = {
     update_sending_subdomain: {
       description: "Update a sending subdomain",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
         preview_enabled: z.boolean().describe(
           "Whether sent messages from this subdomain can be previewed in the activity log.",
         ),
@@ -2148,7 +1675,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -2157,32 +1683,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a sending subdomain (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "sending_subdomain",
-          String(args.subdomain_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.subdomain_id)),
+          result,
         );
         context.logger.info("Updated sending_subdomain", {});
         return { dataHandles: [handle] };
@@ -2191,7 +1702,7 @@ export const model = {
     delete_sending_subdomain: {
       description: "Delete a sending subdomain",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2208,20 +1719,12 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a sending subdomain (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.subdomain_id });
         return { dataHandles: [] };
@@ -2230,7 +1733,7 @@ export const model = {
     get_sending_subdomain_dns: {
       description: "Get sending subdomain DNS records",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2246,32 +1749,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["subdomain_id", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to get sending subdomain DNS records (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2301,7 +1793,7 @@ export const model = {
     email_sending_subdomains_fix_sending_subdomain_dns: {
       description: "Fix sending subdomain DNS records",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2317,34 +1809,18 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to fix sending subdomain DNS records (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns`,
+        );
 
         const handle = await context.writeResource(
           "email_sending_subdomains_fix_sending_subdomain_dns",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed email_sending_subdomains_fix_sending_subdomain_dns",
@@ -2356,7 +1832,7 @@ export const model = {
     get_sending_subdomain_dns_status: {
       description: "Get sending subdomain DNS status",
       arguments: z.object({
-        subdomain_id: z.string().min(1, "subdomain_id must not be empty"),
+        subdomain_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2372,33 +1848,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns/status`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get sending subdomain DNS status (zoneId=${zoneId} subdomain_id=${args.subdomain_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/dns/status`,
+        );
 
         const handle = await context.writeResource(
           "sending_subdomain_dns_status",
-          String(args.subdomain_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.subdomain_id)),
+          result,
         );
         context.logger.info("Fetched sending_subdomain_dns_status", {});
         return { dataHandles: [handle] };
@@ -2426,32 +1886,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
 
-        let results: Record<string, unknown>[];
-        let truncated: boolean;
-        try {
-          ({ results, truncated } = await cfApiPaginated<
-            Record<string, unknown>
-          >(
-            apiToken,
-            `/zones/${zoneId}/email/sending/suppression`,
-            params,
-          ));
-        } catch (error) {
-          throw new Error(
-            `Failed to list zone email suppressions (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/email/sending/suppression`,
+          params,
+        );
 
         if (truncated) {
           context.logger.info(
@@ -2482,9 +1931,7 @@ export const model = {
     create_post_publicnewsuppressionzonesending: {
       description: "Create zone email suppression",
       arguments: z.object({
-        email: z.string().min(1, "email must not be empty").email(
-          "email must be a valid email address",
-        ),
+        email: z.string(),
         expires_at: z.string().nullable().optional(),
       }),
       execute: async (
@@ -2501,38 +1948,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/zones/${zoneId}/email/sending/suppression`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create zone email suppression (zoneId=${zoneId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/zones/${zoneId}/email/sending/suppression`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonesending",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created post_publicnewsuppressionzonesending {id}",
@@ -2544,7 +1977,7 @@ export const model = {
     get_publicgetsuppressionzonesending: {
       description: "Get zone email suppression",
       arguments: z.object({
-        suppression_id: z.string().min(1, "suppression_id must not be empty"),
+        suppression_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2560,33 +1993,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get zone email suppression (zoneId=${zoneId} suppression_id=${args.suppression_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
+        );
 
         const handle = await context.writeResource(
           "publicgetsuppressionzonesending",
-          String(args.suppression_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.suppression_id)),
+          result,
         );
         context.logger.info("Fetched publicgetsuppressionzonesending", {});
         return { dataHandles: [handle] };
@@ -2595,7 +2012,7 @@ export const model = {
     delete_publicdeletesuppressionzonesending: {
       description: "Delete zone email suppression",
       arguments: z.object({
-        suppression_id: z.string().min(1, "suppression_id must not be empty"),
+        suppression_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2612,20 +2029,12 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete zone email suppression (zoneId=${zoneId} suppression_id=${args.suppression_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/zones/${zoneId}/email/sending/suppression/${args.suppression_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.suppression_id,

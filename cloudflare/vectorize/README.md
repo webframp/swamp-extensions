@@ -37,7 +37,7 @@ swamp model create @webframp/cloudflare/vectorize cf-vectorize \
 ## Development
 
 ```bash
-cd cloudflare/vectorize
+cd ../../cloudflare/vectorize
 deno task check
 deno task lint
 deno task fmt

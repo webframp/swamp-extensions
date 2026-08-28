@@ -25,7 +25,7 @@ swamp model create @webframp/cloudflare/durable-objects cf-durable-objects \
 ## Development
 
 ```bash
-cd cloudflare/durable-objects
+cd ../../cloudflare/durable-objects
 deno task check
 deno task lint
 deno task fmt

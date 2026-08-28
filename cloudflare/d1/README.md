@@ -35,7 +35,7 @@ swamp model create @webframp/cloudflare/d1 cf-d1 \
 ## Development
 
 ```bash
-cd cloudflare/d1
+cd ../../cloudflare/d1
 deno task check
 deno task lint
 deno task fmt

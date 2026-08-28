@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/inventory";
 
@@ -28,7 +28,7 @@ const AssetsGroupItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const ListAssetsGroupSchema = z.object({
   items: z.array(AssetsGroupItemSchema),
@@ -53,7 +53,7 @@ const GetFilterFieldsGroupItemSchema = z.object({
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetFilterFieldsGroupSchema = z.object({
   items: z.array(GetFilterFieldsGroupItemSchema),
@@ -78,7 +78,7 @@ const GetFilterValuesGroupItemSchema = z.object({
   value: z.string().optional().describe(
     "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
   ),
-});
+}).passthrough();
 
 const GetFilterValuesGroupSchema = z.object({
   items: z.array(GetFilterValuesGroupItemSchema),
@@ -104,7 +104,7 @@ const GetGroupFieldsGroupItemSchema = z.object({
     'The field name used for grouping (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetGroupFieldsGroupSchema = z.object({
   items: z.array(GetGroupFieldsGroupItemSchema),
@@ -124,7 +124,7 @@ const GetGroupValuesGroupItemSchema = z.object({
     "The JSON:API resource type",
   ),
   value: z.string().describe("The grouped value"),
-});
+}).passthrough();
 
 const GetGroupValuesGroupSchema = z.object({
   items: z.array(GetGroupValuesGroupItemSchema),
@@ -144,7 +144,7 @@ const GetAssetSearchResultsGroupItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const GetAssetSearchResultsGroupSchema = z.object({
   items: z.array(GetAssetSearchResultsGroupItemSchema),
@@ -164,39 +164,18 @@ const GetAssetGroupSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AssetProjectsGroupItemSchema = z.object({
   id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["projects"]).optional().describe("The JSON:API resource type"),
+  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional().describe(
-      "The current base image reference for this project",
-    ),
-    base_image_name: z.string().describe(
-      "Name of the current base image",
-    ),
-    base_image_outdated: z.boolean().optional().describe(
-      "Whether the current base image is outdated",
-    ),
-    code: z.string().describe(
-      "Recommended Dockerfile snippet to apply the remediation",
-    ),
-    distro_alert: z.string().optional().describe(
-      "Alert about the base image OS distribution, if any",
-    ),
-    proposed_base_images: z.unknown().optional().describe(
-      "Suggested upgraded base image options",
-    ),
+    base_image: z.unknown().optional(),
+    base_image_name: z.string(),
+    base_image_outdated: z.boolean().optional(),
+    code: z.string(),
+    distro_alert: z.string().optional(),
+    proposed_base_images: z.unknown().optional(),
   }).optional().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
@@ -204,10 +183,10 @@ const AssetProjectsGroupItemSchema = z.object({
     "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
   ),
   issues: z.object({
-    critical: z.number().int().describe("Count of critical-severity issues"),
-    high: z.number().int().describe("Count of high-severity issues"),
-    low: z.number().int().describe("Count of low-severity issues"),
-    medium: z.number().int().describe("Count of medium-severity issues"),
+    critical: z.number().int(),
+    high: z.number().int(),
+    low: z.number().int(),
+    medium: z.number().int(),
   }).optional().describe("Issue counts by severity"),
   monitor_created_at: z.string().optional().describe(
     "Timestamp when the monitor was created",
@@ -278,7 +257,7 @@ const AssetProjectsGroupItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetProjectsGroupSchema = z.object({
   items: z.array(AssetProjectsGroupItemSchema),
@@ -308,7 +287,7 @@ const AssetTargetsGroupItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetTargetsGroupSchema = z.object({
   items: z.array(AssetTargetsGroupItemSchema),
@@ -328,7 +307,7 @@ const AssetsOrgItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const ListAssetsOrgSchema = z.object({
   items: z.array(AssetsOrgItemSchema),
@@ -353,7 +332,7 @@ const GetFilterFieldsOrgItemSchema = z.object({
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetFilterFieldsOrgSchema = z.object({
   items: z.array(GetFilterFieldsOrgItemSchema),
@@ -378,7 +357,7 @@ const GetFilterValuesOrgItemSchema = z.object({
   value: z.string().optional().describe(
     "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
   ),
-});
+}).passthrough();
 
 const GetFilterValuesOrgSchema = z.object({
   items: z.array(GetFilterValuesOrgItemSchema),
@@ -404,7 +383,7 @@ const GetGroupFieldsOrgItemSchema = z.object({
     'The field name used for grouping (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetGroupFieldsOrgSchema = z.object({
   items: z.array(GetGroupFieldsOrgItemSchema),
@@ -424,7 +403,7 @@ const GetGroupValuesOrgItemSchema = z.object({
     "The JSON:API resource type",
   ),
   value: z.string().describe("The grouped value"),
-});
+}).passthrough();
 
 const GetGroupValuesOrgSchema = z.object({
   items: z.array(GetGroupValuesOrgItemSchema),
@@ -444,7 +423,7 @@ const GetAssetSearchResultsOrgItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const GetAssetSearchResultsOrgSchema = z.object({
   items: z.array(GetAssetSearchResultsOrgItemSchema),
@@ -464,39 +443,18 @@ const GetAssetOrgSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AssetProjectsOrgItemSchema = z.object({
   id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["projects"]).optional().describe("The JSON:API resource type"),
+  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional().describe(
-      "The current base image reference for this project",
-    ),
-    base_image_name: z.string().describe(
-      "Name of the current base image",
-    ),
-    base_image_outdated: z.boolean().optional().describe(
-      "Whether the current base image is outdated",
-    ),
-    code: z.string().describe(
-      "Recommended Dockerfile snippet to apply the remediation",
-    ),
-    distro_alert: z.string().optional().describe(
-      "Alert about the base image OS distribution, if any",
-    ),
-    proposed_base_images: z.unknown().optional().describe(
-      "Suggested upgraded base image options",
-    ),
+    base_image: z.unknown().optional(),
+    base_image_name: z.string(),
+    base_image_outdated: z.boolean().optional(),
+    code: z.string(),
+    distro_alert: z.string().optional(),
+    proposed_base_images: z.unknown().optional(),
   }).optional().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
@@ -504,10 +462,10 @@ const AssetProjectsOrgItemSchema = z.object({
     "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
   ),
   issues: z.object({
-    critical: z.number().int().describe("Count of critical-severity issues"),
-    high: z.number().int().describe("Count of high-severity issues"),
-    low: z.number().int().describe("Count of low-severity issues"),
-    medium: z.number().int().describe("Count of medium-severity issues"),
+    critical: z.number().int(),
+    high: z.number().int(),
+    low: z.number().int(),
+    medium: z.number().int(),
   }).optional().describe("Issue counts by severity"),
   monitor_created_at: z.string().optional().describe(
     "Timestamp when the monitor was created",
@@ -578,7 +536,7 @@ const AssetProjectsOrgItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetProjectsOrgSchema = z.object({
   items: z.array(AssetProjectsOrgItemSchema),
@@ -608,7 +566,7 @@ const AssetTargetsOrgItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetTargetsOrgSchema = z.object({
   items: z.array(AssetTargetsOrgItemSchema),
@@ -629,7 +587,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -639,7 +597,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted. update_assets_bulk_group and update_assets_bulk_org now require a non-empty data array. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -669,6 +626,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -849,8 +811,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -889,10 +851,7 @@ export const model = {
       description: "Bulk update asset attributes - Group scope (Early Access)",
       arguments: z.object({
         group_id: z.string().describe("The unique identifier of the group"),
-        data: z.array(z.unknown()).min(
-          1,
-          "At least one asset update is required for a bulk update",
-        ),
+        data: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -908,7 +867,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -926,13 +884,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "assets_bulk_group",
-          String(args.group_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.group_id)),
+          result,
         );
         context.logger.info("Updated assets_bulk_group", {});
         return { dataHandles: [handle] };
@@ -960,8 +913,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1032,8 +985,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id", "filter_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1094,8 +1047,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1171,8 +1124,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id", "group_field_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1219,7 +1172,7 @@ export const model = {
         data: z.object({
           attributes: z.object({
             filter: z.unknown().optional(),
-            limit: z.number().int().min(10).max(100).optional(),
+            limit: z.number().int().min(10).max(100).optional().default(10),
             meta_count: z.enum(["with", "only"]).optional(),
             sort: z.string().optional(),
           }).optional(),
@@ -1240,7 +1193,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id"]);
@@ -1256,16 +1208,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "asset_search_group",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created asset_search_group {id}", { id });
         return { dataHandles: [handle] };
@@ -1300,8 +1249,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id", "search_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1363,7 +1312,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["group_id", "asset_id"]);
@@ -1385,13 +1333,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_group",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Fetched asset_group", {});
         return { dataHandles: [handle] };
@@ -1418,7 +1361,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["group_id", "asset_id"]);
@@ -1436,13 +1378,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_group",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Updated asset_group", {});
         return { dataHandles: [handle] };
@@ -1482,8 +1419,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1542,8 +1479,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1613,8 +1550,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1652,10 +1589,7 @@ export const model = {
     update_assets_bulk_org: {
       description: "Bulk update asset attributes - Org scope (Early Access)",
       arguments: z.object({
-        data: z.array(z.unknown()).min(
-          1,
-          "At least one asset update is required for a bulk update",
-        ),
+        data: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1671,7 +1605,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1690,12 +1623,7 @@ export const model = {
         const handle = await context.writeResource(
           "assets_bulk_org",
           "updated",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Updated assets_bulk_org", {});
         return { dataHandles: [handle] };
@@ -1722,8 +1650,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1793,8 +1721,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["filter_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1854,8 +1782,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1930,8 +1858,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["group_field_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1977,7 +1905,7 @@ export const model = {
         data: z.object({
           attributes: z.object({
             filter: z.unknown().optional(),
-            limit: z.number().int().min(10).max(100).optional(),
+            limit: z.number().int().min(10).max(100).optional().default(10),
             meta_count: z.enum(["with", "only"]).optional(),
             sort: z.string().optional(),
           }).optional(),
@@ -1998,7 +1926,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -2014,16 +1941,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "asset_search_org",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created asset_search_org {id}", { id });
         return { dataHandles: [handle] };
@@ -2057,8 +1981,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["search_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2119,7 +2043,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["asset_id"]);
@@ -2141,13 +2064,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_org",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Fetched asset_org", {});
         return { dataHandles: [handle] };
@@ -2173,7 +2091,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
@@ -2191,13 +2108,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_org",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Updated asset_org", {});
         return { dataHandles: [handle] };
@@ -2236,8 +2148,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2295,8 +2207,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {

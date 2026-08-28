@@ -29,7 +29,7 @@ swamp model create @webframp/cloudflare/hyperdrive cf-hyperdrive \
 ## Development
 
 ```bash
-cd cloudflare/hyperdrive
+cd ../../cloudflare/hyperdrive
 deno task check
 deno task lint
 deno task fmt

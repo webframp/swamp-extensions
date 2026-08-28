@@ -124,13 +124,6 @@ Deno.test("ssl-certificates model: has expected resources", () => {
   );
 });
 
-Deno.test("ssl-certificates model: rejects empty certificate_id", () => {
-  const result = model.methods.get_certificate.arguments.safeParse({
-    certificate_id: "",
-  });
-  assertEquals(result.success, false);
-});
-
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

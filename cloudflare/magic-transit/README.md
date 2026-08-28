@@ -172,7 +172,7 @@ swamp model create @webframp/cloudflare/magic-transit cf-magic-transit \
 ## Development
 
 ```bash
-cd cloudflare/magic-transit
+cd ../../cloudflare/magic-transit
 deno task check
 deno task lint
 deno task fmt

@@ -72,7 +72,7 @@ swamp model create @webframp/cloudflare/gateway cf-gateway \
 ## Development
 
 ```bash
-cd cloudflare/gateway
+cd ../../cloudflare/gateway
 deno task check
 deno task lint
 deno task fmt

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/downtimes";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/downtimes";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,12 +29,14 @@ const GlobalArgsSchema = z.object({
 
 const DowntimesItemSchema = z.object({
   id: z.string().describe("The downtime ID."),
-  type: z.enum(["downtime"]).optional().describe("Downtime resource type."),
+  type: z.enum(["downtime"]).optional().default("downtime").describe(
+    "Downtime resource type.",
+  ),
   canceled: z.string().nullable().optional().describe(
     "Time that the downtime was canceled.",
   ),
   created: z.string().optional().describe("Creation time of the downtime."),
-  display_timezone: z.string().nullable().optional().describe(
+  display_timezone: z.string().nullable().optional().default("UTC").describe(
     "The timezone in which to display the downtime's start and end times in Datadog applications. This...",
   ),
   message: z.string().nullable().optional().describe(
@@ -65,7 +67,7 @@ const DowntimesItemSchema = z.object({
     .describe("The current status of the downtime."),
   created_by_id: z.string().optional().describe("Related created_by ID"),
   monitor_id: z.string().optional().describe("Related monitor ID"),
-});
+}).passthrough();
 
 const ListDowntimesSchema = z.object({
   items: z.array(DowntimesItemSchema),
@@ -81,12 +83,14 @@ const ListDowntimesSchema = z.object({
 
 const CreateDowntimeSchema = z.object({
   id: z.string().describe("The downtime ID."),
-  type: z.enum(["downtime"]).optional().describe("Downtime resource type."),
+  type: z.enum(["downtime"]).optional().default("downtime").describe(
+    "Downtime resource type.",
+  ),
   canceled: z.string().nullable().optional().describe(
     "Time that the downtime was canceled.",
   ),
   created: z.string().optional().describe("Creation time of the downtime."),
-  display_timezone: z.string().nullable().optional().describe(
+  display_timezone: z.string().nullable().optional().default("UTC").describe(
     "The timezone in which to display the downtime's start and end times in Datadog applications. This...",
   ),
   message: z.string().nullable().optional().describe(
@@ -117,22 +121,12 @@ const CreateDowntimeSchema = z.object({
     .describe("The current status of the downtime."),
   created_by_id: z.string().optional().describe("Related created_by ID"),
   monitor_id: z.string().optional().describe("Related monitor ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const MonitorDowntimesItemSchema = z.object({
   id: z.string().nullable().describe("The downtime ID."),
-  type: z.enum(["downtime_match"]).optional().describe(
-    "Monitor Downtime Match resource type.",
-  ),
+  type: z.enum(["downtime_match"]).optional().default("downtime_match")
+    .describe("Monitor Downtime Match resource type."),
   end: z.string().nullable().optional().describe("The end of the downtime."),
   groups: z.array(z.string()).optional().describe(
     "An array of groups associated with the downtime.",
@@ -141,7 +135,7 @@ const MonitorDowntimesItemSchema = z.object({
     "The scope to which the downtime applies. Must follow the [common search syntax](https://docs.data...",
   ),
   start: z.string().optional().describe("The start of the downtime."),
-});
+}).passthrough();
 
 const ListMonitorDowntimesSchema = z.object({
   items: z.array(MonitorDowntimesItemSchema),
@@ -162,7 +156,7 @@ const ListMonitorDowntimesSchema = z.object({
 /** Datadog Downtimes — scheduled downtime management for monitors */
 export const model = {
   type: "@webframp/datadog/downtimes",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -193,6 +187,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -243,8 +242,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -292,30 +291,14 @@ export const model = {
     create_downtime: {
       description: "Schedule a downtime",
       arguments: z.object({
-        display_timezone: z.unknown().optional().describe(
-          "The timezone in which to display the downtime's start and end times in Datadog applications.",
-        ),
-        message: z.unknown().optional().describe(
-          "A message to include with notifications for this downtime.",
-        ),
-        monitor_identifier: z.unknown().describe(
-          "Monitor identifier for the downtime.",
-        ),
-        mute_first_recovery_notification: z.unknown().optional().describe(
-          "If the first recovery notification during a downtime should be muted.",
-        ),
-        notify_end_states: z.unknown().optional().describe(
-          "States that will trigger a monitor notification when the `notify_end_types` action occurs.",
-        ),
-        notify_end_types: z.unknown().optional().describe(
-          "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
-        ),
-        schedule: z.unknown().optional().describe(
-          "The schedule that defines when the monitor starts, stops, and recurs.",
-        ),
-        scope: z.unknown().describe(
-          "The scope to which the downtime applies.",
-        ),
+        display_timezone: z.unknown().optional(),
+        message: z.unknown().optional(),
+        monitor_identifier: z.unknown(),
+        mute_first_recovery_notification: z.unknown().optional(),
+        notify_end_states: z.unknown().optional(),
+        notify_end_types: z.unknown().optional(),
+        schedule: z.unknown().optional(),
+        scope: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -331,7 +314,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -349,13 +331,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("downtime", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("downtime", id, result);
         context.logger.info("Created downtime {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -363,9 +342,7 @@ export const model = {
     get_downtime: {
       description: "Get a downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "ID of the downtime to fetch.",
-        ),
+        downtime_id: z.string().describe("ID of the downtime to fetch."),
         include: z.string().optional().describe(
           "Comma-separated list of resource paths for related resources to include in th...",
         ),
@@ -384,7 +361,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["downtime_id"]);
@@ -410,13 +386,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "downtime",
-          String(args.downtime_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.downtime_id)),
+          result,
         );
         context.logger.info("Fetched downtime", {});
         return { dataHandles: [handle] };
@@ -425,33 +396,15 @@ export const model = {
     update_downtime: {
       description: "Update a downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "ID of the downtime to update.",
-        ),
-        display_timezone: z.unknown().optional().describe(
-          "The timezone in which to display the downtime's start and end times in Datadog applications.",
-        ),
-        message: z.unknown().optional().describe(
-          "A message to include with notifications for this downtime.",
-        ),
-        monitor_identifier: z.unknown().optional().describe(
-          "Monitor identifier for the downtime.",
-        ),
-        mute_first_recovery_notification: z.unknown().optional().describe(
-          "If the first recovery notification during a downtime should be muted.",
-        ),
-        notify_end_states: z.unknown().optional().describe(
-          "States that will trigger a monitor notification when the `notify_end_types` action occurs.",
-        ),
-        notify_end_types: z.unknown().optional().describe(
-          "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
-        ),
-        schedule: z.unknown().optional().describe(
-          "The schedule that defines when the monitor starts, stops, and recurs.",
-        ),
-        scope: z.unknown().optional().describe(
-          "The scope to which the downtime applies.",
-        ),
+        downtime_id: z.string().describe("ID of the downtime to update."),
+        display_timezone: z.unknown().optional(),
+        message: z.unknown().optional(),
+        monitor_identifier: z.unknown().optional(),
+        mute_first_recovery_notification: z.unknown().optional(),
+        notify_end_states: z.unknown().optional(),
+        notify_end_types: z.unknown().optional(),
+        schedule: z.unknown().optional(),
+        scope: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -467,7 +420,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["downtime_id"]);
@@ -487,13 +439,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "downtime",
-          String(args.downtime_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.downtime_id)),
+          result,
         );
         context.logger.info("Updated downtime", {});
         return { dataHandles: [handle] };
@@ -502,9 +449,7 @@ export const model = {
     cancel_downtime: {
       description: "Cancel a downtime",
       arguments: z.object({
-        downtime_id: z.string().min(1).describe(
-          "ID of the downtime to cancel.",
-        ),
+        downtime_id: z.string().describe("ID of the downtime to cancel."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -536,7 +481,7 @@ export const model = {
     list_monitor_downtimes: {
       description: "Get active downtimes for a monitor",
       arguments: z.object({
-        monitor_id: z.string().min(1).describe("The id of the monitor."),
+        monitor_id: z.string().describe("The id of the monitor."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -552,8 +497,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["monitor_id"]);
         for (const [k, v] of Object.entries(args)) {

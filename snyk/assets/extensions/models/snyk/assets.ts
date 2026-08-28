@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/assets";
 
@@ -92,16 +92,7 @@ const ListAssetsSchema = z.object({
   assets_id: z.string().optional().describe("Related assets ID"),
   organizations_id: z.string().optional().describe("Related organizations ID"),
   projects_id: z.string().optional().describe("Related projects ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAssetSchema = z.object({
   id: z.string(),
@@ -173,16 +164,7 @@ const GetAssetSchema = z.object({
   assets_id: z.string().optional().describe("Related assets ID"),
   organizations_id: z.string().optional().describe("Related organizations ID"),
   projects_id: z.string().optional().describe("Related projects ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const RelatedAssetsItemSchema = z.object({
   id: z.string(),
@@ -254,7 +236,7 @@ const RelatedAssetsItemSchema = z.object({
   assets_id: z.string().optional().describe("Related assets ID"),
   organizations_id: z.string().optional().describe("Related organizations ID"),
   projects_id: z.string().optional().describe("Related projects ID"),
-});
+}).passthrough();
 
 const ListRelatedAssetsSchema = z.object({
   items: z.array(RelatedAssetsItemSchema),
@@ -272,46 +254,22 @@ const AssetProjectsItemSchema = z.object({
   id: z.string(),
   type: z.enum(["project"]).optional(),
   issues_counts: z.object({
-    critical: z.number().optional().describe(
-      "Count of critical-severity issues on this project",
-    ),
-    high: z.number().optional().describe(
-      "Count of high-severity issues on this project",
-    ),
-    low: z.number().optional().describe(
-      "Count of low-severity issues on this project",
-    ),
-    medium: z.number().optional().describe(
-      "Count of medium-severity issues on this project",
-    ),
-  }).optional().describe("Issue counts by severity for this project"),
-  last_scan: z.string().optional().describe(
-    "Timestamp of the most recent scan of this project",
-  ),
-  name: z.string().optional().describe("Name of the project"),
-  organization_id: z.string().optional().describe(
-    "ID of the organization that owns the project",
-  ),
-  organization_name: z.string().optional().describe(
-    "Name of the organization that owns the project",
-  ),
-  project_type: z.string().optional().describe(
-    "Type of the project (e.g. package manager or ecosystem)",
-  ),
-  target_file: z.string().optional().describe(
-    "Manifest or target file scanned for this project",
-  ),
-  target_id: z.string().optional().describe(
-    "ID of the target the project was scanned from",
-  ),
-  target_reference: z.string().optional().describe(
-    "Branch, tag, or other reference of the scanned target",
-  ),
-  test_surface: z.string().optional().describe(
-    "Testing surface used to scan the project",
-  ),
-  url: z.string().optional().describe("URL to view the project in Snyk"),
-});
+    critical: z.number().optional(),
+    high: z.number().optional(),
+    low: z.number().optional(),
+    medium: z.number().optional(),
+  }).optional(),
+  last_scan: z.string().optional(),
+  name: z.string().optional(),
+  organization_id: z.string().optional(),
+  organization_name: z.string().optional(),
+  project_type: z.string().optional(),
+  target_file: z.string().optional(),
+  target_id: z.string().optional(),
+  target_reference: z.string().optional(),
+  test_surface: z.string().optional(),
+  url: z.string().optional(),
+}).passthrough();
 
 const ListAssetProjectsSchema = z.object({
   items: z.array(AssetProjectsItemSchema),
@@ -332,7 +290,7 @@ const ListAssetProjectsSchema = z.object({
 /** Snyk Assets — asset discovery and classification across the group */
 export const model = {
   type: "@webframp/snyk/assets",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -342,7 +300,6 @@ export const model = {
         "Snyk API errors now include the HTTP method and path attempted instead of just the raw status/body. No stored-resource schema changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
-
     {
       toVersion: "2026.08.24.1",
 
@@ -372,6 +329,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -421,7 +383,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -440,12 +401,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_assets",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed list_assets", {});
         return { dataHandles: [handle] };
@@ -470,7 +426,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -481,13 +436,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Fetched asset", {});
         return { dataHandles: [handle] };
@@ -515,8 +465,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -570,8 +520,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, groupId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {

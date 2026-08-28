@@ -5,12 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi } from "./_lib/api.ts";
-
-const EXTENSION_NAME = "@webframp/cloudflare/images";
+import { cfApi, sanitizeInstanceName } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -18,103 +16,40 @@ const EXTENSION_NAME = "@webframp/cloudflare/images";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
 const ListSigningKeysSchema = z.object({
   keys: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateCloudflareImagesKeysAddSigningKeySchema = z.object({
   keys: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCloudflareImagesImagesUsageStatisticsSchema = z.object({
   count: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListVariantsSchema = z.object({
   variants: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateAVariantSchema = z.object({
   variant: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCloudflareImagesVariantsVariantDetailsSchema = z.object({
   variant: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCloudflareImagesVariantsVariantDetailsFlatSchema = z.object({
   id: z.unknown(),
   neverRequireSignedURLs: z.unknown().optional(),
   options: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCloudflareImagesImageDetailsSchema = z.object({
   creator: z.unknown().optional(),
@@ -124,16 +59,7 @@ const GetCloudflareImagesImageDetailsSchema = z.object({
   requireSignedURLs: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   variants: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateImageSchema = z.object({
   creator: z.unknown().optional(),
@@ -143,57 +69,21 @@ const UpdateImageSchema = z.object({
   requireSignedURLs: z.unknown().optional(),
   uploaded: z.unknown().optional(),
   variants: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListImagesV2Schema = z.object({
   images: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListMigrationsSchema = z.object({
   migrations: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateMigrationSchema = z.object({
   id: z.string().optional().describe(
     "The identifier of the created migration.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMigrationProgressSchema = z.object({
   endedAt: z.string().nullable().optional(),
@@ -232,16 +122,7 @@ const GetMigrationProgressSchema = z.object({
   ),
   startedAt: z.string().nullable().optional(),
   status: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.union([
   z.object({}),
@@ -255,42 +136,15 @@ const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.union([
 
 const ListMigrationLogsSchema = z.object({
   logs: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListSourcesSchema = z.object({
   sources: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateSourceSchema = z.object({
   id: z.string().optional().describe("The identifier of the created source."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z
   .object({
@@ -303,7 +157,7 @@ const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z
     reason: z.string().nullable().optional().describe(
       "Human-readable error description if connectivity failed.",
     ),
-  });
+  }).passthrough();
 
 const GetSourceConnectivitySchema = z.object({
   code: z.string().nullable().optional().describe(
@@ -315,16 +169,7 @@ const GetSourceConnectivitySchema = z.object({
   reason: z.string().nullable().optional().describe(
     "Human-readable error description if connectivity failed.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -333,7 +178,7 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -359,6 +204,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -504,33 +354,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/keys`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list Signing Keys (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/keys`,
+        );
 
         const handle = await context.writeResource(
           "list_signing_keys",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_signing_keys", {});
         return { dataHandles: [handle] };
@@ -539,10 +373,7 @@ export const model = {
     update_cloudflare_images_keys_add_signing_key: {
       description: "Create a new Signing Key",
       arguments: z.object({
-        signing_key_name: z.string().min(
-          1,
-          "signing_key_name must not be empty",
-        ),
+        signing_key_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -558,7 +389,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -567,32 +397,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PUT",
-            `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a new Signing Key (accountId=${accountId} signing_key_name=${args.signing_key_name}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_keys_add_signing_key",
-          String(args.signing_key_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.signing_key_name)),
+          result,
         );
         context.logger.info(
           "Updated cloudflare_images_keys_add_signing_key",
@@ -604,10 +419,7 @@ export const model = {
     delete_signing_key: {
       description: "Delete Signing Key",
       arguments: z.object({
-        signing_key_name: z.string().min(
-          1,
-          "signing_key_name must not be empty",
-        ),
+        signing_key_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -625,20 +437,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete Signing Key (accountId=${accountId} signing_key_name=${args.signing_key_name}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/images/v1/keys/${args.signing_key_name}`,
+        );
 
         context.logger.info("Deleted resource {id}", {
           id: args.signing_key_name,
@@ -663,33 +466,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/stats`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to images usage statistics (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/stats`,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_images_usage_statistics",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Fetched cloudflare_images_images_usage_statistics",
@@ -715,33 +502,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/variants`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list variants (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/variants`,
+        );
 
         const handle = await context.writeResource(
           "list_variants",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_variants", {});
         return { dataHandles: [handle] };
@@ -767,35 +538,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/images/v1/variants`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a variant (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/images/v1/variants`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_variant", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("a_variant", id, result);
         context.logger.info("Created a_variant {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -803,7 +560,7 @@ export const model = {
     get_cloudflare_images_variants_variant_details: {
       description: "Variant details",
       arguments: z.object({
-        variant_id: z.string().min(1, "variant_id must not be empty"),
+        variant_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -819,33 +576,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to variant details (accountId=${accountId} variant_id=${args.variant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_variants_variant_details",
-          String(args.variant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.variant_id)),
+          result,
         );
         context.logger.info(
           "Fetched cloudflare_images_variants_variant_details",
@@ -857,7 +598,7 @@ export const model = {
     update_a_variant: {
       description: "Update a variant",
       arguments: z.object({
-        variant_id: z.string().min(1, "variant_id must not be empty"),
+        variant_id: z.string(),
         neverRequireSignedURLs: z.unknown().optional(),
         options: z.unknown(),
       }),
@@ -875,7 +616,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -884,32 +624,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a variant (accountId=${accountId} variant_id=${args.variant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "a_variant",
-          String(args.variant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.variant_id)),
+          result,
         );
         context.logger.info("Updated a_variant", {});
         return { dataHandles: [handle] };
@@ -918,7 +643,7 @@ export const model = {
     delete_a_variant: {
       description: "Delete a variant",
       arguments: z.object({
-        variant_id: z.string().min(1, "variant_id must not be empty"),
+        variant_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -936,20 +661,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a variant (accountId=${accountId} variant_id=${args.variant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/images/v1/variants/${args.variant_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.variant_id });
         return { dataHandles: [] };
@@ -958,7 +674,7 @@ export const model = {
     get_cloudflare_images_variants_variant_details_flat: {
       description: "Variant details (flat)",
       arguments: z.object({
-        variant_id: z.string().min(1, "variant_id must not be empty"),
+        variant_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -974,33 +690,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/variants/${args.variant_id}/flat`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to variant details (flat) (accountId=${accountId} variant_id=${args.variant_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/variants/${args.variant_id}/flat`,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_variants_variant_details_flat",
-          String(args.variant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.variant_id)),
+          result,
         );
         context.logger.info(
           "Fetched cloudflare_images_variants_variant_details_flat",
@@ -1012,7 +712,7 @@ export const model = {
     get_cloudflare_images_image_details: {
       description: "Image details",
       arguments: z.object({
-        image_id: z.string().min(1, "image_id must not be empty"),
+        image_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1028,33 +728,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v1/${args.image_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to image details (accountId=${accountId} image_id=${args.image_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/${args.image_id}`,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_image_details",
-          String(args.image_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.image_id)),
+          result,
         );
         context.logger.info("Fetched cloudflare_images_image_details", {});
         return { dataHandles: [handle] };
@@ -1063,7 +747,7 @@ export const model = {
     update_image: {
       description: "Update image",
       arguments: z.object({
-        image_id: z.string().min(1, "image_id must not be empty"),
+        image_id: z.string(),
         creator: z.string().optional().describe(
           "Can set the creator field with an internal user ID.",
         ),
@@ -1088,7 +772,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1097,32 +780,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/images/v1/${args.image_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update image (accountId=${accountId} image_id=${args.image_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v1/${args.image_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "image",
-          String(args.image_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.image_id)),
+          result,
         );
         context.logger.info("Updated image", {});
         return { dataHandles: [handle] };
@@ -1131,7 +799,7 @@ export const model = {
     delete_image: {
       description: "Delete image",
       arguments: z.object({
-        image_id: z.string().min(1, "image_id must not be empty"),
+        image_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1149,20 +817,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/images/v1/${args.image_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete image (accountId=${accountId} image_id=${args.image_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/images/v1/${args.image_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.image_id });
         return { dataHandles: [] };
@@ -1193,33 +852,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list images V2 (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2`,
+        );
 
         const handle = await context.writeResource(
           "list_images_v2",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_images_v2", {});
         return { dataHandles: [handle] };
@@ -1245,33 +888,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list sourcing kit migrations (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
+        );
 
         const handle = await context.writeResource(
           "list_migrations",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_migrations", {});
         return { dataHandles: [handle] };
@@ -1290,7 +917,7 @@ export const model = {
         rootDirectory: z.string().min(1).max(128).optional().describe(
           "Only import objects under this prefix in the source bucket.",
         ),
-        sourceId: z.string().min(1, "sourceId must not be empty").describe(
+        sourceId: z.string().describe(
           "The identifier of the source to migrate from.",
         ),
       }),
@@ -1308,35 +935,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a sourcing kit migration (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("migration", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("migration", id, result);
         context.logger.info("Created migration {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1344,7 +957,7 @@ export const model = {
     get_migration: {
       description: "Get sourcing kit migration",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1360,33 +973,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get sourcing kit migration (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
+        );
 
         const handle = await context.writeResource(
           "migration",
-          String(args.migration_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.migration_id)),
+          result,
         );
         context.logger.info("Fetched migration", {});
         return { dataHandles: [handle] };
@@ -1395,7 +992,7 @@ export const model = {
     delete_migration: {
       description: "Delete a sourcing kit migration",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1413,20 +1010,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a sourcing kit migration (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.migration_id });
         return { dataHandles: [] };
@@ -1435,7 +1023,7 @@ export const model = {
     get_migration_progress: {
       description: "Get migration progress",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1451,33 +1039,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get migration progress (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle`,
+        );
 
         const handle = await context.writeResource(
           "migration_progress",
-          String(args.migration_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.migration_id)),
+          result,
         );
         context.logger.info("Fetched migration_progress", {});
         return { dataHandles: [handle] };
@@ -1486,7 +1058,7 @@ export const model = {
     update_cloudflare_images_sourcingkit_abort_migration: {
       description: "Abort a migration",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1502,7 +1074,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1511,32 +1082,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/abort`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to abort a migration (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/abort`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_abort_migration",
-          String(args.migration_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.migration_id)),
+          result,
         );
         context.logger.info(
           "Updated cloudflare_images_sourcingkit_abort_migration",
@@ -1548,7 +1104,7 @@ export const model = {
     update_cloudflare_images_sourcingkit_start_migration: {
       description: "Start a migration",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1564,7 +1120,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1573,32 +1128,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/start`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to start a migration (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/lifecycle/start`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_start_migration",
-          String(args.migration_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.migration_id)),
+          result,
         );
         context.logger.info(
           "Updated cloudflare_images_sourcingkit_start_migration",
@@ -1610,7 +1150,7 @@ export const model = {
     list_migration_logs: {
       description: "List migration logs",
       arguments: z.object({
-        migration_id: z.string().min(1, "migration_id must not be empty"),
+        migration_id: z.string(),
         offset: z.number().optional(),
         limit: z.number().optional(),
       }),
@@ -1628,33 +1168,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list migration logs (accountId=${accountId} migration_id=${args.migration_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs`,
+        );
 
         const handle = await context.writeResource(
           "list_migration_logs",
-          String(args.migration_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.migration_id)),
+          result,
         );
         context.logger.info("Fetched list_migration_logs", {});
         return { dataHandles: [handle] };
@@ -1681,33 +1205,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to list sourcing kit sources (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources`,
+        );
 
         const handle = await context.writeResource(
           "list_sources",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_sources", {});
         return { dataHandles: [handle] };
@@ -1744,35 +1252,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to create a sourcing kit source (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("source", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("source", id, result);
         context.logger.info("Created source {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1808,38 +1302,24 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "POST",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources/connectivity-precheck`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to precheck source connectivity (accountId=${accountId}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources/connectivity-precheck`,
+          body,
+        );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_precheck_source_connectivity",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info(
           "Created cloudflare_images_sourcingkit_precheck_source_connectivity {id}",
@@ -1851,7 +1331,7 @@ export const model = {
     get_source: {
       description: "Get sourcing kit source",
       arguments: z.object({
-        source_id: z.string().min(1, "source_id must not be empty"),
+        source_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1867,33 +1347,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get sourcing kit source (accountId=${accountId} source_id=${args.source_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
+        );
 
         const handle = await context.writeResource(
           "source",
-          String(args.source_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.source_id)),
+          result,
         );
         context.logger.info("Fetched source", {});
         return { dataHandles: [handle] };
@@ -1902,7 +1366,7 @@ export const model = {
     update_source: {
       description: "Update a sourcing kit source",
       arguments: z.object({
-        source_id: z.string().min(1, "source_id must not be empty"),
+        source_id: z.string(),
         name: z.string().min(1).max(128).describe(
           "Updated name for the source.",
         ),
@@ -1921,7 +1385,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1930,32 +1393,17 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "PATCH",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
-            body,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to update a sourcing kit source (accountId=${accountId} source_id=${args.source_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
+          body,
+        );
 
         const handle = await context.writeResource(
           "source",
-          String(args.source_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.source_id)),
+          result,
         );
         context.logger.info("Updated source", {});
         return { dataHandles: [handle] };
@@ -1964,7 +1412,7 @@ export const model = {
     delete_source: {
       description: "Delete a sourcing kit source",
       arguments: z.object({
-        source_id: z.string().min(1, "source_id must not be empty"),
+        source_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1982,20 +1430,11 @@ export const model = {
       ) => {
         const { apiToken, accountId } = context.globalArgs;
 
-        try {
-          await cfApi(
-            apiToken,
-            "DELETE",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to delete a sourcing kit source (accountId=${accountId} source_id=${args.source_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}`,
+        );
 
         context.logger.info("Deleted resource {id}", { id: args.source_id });
         return { dataHandles: [] };
@@ -2004,7 +1443,7 @@ export const model = {
     get_source_connectivity: {
       description: "Get source connectivity status",
       arguments: z.object({
-        source_id: z.string().min(1, "source_id must not be empty"),
+        source_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2020,33 +1459,17 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
-        let result: Record<string, unknown>;
-        try {
-          result = await cfApi<Record<string, unknown>>(
-            apiToken,
-            "GET",
-            `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}/connectivity`,
-          );
-        } catch (error) {
-          throw new Error(
-            `Failed to get source connectivity status (accountId=${accountId} source_id=${args.source_id}): ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            { cause: error },
-          );
-        }
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/sources/${args.source_id}/connectivity`,
+        );
 
         const handle = await context.writeResource(
           "source_connectivity",
-          String(args.source_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.source_id)),
+          result,
         );
         context.logger.info("Fetched source_connectivity", {});
         return { dataHandles: [handle] };

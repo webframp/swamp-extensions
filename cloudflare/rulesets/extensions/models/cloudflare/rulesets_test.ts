@@ -193,7 +193,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "rulesets model: createaccountruleset executes and writes resource",
+  name: "rulesets model: createaccountruleset creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = { "id": "fixture-123" };

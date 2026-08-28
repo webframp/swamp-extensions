@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/metrics";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/metrics";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -43,34 +43,27 @@ const ListTagConfigurationsSchema = z.object({
 
 const ListActiveMetricConfigurationsSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["actively_queried_configurations"]).optional().describe(
-    "The metric actively queried configuration resource type.",
-  ),
+  type: z.enum(["actively_queried_configurations"]).optional().default(
+    "actively_queried_configurations",
+  ).describe("The metric actively queried configuration resource type."),
   active_aggregations: z.array(z.unknown()).optional().describe(
     "List of aggregation combinations that have been actively queried.",
   ),
   active_tags: z.array(z.string()).optional().describe(
     "List of tag keys that have been actively queried.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TagsByMetricNameItemSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["metrics"]).optional().describe("The metric resource type."),
+  type: z.enum(["metrics"]).optional().default("metrics").describe(
+    "The metric resource type.",
+  ),
   ingested_tags: z.array(z.string()).optional().describe(
     "List of ingested tags that are not indexed.",
   ),
   tags: z.array(z.string()).optional().describe("List of indexed tags."),
-});
+}).passthrough();
 
 const ListTagsByMetricNameSchema = z.object({
   items: z.array(TagsByMetricNameItemSchema),
@@ -85,30 +78,19 @@ const ListTagsByMetricNameSchema = z.object({
 });
 
 const ListMetricAssetsSchema = z.object({
-  id: z.unknown().describe("The metric name for this resource."),
-  relationships: z.unknown().optional().describe(
-    "Related assets (dashboards, monitors, notebooks, SLOs) for this metric.",
-  ),
-  type: z.unknown().describe("The metric assets resource type."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  id: z.unknown(),
+  relationships: z.unknown().optional(),
+  type: z.unknown(),
+}).passthrough();
 
 const EstimateMetricsOutputSeriesSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["metric_cardinality_estimate"]).optional().describe(
-    "The metric estimate resource type.",
-  ),
+  type: z.enum(["metric_cardinality_estimate"]).optional().default(
+    "metric_cardinality_estimate",
+  ).describe("The metric estimate resource type."),
   estimate_type: z.enum(["count_or_gauge", "distribution", "percentile"])
-    .optional().describe(
-      "Estimate type based on the queried configuration. By default, `count_or_gauge` is returned. `dist...",
+    .optional().default("count_or_gauge").describe(
+      "Estimate type based on the queried configuration. `count_or_gauge` is returned by default, and `d...",
     ),
   estimated_at: z.string().optional().describe(
     "Timestamp when the cardinality estimate was requested.",
@@ -116,24 +98,17 @@ const EstimateMetricsOutputSeriesSchema = z.object({
   estimated_output_series: z.number().int().optional().describe(
     "Estimated cardinality of the metric based on the queried configuration.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const MetricTagCardinalityDetailsItemSchema = z.object({
   id: z.string().describe("The name of the tag key."),
-  type: z.string().optional().describe("This describes the endpoint action."),
+  type: z.string().optional().default("tag_cardinality").describe(
+    "This describes the endpoint action.",
+  ),
   cardinality_delta: z.number().int().optional().describe(
     "This describes the recent change in the tag keys cardinality",
   ),
-});
+}).passthrough();
 
 const GetMetricTagCardinalityDetailsSchema = z.object({
   items: z.array(MetricTagCardinalityDetailsItemSchema),
@@ -149,7 +124,7 @@ const GetMetricTagCardinalityDetailsSchema = z.object({
 
 const ListTagConfigurationByNameSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["manage_tags"]).optional().describe(
+  type: z.enum(["manage_tags"]).optional().default("manage_tags").describe(
     "The metric tag configuration resource type.",
   ),
   aggregations: z.array(z.unknown()).optional().describe(
@@ -165,7 +140,7 @@ const ListTagConfigurationByNameSchema = z.object({
     "Toggle to include or exclude percentile aggregations for distribution metrics. Only present when ...",
   ),
   metric_type: z.enum(["gauge", "count", "rate", "distribution"]).optional()
-    .describe("The metric's type."),
+    .default("gauge").describe("The metric's type."),
   modified_at: z.string().optional().describe(
     "Timestamp when the tag configuration was last modified.",
   ),
@@ -175,20 +150,11 @@ const ListTagConfigurationByNameSchema = z.object({
   metric_volumes_id: z.string().optional().describe(
     "Related metric_volumes ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateTagConfigurationSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["manage_tags"]).optional().describe(
+  type: z.enum(["manage_tags"]).optional().default("manage_tags").describe(
     "The metric tag configuration resource type.",
   ),
   aggregations: z.array(z.unknown()).optional().describe(
@@ -204,7 +170,7 @@ const CreateTagConfigurationSchema = z.object({
     "Toggle to include or exclude percentile aggregations for distribution metrics. Only present when ...",
   ),
   metric_type: z.enum(["gauge", "count", "rate", "distribution"]).optional()
-    .describe("The metric's type."),
+    .default("gauge").describe("The metric's type."),
   modified_at: z.string().optional().describe(
     "Timestamp when the tag configuration was last modified.",
   ),
@@ -214,80 +180,31 @@ const CreateTagConfigurationSchema = z.object({
   metric_volumes_id: z.string().optional().describe(
     "Related metric_volumes ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListVolumesByMetricNameSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
-  type: z.enum(["distinct_metric_volumes"]).optional().describe(
-    "The metric distinct volume type.",
-  ),
+  type: z.enum(["distinct_metric_volumes"]).optional().default(
+    "distinct_metric_volumes",
+  ).describe("The metric distinct volume type."),
   distinct_volume: z.number().int().optional().describe(
     "Distinct volume for the given metric.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const QueryScalarDataSchema = z.object({
-  attributes: z.unknown().optional().describe(
-    "The object containing the scalar response.",
-  ),
-  type: z.unknown().optional().describe("The scalar response type."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  attributes: z.unknown().optional(),
+  type: z.unknown().optional(),
+}).passthrough();
 
 const QueryTimeseriesDataSchema = z.object({
-  attributes: z.unknown().optional().describe(
-    "The object containing the timeseries response.",
-  ),
-  type: z.unknown().optional().describe("The timeseries response type."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  attributes: z.unknown().optional(),
+  type: z.unknown().optional(),
+}).passthrough();
 
 const SubmitMetricsSchema = z.object({
   errors: z.array(z.string()).optional().describe("A list of errors."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -296,7 +213,7 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -327,6 +244,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -461,8 +383,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -527,7 +449,7 @@ export const model = {
     list_active_metric_configurations: {
       description: "List active tags and aggregations",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now). Default value is 604,800 (1 we...",
         ),
@@ -546,7 +468,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -575,13 +496,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_active_metric_configurations",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Fetched list_active_metric_configurations", {});
         return { dataHandles: [handle] };
@@ -590,7 +506,7 @@ export const model = {
     list_tags_by_metric_name: {
       description: "List tags by metric name",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now) to query for tag data. Default ...",
         ),
@@ -621,8 +537,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
         const paramNameMap: Record<string, string> = {
@@ -683,7 +599,7 @@ export const model = {
     list_metric_assets: {
       description: "Related Assets to a Metric",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -699,7 +615,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -713,13 +628,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_metric_assets",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Fetched list_metric_assets", {});
         return { dataHandles: [handle] };
@@ -728,9 +638,12 @@ export const model = {
     estimate_metrics_output_series: {
       description: "Tag Configuration Cardinality Estimator",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
         filter_groups: z.string().optional().describe(
           "Comma-separated list of tag keys that the metric is configured to query with....",
+        ),
+        filter_exclude_tags_mode: z.boolean().optional().describe(
+          "When `true`, `filter[groups]` is treated as an exclude list instead of an inc...",
         ),
         filter_hours_ago: z.number().optional().describe(
           "The number of hours of look back (from now) to estimate cardinality with. If ...",
@@ -739,7 +652,7 @@ export const model = {
           "Deprecated. Number of aggregations has no impact on volume.",
         ),
         filter_pct: z.boolean().optional().describe(
-          "A boolean, for distribution metrics only, to estimate cardinality if the metr...",
+          "Deprecated. This query parameter has no effect on the estimate.",
         ),
         filter_timespan_h: z.number().optional().describe(
           "A window, in hours, from the look back to estimate cardinality with. The mini...",
@@ -759,12 +672,12 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
         const paramNameMap: Record<string, string> = {
           "filter_groups": "filter[groups]",
+          "filter_exclude_tags_mode": "filter[exclude_tags_mode]",
           "filter_hours_ago": "filter[hours_ago]",
           "filter_num_aggregations": "filter[num_aggregations]",
           "filter_pct": "filter[pct]",
@@ -792,13 +705,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "estimate_metrics_output_series",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Fetched estimate_metrics_output_series", {});
         return { dataHandles: [handle] };
@@ -807,7 +715,7 @@ export const model = {
     get_metric_tag_cardinality_details: {
       description: "Get tag key cardinality details",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -823,8 +731,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
         for (const [k, v] of Object.entries(args)) {
@@ -873,7 +781,7 @@ export const model = {
     list_tag_configuration_by_name: {
       description: "List tag configuration by name",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -889,7 +797,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -903,13 +810,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_tag_configuration_by_name",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Fetched list_tag_configuration_by_name", {});
         return { dataHandles: [handle] };
@@ -918,17 +820,15 @@ export const model = {
     create_tag_configuration: {
       description: "Create a tag configuration",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
-        aggregations: z.unknown().optional().describe(
-          "Deprecated. Time and space aggregations to configure for the metric.",
-        ),
+        metric_name: z.string().describe("The name of the metric."),
+        aggregations: z.unknown().optional(),
         exclude_tags_mode: z.boolean().optional().describe(
           "When set to true, the configuration will exclude the configured tags and incl...",
         ),
         include_percentiles: z.boolean().optional().describe(
           "Toggle to include/exclude percentiles for a distribution metric. Defaults to ...",
         ),
-        metric_type: z.unknown().describe("The metric's type."),
+        metric_type: z.unknown(),
         tags: z.array(z.string()).describe(
           "A list of tag keys that will be queryable for your metric.",
         ),
@@ -947,7 +847,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -967,16 +866,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "tag_configuration",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created tag_configuration {id}", { id });
         return { dataHandles: [handle] };
@@ -985,10 +881,8 @@ export const model = {
     update_tag_configuration: {
       description: "Update a tag configuration",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
-        aggregations: z.unknown().optional().describe(
-          "Deprecated. Time and space aggregations to configure for the metric.",
-        ),
+        metric_name: z.string().describe("The name of the metric."),
+        aggregations: z.unknown().optional(),
         exclude_tags_mode: z.boolean().optional().describe(
           "When set to true, the configuration will exclude the configured tags and incl...",
         ),
@@ -1013,7 +907,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -1035,13 +928,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tag_configuration",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Updated tag_configuration", {});
         return { dataHandles: [handle] };
@@ -1050,7 +938,7 @@ export const model = {
     delete_tag_configuration: {
       description: "Delete a tag configuration",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1084,7 +972,7 @@ export const model = {
     list_volumes_by_metric_name: {
       description: "List distinct metric volumes by metric name",
       arguments: z.object({
-        metric_name: z.string().min(1).describe("The name of the metric."),
+        metric_name: z.string().describe("The name of the metric."),
         window_seconds: z.number().optional().describe(
           "The number of seconds of look back (from now). Default value is 3,600 (1 hour...",
         ),
@@ -1103,7 +991,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["metric_name"]);
@@ -1132,13 +1019,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_volumes_by_metric_name",
-          String(args.metric_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
         );
         context.logger.info("Fetched list_volumes_by_metric_name", {});
         return { dataHandles: [handle] };
@@ -1153,9 +1035,7 @@ export const model = {
         from: z.number().int().describe(
           "Start date (inclusive) of the query in milliseconds since the Unix epoch.",
         ),
-        queries: z.unknown().describe(
-          "List of queries to be run and used with the formulas.",
-        ),
+        queries: z.unknown(),
         to: z.number().int().describe(
           "End date (exclusive) of the query in milliseconds since the Unix epoch.",
         ),
@@ -1174,7 +1054,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1192,16 +1071,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "query_scalar_data",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created query_scalar_data {id}", { id });
         return { dataHandles: [handle] };
@@ -1219,9 +1095,7 @@ export const model = {
         interval: z.number().int().optional().describe(
           "A time interval in milliseconds. May be overridden by a larger interval if th...",
         ),
-        queries: z.unknown().describe(
-          "List of queries to be run and used with the formulas.",
-        ),
+        queries: z.unknown(),
         to: z.number().int().describe(
           "End date (exclusive) of the query in milliseconds since the Unix epoch.",
         ),
@@ -1240,7 +1114,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1260,16 +1133,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "query_timeseries_data",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created query_timeseries_data {id}", { id });
         return { dataHandles: [handle] };
@@ -1278,7 +1148,7 @@ export const model = {
     submit_metrics: {
       description: "Submit metrics",
       arguments: z.object({
-        series: z.array(z.unknown()).min(1).describe(
+        series: z.array(z.unknown()).describe(
           "A list of timeseries to submit to Datadog.",
         ),
       }),
@@ -1296,7 +1166,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1313,16 +1182,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "submit_metrics",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created submit_metrics {id}", { id });
         return { dataHandles: [handle] };

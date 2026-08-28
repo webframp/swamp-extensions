@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/snyk/issues"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Snyk Issues — vulnerability issues across projects and groups"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

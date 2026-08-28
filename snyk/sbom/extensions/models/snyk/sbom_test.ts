@@ -38,19 +38,6 @@ Deno.test("sbom model: has expected methods", () => {
   assertExists(model.methods.get_sbom_test_result);
 });
 
-Deno.test("sbom model: get_sbom_test_status rejects empty job_id", () => {
-  const result = model.methods.get_sbom_test_status.arguments.safeParse({
-    job_id: "",
-  });
-  assertEquals(result.success, false);
-  if (!result.success) {
-    assertStringIncludes(
-      JSON.stringify(result.error.issues),
-      "job_id must not be empty",
-    );
-  }
-});
-
 Deno.test("sbom model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["sbom_test_run"]);

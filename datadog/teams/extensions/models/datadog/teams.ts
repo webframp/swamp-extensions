@@ -5,10 +5,15 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPaginated, ddApiPostPaginated } from "./_lib/api.ts";
+import {
+  ddApi,
+  ddApiPaginated,
+  ddApiPostPaginated,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/teams";
 
@@ -17,10 +22,10 @@ const EXTENSION_NAME = "@webframp/datadog/teams";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,7 +34,7 @@ const GlobalArgsSchema = z.object({
 
 const TeamsItemSchema = z.object({
   id: z.string().describe("The team's identifier"),
-  type: z.enum(["team"]).optional().describe("Team type"),
+  type: z.enum(["team"]).optional().default("team").describe("Team type"),
   avatar: z.string().nullable().optional().describe(
     "Unicode representation of the avatar for the team, limited to a single grapheme",
   ),
@@ -65,7 +70,7 @@ const TeamsItemSchema = z.object({
   user_team_permissions_id: z.string().optional().describe(
     "Related user_team_permissions ID",
   ),
-});
+}).passthrough();
 
 const ListTeamsSchema = z.object({
   items: z.array(TeamsItemSchema),
@@ -81,7 +86,7 @@ const ListTeamsSchema = z.object({
 
 const CreateTeamSchema = z.object({
   id: z.string().describe("The team's identifier"),
-  type: z.enum(["team"]).optional().describe("Team type"),
+  type: z.enum(["team"]).optional().default("team").describe("Team type"),
   avatar: z.string().nullable().optional().describe(
     "Unicode representation of the avatar for the team, limited to a single grapheme",
   ),
@@ -117,22 +122,13 @@ const CreateTeamSchema = z.object({
   user_team_permissions_id: z.string().optional().describe(
     "Related user_team_permissions ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TeamHierarchyLinksItemSchema = z.object({
   id: z.string().describe("The team hierarchy link's identifier"),
-  type: z.enum(["team_hierarchy_links"]).optional().describe(
-    "Team hierarchy link type",
-  ),
+  type: z.enum(["team_hierarchy_links"]).optional().default(
+    "team_hierarchy_links",
+  ).describe("Team hierarchy link type"),
   created_at: z.string().describe(
     "Timestamp when the team hierarchy link was created",
   ),
@@ -141,7 +137,7 @@ const TeamHierarchyLinksItemSchema = z.object({
   ),
   parent_team_id: z.string().optional().describe("Related parent_team ID"),
   sub_team_id: z.string().optional().describe("Related sub_team ID"),
-});
+}).passthrough();
 
 const ListTeamHierarchyLinksSchema = z.object({
   items: z.array(TeamHierarchyLinksItemSchema),
@@ -157,9 +153,9 @@ const ListTeamHierarchyLinksSchema = z.object({
 
 const AddTeamHierarchyLinkSchema = z.object({
   id: z.string().describe("The team hierarchy link's identifier"),
-  type: z.enum(["team_hierarchy_links"]).optional().describe(
-    "Team hierarchy link type",
-  ),
+  type: z.enum(["team_hierarchy_links"]).optional().default(
+    "team_hierarchy_links",
+  ).describe("Team hierarchy link type"),
   created_at: z.string().describe(
     "Timestamp when the team hierarchy link was created",
   ),
@@ -168,22 +164,13 @@ const AddTeamHierarchyLinkSchema = z.object({
   ),
   parent_team_id: z.string().optional().describe("Related parent_team ID"),
   sub_team_id: z.string().optional().describe("Related sub_team ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetTeamHierarchyLinkSchema = z.object({
   id: z.string().describe("The team hierarchy link's identifier"),
-  type: z.enum(["team_hierarchy_links"]).optional().describe(
-    "Team hierarchy link type",
-  ),
+  type: z.enum(["team_hierarchy_links"]).optional().default(
+    "team_hierarchy_links",
+  ).describe("Team hierarchy link type"),
   created_at: z.string().describe(
     "Timestamp when the team hierarchy link was created",
   ),
@@ -192,22 +179,12 @@ const GetTeamHierarchyLinkSchema = z.object({
   ),
   parent_team_id: z.string().optional().describe("Related parent_team ID"),
   sub_team_id: z.string().optional().describe("Related sub_team ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TeamConnectionsItemSchema = z.object({
   id: z.string().describe("The unique identifier of the team connection."),
-  type: z.enum(["team_connection"]).optional().describe(
-    "Team connection resource type.",
-  ),
+  type: z.enum(["team_connection"]).optional().default("team_connection")
+    .describe("Team connection resource type."),
   managed_by: z.string().optional().describe(
     "The entity that manages this team connection.",
   ),
@@ -216,7 +193,7 @@ const TeamConnectionsItemSchema = z.object({
     "Related connected_team ID",
   ),
   team_id: z.string().optional().describe("Related team ID"),
-});
+}).passthrough();
 
 const ListTeamConnectionsSchema = z.object({
   items: z.array(TeamConnectionsItemSchema),
@@ -232,9 +209,8 @@ const ListTeamConnectionsSchema = z.object({
 
 const CreateTeamConnectionsItemSchema = z.object({
   id: z.string().describe("The unique identifier of the team connection."),
-  type: z.enum(["team_connection"]).optional().describe(
-    "Team connection resource type.",
-  ),
+  type: z.enum(["team_connection"]).optional().default("team_connection")
+    .describe("Team connection resource type."),
   managed_by: z.string().optional().describe(
     "The entity that manages this team connection.",
   ),
@@ -243,7 +219,7 @@ const CreateTeamConnectionsItemSchema = z.object({
     "Related connected_team ID",
   ),
   team_id: z.string().optional().describe("Related team ID"),
-});
+}).passthrough();
 
 const CreateTeamConnectionsSchema = z.object({
   items: z.array(CreateTeamConnectionsItemSchema),
@@ -271,10 +247,10 @@ const TeamSyncItemSchema = z.object({
   source: z.enum(["github"]).describe(
     'The external source platform for team synchronization. Only "github" is supported.',
   ),
-  sync_membership: z.boolean().optional().describe(
+  sync_membership: z.boolean().optional().default(false).describe(
     "Whether to sync members from the external team to the Datadog team. Defaults to `false` when not ...",
   ),
-});
+}).passthrough();
 
 const GetTeamSyncSchema = z.object({
   items: z.array(TeamSyncItemSchema),
@@ -290,7 +266,9 @@ const GetTeamSyncSchema = z.object({
 
 const TeamLinksItemSchema = z.object({
   id: z.string().describe("The team link's identifier"),
-  type: z.enum(["team_links"]).optional().describe("Team link type"),
+  type: z.enum(["team_links"]).optional().default("team_links").describe(
+    "Team link type",
+  ),
   label: z.string().max(256).describe("The link's label"),
   position: z.number().int().max(2147483647).optional().describe(
     "The link's position, used to sort links for the team",
@@ -299,7 +277,7 @@ const TeamLinksItemSchema = z.object({
     "ID of the team the link is associated with",
   ),
   url: z.string().describe("The URL for the link"),
-});
+}).passthrough();
 
 const GetTeamLinksSchema = z.object({
   items: z.array(TeamLinksItemSchema),
@@ -315,7 +293,9 @@ const GetTeamLinksSchema = z.object({
 
 const CreateTeamLinkSchema = z.object({
   id: z.string().describe("The team link's identifier"),
-  type: z.enum(["team_links"]).optional().describe("Team link type"),
+  type: z.enum(["team_links"]).optional().default("team_links").describe(
+    "Team link type",
+  ),
   label: z.string().max(256).describe("The link's label"),
   position: z.number().int().max(2147483647).optional().describe(
     "The link's position, used to sort links for the team",
@@ -324,22 +304,12 @@ const CreateTeamLinkSchema = z.object({
     "ID of the team the link is associated with",
   ),
   url: z.string().describe("The URL for the link"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TeamMembershipsItemSchema = z.object({
   id: z.string().describe("The ID of a user's relationship with a team"),
-  type: z.enum(["team_memberships"]).optional().describe(
-    "Team membership type",
-  ),
+  type: z.enum(["team_memberships"]).optional().default("team_memberships")
+    .describe("Team membership type"),
   provisioned_by: z.string().nullable().optional().describe(
     "The mechanism responsible for provisioning the team relationship. Possible values: null for added...",
   ),
@@ -351,7 +321,7 @@ const TeamMembershipsItemSchema = z.object({
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const GetTeamMembershipsSchema = z.object({
   items: z.array(TeamMembershipsItemSchema),
@@ -367,9 +337,8 @@ const GetTeamMembershipsSchema = z.object({
 
 const CreateTeamMembershipSchema = z.object({
   id: z.string().describe("The ID of a user's relationship with a team"),
-  type: z.enum(["team_memberships"]).optional().describe(
-    "Team membership type",
-  ),
+  type: z.enum(["team_memberships"]).optional().default("team_memberships")
+    .describe("Team membership type"),
   provisioned_by: z.string().nullable().optional().describe(
     "The mechanism responsible for provisioning the team relationship. Possible values: null for added...",
   ),
@@ -381,22 +350,13 @@ const CreateTeamMembershipSchema = z.object({
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TeamNotificationRulesItemSchema = z.object({
   id: z.string().describe("The identifier of the team notification rule"),
-  type: z.enum(["team_notification_rules"]).optional().describe(
-    "Team notification rule type",
-  ),
+  type: z.enum(["team_notification_rules"]).optional().default(
+    "team_notification_rules",
+  ).describe("Team notification rule type"),
   email: z.object({
     enabled: z.boolean().optional(),
   }).optional().describe("Email notification settings for the team"),
@@ -410,7 +370,7 @@ const TeamNotificationRulesItemSchema = z.object({
     channel: z.string().optional(),
     workspace: z.string().optional(),
   }).optional().describe("Slack notification settings for the team"),
-});
+}).passthrough();
 
 const GetTeamNotificationRulesSchema = z.object({
   items: z.array(TeamNotificationRulesItemSchema),
@@ -426,9 +386,9 @@ const GetTeamNotificationRulesSchema = z.object({
 
 const CreateTeamNotificationRuleSchema = z.object({
   id: z.string().describe("The identifier of the team notification rule"),
-  type: z.enum(["team_notification_rules"]).optional().describe(
-    "Team notification rule type",
-  ),
+  type: z.enum(["team_notification_rules"]).optional().default(
+    "team_notification_rules",
+  ).describe("Team notification rule type"),
   email: z.object({
     enabled: z.boolean().optional(),
   }).optional().describe("Email notification settings for the team"),
@@ -442,22 +402,13 @@ const CreateTeamNotificationRuleSchema = z.object({
     channel: z.string().optional(),
     workspace: z.string().optional(),
   }).optional().describe("Slack notification settings for the team"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const TeamPermissionSettingsItemSchema = z.object({
   id: z.string().describe("The team permission setting's identifier"),
-  type: z.enum(["team_permission_settings"]).optional().describe(
-    "Team permission setting type",
-  ),
+  type: z.enum(["team_permission_settings"]).optional().default(
+    "team_permission_settings",
+  ).describe("Team permission setting type"),
   action: z.enum(["manage_membership", "edit"]).optional().describe(
     "The identifier for the action",
   ),
@@ -477,7 +428,7 @@ const TeamPermissionSettingsItemSchema = z.object({
   ]).optional().describe(
     "What type of user is allowed to perform the specified action",
   ),
-});
+}).passthrough();
 
 const GetTeamPermissionSettingsSchema = z.object({
   items: z.array(TeamPermissionSettingsItemSchema),
@@ -493,9 +444,9 @@ const GetTeamPermissionSettingsSchema = z.object({
 
 const UpdateTeamPermissionSettingSchema = z.object({
   id: z.string().describe("The team permission setting's identifier"),
-  type: z.enum(["team_permission_settings"]).optional().describe(
-    "Team permission setting type",
-  ),
+  type: z.enum(["team_permission_settings"]).optional().default(
+    "team_permission_settings",
+  ).describe("Team permission setting type"),
   action: z.enum(["manage_membership", "edit"]).optional().describe(
     "The identifier for the action",
   ),
@@ -515,22 +466,12 @@ const UpdateTeamPermissionSettingSchema = z.object({
   ]).optional().describe(
     "What type of user is allowed to perform the specified action",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UserMembershipsItemSchema = z.object({
   id: z.string().describe("The ID of a user's relationship with a team"),
-  type: z.enum(["team_memberships"]).optional().describe(
-    "Team membership type",
-  ),
+  type: z.enum(["team_memberships"]).optional().default("team_memberships")
+    .describe("Team membership type"),
   provisioned_by: z.string().nullable().optional().describe(
     "The mechanism responsible for provisioning the team relationship. Possible values: null for added...",
   ),
@@ -542,7 +483,7 @@ const UserMembershipsItemSchema = z.object({
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const GetUserMembershipsSchema = z.object({
   items: z.array(UserMembershipsItemSchema),
@@ -563,7 +504,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -594,6 +535,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -743,8 +689,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -827,7 +773,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -845,13 +790,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("team", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("team", id, result);
         context.logger.info("Created team {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -880,8 +822,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -937,12 +879,8 @@ export const model = {
     add_team_hierarchy_link: {
       description: "Create a team hierarchy link",
       arguments: z.object({
-        relationships: z.unknown().describe(
-          "JSON:API relationships object linking this hierarchy record to its parent and child teams.",
-        ),
-        type: z.unknown().describe(
-          "JSON:API resource type for this record.",
-        ),
+        relationships: z.unknown(),
+        type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -958,7 +896,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -976,16 +913,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "add_team_hierarchy_link",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created add_team_hierarchy_link {id}", { id });
         return { dataHandles: [handle] };
@@ -994,9 +928,7 @@ export const model = {
     get_team_hierarchy_link: {
       description: "Get a team hierarchy link",
       arguments: z.object({
-        link_id: z.string().min(1, "link_id must not be empty").describe(
-          "The team hierarchy link's identifier",
-        ),
+        link_id: z.string().describe("The team hierarchy link's identifier"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1012,7 +944,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1026,13 +957,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_hierarchy_link",
-          String(args.link_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.link_id)),
+          result,
         );
         context.logger.info("Fetched team_hierarchy_link", {});
         return { dataHandles: [handle] };
@@ -1041,9 +967,7 @@ export const model = {
     remove_team_hierarchy_link: {
       description: "Remove a team hierarchy link",
       arguments: z.object({
-        link_id: z.string().min(1, "link_id must not be empty").describe(
-          "The team hierarchy link's identifier",
-        ),
+        link_id: z.string().describe("The team hierarchy link's identifier"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1104,8 +1028,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -1173,8 +1097,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1266,8 +1190,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         const paramNameMap: Record<string, string> = {
@@ -1313,21 +1237,11 @@ export const model = {
     sync_teams: {
       description: "Link Teams with GitHub Teams",
       arguments: z.object({
-        frequency: z.unknown().optional().describe(
-          "How often the sync with the external source should run.",
-        ),
-        selection_state: z.unknown().optional().describe(
-          "The selection state controlling which external teams are included in the sync.",
-        ),
-        source: z.unknown().describe(
-          "The external source system to sync teams from, e.g. `github`.",
-        ),
-        sync_membership: z.unknown().optional().describe(
-          "Whether team memberships should also be synced, in addition to team definitions.",
-        ),
-        type: z.unknown().describe(
-          "The resource type for the sync request.",
-        ),
+        frequency: z.unknown().optional(),
+        selection_state: z.unknown().optional(),
+        source: z.unknown(),
+        sync_membership: z.unknown().optional(),
+        type: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1343,7 +1257,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -1361,13 +1274,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("sync_teams", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("sync_teams", id, result);
         context.logger.info("Created sync_teams {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1375,7 +1285,7 @@ export const model = {
     get_team: {
       description: "Get a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1391,7 +1301,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1403,13 +1312,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team",
-          String(args.team_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.team_id)),
+          result,
         );
         context.logger.info("Fetched team", {});
         return { dataHandles: [handle] };
@@ -1418,7 +1322,7 @@ export const model = {
     update_team: {
       description: "Update a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
         avatar: z.string().nullable().optional().describe(
           "Unicode representation of the avatar for the team, limited to a single grapheme",
         ),
@@ -1451,7 +1355,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
@@ -1471,13 +1374,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team",
-          String(args.team_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.team_id)),
+          result,
         );
         context.logger.info("Updated team", {});
         return { dataHandles: [handle] };
@@ -1486,7 +1384,7 @@ export const model = {
     delete_team: {
       description: "Remove a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1518,7 +1416,7 @@ export const model = {
     get_team_links: {
       description: "Get links for a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1534,8 +1432,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1578,7 +1476,7 @@ export const model = {
     create_team_link: {
       description: "Create a team link",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
         label: z.string().max(256).describe("The link's label"),
         position: z.number().int().max(2147483647).optional().describe(
           "The link's position, used to sort links for the team",
@@ -1599,7 +1497,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
@@ -1617,13 +1514,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("team_link", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("team_link", id, result);
         context.logger.info("Created team_link {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -1631,8 +1525,8 @@ export const model = {
     get_team_link: {
       description: "Get a team link",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        link_id: z.string().min(1).describe("The ID of the team link."),
+        team_id: z.string().describe("None"),
+        link_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1648,7 +1542,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -1662,13 +1555,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_link",
-          String(args.link_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.link_id)),
+          result,
         );
         context.logger.info("Fetched team_link", {});
         return { dataHandles: [handle] };
@@ -1677,8 +1565,8 @@ export const model = {
     update_team_link: {
       description: "Update a team link",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        link_id: z.string().min(1).describe("The ID of the team link."),
+        team_id: z.string().describe("None"),
+        link_id: z.string().describe("None"),
         label: z.string().max(256).describe("The link's label"),
         position: z.number().int().max(2147483647).optional().describe(
           "The link's position, used to sort links for the team",
@@ -1699,7 +1587,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "link_id"]);
@@ -1721,13 +1608,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_link",
-          String(args.link_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.link_id)),
+          result,
         );
         context.logger.info("Updated team_link", {});
         return { dataHandles: [handle] };
@@ -1736,8 +1618,8 @@ export const model = {
     delete_team_link: {
       description: "Remove a team link",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        link_id: z.string().min(1).describe("The ID of the team link."),
+        team_id: z.string().describe("None"),
+        link_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1771,7 +1653,7 @@ export const model = {
     get_team_memberships: {
       description: "Get team memberships",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
         sort: z.string().optional().describe(
           "Specifies the order of returned team memberships",
         ),
@@ -1793,8 +1675,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         const paramNameMap: Record<string, string> = {
@@ -1847,16 +1729,14 @@ export const model = {
     create_team_membership: {
       description: "Add a user to a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
         provisioned_by: z.string().nullable().optional().describe(
           "The mechanism responsible for provisioning the team relationship. Possible va...",
         ),
         provisioned_by_id: z.string().nullable().optional().describe(
           "UUID of the User or Service Account who provisioned this team membership, or ...",
         ),
-        role: z.unknown().optional().describe(
-          "The user's role on the team (e.g. `admin` or `member`).",
-        ),
+        role: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1872,7 +1752,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
@@ -1892,16 +1771,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "team_membership",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created team_membership {id}", { id });
         return { dataHandles: [handle] };
@@ -1910,17 +1786,15 @@ export const model = {
     update_team_membership: {
       description: "Update a user's membership attributes on a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        user_id: z.string().min(1).describe("The ID of the user."),
+        team_id: z.string().describe("None"),
+        user_id: z.string().describe("None"),
         provisioned_by: z.string().nullable().optional().describe(
           "The mechanism responsible for provisioning the team relationship. Possible va...",
         ),
         provisioned_by_id: z.string().nullable().optional().describe(
           "UUID of the User or Service Account who provisioned this team membership, or ...",
         ),
-        role: z.unknown().optional().describe(
-          "The user's role on the team (e.g. `admin` or `member`).",
-        ),
+        role: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1936,7 +1810,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "user_id"]);
@@ -1958,13 +1831,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_membership",
-          String(args.user_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.user_id)),
+          result,
         );
         context.logger.info("Updated team_membership", {});
         return { dataHandles: [handle] };
@@ -1973,8 +1841,8 @@ export const model = {
     delete_team_membership: {
       description: "Remove a user from a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        user_id: z.string().min(1).describe("The ID of the user."),
+        team_id: z.string().describe("None"),
+        user_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2008,7 +1876,7 @@ export const model = {
     get_team_notification_rules: {
       description: "Get team notification rules",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2024,8 +1892,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2074,19 +1942,11 @@ export const model = {
     create_team_notification_rule: {
       description: "Create team notification rule",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        email: z.unknown().optional().describe(
-          "Email notification targets for this team notification rule.",
-        ),
-        ms_teams: z.unknown().optional().describe(
-          "Microsoft Teams notification targets for this team notification rule.",
-        ),
-        pagerduty: z.unknown().optional().describe(
-          "PagerDuty notification targets for this team notification rule.",
-        ),
-        slack: z.unknown().optional().describe(
-          "Slack notification targets for this team notification rule.",
-        ),
+        team_id: z.string().describe("None"),
+        email: z.unknown().optional(),
+        ms_teams: z.unknown().optional(),
+        pagerduty: z.unknown().optional(),
+        slack: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2102,7 +1962,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id"]);
@@ -2124,16 +1983,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "team_notification_rule",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created team_notification_rule {id}", { id });
         return { dataHandles: [handle] };
@@ -2142,8 +1998,8 @@ export const model = {
     get_team_notification_rule: {
       description: "Get team notification rule",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        rule_id: z.string().min(1).describe("The ID of the notification rule."),
+        team_id: z.string().describe("None"),
+        rule_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2159,7 +2015,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -2173,13 +2028,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Fetched team_notification_rule", {});
         return { dataHandles: [handle] };
@@ -2188,20 +2038,12 @@ export const model = {
     update_team_notification_rule: {
       description: "Update team notification rule",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        rule_id: z.string().min(1).describe("The ID of the notification rule."),
-        email: z.unknown().optional().describe(
-          "Email notification targets for this team notification rule.",
-        ),
-        ms_teams: z.unknown().optional().describe(
-          "Microsoft Teams notification targets for this team notification rule.",
-        ),
-        pagerduty: z.unknown().optional().describe(
-          "PagerDuty notification targets for this team notification rule.",
-        ),
-        slack: z.unknown().optional().describe(
-          "Slack notification targets for this team notification rule.",
-        ),
+        team_id: z.string().describe("None"),
+        rule_id: z.string().describe("None"),
+        email: z.unknown().optional(),
+        ms_teams: z.unknown().optional(),
+        pagerduty: z.unknown().optional(),
+        slack: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2217,7 +2059,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "rule_id"]);
@@ -2241,13 +2082,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_notification_rule",
-          String(args.rule_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.rule_id)),
+          result,
         );
         context.logger.info("Updated team_notification_rule", {});
         return { dataHandles: [handle] };
@@ -2256,8 +2092,8 @@ export const model = {
     delete_team_notification_rule: {
       description: "Delete team notification rule",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        rule_id: z.string().min(1).describe("The ID of the notification rule."),
+        team_id: z.string().describe("None"),
+        rule_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2291,7 +2127,7 @@ export const model = {
     get_team_permission_settings: {
       description: "Get permission settings for a team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
+        team_id: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2307,8 +2143,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["team_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2357,11 +2193,9 @@ export const model = {
     update_team_permission_setting: {
       description: "Update permission setting for team",
       arguments: z.object({
-        team_id: z.string().min(1).describe("The ID of the team."),
-        action: z.string().min(1).describe("The permission action to update."),
-        value: z.unknown().optional().describe(
-          "The new value for the permission setting.",
-        ),
+        team_id: z.string().describe("None"),
+        action: z.string().describe("None"),
+        value: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2377,7 +2211,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["team_id", "action"]);
@@ -2401,13 +2234,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_permission_setting",
-          String(args.action),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.action)),
+          result,
         );
         context.logger.info("Updated team_permission_setting", {});
         return { dataHandles: [handle] };
@@ -2416,7 +2244,7 @@ export const model = {
     get_user_memberships: {
       description: "Get user memberships",
       arguments: z.object({
-        user_uuid: z.string().min(1).describe("The UUID of the user."),
+        user_uuid: z.string().describe("None"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2432,8 +2260,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["user_uuid"]);
         for (const [k, v] of Object.entries(args)) {

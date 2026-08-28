@@ -176,6 +176,13 @@ export function generateModelSource(
   const apiImports: string[] = [];
   if (usesSingle) apiImports.push("snykApi");
   if (usesPaginated || usesSimpleList) apiImports.push("snykApiPaginated");
+  // sanitizeInstanceName is emitted only by bodies that build an instance name
+  // from an API-influenced value: every `create`, and any `get`/`update`
+  // targeting a resource by a path id. `list` and `action` use constant
+  // instance names and never call it. Import it only when a body actually
+  // references it, or deno lint fails with no-unused-vars.
+  const usesSanitize = methods.some(methodEmitsSanitize);
+  if (usesSanitize) apiImports.push("sanitizeInstanceName");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -321,7 +328,7 @@ function generateResponseSchemas(
     if (method.type === "list") {
       const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
         "ItemSchema";
-      const itemZod = schemaToZod(schema, { indent: 2 }, 1);
+      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -340,7 +347,7 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = schemaToZod(schema, { indent: 2 }, 1);
+      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
@@ -583,7 +590,7 @@ function generateGetBody(
     method.operation.pathParams.length - 1
   ];
   const instanceExpr = idParam
-    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"latest"';
 
   const hasQueryParams = method.operation.queryParams.length > 0;
@@ -657,7 +664,7 @@ ${indent}      version,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const id = (result as { id?: string }).id ?? "created";
+${indent}    const id = sanitizeInstanceName((result as { id?: string }).id ?? "created");
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
@@ -675,7 +682,7 @@ function generateUpdateBody(
     method.operation.pathParams.length - 1
   ];
   const instanceExpr = idParam
-    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"updated"';
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
@@ -849,11 +856,47 @@ function sanitizeFieldName(name: string): string {
     .replace(/^\d/, "_$&");
 }
 
+/**
+ * True when a method's generated body references sanitizeInstanceName. This
+ * MUST stay in lockstep with the body generators:
+ *   - create: always (wraps the API-returned id, falling back to "created")
+ *   - get / update: only when a trailing path param supplies the instance id
+ *     (otherwise the body uses the constant "latest"/"updated")
+ *   - list, action, delete: never
+ */
+function methodEmitsSanitize(method: ClassifiedMethod): boolean {
+  if (method.type === "create") return true;
+  if (method.type === "get" || method.type === "update") {
+    return method.operation.pathParams.length > 0;
+  }
+  return false;
+}
+
 function toPascalCase(name: string): string {
   return name
     .split("_")
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join("");
+}
+
+/**
+ * Append `.passthrough()` to a generated object schema so unknown API-returned
+ * fields survive validation instead of being stripped. Output/resource schemas
+ * describe observed reality, which the spec never fully captures, so unknown
+ * fields must pass through. Only applies to a top-level `z.object({...})`; other
+ * shapes (records, unions, unknown) are returned unchanged.
+ */
+function withPassthrough(zodExpr: string): string {
+  if (!zodExpr.startsWith("z.object({")) return zodExpr;
+  // `.passthrough()` must attach to the ZodObject, not a wrapper: a nullable
+  // object is `z.object({...}).nullable()` and ZodNullable has no
+  // `.passthrough()`. Insert before the trailing `.nullable()` in that case.
+  if (zodExpr.endsWith(".nullable()")) {
+    return `${
+      zodExpr.slice(0, -".nullable()".length)
+    }.passthrough().nullable()`;
+  }
+  return `${zodExpr}.passthrough()`;
 }
 
 function escapeStr(s: string): string {

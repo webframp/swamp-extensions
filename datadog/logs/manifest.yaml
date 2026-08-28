@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/logs"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Datadog Logs — log search, aggregation, and analytics"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -16,6 +16,5 @@ additionalFiles:
 labels:
   - datadog
   - logs
-  - observability
-  - ops
   - search
+  - observability

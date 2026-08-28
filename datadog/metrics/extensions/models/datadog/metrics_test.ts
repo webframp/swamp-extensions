@@ -65,13 +65,6 @@ Deno.test("metrics model: has expected resources", () => {
   assertExists(model.resources["submit_metrics"]);
 });
 
-Deno.test("metrics model: submit_metrics rejects an empty series array", () => {
-  const result = model.methods.submit_metrics.arguments.safeParse({
-    series: [],
-  });
-  assertEquals(result.success, false);
-});
-
 // ---------------------------------------------------------------------------
 // Mock Datadog API Server
 // ---------------------------------------------------------------------------

@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { ddApi, ddApiPostPaginated } from "./_lib/api.ts";
+import { ddApi, ddApiPostPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/dora";
 
@@ -17,10 +17,10 @@ const EXTENSION_NAME = "@webframp/datadog/dora";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  apiKey: z.string().meta({ sensitive: true }).describe(
     "Datadog API key (DD-API-KEY)",
   ),
-  appKey: z.string().min(1).meta({ sensitive: true }).describe(
+  appKey: z.string().meta({ sensitive: true }).describe(
     "Datadog application key (DD-APPLICATION-KEY)",
   ),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1")
@@ -29,25 +29,13 @@ const GlobalArgsSchema = z.object({
 
 const CreateDoraDeploymentSchema = z.object({
   id: z.string().describe("The ID of the received DORA deployment event."),
-  type: z.unknown().optional().describe(
-    "JSON:API type for DORA deployment events.",
-  ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  type: z.unknown().optional(),
+}).passthrough();
 
 const DoraDeploymentsItemSchema = z.object({
   id: z.string().describe("The ID of the deployment event."),
-  type: z.enum(["dora_deployment"]).optional().describe(
-    "JSON:API type for DORA deployment events.",
-  ),
+  type: z.enum(["dora_deployment"]).optional().default("dora_deployment")
+    .describe("JSON:API type for DORA deployment events."),
   custom_tags: z.array(z.string()).nullable().optional().describe(
     "A list of user-defined tags. The tags must follow the `key:value` pattern. Up to 100 may be added...",
   ),
@@ -58,10 +46,8 @@ const DoraDeploymentsItemSchema = z.object({
     "The time when the deployment finished.",
   ),
   git: z.object({
-    commit_sha: z.unknown().describe("Git commit SHA for the deployment."),
-    repository_id: z.unknown().describe(
-      "Git repository identifier for the deployment.",
-    ),
+    commit_sha: z.unknown(),
+    repository_id: z.unknown(),
   }).optional().describe("Git info returned by DORA Metrics events."),
   service: z.string().describe("Service name."),
   started_at: z.string().describe("The time when the deployment started."),
@@ -71,7 +57,7 @@ const DoraDeploymentsItemSchema = z.object({
   version: z.string().optional().describe(
     "Version to correlate with APM Deployment Tracking.",
   ),
-});
+}).passthrough();
 
 const ListDoraDeploymentsSchema = z.object({
   items: z.array(DoraDeploymentsItemSchema),
@@ -87,23 +73,12 @@ const ListDoraDeploymentsSchema = z.object({
 
 const CreateDoraFailureSchema = z.object({
   id: z.string().describe("The ID of the received DORA incident event."),
-  type: z.unknown().optional().describe(
-    "JSON:API type for DORA incident events.",
-  ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  type: z.unknown().optional(),
+}).passthrough();
 
 const DoraFailuresItemSchema = z.object({
   id: z.string().describe("The ID of the incident event."),
-  type: z.enum(["dora_failure"]).optional().describe(
+  type: z.enum(["dora_failure"]).optional().default("dora_failure").describe(
     "JSON:API type for DORA incident events.",
   ),
   custom_tags: z.array(z.string()).nullable().optional().describe(
@@ -116,10 +91,8 @@ const DoraFailuresItemSchema = z.object({
     "The time when the incident finished.",
   ),
   git: z.object({
-    commit_sha: z.unknown().describe("Git commit SHA for the incident."),
-    repository_url: z.unknown().describe(
-      "Git repository URL for the incident.",
-    ),
+    commit_sha: z.unknown(),
+    repository_url: z.unknown(),
   }).optional().describe("Git info for DORA Metrics events."),
   name: z.string().optional().describe("Incident name."),
   services: z.array(z.string()).optional().describe(
@@ -135,7 +108,7 @@ const DoraFailuresItemSchema = z.object({
   version: z.string().optional().describe(
     "Version to correlate with APM Deployment Tracking.",
   ),
-});
+}).passthrough();
 
 const ListDoraFailuresSchema = z.object({
   items: z.array(DoraFailuresItemSchema),
@@ -156,7 +129,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -187,6 +160,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -228,18 +206,14 @@ export const model = {
     create_dora_deployment: {
       description: "Send a deployment event",
       arguments: z.object({
-        custom_tags: z.unknown().optional().describe(
-          "A list of user-defined `key:value` tags for the deployment.",
-        ),
+        custom_tags: z.unknown().optional(),
         env: z.string().optional().describe(
           "Environment name to where the service was deployed.",
         ),
         finished_at: z.number().int().describe(
           "Unix timestamp when the deployment finished. It must be in nanoseconds, milli...",
         ),
-        git: z.unknown().optional().describe(
-          "Git info for the deployment (commit SHA, repository).",
-        ),
+        git: z.unknown().optional(),
         service: z.string().describe("Service name."),
         started_at: z.number().int().describe(
           "Unix timestamp when the deployment started. It must be in nanoseconds, millis...",
@@ -265,7 +239,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -283,16 +256,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "dora_deployment",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created dora_deployment {id}", { id });
         return { dataHandles: [handle] };
@@ -301,7 +271,7 @@ export const model = {
     delete_dora_deployment: {
       description: "Delete a deployment event",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
+        deployment_id: z.string().describe(
           "The ID of the deployment event to delete.",
         ),
       }),
@@ -369,8 +339,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -410,9 +380,7 @@ export const model = {
     get_dora_deployment: {
       description: "Get a deployment event",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "The ID of the deployment event.",
-        ),
+        deployment_id: z.string().describe("The ID of the deployment event."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -428,7 +396,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -442,13 +409,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "dora_deployment",
-          String(args.deployment_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.deployment_id)),
+          result,
         );
         context.logger.info("Fetched dora_deployment", {});
         return { dataHandles: [handle] };
@@ -457,15 +419,11 @@ export const model = {
     patch_dora_deployment: {
       description: "Patch a deployment event",
       arguments: z.object({
-        deployment_id: z.string().min(1).describe(
-          "The ID of the deployment event.",
-        ),
+        deployment_id: z.string().describe("The ID of the deployment event."),
         change_failure: z.boolean().optional().describe(
           "Indicates whether the deployment resulted in a change failure.",
         ),
-        remediation: z.unknown().optional().describe(
-          "Remediation details for the change failure.",
-        ),
+        remediation: z.unknown().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -481,7 +439,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["deployment_id"]);
@@ -505,13 +462,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_dora_deployment",
-          String(args.deployment_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.deployment_id)),
+          result,
         );
         context.logger.info("Updated patch_dora_deployment", {});
         return { dataHandles: [handle] };
@@ -520,18 +472,14 @@ export const model = {
     create_dora_failure: {
       description: "Send an incident event",
       arguments: z.object({
-        custom_tags: z.unknown().optional().describe(
-          "A list of user-defined `key:value` tags for the incident.",
-        ),
+        custom_tags: z.unknown().optional(),
         env: z.string().optional().describe(
           "Environment name that was impacted by the incident.",
         ),
         finished_at: z.number().int().optional().describe(
           "Unix timestamp when the incident finished. It must be in nanoseconds, millise...",
         ),
-        git: z.unknown().optional().describe(
-          "Git info for the incident (commit SHA, repository).",
-        ),
+        git: z.unknown().optional(),
         name: z.string().optional().describe("Incident name."),
         services: z.array(z.string()).optional().describe(
           "Service names impacted by the incident. If possible, use names registered in ...",
@@ -561,7 +509,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const attrs: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
@@ -579,13 +526,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("dora_failure", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("dora_failure", id, result);
         context.logger.info("Created dora_failure {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -593,7 +537,7 @@ export const model = {
     delete_dora_failure: {
       description: "Delete an incident event",
       arguments: z.object({
-        failure_id: z.string().min(1).describe(
+        failure_id: z.string().describe(
           "The ID of the incident event to delete.",
         ),
       }),
@@ -657,8 +601,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -698,7 +642,7 @@ export const model = {
     get_dora_failure: {
       description: "Get an incident event",
       arguments: z.object({
-        failure_id: z.string().min(1).describe("The ID of the incident event."),
+        failure_id: z.string().describe("The ID of the incident event."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -714,7 +658,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiKey, appKey, site } = context.globalArgs;
         const result = await ddApi(
           apiKey,
@@ -728,13 +671,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "dora_failure",
-          String(args.failure_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.failure_id)),
+          result,
         );
         context.logger.info("Fetched dora_failure", {});
         return { dataHandles: [handle] };

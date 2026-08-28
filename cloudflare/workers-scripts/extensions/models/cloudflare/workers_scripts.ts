@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/workers-scripts";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/workers-scripts";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
@@ -63,7 +63,7 @@ const WorkersItemSchema = z.object({
   routes: z.array(z.unknown()).nullable().optional().describe(
     "Routes associated with the Worker.",
   ),
-});
+}).passthrough();
 
 const ListWorkersSchema = z.object({
   items: z.array(WorkersItemSchema),
@@ -87,7 +87,7 @@ const WorkerScriptSearchWorkersItemSchema = z.object({
   modified_on: z.unknown(),
   script_name: z.unknown(),
   service_name: z.string().optional().describe("Name of the service."),
-});
+}).passthrough();
 
 const ListWorkerScriptSearchWorkersSchema = z.object({
   items: z.array(WorkerScriptSearchWorkersItemSchema),
@@ -108,29 +108,11 @@ const CreateAssetsUploadSessionSchema = z.object({
   jwt: z.string().optional().describe(
     "A JWT to use as authentication for uploading assets.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListDeploymentsSchema = z.object({
   deployments: z.array(z.unknown()),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateDeploymentSchema = z.object({
   annotations: z.object({
@@ -146,29 +128,11 @@ const CreateDeploymentSchema = z.object({
     percentage: z.number().min(0.01).max(100),
     version_id: z.string(),
   })),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetCronTriggersSchema = z.object({
   schedules: z.array(z.unknown()),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSettingsSchema = z.object({
   logpush: z.unknown().optional(),
@@ -177,16 +141,7 @@ const GetSettingsSchema = z.object({
   tail_consumers: z.array(z.unknown()).nullable().optional().describe(
     "List of Workers that will consume logs from the attached Worker.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const PatchSettingsSchema = z.object({
   logpush: z.unknown().optional(),
@@ -195,18 +150,35 @@ const PatchSettingsSchema = z.object({
   tail_consumers: z.array(z.unknown()).nullable().optional().describe(
     "List of Workers that will consume logs from the attached Worker.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
-const ScriptSecretsItemSchema = z.union([z.unknown(), z.unknown()]);
+const ScriptSecretsItemSchema = z.union([
+  z.object({
+    name: z.unknown(),
+    text: z.string(),
+    type: z.enum(["secret_text"]),
+  }),
+  z.object({
+    algorithm: z.object({}),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    key_base64: z.string().optional(),
+    key_jwk: z.object({}).optional(),
+    name: z.unknown(),
+    type: z.enum(["secret_key"]),
+    usages: z.array(
+      z.enum([
+        "encrypt",
+        "decrypt",
+        "sign",
+        "verify",
+        "deriveKey",
+        "deriveBits",
+        "wrapKey",
+        "unwrapKey",
+      ]),
+    ),
+  }),
+]);
 
 const ListScriptSecretsSchema = z.object({
   items: z.array(ScriptSecretsItemSchema),
@@ -220,118 +192,107 @@ const ListScriptSecretsSchema = z.object({
   ),
 });
 
-const PutScriptSecretSchema = z.union([z.unknown(), z.unknown()]);
+const PutScriptSecretSchema = z.union([
+  z.object({
+    name: z.unknown(),
+    text: z.string(),
+    type: z.enum(["secret_text"]),
+  }),
+  z.object({
+    algorithm: z.object({}),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    key_base64: z.string().optional(),
+    key_jwk: z.object({}).optional(),
+    name: z.unknown(),
+    type: z.enum(["secret_key"]),
+    usages: z.array(
+      z.enum([
+        "encrypt",
+        "decrypt",
+        "sign",
+        "verify",
+        "deriveKey",
+        "deriveBits",
+        "wrapKey",
+        "unwrapKey",
+      ]),
+    ),
+  }),
+]);
 
 const PatchScriptSecretsBulkSchema = z.record(z.string(), z.unknown());
 
-const GetScriptSecretSchema = z.union([z.unknown(), z.unknown()]);
+const GetScriptSecretSchema = z.union([
+  z.object({
+    name: z.unknown(),
+    text: z.string(),
+    type: z.enum(["secret_text"]),
+  }),
+  z.object({
+    algorithm: z.object({}),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    key_base64: z.string().optional(),
+    key_jwk: z.object({}).optional(),
+    name: z.unknown(),
+    type: z.enum(["secret_key"]),
+    usages: z.array(
+      z.enum([
+        "encrypt",
+        "decrypt",
+        "sign",
+        "verify",
+        "deriveKey",
+        "deriveBits",
+        "wrapKey",
+        "unwrapKey",
+      ]),
+    ),
+  }),
+]);
 
 const GetSubdomainSchema = z.object({
-  enabled: z.boolean().describe(
+  enabled: z.boolean().default(false).describe(
     "Whether the Worker is available on the workers.dev subdomain.",
   ),
   previews_enabled: z.boolean().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const CreateWorkerScriptPostSubdomainSchema = z.object({
-  enabled: z.boolean().describe(
+  enabled: z.boolean().default(false).describe(
     "Whether the Worker is available on the workers.dev subdomain.",
   ),
   previews_enabled: z.boolean().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListTailsSchema = z.object({
   expires_at: z.string(),
   id: z.unknown(),
   url: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const WorkerTailLogsStartTailSchema = z.object({
   expires_at: z.string(),
   id: z.unknown(),
   url: z.string(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetWorkerScriptFetchUsageModelSchema = z.object({
   usage_model: z.unknown().optional(),
   user_limits: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateUsageModelSchema = z.object({
   usage_model: z.unknown().optional(),
   user_limits: z.unknown().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListVersionsSchema = z.object({
   items: z.array(z.unknown()).optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetVersionDetailSchema = z.object({
   id: z.string().optional().describe("Unique identifier for the version."),
@@ -378,16 +339,7 @@ const GetVersionDetailSchema = z.object({
       usage_model: z.enum(["bundled", "unbound", "standard"]).optional(),
     }).optional(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -396,7 +348,7 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -422,6 +374,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -571,8 +528,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -629,8 +586,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -673,7 +630,7 @@ export const model = {
     delete_worker: {
       description: "Delete Worker",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         force: z.boolean().optional().describe(
           "If set to true, delete will not be stopped by associated service binding, durable object, or other binding. Any of these associated bindings/durable objects will be deleted along with the script.",
         ),
@@ -693,10 +650,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["force"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}`,
+          `/accounts/${accountId}/workers/scripts/${args.script_name}${qs}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.script_name });
@@ -706,7 +672,7 @@ export const model = {
     create_assets_upload_session: {
       description: "Create Assets Upload Session",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         manifest: z.record(z.string(), z.unknown()).describe(
           "A manifest ([path]: {hash, size}) map of files to upload. As an example, `/bl...",
         ),
@@ -725,7 +691,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -741,16 +706,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "assets_upload_session",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created assets_upload_session {id}", { id });
         return { dataHandles: [handle] };
@@ -759,7 +721,7 @@ export const model = {
     list_deployments: {
       description: "List Deployments",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -775,7 +737,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -785,13 +746,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_deployments",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched list_deployments", {});
         return { dataHandles: [handle] };
@@ -800,7 +756,7 @@ export const model = {
     create_deployment: {
       description: "Create Deployment",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         force: z.boolean().optional().describe(
           "If set to true, the deployment will be created even if normally blocked by something such rolling back to an older version when a secret has changed.",
         ),
@@ -831,7 +787,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -855,13 +810,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("deployment", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("deployment", id, result);
         context.logger.info("Created deployment {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -869,8 +821,8 @@ export const model = {
     get_deployment: {
       description: "Get Deployment",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
-        deployment_id: z.string().min(1, "deployment_id must not be empty"),
+        script_name: z.string(),
+        deployment_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -886,7 +838,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -896,13 +847,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "deployment",
-          String(args.deployment_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.deployment_id)),
+          result,
         );
         context.logger.info("Fetched deployment", {});
         return { dataHandles: [handle] };
@@ -911,8 +857,8 @@ export const model = {
     delete_deployment: {
       description: "Delete Deployment",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
-        deployment_id: z.string().min(1, "deployment_id must not be empty"),
+        script_name: z.string(),
+        deployment_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -929,6 +875,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -944,7 +891,7 @@ export const model = {
     get_cron_triggers: {
       description: "Get Cron Triggers",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -960,7 +907,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -970,13 +916,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cron_triggers",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched cron_triggers", {});
         return { dataHandles: [handle] };
@@ -985,7 +926,7 @@ export const model = {
     update_cron_triggers: {
       description: "Update Cron Triggers",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         items: z.array(z.unknown()),
       }),
       execute: async (
@@ -1002,7 +943,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -1016,13 +956,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "cron_triggers",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Updated cron_triggers", {});
         return { dataHandles: [handle] };
@@ -1031,7 +966,7 @@ export const model = {
     get_settings: {
       description: "Get Script Settings",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1047,7 +982,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1057,13 +991,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "settings",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched settings", {});
         return { dataHandles: [handle] };
@@ -1072,7 +1001,7 @@ export const model = {
     patch_settings: {
       description: "Patch Script Settings",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         logpush: z.unknown().optional(),
         observability: z.unknown().optional(),
         tags: z.unknown().optional(),
@@ -1094,7 +1023,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1112,13 +1040,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_settings",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Updated patch_settings", {});
         return { dataHandles: [handle] };
@@ -1127,7 +1050,7 @@ export const model = {
     list_script_secrets: {
       description: "List script secrets",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1143,8 +1066,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["script_name", "page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1183,10 +1106,34 @@ export const model = {
     put_script_secret: {
       description: "Add script secret",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
-        body: z.union([z.unknown(), z.unknown()]).describe(
-          "A secret value accessible through a binding.",
-        ),
+        script_name: z.string(),
+        body: z.union([
+          z.object({
+            name: z.unknown(),
+            text: z.string(),
+            type: z.enum(["secret_text"]),
+          }),
+          z.object({
+            algorithm: z.object({}),
+            format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+            key_base64: z.string().optional(),
+            key_jwk: z.object({}).optional(),
+            name: z.unknown(),
+            type: z.enum(["secret_key"]),
+            usages: z.array(
+              z.enum([
+                "encrypt",
+                "decrypt",
+                "sign",
+                "verify",
+                "deriveKey",
+                "deriveBits",
+                "wrapKey",
+                "unwrapKey",
+              ]),
+            ),
+          }),
+        ]).describe("A secret value accessible through a binding."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1202,7 +1149,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.body;
@@ -1216,13 +1162,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "put_script_secret",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Updated put_script_secret", {});
         return { dataHandles: [handle] };
@@ -1231,7 +1172,7 @@ export const model = {
     patch_script_secrets_bulk: {
       description: "Patch multiple script secrets",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         secrets: z.record(z.string(), z.object({}).nullable()).optional()
           .describe(
             "Map of secret names to secret values: - Set to a secret object to create or u...",
@@ -1254,7 +1195,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1272,13 +1212,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "patch_script_secrets_bulk",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Updated patch_script_secrets_bulk", {});
         return { dataHandles: [handle] };
@@ -1287,7 +1222,7 @@ export const model = {
     get_script_secret: {
       description: "Get secret binding",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         secret_name: z.string(),
         url_encoded: z.string().optional(),
       }),
@@ -1305,7 +1240,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1315,13 +1249,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "script_secret",
-          String(args.secret_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.secret_name)),
+          result,
         );
         context.logger.info("Fetched script_secret", {});
         return { dataHandles: [handle] };
@@ -1330,7 +1259,7 @@ export const model = {
     delete_script_secret: {
       description: "Delete script secret",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         secret_name: z.string(),
         url_encoded: z.string().optional(),
       }),
@@ -1349,10 +1278,19 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
+        const queryParts: string[] = [];
+        const queryKeys = new Set(["url_encoded"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && queryKeys.has(k)) {
+            queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         await cfApi(
           apiToken,
           "DELETE",
-          `/accounts/${accountId}/workers/scripts/${args.script_name}/secrets/${args.secret_name}`,
+          `/accounts/${accountId}/workers/scripts/${args.script_name}/secrets/${args.secret_name}${qs}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.secret_name });
@@ -1362,7 +1300,7 @@ export const model = {
     get_subdomain: {
       description: "Get Worker subdomain",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1378,7 +1316,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1388,13 +1325,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "subdomain",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched subdomain", {});
         return { dataHandles: [handle] };
@@ -1403,7 +1335,7 @@ export const model = {
     create_worker_script_post_subdomain: {
       description: "Post Worker subdomain",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         enabled: z.boolean().describe(
           "Whether the Worker should be available on the workers.dev subdomain.",
         ),
@@ -1425,7 +1357,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1441,16 +1372,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "worker_script_post_subdomain",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created worker_script_post_subdomain {id}", {
           id,
@@ -1461,7 +1389,7 @@ export const model = {
     delete_subdomain: {
       description: "Delete Worker subdomain",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1478,6 +1406,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1491,7 +1420,7 @@ export const model = {
     list_tails: {
       description: "List Tails",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1507,7 +1436,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1517,13 +1445,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_tails",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched list_tails", {});
         return { dataHandles: [handle] };
@@ -1532,7 +1455,7 @@ export const model = {
     worker_tail_logs_start_tail: {
       description: "Start Tail",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1548,7 +1471,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const result = await cfApi<Record<string, unknown>>(
@@ -1560,12 +1482,7 @@ export const model = {
         const handle = await context.writeResource(
           "worker_tail_logs_start_tail",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed worker_tail_logs_start_tail", {});
         return { dataHandles: [handle] };
@@ -1574,7 +1491,7 @@ export const model = {
     delete_tail: {
       description: "Delete Tail",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         id: z.string(),
       }),
       execute: async (
@@ -1592,6 +1509,7 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",
@@ -1605,7 +1523,7 @@ export const model = {
     get_worker_script_fetch_usage_model: {
       description: "Fetch Usage Model",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1621,7 +1539,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1631,13 +1548,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "worker_script_fetch_usage_model",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched worker_script_fetch_usage_model", {});
         return { dataHandles: [handle] };
@@ -1646,7 +1558,7 @@ export const model = {
     update_usage_model: {
       description: "Update Usage Model",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         usage_model: z.unknown().optional(),
         user_limits: z.unknown().optional(),
       }),
@@ -1664,7 +1576,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -1682,13 +1593,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "usage_model",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Updated usage_model", {});
         return { dataHandles: [handle] };
@@ -1697,7 +1603,7 @@ export const model = {
     list_versions: {
       description: "List Versions",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         deployable: z.boolean().optional().describe(
           "Only return versions that can be used in a deployment. Ignores pagination.",
         ),
@@ -1718,7 +1624,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1728,13 +1633,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_versions",
-          String(args.script_name),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.script_name)),
+          result,
         );
         context.logger.info("Fetched list_versions", {});
         return { dataHandles: [handle] };
@@ -1743,7 +1643,7 @@ export const model = {
     get_version_detail: {
       description: "Get Version Detail",
       arguments: z.object({
-        script_name: z.string().min(1, "script_name must not be empty"),
+        script_name: z.string(),
         version_id: z.string(),
       }),
       execute: async (
@@ -1760,7 +1660,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -1770,13 +1669,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "version_detail",
-          String(args.version_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.version_id)),
+          result,
         );
         context.logger.info("Fetched version_detail", {});
         return { dataHandles: [handle] };

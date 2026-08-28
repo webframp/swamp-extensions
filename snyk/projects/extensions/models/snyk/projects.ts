@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/projects";
 
@@ -75,7 +75,7 @@ const OrgProjectsItemSchema = z.object({
   organization_id: z.string().optional().describe("Related organization ID"),
   owner_id: z.string().optional().describe("Related owner ID"),
   target_id: z.string().optional().describe("Related target ID"),
-});
+}).passthrough();
 
 const ListOrgProjectsSchema = z.object({
   items: z.array(OrgProjectsItemSchema),
@@ -88,6 +88,14 @@ const ListOrgProjectsSchema = z.object({
     "Extension that collected this data",
   ),
 });
+
+const DeleteOrgProjectsSchema = z.object({
+  jsonapi: z.unknown(),
+  meta: z.object({
+    deleted: z.array(z.unknown()),
+    failed: z.array(z.unknown()),
+  }),
+}).passthrough();
 
 const GetOrgProjectSchema = z.object({
   id: z.string().describe("The Resource ID."),
@@ -142,30 +150,13 @@ const GetOrgProjectSchema = z.object({
   organization_id: z.string().optional().describe("Related organization ID"),
   owner_id: z.string().optional().describe("Related owner ID"),
   target_id: z.string().optional().describe("Related target ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetSbomSchema = z.object({
   id: z.string(),
-  type: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -174,7 +165,7 @@ const GetSbomSchema = z.object({
 /** Snyk Projects — project listing, attributes, relationships, and target management */
 export const model = {
   type: "@webframp/snyk/projects",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -202,6 +193,11 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -210,6 +206,12 @@ export const model = {
       schema: ListOrgProjectsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "delete_org_projects": {
+      description: "Delete several projects in one request.",
+      schema: DeleteOrgProjectsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "org_project": {
       description: "Get project by project ID.",
@@ -302,8 +304,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -338,12 +340,61 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    delete_org_projects: {
+      description: "Delete several projects in one request.",
+      arguments: z.object({
+        data: z.array(z.unknown()).describe(
+          "The projects to delete, at most 100 per request.",
+        ),
+        meta: z.object({
+          exclude_from_future_scans: z.boolean().optional().default(false),
+        }).optional().describe("Options that apply to this request."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, orgId, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await snykApi(
+          apiToken,
+          "POST",
+          `/orgs/${orgId}/projects/bulk-delete`,
+          version,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource(
+          "delete_org_projects",
+          id,
+          result,
+        );
+        context.logger.info("Created delete_org_projects {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
     get_org_project: {
       description: "Get project by project ID.",
       arguments: z.object({
-        project_id: z.string().min(1, "project_id must not be empty").describe(
-          "The ID of the project.",
-        ),
+        project_id: z.string().describe("The ID of the project."),
         expand: z.string().optional().describe("Expand relationships."),
         meta_latest_issue_counts: z.boolean().optional().describe(
           "Include a summary count for the issues found in the most recent scan of this ...",
@@ -366,7 +417,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["project_id"]);
@@ -388,13 +438,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_project",
-          String(args.project_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_id)),
+          result,
         );
         context.logger.info("Fetched org_project", {});
         return { dataHandles: [handle] };
@@ -403,9 +448,7 @@ export const model = {
     update_org_project: {
       description: "Updates project by project ID.",
       arguments: z.object({
-        project_id: z.string().min(1, "project_id must not be empty").describe(
-          "The ID of the project to patch.",
-        ),
+        project_id: z.string().describe("The ID of the project to patch."),
         expand: z.string().optional().describe("Expand relationships."),
         data: z.object({
           attributes: z.object({
@@ -459,7 +502,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["project_id", "expand"]);
@@ -477,13 +519,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_project",
-          String(args.project_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_id)),
+          result,
         );
         context.logger.info("Updated org_project", {});
         return { dataHandles: [handle] };
@@ -492,9 +529,7 @@ export const model = {
     delete_org_project: {
       description: "Delete project by project ID.",
       arguments: z.object({
-        project_id: z.string().min(1, "project_id must not be empty").describe(
-          "The ID of the project.",
-        ),
+        project_id: z.string().describe("The ID of the project."),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -525,9 +560,7 @@ export const model = {
     get_sbom: {
       description: "Get a project’s SBOM document",
       arguments: z.object({
-        project_id: z.string().min(1, "project_id must not be empty").describe(
-          "Unique identifier for a project",
-        ),
+        project_id: z.string().describe("Unique identifier for a project"),
         format: z.enum([
           "cyclonedx1.6+json",
           "cyclonedx1.6+xml",
@@ -558,7 +591,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, orgId, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["project_id"]);
@@ -580,13 +612,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "sbom",
-          String(args.project_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.project_id)),
+          result,
         );
         context.logger.info("Fetched sbom", {});
         return { dataHandles: [handle] };

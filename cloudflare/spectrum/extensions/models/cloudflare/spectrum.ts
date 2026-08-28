@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/spectrum";
 
@@ -18,8 +18,8 @@ const EXTENSION_NAME = "@webframp/cloudflare/spectrum";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   zoneId: z.string().describe("Cloudflare zone ID"),
 });
 
@@ -29,7 +29,7 @@ const GetCurrentAggregatedAnalyticsItemSchema = z.object({
   bytesIngress: z.number().describe("Number of bytes received."),
   connections: z.number().describe("Number of connections."),
   durationAvg: z.number().describe("Average duration of connections."),
-});
+}).passthrough();
 
 const GetCurrentAggregatedAnalyticsSchema = z.object({
   items: z.array(GetCurrentAggregatedAnalyticsItemSchema),
@@ -58,16 +58,7 @@ const GetAnalyticsByTimeSchema = z.object({
     "List of time interval buckets: [start, end].",
   ),
   totals: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetAnalyticsSummarySchema = z.object({
   data: z.array(z.unknown()).describe(
@@ -84,16 +75,7 @@ const GetAnalyticsSummarySchema = z.object({
     "List of time interval buckets: [start, end].",
   ),
   totals: z.unknown(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const ListSpectrumApplicationsSchema = z.union([
   z.array(z.unknown()),
@@ -101,17 +83,89 @@ const ListSpectrumApplicationsSchema = z.union([
 ]);
 
 const CreateSpectrumApplicationUsingANameForTheOriginSchema = z.union([
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    created_on: z.unknown(),
+    id: z.unknown(),
+    modified_on: z.unknown(),
+    argo_smart_routing: z.unknown().optional(),
+    dns: z.unknown(),
+    edge_ips: z.unknown().optional(),
+    ip_firewall: z.unknown().optional(),
+    origin_direct: z.unknown().optional(),
+    origin_dns: z.unknown().optional(),
+    origin_port: z.unknown().optional(),
+    protocol: z.unknown(),
+    proxy_protocol: z.unknown().optional(),
+    tls: z.unknown().optional(),
+    traffic_type: z.unknown(),
+    virtual_network_id: z.unknown().optional(),
+  }),
+  z.object({
+    created_on: z.unknown(),
+    id: z.unknown(),
+    modified_on: z.unknown(),
+    dns: z.unknown(),
+    origin_direct: z.unknown().optional(),
+    protocol: z.unknown(),
+  }),
 ]);
 
 const GetSpectrumApplicationConfigurationSchema = z.union([
-  z.unknown(),
-  z.unknown(),
+  z.object({
+    created_on: z.unknown(),
+    id: z.unknown(),
+    modified_on: z.unknown(),
+    argo_smart_routing: z.unknown().optional(),
+    dns: z.unknown(),
+    edge_ips: z.unknown().optional(),
+    ip_firewall: z.unknown().optional(),
+    origin_direct: z.unknown().optional(),
+    origin_dns: z.unknown().optional(),
+    origin_port: z.unknown().optional(),
+    protocol: z.unknown(),
+    proxy_protocol: z.unknown().optional(),
+    tls: z.unknown().optional(),
+    traffic_type: z.unknown(),
+    virtual_network_id: z.unknown().optional(),
+  }),
+  z.object({
+    created_on: z.unknown(),
+    id: z.unknown(),
+    modified_on: z.unknown(),
+    dns: z.unknown(),
+    origin_direct: z.unknown().optional(),
+    protocol: z.unknown(),
+  }),
 ]);
 
 const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
-  .union([z.unknown(), z.unknown()]);
+  .union([
+    z.object({
+      created_on: z.unknown(),
+      id: z.unknown(),
+      modified_on: z.unknown(),
+      argo_smart_routing: z.unknown().optional(),
+      dns: z.unknown(),
+      edge_ips: z.unknown().optional(),
+      ip_firewall: z.unknown().optional(),
+      origin_direct: z.unknown().optional(),
+      origin_dns: z.unknown().optional(),
+      origin_port: z.unknown().optional(),
+      protocol: z.unknown(),
+      proxy_protocol: z.unknown().optional(),
+      tls: z.unknown().optional(),
+      traffic_type: z.unknown(),
+      virtual_network_id: z.unknown().optional(),
+    }),
+    z.object({
+      created_on: z.unknown(),
+      id: z.unknown(),
+      modified_on: z.unknown(),
+      dns: z.unknown(),
+      origin_direct: z.unknown().optional(),
+      protocol: z.unknown(),
+    }),
+  ]);
 
 // =============================================================================
 // Model Definition
@@ -120,7 +174,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -151,6 +205,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -223,8 +282,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -298,7 +357,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -309,12 +367,7 @@ export const model = {
         const handle = await context.writeResource(
           "analytics_by_time",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched analytics_by_time", {});
         return { dataHandles: [handle] };
@@ -344,7 +397,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -355,12 +407,7 @@ export const model = {
         const handle = await context.writeResource(
           "analytics_summary",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched analytics_summary", {});
         return { dataHandles: [handle] };
@@ -394,7 +441,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -405,12 +451,7 @@ export const model = {
         const handle = await context.writeResource(
           "list_spectrum_applications",
           "latest",
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Fetched list_spectrum_applications", {});
         return { dataHandles: [handle] };
@@ -418,7 +459,35 @@ export const model = {
     },
     create_spectrum_application_using_a_name_for_the_origin: {
       description: "Create Spectrum application using a name for the origin",
-      arguments: z.object({}),
+      arguments: z.object({
+        body: z.union([
+          z.object({
+            created_on: z.unknown(),
+            id: z.unknown(),
+            modified_on: z.unknown(),
+            argo_smart_routing: z.unknown().optional(),
+            dns: z.unknown(),
+            edge_ips: z.unknown().optional(),
+            ip_firewall: z.unknown().optional(),
+            origin_direct: z.unknown().optional(),
+            origin_dns: z.unknown().optional(),
+            origin_port: z.unknown().optional(),
+            protocol: z.unknown(),
+            proxy_protocol: z.unknown().optional(),
+            tls: z.unknown().optional(),
+            traffic_type: z.unknown(),
+            virtual_network_id: z.unknown().optional(),
+          }),
+          z.object({
+            created_on: z.unknown(),
+            id: z.unknown(),
+            modified_on: z.unknown(),
+            dns: z.unknown(),
+            origin_direct: z.unknown().optional(),
+            protocol: z.unknown(),
+          }),
+        ]),
+      }),
       execute: async (
         args: Record<string, unknown>,
         context: {
@@ -433,25 +502,21 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
+
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "POST",
           `/zones/${zoneId}/spectrum/apps`,
-          args,
+          body,
         );
 
         const handle = await context.writeResource(
           "create_spectrum_application_using_a_name_for_the_origin",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info(
           "Executed create_spectrum_application_using_a_name_for_the_origin",
@@ -463,7 +528,7 @@ export const model = {
     get_spectrum_application_configuration: {
       description: "Get Spectrum application configuration",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -479,7 +544,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -489,13 +553,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "spectrum_application_configuration",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info("Fetched spectrum_application_configuration", {});
         return { dataHandles: [handle] };
@@ -505,7 +564,34 @@ export const model = {
       description:
         "Update Spectrum application configuration using a name for the origin",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
+        body: z.union([
+          z.object({
+            created_on: z.unknown(),
+            id: z.unknown(),
+            modified_on: z.unknown(),
+            argo_smart_routing: z.unknown().optional(),
+            dns: z.unknown(),
+            edge_ips: z.unknown().optional(),
+            ip_firewall: z.unknown().optional(),
+            origin_direct: z.unknown().optional(),
+            origin_dns: z.unknown().optional(),
+            origin_port: z.unknown().optional(),
+            protocol: z.unknown(),
+            proxy_protocol: z.unknown().optional(),
+            tls: z.unknown().optional(),
+            traffic_type: z.unknown(),
+            virtual_network_id: z.unknown().optional(),
+          }),
+          z.object({
+            created_on: z.unknown(),
+            id: z.unknown(),
+            modified_on: z.unknown(),
+            dns: z.unknown(),
+            origin_direct: z.unknown().optional(),
+            protocol: z.unknown(),
+          }),
+        ]),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -521,14 +607,9 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, zoneId } = context.globalArgs;
 
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["app_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
+        const body = args.body;
 
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -539,13 +620,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "spectrum_application_configuration_using_a_name_for_the_origin",
-          String(args.app_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.app_id)),
+          result,
         );
         context.logger.info(
           "Updated spectrum_application_configuration_using_a_name_for_the_origin",
@@ -557,7 +633,7 @@ export const model = {
     delete_spectrum_application: {
       description: "Delete Spectrum application",
       arguments: z.object({
-        app_id: z.string().min(1, "app_id must not be empty"),
+        app_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -574,6 +650,7 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+
         await cfApi(
           apiToken,
           "DELETE",

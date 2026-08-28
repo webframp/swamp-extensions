@@ -55,7 +55,7 @@ swamp model create @webframp/cloudflare/rulesets cf-rulesets \
 ## Development
 
 ```bash
-cd cloudflare/rulesets
+cd ../../cloudflare/rulesets
 deno task check
 deno task lint
 deno task fmt

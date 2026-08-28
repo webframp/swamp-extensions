@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/tenants";
 
@@ -23,7 +23,8 @@ const GlobalArgsSchema = z.object({
 
 const TenantsItemSchema = z.object({
   id: z.string().describe("The Snyk ID of the tenant."),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   created_at: z.string().describe("The time the tenant was created."),
   name: z.string().describe("The display name of the tenant."),
   slug: z.string().describe(
@@ -31,7 +32,7 @@ const TenantsItemSchema = z.object({
   ),
   updated_at: z.string().describe("The time the tenant was last modified."),
   owner_id: z.string().optional().describe("Related owner ID"),
-});
+}).passthrough();
 
 const ListTenantsSchema = z.object({
   items: z.array(TenantsItemSchema),
@@ -47,7 +48,8 @@ const ListTenantsSchema = z.object({
 
 const GetTenantSchema = z.object({
   id: z.string().describe("The Snyk ID of the tenant."),
-  type: z.string().optional(),
+  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
+    .optional(),
   created_at: z.string().describe("The time the tenant was created."),
   name: z.string().describe("The display name of the tenant."),
   slug: z.string().describe(
@@ -55,21 +57,12 @@ const GetTenantSchema = z.object({
   ),
   updated_at: z.string().describe("The time the tenant was last modified."),
   owner_id: z.string().optional().describe("Related owner ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetBrokerConnectionIntegrationsItemSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-});
+}).passthrough();
 
 const GetBrokerConnectionIntegrationsSchema = z.object({
   items: z.array(GetBrokerConnectionIntegrationsItemSchema),
@@ -86,16 +79,7 @@ const GetBrokerConnectionIntegrationsSchema = z.object({
 const CreateBrokerConnectionIntegrationSchema = z.object({
   id: z.string(),
   type: z.string().optional(),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BrokerDeploymentsForTenantItemSchema = z.object({
   id: z.string(),
@@ -103,11 +87,13 @@ const BrokerDeploymentsForTenantItemSchema = z.object({
   broker_app_installed_in_org_id: z.string().describe(
     "Org Id in which the Broker App is installed",
   ),
+  created_at: z.string().describe("Deployment creation time in UTC"),
   install_id: z.string().optional().describe("Associated Install ID"),
   metadata: z.object({}).describe(
     "Metadata information such user/org id or metrics",
   ),
-});
+  updated_at: z.string().describe("Deployment last update time in UTC"),
+}).passthrough();
 
 const ListBrokerDeploymentsForTenantSchema = z.object({
   items: z.array(BrokerDeploymentsForTenantItemSchema),
@@ -133,7 +119,7 @@ const ConnectionContextsItemSchema = z.object({
   applied_integrations_id: z.string().optional().describe(
     "Related applied_integrations ID",
   ),
-});
+}).passthrough();
 
 const ListConnectionContextsSchema = z.object({
   items: z.array(ConnectionContextsItemSchema),
@@ -159,16 +145,7 @@ const GetConnectionContextSchema = z.object({
   applied_integrations_id: z.string().optional().describe(
     "Related applied_integrations ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateBrokerContextSchema = z.object({
   id: z.string(),
@@ -182,16 +159,7 @@ const UpdateBrokerContextSchema = z.object({
   applied_integrations_id: z.string().optional().describe(
     "Related applied_integrations ID",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const UpdateBrokerContextIntegrationSchema = z.object({
   id: z.string(),
@@ -201,16 +169,7 @@ const UpdateBrokerContextIntegrationSchema = z.object({
   ),
   jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
   links_id: z.string().optional().describe("Related links ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BrokerDeploymentsItemSchema = z.object({
   id: z.string(),
@@ -218,11 +177,13 @@ const BrokerDeploymentsItemSchema = z.object({
   broker_app_installed_in_org_id: z.string().describe(
     "Org Id in which the Broker App is installed",
   ),
+  created_at: z.string().describe("Deployment creation time in UTC"),
   install_id: z.string().optional().describe("Associated Install ID"),
   metadata: z.object({}).describe(
     "Metadata information such user/org id or metrics",
   ),
-});
+  updated_at: z.string().describe("Deployment last update time in UTC"),
+}).passthrough();
 
 const ListBrokerDeploymentsSchema = z.object({
   items: z.array(BrokerDeploymentsItemSchema),
@@ -242,20 +203,13 @@ const CreateBrokerDeploymentSchema = z.object({
   broker_app_installed_in_org_id: z.string().describe(
     "Org Id in which the Broker App is installed",
   ),
+  created_at: z.string().describe("Deployment creation time in UTC"),
   install_id: z.string().optional().describe("Associated Install ID"),
   metadata: z.object({}).describe(
     "Metadata information such user/org id or metrics",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  updated_at: z.string().describe("Deployment last update time in UTC"),
+}).passthrough();
 
 const BrokerConnectionsItemSchema = z.object({
   id: z.string(),
@@ -272,7 +226,7 @@ const BrokerConnectionsItemSchema = z.object({
     type: z.string(),
     validations: z.array(z.object({})).optional(),
   }),
-});
+}).passthrough();
 
 const ListBrokerConnectionsSchema = z.object({
   items: z.array(BrokerConnectionsItemSchema),
@@ -301,23 +255,14 @@ const CreateBrokerConnectionSchema = z.object({
     type: z.string(),
     validations: z.array(z.object({})).optional(),
   }),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const BrokerOrgsForBulkMigrationItemSchema = z.object({
   id: z.string().describe(
     "The organization ID associated with the bulk migration.",
   ),
   type: z.enum(["broker_organization"]).optional(),
-});
+}).passthrough();
 
 const ListBrokerOrgsForBulkMigrationSchema = z.object({
   items: z.array(BrokerOrgsForBulkMigrationItemSchema),
@@ -343,7 +288,7 @@ const DeploymentContextsItemSchema = z.object({
   applied_integrations_id: z.string().optional().describe(
     "Related applied_integrations ID",
   ),
-});
+}).passthrough();
 
 const ListDeploymentContextsSchema = z.object({
   items: z.array(DeploymentContextsItemSchema),
@@ -368,7 +313,7 @@ const DeploymentCredentialsItemSchema = z.object({
   ),
   jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
   links_id: z.string().optional().describe("Related links ID"),
-});
+}).passthrough();
 
 const ListDeploymentCredentialsSchema = z.object({
   items: z.array(DeploymentCredentialsItemSchema),
@@ -393,16 +338,7 @@ const CreateDeploymentCredentialSchema = z.object({
   ),
   jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
   links_id: z.string().optional().describe("Related links ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AssetsTenantItemSchema = z.object({
   id: z.string().describe("The unique identifier of the asset"),
@@ -410,7 +346,7 @@ const AssetsTenantItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const ListAssetsTenantSchema = z.object({
   items: z.array(AssetsTenantItemSchema),
@@ -435,7 +371,7 @@ const GetFilterFieldsTenantItemSchema = z.object({
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetFilterFieldsTenantSchema = z.object({
   items: z.array(GetFilterFieldsTenantItemSchema),
@@ -460,7 +396,7 @@ const GetFilterValuesTenantItemSchema = z.object({
   value: z.string().optional().describe(
     "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
   ),
-});
+}).passthrough();
 
 const GetFilterValuesTenantSchema = z.object({
   items: z.array(GetFilterValuesTenantItemSchema),
@@ -486,7 +422,7 @@ const GetGroupFieldsTenantItemSchema = z.object({
     'The field name used for grouping (e.g., "class", "registry")',
   ),
   values_id: z.string().optional().describe("Related values ID"),
-});
+}).passthrough();
 
 const GetGroupFieldsTenantSchema = z.object({
   items: z.array(GetGroupFieldsTenantItemSchema),
@@ -506,7 +442,7 @@ const GetGroupValuesTenantItemSchema = z.object({
     "The JSON:API resource type",
   ),
   value: z.string().describe("The grouped value"),
-});
+}).passthrough();
 
 const GetGroupValuesTenantSchema = z.object({
   items: z.array(GetGroupValuesTenantItemSchema),
@@ -526,7 +462,7 @@ const GetAssetSearchResultsTenantItemSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-});
+}).passthrough();
 
 const GetAssetSearchResultsTenantSchema = z.object({
   items: z.array(GetAssetSearchResultsTenantItemSchema),
@@ -546,20 +482,11 @@ const GetAssetTenantSchema = z.object({
     .describe("The JSON:API resource type"),
   projects_id: z.string().optional().describe("Related projects ID"),
   targets_id: z.string().optional().describe("Related targets ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const AssetProjectsTenantItemSchema = z.object({
   id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["projects"]).optional().describe("The JSON:API resource type"),
+  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
     base_image: z.unknown().optional(),
     base_image_name: z.string(),
@@ -648,7 +575,7 @@ const AssetProjectsTenantItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetProjectsTenantSchema = z.object({
   items: z.array(AssetProjectsTenantItemSchema),
@@ -678,7 +605,7 @@ const AssetTargetsTenantItemSchema = z.object({
   target_ref: z.string().optional().describe(
     "The target reference (e.g., branch name)",
   ),
-});
+}).passthrough();
 
 const ListAssetTargetsTenantSchema = z.object({
   items: z.array(AssetTargetsTenantItemSchema),
@@ -703,7 +630,7 @@ const GetTenantMembershipsItemSchema = z.object({
   role_id: z.string().optional().describe("Related role ID"),
   tenant_id: z.string().optional().describe("Related tenant ID"),
   user_id: z.string().optional().describe("Related user ID"),
-});
+}).passthrough();
 
 const GetTenantMembershipsSchema = z.object({
   items: z.array(GetTenantMembershipsItemSchema),
@@ -722,13 +649,13 @@ const TenantRolesItemSchema = z.object({
   type: z.enum(["tenant_role"]).optional().describe(
     "The type of the resource for tenant role operations",
   ),
-  custom: z.boolean(),
+  custom: z.boolean().default(false),
   description: z.string(),
   name: z.string(),
   normalized_name: z.string().optional(),
   permissions: z.array(z.string()),
   tenant_id: z.string().optional().describe("Related tenant ID"),
-});
+}).passthrough();
 
 const ListTenantRolesSchema = z.object({
   items: z.array(TenantRolesItemSchema),
@@ -747,22 +674,13 @@ const CreateTenantRoleSchema = z.object({
   type: z.enum(["tenant_role"]).optional().describe(
     "The type of the resource for tenant role operations",
   ),
-  custom: z.boolean(),
+  custom: z.boolean().default(false),
   description: z.string(),
   name: z.string(),
   normalized_name: z.string().optional(),
   permissions: z.array(z.string()),
   tenant_id: z.string().optional().describe("Related tenant ID"),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 // =============================================================================
 // Model Definition
@@ -771,7 +689,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -802,6 +720,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1026,8 +949,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
@@ -1079,7 +1002,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1090,13 +1012,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tenant",
-          String(args.tenant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
         );
         context.logger.info("Fetched tenant", {});
         return { dataHandles: [handle] };
@@ -1126,7 +1043,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
@@ -1144,13 +1060,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tenant",
-          String(args.tenant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
         );
         context.logger.info("Updated tenant", {});
         return { dataHandles: [handle] };
@@ -1176,8 +1087,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "connection_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1239,7 +1150,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -1259,16 +1169,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "broker_connection_integration",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created broker_connection_integration {id}", {
           id,
@@ -1331,8 +1238,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1392,8 +1299,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([
           "tenant_id",
@@ -1457,7 +1364,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -1468,13 +1374,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "connection_context",
-          String(args.context_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.context_id)),
+          result,
         );
         context.logger.info("Fetched connection_context", {});
         return { dataHandles: [handle] };
@@ -1506,7 +1407,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -1528,13 +1428,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "broker_context",
-          String(args.context_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.context_id)),
+          result,
         );
         context.logger.info("Updated broker_context", {});
         return { dataHandles: [handle] };
@@ -1602,7 +1497,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -1624,13 +1518,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "broker_context_integration",
-          String(args.context_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.context_id)),
+          result,
         );
         context.logger.info("Updated broker_context_integration", {});
         return { dataHandles: [handle] };
@@ -1692,8 +1581,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "install_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -1737,10 +1626,7 @@ export const model = {
       arguments: z.object({
         tenant_id: z.string().describe("Tenant ID"),
         install_id: z.string().describe("Install ID"),
-        data: z.object({
-          attributes: z.unknown(),
-          type: z.enum(["broker_deployment"]),
-        }),
+        data: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1756,7 +1642,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id", "install_id"]);
@@ -1772,16 +1657,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "broker_deployment",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created broker_deployment {id}", { id });
         return { dataHandles: [handle] };
@@ -1809,7 +1691,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -1831,13 +1712,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "broker_deployment",
-          String(args.deployment_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.deployment_id)),
+          result,
         );
         context.logger.info("Updated broker_deployment", {});
         return { dataHandles: [handle] };
@@ -1899,8 +1775,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([
           "tenant_id",
@@ -1968,7 +1844,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -1988,16 +1863,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "broker_connection",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created broker_connection {id}", { id });
         return { dataHandles: [handle] };
@@ -2060,7 +1932,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -2071,13 +1942,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "broker_connection",
-          String(args.connection_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.connection_id)),
+          result,
         );
         context.logger.info("Fetched broker_connection", {});
         return { dataHandles: [handle] };
@@ -2110,7 +1976,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -2133,13 +1998,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "broker_connection",
-          String(args.connection_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.connection_id)),
+          result,
         );
         context.logger.info("Updated broker_connection", {});
         return { dataHandles: [handle] };
@@ -2203,8 +2063,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([
           "connection_id",
@@ -2273,7 +2133,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -2294,16 +2153,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "broker_orgs_for_bulk_migration",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created broker_orgs_for_bulk_migration {id}", {
           id,
@@ -2332,8 +2188,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([
           "tenant_id",
@@ -2401,7 +2257,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -2421,16 +2276,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "broker_context",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created broker_context {id}", { id });
         return { dataHandles: [handle] };
@@ -2457,8 +2309,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>([
           "tenant_id",
@@ -2526,7 +2378,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -2546,16 +2397,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "deployment_credential",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created deployment_credential {id}", { id });
         return { dataHandles: [handle] };
@@ -2583,7 +2431,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const result = await snykApi(
           apiToken,
@@ -2594,13 +2441,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "deployment_credential",
-          String(args.credential_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.credential_id)),
+          result,
         );
         context.logger.info("Fetched deployment_credential", {});
         return { dataHandles: [handle] };
@@ -2629,7 +2471,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>([
@@ -2652,13 +2493,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "deployment_credential",
-          String(args.credential_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.credential_id)),
+          result,
         );
         context.logger.info("Updated deployment_credential", {});
         return { dataHandles: [handle] };
@@ -2731,8 +2567,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2787,7 +2623,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
@@ -2805,13 +2640,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "assets_bulk_tenant",
-          String(args.tenant_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
         );
         context.logger.info("Updated assets_bulk_tenant", {});
         return { dataHandles: [handle] };
@@ -2839,8 +2669,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2910,8 +2740,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "filter_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -2972,8 +2802,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3049,8 +2879,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "group_field_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3096,7 +2926,7 @@ export const model = {
         data: z.object({
           attributes: z.object({
             filter: z.unknown().optional(),
-            limit: z.number().int().min(10).max(100).optional(),
+            limit: z.number().int().min(10).max(100).optional().default(10),
             meta_count: z.enum(["with", "only"]).optional(),
             sort: z.string().optional(),
           }).optional(),
@@ -3117,7 +2947,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
@@ -3133,16 +2962,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "asset_search_tenant",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created asset_search_tenant {id}", { id });
         return { dataHandles: [handle] };
@@ -3177,8 +3003,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "search_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3240,7 +3066,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
@@ -3262,13 +3087,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_tenant",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Fetched asset_tenant", {});
         return { dataHandles: [handle] };
@@ -3295,7 +3115,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
@@ -3313,13 +3132,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "asset_tenant",
-          String(args.asset_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.asset_id)),
+          result,
         );
         context.logger.info("Updated asset_tenant", {});
         return { dataHandles: [handle] };
@@ -3359,8 +3173,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3419,8 +3233,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3506,8 +3320,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3569,7 +3383,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id", "membership_id"]);
@@ -3587,13 +3400,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tenant_membership",
-          String(args.membership_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.membership_id)),
+          result,
         );
         context.logger.info("Updated tenant_membership", {});
         return { dataHandles: [handle] };
@@ -3663,8 +3471,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -3723,7 +3531,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id"]);
@@ -3739,13 +3546,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("tenant_role", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("tenant_role", id, result);
         context.logger.info("Created tenant_role {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -3774,7 +3578,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const queryParts: string[] = [];
         const excludeKeys = new Set<string>(["tenant_id", "role_id"]);
@@ -3796,13 +3599,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tenant_role",
-          String(args.role_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.role_id)),
+          result,
         );
         context.logger.info("Fetched tenant_role", {});
         return { dataHandles: [handle] };
@@ -3837,7 +3635,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, version } = context.globalArgs;
         const body: Record<string, unknown> = {};
         const excludeKeys = new Set<string>(["tenant_id", "role_id", "force"]);
@@ -3855,13 +3652,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "tenant_role",
-          String(args.role_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.role_id)),
+          result,
         );
         context.logger.info("Updated tenant_role", {});
         return { dataHandles: [handle] };

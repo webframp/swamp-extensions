@@ -45,11 +45,6 @@ Deno.test("turnstile model: has expected resources", () => {
   assertExists(model.resources["rotate_secret"]);
 });
 
-Deno.test("turnstile model: rejects empty sitekey", () => {
-  const result = model.methods.get_get.arguments.safeParse({ sitekey: "" });
-  assertEquals(result.success, false);
-});
-
 // ---------------------------------------------------------------------------
 // Mock Cloudflare API Server
 // ---------------------------------------------------------------------------

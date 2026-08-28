@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/security-signals"
-version: "2026.08.28.1"
+version: "2026.08.28.2"
 description: "Datadog Security Signals — signal search, triage, and archiving"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -15,7 +15,6 @@ additionalFiles:
   - LICENSE.md
 labels:
   - datadog
-  - incident-response
   - security
   - signals
   - triage

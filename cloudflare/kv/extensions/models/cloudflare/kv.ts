@@ -5,10 +5,10 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/kv";
 
@@ -18,18 +18,18 @@ const EXTENSION_NAME = "@webframp/cloudflare/kv";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token",
-  ),
+    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+  ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
 const NamespacesItemSchema = z.object({
-  id: z.unknown().describe("Namespace identifier tag."),
+  id: z.unknown(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown().describe("Human-readable name for the namespace."),
-});
+  title: z.unknown(),
+}).passthrough();
 
 const ListNamespacesSchema = z.object({
   items: z.array(NamespacesItemSchema),
@@ -44,38 +44,20 @@ const ListNamespacesSchema = z.object({
 });
 
 const CreateANamespaceSchema = z.object({
-  id: z.unknown().describe("Namespace identifier tag."),
+  id: z.unknown(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown().describe("Human-readable name for the namespace."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  title: z.unknown(),
+}).passthrough();
 
 const UpdateWorkersKvNamespaceRenameANamespaceSchema = z.object({
-  id: z.unknown().describe("Namespace identifier tag."),
+  id: z.unknown(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown().describe("Human-readable name for the namespace."),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+  title: z.unknown(),
+}).passthrough();
 
 const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
   successful_key_count: z.number().optional().describe(
@@ -84,16 +66,7 @@ const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
   unsuccessful_keys: z.array(z.string()).optional().describe(
     "Name of the keys that failed to be fully updated. They should be retried.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const DeleteMultipleKeyValuePairsSchema = z.object({
   successful_key_count: z.number().optional().describe(
@@ -102,16 +75,7 @@ const DeleteMultipleKeyValuePairsSchema = z.object({
   unsuccessful_keys: z.array(z.string()).optional().describe(
     "Name of the keys that failed to be fully updated. They should be retried.",
   ),
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+}).passthrough();
 
 const GetMultipleKeyValuePairsSchema = z.union([
   z.object({
@@ -142,8 +106,8 @@ const ANamespaceSKeysItemSchema = z.object({
     "The time, measured in number of seconds since the UNIX epoch, at which the key will expire. This ...",
   ),
   metadata: z.unknown().optional(),
-  name: z.unknown().describe("Name of the key."),
-});
+  name: z.unknown(),
+}).passthrough();
 
 const ListANamespaceSKeysSchema = z.object({
   items: z.array(ANamespaceSKeysItemSchema),
@@ -157,17 +121,8 @@ const ListANamespaceSKeysSchema = z.object({
   ),
 });
 
-const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({
-  fetchedAt: z.string().optional().describe(
-    "ISO 8601 timestamp when data was fetched",
-  ),
-  durationMs: z.number().optional().describe(
-    "Method execution duration in milliseconds",
-  ),
-  collectedBy: z.string().optional().describe(
-    "Extension that collected this data",
-  ),
-});
+const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({})
+  .passthrough();
 
 // =============================================================================
 // Model Definition
@@ -176,7 +131,7 @@ const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({
 /** Cloudflare Workers KV — namespaces, keys, values, bulk operations */
 export const model = {
   type: "@webframp/cloudflare/kv",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -202,6 +157,11 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -261,18 +221,10 @@ export const model = {
     list_namespaces: {
       description: "List Namespaces",
       arguments: z.object({
-        page: z.number().optional().describe(
-          "Page number of results to return.",
-        ),
-        per_page: z.number().optional().describe(
-          "Number of results per page.",
-        ),
-        order: z.enum(["id", "title"]).optional().describe(
-          "Field to order results by.",
-        ),
-        direction: z.enum(["asc", "desc"]).optional().describe(
-          "Direction to sort results in.",
-        ),
+        page: z.number().optional(),
+        per_page: z.number().optional(),
+        order: z.enum(["id", "title"]).optional(),
+        direction: z.enum(["asc", "desc"]).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -288,8 +240,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["page", "per_page"]);
         for (const [k, v] of Object.entries(args)) {
@@ -328,7 +280,7 @@ export const model = {
     create_a_namespace: {
       description: "Create a Namespace",
       arguments: z.object({
-        title: z.unknown().describe("Human-readable name for the namespace."),
+        title: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -344,7 +296,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args;
@@ -356,13 +307,10 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
-        const handle = await context.writeResource("a_namespace", id, {
-          ...result,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
+        const handle = await context.writeResource("a_namespace", id, result);
         context.logger.info("Created a_namespace {id}", { id });
         return { dataHandles: [handle] };
       },
@@ -370,9 +318,7 @@ export const model = {
     get_a_namespace: {
       description: "Get a Namespace",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
+        namespace_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -388,7 +334,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -398,13 +343,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "a_namespace",
-          String(args.namespace_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.namespace_id)),
+          result,
         );
         context.logger.info("Fetched a_namespace", {});
         return { dataHandles: [handle] };
@@ -413,12 +353,8 @@ export const model = {
     update_workers_kv_namespace_rename_a_namespace: {
       description: "Rename a Namespace",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
-        title: z.unknown().describe(
-          "New human-readable name for the namespace.",
-        ),
+        namespace_id: z.string(),
+        title: z.unknown(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -434,7 +370,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -452,13 +387,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_kv_namespace_rename_a_namespace",
-          String(args.namespace_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.namespace_id)),
+          result,
         );
         context.logger.info(
           "Updated workers_kv_namespace_rename_a_namespace",
@@ -470,9 +400,7 @@ export const model = {
     delete_workers_kv_namespace_remove_a_namespace: {
       description: "Remove a Namespace",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
+        namespace_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -503,29 +431,15 @@ export const model = {
     update_workers_kv_namespace_write_multiple_key_value_pairs: {
       description: "Write multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
+        namespace_id: z.string(),
         items: z.array(z.object({
-          base64: z.boolean().optional().describe(
-            "Whether the server should base64-decode the value before storing it.",
-          ),
-          expiration: z.unknown().optional().describe(
-            "The time, measured in number of seconds since the UNIX epoch, at which the key will expire.",
-          ),
-          expiration_ttl: z.unknown().optional().describe(
-            "Number of seconds for which the key should be visible before it expires.",
-          ),
-          key: z.unknown().describe("Key name to write."),
-          metadata: z.unknown().optional().describe(
-            "Arbitrary JSON to associate with the key-value pair.",
-          ),
-          value: z.string().max(26214400).describe(
-            "Value to store, up to 25 MiB in length.",
-          ),
-        })).min(1).describe(
-          "Key-value pairs to write; must contain at least one entry.",
-        ),
+          base64: z.boolean().optional().default(false),
+          expiration: z.unknown().optional(),
+          expiration_ttl: z.unknown().optional(),
+          key: z.unknown(),
+          metadata: z.unknown().optional(),
+          value: z.string().max(26214400),
+        })),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -541,7 +455,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -555,13 +468,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_kv_namespace_write_multiple_key_value_pairs",
-          String(args.namespace_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.namespace_id)),
+          result,
         );
         context.logger.info(
           "Updated workers_kv_namespace_write_multiple_key_value_pairs",
@@ -573,12 +481,8 @@ export const model = {
     delete_multiple_key_value_pairs: {
       description: "Delete multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
-        items: z.array(z.unknown()).min(1).max(10000).describe(
-          "Array of keys to delete (1 to 10,000 entries).",
-        ),
+        namespace_id: z.string(),
+        items: z.array(z.unknown()),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -594,7 +498,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body = args.items;
@@ -609,12 +512,7 @@ export const model = {
         const handle = await context.writeResource(
           "delete_multiple_key_value_pairs",
           "latest",
-          {
-            ...result ?? {},
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result ?? {},
         );
         context.logger.info("Executed delete_multiple_key_value_pairs", {});
         return { dataHandles: [handle] };
@@ -623,11 +521,9 @@ export const model = {
     get_multiple_key_value_pairs: {
       description: "Get multiple key-value pairs",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
-        keys: z.array(z.unknown()).min(1).max(100).describe(
-          "Array of keys to retrieve (1 to 100 entries).",
+        namespace_id: z.string(),
+        keys: z.array(z.unknown()).describe(
+          "Array of keys to retrieve (maximum of 100).",
         ),
         type: z.enum(["text", "json"]).optional().describe(
           "Whether to parse JSON values in the response.",
@@ -650,7 +546,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
 
         const body: Record<string, unknown> = {};
@@ -666,16 +561,13 @@ export const model = {
           body,
         );
 
-        const id = (result as { id?: string }).id ?? "created";
+        const id = sanitizeInstanceName(
+          (result as { id?: string }).id ?? "created",
+        );
         const handle = await context.writeResource(
           "get_multiple_key_value_pairs",
           id,
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          result,
         );
         context.logger.info("Created get_multiple_key_value_pairs {id}", {
           id,
@@ -686,18 +578,10 @@ export const model = {
     list_a_namespace_s_keys: {
       description: "List a Namespace's Keys",
       arguments: z.object({
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
-        limit: z.number().optional().describe(
-          "Maximum number of keys to return per page.",
-        ),
-        prefix: z.string().optional().describe(
-          "Filter keys to those starting with this prefix.",
-        ),
-        cursor: z.string().optional().describe(
-          "Opaque token for fetching the next page of results.",
-        ),
+        namespace_id: z.string(),
+        limit: z.number().optional(),
+        prefix: z.string().optional(),
+        cursor: z.string().optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -713,8 +597,8 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
+        const startMs = Date.now();
         const params: Record<string, string> = {};
         const excludeKeys = new Set(["namespace_id"]);
         for (const [k, v] of Object.entries(args)) {
@@ -754,10 +638,8 @@ export const model = {
     get_workers_kv_namespace_read_the_metadata_for_a_key: {
       description: "Read the metadata for a key",
       arguments: z.object({
-        key_name: z.string().min(1).describe("Name of the key to look up."),
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
+        key_name: z.string(),
+        namespace_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -773,7 +655,6 @@ export const model = {
           };
         },
       ) => {
-        const startMs = Date.now();
         const { apiToken, accountId } = context.globalArgs;
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
@@ -783,13 +664,8 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_kv_namespace_read_the_metadata_for_a_key",
-          String(args.namespace_id),
-          {
-            ...result,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+          sanitizeInstanceName(String(args.namespace_id)),
+          result,
         );
         context.logger.info(
           "Fetched workers_kv_namespace_read_the_metadata_for_a_key",
@@ -801,10 +677,8 @@ export const model = {
     delete_key_value_pair: {
       description: "Delete key-value pair",
       arguments: z.object({
-        key_name: z.string().min(1).describe("Name of the key to delete."),
-        namespace_id: z.string().min(1).describe(
-          "Namespace identifier tag.",
-        ),
+        key_name: z.string(),
+        namespace_id: z.string(),
       }),
       execute: async (
         args: Record<string, unknown>,

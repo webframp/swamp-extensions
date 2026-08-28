@@ -52,7 +52,7 @@ swamp model create @webframp/cloudflare/images cf-images \
 ## Development
 
 ```bash
-cd cloudflare/images
+cd ../../cloudflare/images
 deno task check
 deno task lint
 deno task fmt

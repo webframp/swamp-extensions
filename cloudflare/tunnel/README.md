@@ -36,7 +36,7 @@ swamp model create @webframp/cloudflare/tunnel cf-tunnel \
 ## Development
 
 ```bash
-cd cloudflare/tunnel
+cd ../../cloudflare/tunnel
 deno task check
 deno task lint
 deno task fmt
