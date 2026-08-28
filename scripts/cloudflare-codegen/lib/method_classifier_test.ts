@@ -398,7 +398,7 @@ Deno.test("generateModelSource: created resource id is sanitized", () => {
 
   assertEquals(
     src.includes(
-      'sanitizeInstanceName((result as { id?: string }).id ?? "created")',
+      'sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"))',
     ),
     true,
   );

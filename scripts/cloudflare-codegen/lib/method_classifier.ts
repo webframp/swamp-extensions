@@ -757,7 +757,7 @@ ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const id = sanitizeInstanceName((result as { id?: string }).id ?? "created");
+${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
