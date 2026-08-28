@@ -131,9 +131,30 @@ async function main() {
     Deno.exit(0);
   }
 
-  // Generate each service
+  // Generate each service in two passes so a rejected `--version` never leaves
+  // a half-written tree:
+  //   Pass 1 (plan): classify, compute version + upgrades block for every
+  //     service, WITHOUT writing anything. computeUpgradesBlock/appendGuarded
+  //     throws when a forced --version is not strictly greater than a service's
+  //     upgrade-chain tail; we catch those, accumulate them, and fail-fast with
+  //     a summary of every rejecting service before any file is touched.
+  //   Pass 2 (write): iterate the validated plan and write files.
+  const PLACEHOLDER = "0.0.0.0";
+
+  interface PlannedExtension {
+    // deno-lint-ignore no-explicit-any
+    group: any;
+    // deno-lint-ignore no-explicit-any
+    methods: any[];
+    version: string;
+    status: "new" | "changed" | "unchanged";
+    upgradesBlock: string;
+    existingContent?: string;
+  }
+
+  const plan: PlannedExtension[] = [];
+  const rejections: string[] = [];
   let totalMethods = 0;
-  let totalExtensions = 0;
 
   for (const group of groups) {
     const { config } = group;
@@ -144,22 +165,18 @@ async function main() {
       continue;
     }
 
-    totalMethods += methods.length;
-    totalExtensions++;
-
     const modelFileName = `${config.name.replace(/-/g, "_")}.ts`;
-    const testFileName = `${config.name.replace(/-/g, "_")}_test.ts`;
-    const extDir = join(outputBase, config.name);
-    const modelDir = join(extDir, "extensions", "models", "snyk");
-    const libDir = join(modelDir, "_lib");
-
-    console.log(`   🔨 ${config.name}: ${methods.length} methods`);
-
+    const modelDir = join(
+      outputBase,
+      config.name,
+      "extensions",
+      "models",
+      "snyk",
+    );
     const modelPath = join(modelDir, modelFileName);
 
     // Content-based version: keep the existing version when nothing changed,
     // preserve the hand-written upgrade chain, and bump only on a real change.
-    const PLACEHOLDER = "0.0.0.0";
     const candidateSource = generateModelSource(
       group,
       methods,
@@ -177,17 +194,63 @@ async function main() {
     // catch-up upgrade entry, which appendGuarded rejects if the forced version
     // is not strictly greater than the chain's tail.
     const version = opts.version ?? versionResult.version;
-    const upgradesBlock = computeUpgradesBlock(
-      versionResult.status,
-      version,
-      versionResult.existingContent,
-    );
 
-    if (versionResult.status === "unchanged" && !opts.version) {
+    let upgradesBlock: string;
+    try {
+      upgradesBlock = computeUpgradesBlock(
+        versionResult.status,
+        version,
+        versionResult.existingContent,
+      );
+    } catch (err) {
+      // A forced --version that is behind this service's chain tail. Record it
+      // and keep going so the summary lists every rejecting service at once.
+      rejections.push(`   • ${config.name}: ${(err as Error).message}`);
+      continue;
+    }
+
+    plan.push({
+      group,
+      methods,
+      version,
+      status: versionResult.status,
+      upgradesBlock,
+      existingContent: versionResult.existingContent,
+    });
+  }
+
+  // Fail-fast before any write if the forced --version was rejected anywhere.
+  if (rejections.length > 0) {
+    console.error(
+      `\n❌ --version ${opts.version} was rejected by ${rejections.length} ` +
+        `service(s); no files were written:\n${rejections.join("\n")}`,
+    );
+    Deno.exit(1);
+  }
+
+  // Pass 2: write the validated plan.
+  let totalExtensions = 0;
+
+  for (const planned of plan) {
+    const { group, methods, version, status, upgradesBlock } = planned;
+    const { config } = group;
+
+    totalMethods += methods.length;
+    totalExtensions++;
+
+    const modelFileName = `${config.name.replace(/-/g, "_")}.ts`;
+    const testFileName = `${config.name.replace(/-/g, "_")}_test.ts`;
+    const extDir = join(outputBase, config.name);
+    const modelDir = join(extDir, "extensions", "models", "snyk");
+    const libDir = join(modelDir, "_lib");
+
+    console.log(`   🔨 ${config.name}: ${methods.length} methods`);
+
+    if (status === "unchanged" && !opts.version) {
       console.log(`      ↳ unchanged (${version}) — no write needed`);
       continue;
     }
-    console.log(`      ↳ ${versionResult.status} → ${version}`);
+    console.log(`      ↳ ${status} → ${version}`);
 
     if (opts.dryRun) {
       console.log(`      [DRY RUN] would write ${extDir}/ (${version})`);
