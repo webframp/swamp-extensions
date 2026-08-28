@@ -4,12 +4,12 @@
   },
   "tasks": {
     "generate": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run main.ts",
-    "generate:dry-run": "deno run --allow-net --allow-read --allow-write --allow-env main.ts --dry-run",
+    "generate:dry-run": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run main.ts --dry-run",
     "check": "deno check *.ts lib/*.ts",
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "test": "deno test --allow-net --allow-read --allow-write --allow-env --permit-no-files"
+    "test": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run --permit-no-files"
   },
   "imports": {
     "@std/path": "jsr:@std/path@1",

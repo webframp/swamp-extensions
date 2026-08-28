@@ -19,8 +19,8 @@ export const SCHEMA_SHA = "29f8cda983dbd30c426fcc9d2767b2548409ac46";
 export const SCHEMA_URL =
   `https://raw.githubusercontent.com/cloudflare/api-schemas/${SCHEMA_SHA}/openapi.json`;
 
-/** Where generated extensions land relative to repo root */
-export const OUTPUT_BASE = "cloudflare";
+/** Where generated extensions land, relative to the codegen dir (cwd). */
+export const OUTPUT_BASE = "../../cloudflare";
 
 /** Zod version to use in generated code */
 export const ZOD_VERSION = "4.4.3";

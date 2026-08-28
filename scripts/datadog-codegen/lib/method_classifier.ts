@@ -153,6 +153,7 @@ export function generateModelSource(
   group: ServiceGroup,
   methods: ClassifiedMethod[],
   version: string,
+  upgradesBlock = "  upgrades: [],",
 ): string {
   const { config } = group;
   const modelType = `@webframp/datadog/${config.name}`;
@@ -170,7 +171,7 @@ export function generateModelSource(
   lines.push(` * @module`);
   lines.push(` */`);
   lines.push(
-    `// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception`,
+    `// SPDX-License-Identifier: Apache-2.0`,
   );
   lines.push(``);
   lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
@@ -193,6 +194,13 @@ export function generateModelSource(
     );
   }
   lines.push(``);
+  // EXTENSION_NAME is referenced by list method bodies (collectedBy metadata).
+  // Only emit it when a list method exists, or it would be an unused const.
+  const hasListMethod = methods.some((m) => m.type === "list");
+  if (hasListMethod) {
+    lines.push(`const EXTENSION_NAME = "${modelType}";`);
+    lines.push(``);
+  }
 
   // Schemas section
   lines.push(
@@ -226,7 +234,7 @@ export function generateModelSource(
   lines.push(`  version: "${version}",`);
   lines.push(`  globalArguments: GlobalArgsSchema,`);
   lines.push(``);
-  lines.push(`  upgrades: [],`);
+  lines.push(upgradesBlock);
   lines.push(``);
 
   // Resources
@@ -322,6 +330,16 @@ function generateResponseSchemas(
       lines.push(`  items: z.array(${itemVarName}),`);
       lines.push(`  truncated: z.boolean(),`);
       lines.push(`  fetchedAt: z.string(),`);
+      lines.push(
+        `  durationMs: z.number().optional().describe(`,
+      );
+      lines.push(`    "Method execution duration in milliseconds",`);
+      lines.push(`  ),`);
+      lines.push(
+        `  collectedBy: z.string().optional().describe(`,
+      );
+      lines.push(`    "Extension that collected this data",`);
+      lines.push(`  ),`);
       lines.push(`});`);
     } else {
       const zodStr = schemaToZod(schema, { indent: 2 }, 1);
@@ -499,7 +517,8 @@ function generateListBody(
 
   // POST-list methods (search endpoints) use body-based cursor pagination
   if (method.operation.httpMethod === "post") {
-    return `${indent}    const body: Record<string, unknown> = {};
+    return `${indent}    const startMs = Date.now();
+${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
       JSON.stringify(excludeNames)
     });
@@ -524,6 +543,8 @@ ${indent}    const handle = await context.writeResource("${resourceName}", "main
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
+${indent}      durationMs: Date.now() - startMs,
+${indent}      collectedBy: EXTENSION_NAME,
 ${indent}    });
 ${indent}
 ${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });
@@ -540,7 +561,8 @@ ${indent}    return { dataHandles: [handle] };`;
   }
   const hasParamMap = Object.keys(paramNameMap).length > 0;
 
-  return `${indent}    const params: Record<string, string> = {};
+  return `${indent}    const startMs = Date.now();
+${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
   });${
@@ -574,6 +596,8 @@ ${indent}    const handle = await context.writeResource("${resourceName}", "main
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
+${indent}      durationMs: Date.now() - startMs,
+${indent}      collectedBy: EXTENSION_NAME,
 ${indent}    });
 ${indent}
 ${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });

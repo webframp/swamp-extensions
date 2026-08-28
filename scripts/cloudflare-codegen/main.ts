@@ -17,6 +17,7 @@ import {
   generateModelSource,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
+import { computeModelVersion, computeUpgradesBlock } from "./lib/upgrades.ts";
 import {
   generateApiLib,
   generateDenoJson,
@@ -75,42 +76,23 @@ function parseArgs(): GenerateOptions {
   return opts;
 }
 
-/** Get next CalVer, incrementing N if today already has a version */
-async function getNextVersion(outputBase: string): Promise<string> {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const datePrefix = `${y}.${m}.${d}`;
-
-  let maxN = 0;
-  for (const service of SERVICES) {
-    const manifestPath = join(outputBase, service.name, "manifest.yaml");
-    try {
-      const content = await Deno.readTextFile(manifestPath);
-      const match = content.match(/version:\s*"(\d{4}\.\d{2}\.\d{2}\.\d+)"/);
-      if (match) {
-        const existingVersion = match[1];
-        if (existingVersion.startsWith(datePrefix)) {
-          const n = parseInt(existingVersion.split(".")[3], 10);
-          if (Number.isFinite(n) && n >= maxN) maxN = n;
-        }
-      }
-    } catch {
-      // File doesn't exist yet
-    }
-  }
-
-  return `${datePrefix}.${maxN + 1}`;
-}
-
 async function main() {
   const opts = parseArgs();
   const outputBase = opts.outputBase ?? OUTPUT_BASE;
-  const version = opts.version ?? await getNextVersion(outputBase);
+
+  // Date prefix for CalVer. Per-model versions are computed from a content
+  // diff (see computeModelVersion); `--version` forces a specific version.
+  const now = new Date();
+  const datePrefix = `${now.getFullYear()}.${
+    String(now.getMonth() + 1).padStart(2, "0")
+  }.${String(now.getDate()).padStart(2, "0")}`;
 
   console.log(`\n🔧 Cloudflare Extension Code Generator`);
-  console.log(`   Version: ${version}`);
+  console.log(
+    `   Version: ${
+      opts.version ?? `${datePrefix}.* (per-model, content-based)`
+    }`,
+  );
   console.log(`   Output:  ${outputBase}/`);
   console.log(`   Mode:    ${opts.dryRun ? "DRY RUN" : "GENERATE"}`);
   console.log(``);
@@ -164,9 +146,30 @@ async function main() {
     Deno.exit(0);
   }
 
-  // Generate each service
+  // Generate each service in two passes so a rejected `--version` never leaves
+  // a half-written tree:
+  //   Pass 1 (plan): classify, compute version + upgrades block for every
+  //     service, WITHOUT writing anything. computeUpgradesBlock/appendGuarded
+  //     throws when a forced --version is not strictly greater than a service's
+  //     upgrade-chain tail; we catch those, accumulate them, and fail-fast with
+  //     a summary of every rejecting service before any file is touched.
+  //   Pass 2 (write): iterate the validated plan and write files.
+  const PLACEHOLDER = "0.0.0.0";
+
+  interface PlannedExtension {
+    // deno-lint-ignore no-explicit-any
+    group: any;
+    // deno-lint-ignore no-explicit-any
+    methods: any[];
+    version: string;
+    status: "new" | "changed" | "unchanged";
+    upgradesBlock: string;
+    existingContent?: string;
+  }
+
+  const plan: PlannedExtension[] = [];
+  const rejections: string[] = [];
   let totalMethods = 0;
-  let totalExtensions = 0;
 
   for (const group of groups) {
     const { config } = group;
@@ -176,6 +179,79 @@ async function main() {
       console.log(`   ⚠️  ${config.name}: no methods classified, skipping`);
       continue;
     }
+
+    const modelFileName = `${config.name.replace(/-/g, "_")}.ts`;
+    const modelDir = join(
+      outputBase,
+      config.name,
+      "extensions",
+      "models",
+      "cloudflare",
+    );
+    const modelPath = join(modelDir, modelFileName);
+
+    // Content-based version: generate a candidate with a placeholder version
+    // and empty upgrades, compare against the on-disk file, and keep the
+    // existing version when nothing changed. This makes regeneration idempotent
+    // (no date reset on no-op runs) and preserves the hand-written upgrade
+    // ledger instead of erasing it.
+    const candidateSource = generateModelSource(
+      group,
+      methods,
+      PLACEHOLDER,
+      "  upgrades: [],",
+    );
+    const versionResult = await computeModelVersion(
+      modelPath,
+      datePrefix,
+      candidateSource,
+      PLACEHOLDER,
+    );
+    // `--version` forces a specific version. When forced, unchanged models are
+    // NOT skipped below (see the skip condition) — they are rewritten and get a
+    // catch-up upgrade entry, which appendGuarded rejects if the forced version
+    // is not strictly greater than the chain's tail.
+    const version = opts.version ?? versionResult.version;
+
+    let upgradesBlock: string;
+    try {
+      upgradesBlock = computeUpgradesBlock(
+        versionResult.status,
+        version,
+        versionResult.existingContent,
+      );
+    } catch (err) {
+      // A forced --version that is behind this service's chain tail. Record it
+      // and keep going so the summary lists every rejecting service at once.
+      rejections.push(`   • ${config.name}: ${(err as Error).message}`);
+      continue;
+    }
+
+    plan.push({
+      group,
+      methods,
+      version,
+      status: versionResult.status,
+      upgradesBlock,
+      existingContent: versionResult.existingContent,
+    });
+  }
+
+  // Fail-fast before any write if the forced --version was rejected anywhere.
+  if (rejections.length > 0) {
+    console.error(
+      `\n❌ --version ${opts.version} was rejected by ${rejections.length} ` +
+        `service(s); no files were written:\n${rejections.join("\n")}`,
+    );
+    Deno.exit(1);
+  }
+
+  // Pass 2: write the validated plan.
+  let totalExtensions = 0;
+
+  for (const planned of plan) {
+    const { group, methods, version, status, upgradesBlock } = planned;
+    const { config } = group;
 
     totalMethods += methods.length;
     totalExtensions++;
@@ -188,13 +264,14 @@ async function main() {
 
     console.log(`   🔨 ${config.name}: ${methods.length} methods`);
 
+    if (status === "unchanged" && !opts.version) {
+      console.log(`      ↳ unchanged (${version}) — no write needed`);
+      continue;
+    }
+    console.log(`      ↳ ${status} → ${version}`);
+
     if (opts.dryRun) {
-      console.log(`      Would create: ${extDir}/`);
-      console.log(`        manifest.yaml, deno.json, README.md, LICENSE.md`);
-      console.log(`        RELEASE_NOTES.md, .swamp.yaml, .gitignore`);
-      console.log(`        extensions/models/cloudflare/${modelFileName}`);
-      console.log(`        extensions/models/cloudflare/${testFileName}`);
-      console.log(`        extensions/models/cloudflare/_lib/api.ts`);
+      console.log(`      [DRY RUN] would write ${extDir}/ (${version})`);
       continue;
     }
 
@@ -202,7 +279,12 @@ async function main() {
     await ensureDir(libDir);
 
     // Generate all files
-    const modelSource = generateModelSource(group, methods, version);
+    const modelSource = generateModelSource(
+      group,
+      methods,
+      version,
+      upgradesBlock,
+    );
     const testSource = generateTestSource(
       config,
       methods,
