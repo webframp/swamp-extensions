@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { assertEquals } from "@std/assert";
+import { assertThrows } from "@std/assert";
 import {
   buildUpgradesBlock,
+  compareCalVer,
   computeModelVersion,
   computeUpgradesBlock,
   extractExistingUpgrades,
@@ -10,7 +12,7 @@ import {
 } from "./upgrades.ts";
 
 const SAMPLE = `export const model = {
-  type: "@webframp/cloudflare/dns",
+  type: "@webframp/snyk/projects",
   version: "2026.08.26.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
@@ -89,6 +91,41 @@ Deno.test("computeUpgradesBlock: unchanged with lagging last toVersion appends a
   const toVersions = block.match(/toVersion:/g) ?? [];
   assertEquals(toVersions.length, 3);
   assertEquals(block.includes('toVersion: "2026.08.28.9"'), true);
+});
+
+Deno.test("compareCalVer orders by segment", () => {
+  assertEquals(compareCalVer("2026.08.26.4", "2026.08.27.1") < 0, true);
+  assertEquals(compareCalVer("2026.08.27.1", "2026.08.26.4") > 0, true);
+  assertEquals(compareCalVer("2026.08.26.2", "2026.08.26.2"), 0);
+  assertEquals(compareCalVer("2026.08.26.10", "2026.08.26.2") > 0, true);
+});
+
+Deno.test("computeUpgradesBlock: changed with backwards version throws (HIGH guard)", () => {
+  // SAMPLE's last toVersion is 2026.08.26.2. A forced/lower version must not
+  // be appended after it — that would be a backwards chain.
+  assertThrows(
+    () => computeUpgradesBlock("changed", "2026.08.26.1", SAMPLE),
+    Error,
+    "backwards upgrade chain",
+  );
+});
+
+Deno.test("computeUpgradesBlock: changed with equal version throws (HIGH guard)", () => {
+  assertThrows(
+    () => computeUpgradesBlock("changed", "2026.08.26.2", SAMPLE),
+    Error,
+    "strictly greater",
+  );
+});
+
+Deno.test("computeUpgradesBlock: unchanged catch-up with backwards version throws (HIGH guard)", () => {
+  // Forcing a version that differs from the tail but is lower must also throw,
+  // not silently append a backwards entry.
+  assertThrows(
+    () => computeUpgradesBlock("unchanged", "2026.08.25.9", SAMPLE),
+    Error,
+    "backwards upgrade chain",
+  );
 });
 
 Deno.test("buildUpgradesBlock with no entries yields empty array literal", () => {

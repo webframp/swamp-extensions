@@ -190,7 +190,10 @@ async function main() {
       candidateSource,
       PLACEHOLDER,
     );
-    // `--version` forces a specific version (still skips writing unchanged).
+    // `--version` forces a specific version. When forced, unchanged models are
+    // NOT skipped below (see the skip condition) — they are rewritten and get a
+    // catch-up upgrade entry, which appendGuarded rejects if the forced version
+    // is not strictly greater than the chain's tail.
     const version = opts.version ?? versionResult.version;
     const upgradesBlock = computeUpgradesBlock(
       versionResult.status,

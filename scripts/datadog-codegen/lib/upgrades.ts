@@ -99,6 +99,28 @@ export function lastToVersion(entries: string[]): string | null {
 }
 
 /**
+ * Compare two CalVer strings (`YYYY.MM.DD.N`) segment by segment.
+ * Returns a negative number if `a < b`, zero if equal, positive if `a > b`.
+ * Non-numeric or short strings sort by their numeric prefix, then lexically —
+ * enough to order well-formed CalVer, which is all the codegen emits.
+ */
+export function compareCalVer(a: string, b: string): number {
+  const pa = a.split(".").map((s) => parseInt(s, 10));
+  const pb = b.split(".").map((s) => parseInt(s, 10));
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (Number.isNaN(x) || Number.isNaN(y)) {
+      // Fall back to lexical comparison of the raw strings.
+      return a < b ? -1 : a > b ? 1 : 0;
+    }
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+/**
  * Generate a single no-op (identity) upgrade entry. The codegen only produces
  * additive, optional schema fields, so old data is always valid under the new
  * schema — the migration is identity.
@@ -130,15 +152,39 @@ export function buildUpgradesBlock(
 }
 
 /**
+ * Append a new identity upgrade entry for `version`, but only after confirming
+ * it is strictly greater than the chain's current last `toVersion`. A forced
+ * `--version` (or, in principle, any recomputed version) that is not ahead of
+ * the existing tail would produce a backwards, invalid upgrade chain. With
+ * per-model versioning, models advance independently, so a single forced
+ * `--version` is routinely behind some models — throwing here surfaces the
+ * mistake instead of silently corrupting the ledger. main.ts's top-level catch
+ * turns the throw into a non-zero exit with the message.
+ */
+function appendGuarded(existing: string[], version: string): string {
+  const last = lastToVersion(existing);
+  if (last !== null && compareCalVer(version, last) <= 0) {
+    throw new Error(
+      `refusing to append upgrade entry ${version}: not strictly greater ` +
+        `than the chain's last toVersion ${last}. Appending it would produce ` +
+        `a backwards upgrade chain. Pass a --version greater than ${last}, ` +
+        `or omit --version to use the content-based per-model version.`,
+    );
+  }
+  return buildUpgradesBlock(existing, generateUpgradeEntry(version));
+}
+
+/**
  * Compute the `upgrades: [...]` block body for a model, given the version
  * status and the existing file content.
  *
  * - new: empty chain (first release, `upgrades: []`)
  * - unchanged: re-emit existing entries verbatim; if the last entry's toVersion
- *   somehow lags the model version (e.g. a manual bump), append an identity
- *   entry so the chain's final toVersion matches.
+ *   lags the model version (e.g. a manual/forced bump), append an identity
+ *   entry so the chain's final toVersion matches — guarded so the appended
+ *   version must be strictly greater than the current tail.
  * - changed: re-emit existing entries and append one new identity entry for the
- *   new version.
+ *   new version, guarded the same way.
  */
 export function computeUpgradesBlock(
   status: "new" | "changed" | "unchanged",
@@ -154,13 +200,13 @@ export function computeUpgradesBlock(
   if (status === "unchanged") {
     if (existing.length === 0) return `  upgrades: [],`;
     if (lastToVersion(existing) !== version) {
-      return buildUpgradesBlock(existing, generateUpgradeEntry(version));
+      return appendGuarded(existing, version);
     }
     return buildUpgradesBlock(existing, null);
   }
 
   // changed
-  return buildUpgradesBlock(existing, generateUpgradeEntry(version));
+  return appendGuarded(existing, version);
 }
 
 // =============================================================================
@@ -234,12 +280,9 @@ export async function computeModelVersion(
       `"${placeholderVersion}"`,
     ),
   );
-  const normalizedCandidate = stripUpgradesBlock(
-    formattedCandidate.replaceAll(
-      `"${placeholderVersion}"`,
-      `"${placeholderVersion}"`,
-    ),
-  );
+  // The candidate already carries the placeholder version, so no replacement is
+  // needed on this side — just strip the upgrades block to match.
+  const normalizedCandidate = stripUpgradesBlock(formattedCandidate);
 
   if (normalizedExisting === normalizedCandidate) {
     return { version: existingVersion, status: "unchanged", existingContent };
