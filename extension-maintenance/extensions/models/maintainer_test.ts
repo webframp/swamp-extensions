@@ -97,6 +97,13 @@ Deno.test("ExtensionStatusSchema accepts lockfileSync and directSpecifiers", () 
         alias: "@systeminit/swamp-testing",
       },
     ],
+    pinDrift: [
+      { name: "npm:zod", pinned: "4.3.6", modal: "4.4.3" },
+    ],
+    metadataCoverage: {
+      isModel: true,
+      missing: ["fetchedAt"],
+    },
     stale: false,
     lockDrifted: true,
   };
@@ -114,6 +121,8 @@ Deno.test("ExtensionStatusSchema accepts lockfileSync and directSpecifiers", () 
       manifest: 0,
       lockDrifted: 1,
       directSpecifiers: 1,
+      pinDrift: 1,
+      metadataGaps: 1,
     },
     extensions: [input],
   });
@@ -158,6 +167,66 @@ Deno.test("AuditSummarySchema requires new category counts", () => {
     staleCount: 0,
     categories: { npm: 0, testing: 0, manifest: 0 },
     extensions: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("AuditSummarySchema requires pinDrift and metadataGaps counts", () => {
+  const auditSchema = model.resources.audit.schema;
+  // Has the older counts but omits the two new ones.
+  const result = auditSchema.safeParse({
+    scannedAt: "2026-07-26T00:00:00Z",
+    repoRoot: "/tmp",
+    totalExtensions: 0,
+    staleCount: 0,
+    categories: {
+      npm: 0,
+      testing: 0,
+      manifest: 0,
+      lockDrifted: 0,
+      directSpecifiers: 0,
+    },
+    extensions: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("ExtensionStatusSchema requires pinDrift and metadataCoverage", () => {
+  const auditSchema = model.resources.audit.schema;
+  const ext = {
+    name: "@webframp/test",
+    dir: "test",
+    version: "2026.01.01.1",
+    qualityScore: 100,
+    npmDeps: [],
+    testingDep: null,
+    manifestDeps: [],
+    lockfileSync: {
+      hasDeno: true,
+      hasLock: true,
+      inSync: true,
+      staleEntries: [],
+    },
+    directSpecifiers: [],
+    // pinDrift and metadataCoverage deliberately omitted
+    stale: false,
+    lockDrifted: false,
+  };
+  const result = auditSchema.safeParse({
+    scannedAt: "2026-07-26T00:00:00Z",
+    repoRoot: "/tmp",
+    totalExtensions: 1,
+    staleCount: 0,
+    categories: {
+      npm: 0,
+      testing: 0,
+      manifest: 0,
+      lockDrifted: 0,
+      directSpecifiers: 0,
+      pinDrift: 0,
+      metadataGaps: 0,
+    },
+    extensions: [ext],
   });
   assertEquals(result.success, false);
 });

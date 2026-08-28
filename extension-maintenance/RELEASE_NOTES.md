@@ -1,3 +1,25 @@
+## 2026.08.28.3
+
+**Added:** The `audit` method now detects two more classes of repo-wide drift.
+`pinDrift` flags any extension pinning an npm package to a version differing
+from the repo-wide consensus (the modal version across all extensions) — this
+catches inconsistency even when the pin is not stale. `metadataCoverage` flags
+observation-model extensions missing any of the standard output-metadata fields
+(`durationMs`, `collectedBy`, `fetchedAt`) introduced in #386.
+
+**Added:** Two new `categories` counts in the audit summary — `pinDrift` and
+`metadataGaps` — and two new per-extension fields, `pinDrift` and
+`metadataCoverage`. Exported `computeModalPins` and `checkMetadataCoverage` for
+unit testing.
+
+**Upgrade note:** The `audit` resource schema gained required fields. A
+`current-audit` resource stored by an older version will fail validation on
+read; re-run `audit` to regenerate it. Audit snapshots are ephemeral
+observations and are not migrated. No model-instance schema changed. Detection
+is heuristic (string-based, consistent with the rest of the audit) and is a
+signal for human review, not a hard gate — `plan-bump`/`apply-bump` behavior is
+unchanged.
+
 ## 2026.08.28.2
 
 **Fixed:** The sweep no longer corrupts model upgrade chains. Previously
