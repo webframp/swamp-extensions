@@ -106,6 +106,11 @@ function stringToZod(schema: SchemaObject): string {
   if (schema.maxLength !== undefined) {
     s += `.max(${schema.maxLength})`;
   }
+  if (schema.pattern !== undefined) {
+    // new RegExp(...) with a JSON-encoded source so backslashes and quotes in
+    // the spec's pattern survive into valid TypeScript.
+    s += `.regex(new RegExp(${JSON.stringify(schema.pattern)}))`;
+  }
   return s;
 }
 

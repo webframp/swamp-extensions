@@ -25,6 +25,23 @@ Deno.test("type_mapper: string with minLength and maxLength", () => {
   assertEquals(schemaToZod(schema), "z.string().min(1).max(100)");
 });
 
+Deno.test("type_mapper: string with pattern emits .regex(new RegExp(...))", () => {
+  const schema: SchemaObject = { type: "string", pattern: "^[a-z0-9]+$" };
+  assertEquals(
+    schemaToZod(schema),
+    'z.string().regex(new RegExp("^[a-z0-9]+$"))',
+  );
+});
+
+Deno.test("type_mapper: pattern with backslashes survives JSON encoding", () => {
+  const schema: SchemaObject = { type: "string", pattern: "\\d{3}-\\d{4}" };
+  // JSON.stringify escapes the backslashes so the emitted source is valid TS.
+  assertEquals(
+    schemaToZod(schema),
+    'z.string().regex(new RegExp("\\\\d{3}-\\\\d{4}"))',
+  );
+});
+
 Deno.test("type_mapper: integer type", () => {
   const schema: SchemaObject = { type: "integer" };
   assertEquals(schemaToZod(schema), "z.number().int()");

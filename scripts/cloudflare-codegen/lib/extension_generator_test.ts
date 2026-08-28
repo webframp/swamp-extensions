@@ -4,6 +4,7 @@
 
 import { assertEquals } from "@std/assert";
 import {
+  generateApiLib,
   generateReleaseNotes,
   generateSwampYaml,
 } from "./extension_generator.ts";
@@ -130,4 +131,47 @@ Deno.test("generateReleaseNotes: trailing whitespace in the body is trimmed", ()
     "**Fixed:** y\n\n\n",
   );
   assertEquals(notes.endsWith("**Fixed:** y\n"), true);
+});
+
+// ---------------------------------------------------------------------------
+// generateApiLib — the hardened HTTP client.
+//
+// The generated _lib/api.ts is what every model imports. These assertions pin
+// the reference-inspired hardening: 429 retry with Retry-After, token env
+// fallback, and the instance-name sanitizer export.
+// ---------------------------------------------------------------------------
+
+Deno.test("generateApiLib: exports sanitizeInstanceName", () => {
+  const lib = generateApiLib();
+  assertEquals(lib.includes("export function sanitizeInstanceName("), true);
+});
+
+Deno.test("generateApiLib: retries on 429 honoring Retry-After", () => {
+  const lib = generateApiLib();
+  assertEquals(lib.includes("status !== 429"), true);
+  assertEquals(lib.includes('headers.get("Retry-After")'), true);
+  assertEquals(lib.includes("const MAX_RETRIES = 3"), true);
+});
+
+Deno.test("generateApiLib: resolves the token from arg or env, else throws", () => {
+  const lib = generateApiLib();
+  assertEquals(lib.includes("function resolveToken("), true);
+  assertEquals(lib.includes('Deno.env.get("CLOUDFLARE_API_TOKEN")'), true);
+  assertEquals(lib.includes("Cloudflare API token not set"), true);
+});
+
+Deno.test("generateApiLib: sanitizeInstanceName strips path-traversal chars at runtime", async () => {
+  // Materialize the generated source and import it, so the emitted regex chain
+  // is exercised as real code rather than string-matched.
+  const lib = generateApiLib();
+  const tmp = await Deno.makeTempFile({ suffix: ".ts" });
+  try {
+    await Deno.writeTextFile(tmp, lib);
+    const mod = await import(`file://${tmp}`);
+    // "/" and "\" -> "_", ".." -> "_", null byte removed (matches reference).
+    assertEquals(mod.sanitizeInstanceName("a/b\\c..d\0e"), "a_b_c_de");
+    assertEquals(mod.sanitizeInstanceName("plain"), "plain");
+  } finally {
+    await Deno.remove(tmp);
+  }
 });

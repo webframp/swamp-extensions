@@ -104,6 +104,9 @@ function stringToZod(schema: SchemaObject): string {
   if (schema.maxLength !== undefined) {
     s += `.max(${schema.maxLength})`;
   }
+  if (schema.pattern !== undefined) {
+    s += `.regex(new RegExp(${JSON.stringify(schema.pattern)}))`;
+  }
   return s;
 }
 

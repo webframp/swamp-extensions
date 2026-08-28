@@ -195,6 +195,11 @@ export function generateModelSource(
   const apiImports: string[] = [];
   if (usesCfApi) apiImports.push("cfApi");
   if (usesCfApiPaginated) apiImports.push("cfApiPaginated");
+  // Every method that writes a resource routes its instance name through
+  // sanitizeInstanceName (path-traversal protection). Delete-only methods write
+  // no resource, so import it only when at least one non-delete method exists.
+  const writesResource = methods.some((m) => m.type !== "delete");
+  if (writesResource) apiImports.push("sanitizeInstanceName");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -286,7 +291,7 @@ export function generateModelSource(
 function generateGlobalArgsSchema(config: ServiceConfig): string {
   const lines = [`const GlobalArgsSchema = z.object({`];
   lines.push(
-    `  apiToken: z.string().meta({ sensitive: true }).describe("Cloudflare API token"),`,
+    `  apiToken: z.string().meta({ sensitive: true }).describe("Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.").optional(),`,
   );
 
   if (config.scope === "account") {
@@ -340,7 +345,7 @@ function generateResponseSchemas(
       // For list methods, generate both item schema and list wrapper
       const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
         "ItemSchema";
-      const itemZod = schemaToZod(schema, { indent: 2 }, 1);
+      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -359,7 +364,7 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = schemaToZod(schema, { indent: 2 }, 1);
+      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
@@ -683,7 +688,7 @@ function generateGetBody(
     method.operation.pathParams.length - 1
   ];
   const instanceExpr = idParam
-    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"latest"';
 
   return `${indent}    const result = await cfApi<Record<string, unknown>>(
@@ -750,7 +755,7 @@ ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const id = (result as { id?: string }).id ?? "created";
+${indent}    const id = sanitizeInstanceName((result as { id?: string }).id ?? "created");
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
@@ -768,7 +773,7 @@ function generateUpdateBody(
     method.operation.pathParams.length - 1
   ];
   const instanceExpr = idParam
-    ? `String(args.${sanitizeFieldName(idParam.name)})`
+    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"updated"';
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
@@ -989,6 +994,19 @@ function toPascalCase(name: string): string {
     .split("_")
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .join("");
+}
+
+/**
+ * Append `.passthrough()` to a generated object schema so unknown API-returned
+ * fields survive validation instead of being stripped. Output/resource schemas
+ * describe observed reality, which the spec never fully captures, so unknown
+ * fields must pass through. Only applies to a top-level `z.object({...})`; other
+ * shapes (records, unions, unknown) are returned unchanged.
+ */
+function withPassthrough(zodExpr: string): string {
+  return zodExpr.startsWith("z.object({")
+    ? `${zodExpr}.passthrough()`
+    : zodExpr;
 }
 
 function escapeStr(s: string): string {
