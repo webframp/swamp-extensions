@@ -341,3 +341,222 @@ Deno.test("apply-bump regenerates deno.lock with direct specifiers", async () =>
 
   await cleanup();
 });
+
+Deno.test("apply-bump APPENDS an upgrade entry, preserving prior chain history", async () => {
+  // A model with a two-step chain whose last entry already matches the current
+  // version. Bumping must APPEND a third entry, not relabel the second.
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.2",
+  upgrades: [
+    {
+      toVersion: "2026.01.01.1",
+      description: "initial",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.01.01.2",
+      description: "add field foo",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old, foo: 3 }),
+    },
+  ],
+};
+`,
+  });
+
+  const plan = {
+    plannedAt: "2026-07-27T00:00:00Z",
+    totalEntries: 1,
+    entries: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        currentVersion: "2026.01.01.2",
+        nextVersion: "2026.07.27.1",
+        changes: [
+          {
+            file: "extensions/**/*.ts",
+            find: 'version: "2026.01.01.2"',
+            replace: 'version: "2026.07.27.1"',
+            category: "source-version",
+          },
+        ],
+        upgradeInserts: [
+          {
+            file: "extensions/models/mod.ts",
+            toVersion: "2026.07.27.1",
+            description:
+              "No schema changes — dependency/license maintenance bump",
+          },
+        ],
+        releaseNotes: "## 2026.07.27.1\n\n**Changed:** Bumped something.\n",
+      },
+    ],
+    skipped: [],
+  };
+
+  const { context, written } = mockContext(root, plan);
+  await model.methods["apply-bump"].execute({}, context);
+
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  assertEquals(applyResult.errors, []);
+  assertEquals(applyResult.extensionsBumped, 1);
+
+  const src = await Deno.readTextFile(`${extDir}/extensions/models/mod.ts`);
+  // Prior entries preserved.
+  assertStringIncludes(src, 'toVersion: "2026.01.01.1"');
+  assertStringIncludes(src, 'toVersion: "2026.01.01.2"');
+  assertStringIncludes(src, "add field foo");
+  // New entry appended with identity migration.
+  assertStringIncludes(src, 'toVersion: "2026.07.27.1"');
+  assertStringIncludes(
+    src,
+    "No schema changes — dependency/license maintenance bump",
+  );
+  // The .01.01.2 step must still describe its own migration, not be relabelled.
+  assertStringIncludes(
+    src,
+    'toVersion: "2026.01.01.2"',
+  );
+
+  await cleanup();
+});
+
+Deno.test("apply-bump detects the relabel anti-pattern (previous entry destroyed)", async () => {
+  // Simulate the OLD broken behavior: the fixture's last toVersion was
+  // relabelled from the previous version to the new one in place, so the
+  // previous version's entry is gone. The version field is already bumped.
+  // With currentVersion passed to checkUpgradeChain, this must be caught even
+  // though the last toVersion equals the model version.
+  const { root, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.07.27.1",
+  upgrades: [
+    {
+      toVersion: "2026.01.01.1",
+      description: "initial",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.07.27.1",
+      description: "add field foo",
+      upgradeAttributes: (old: Record<string, unknown>) => ({ ...old, foo: 3 }),
+    },
+  ],
+};
+`,
+  });
+
+  // Plan reports the bump came FROM 2026.01.02.1 — an intermediate shipped
+  // version whose entry should exist but was destroyed by the relabel.
+  const plan = {
+    plannedAt: "2026-07-27T00:00:00Z",
+    totalEntries: 1,
+    entries: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        currentVersion: "2026.07.20.1",
+        nextVersion: "2026.07.27.1",
+        // No changes / inserts needed — the fixture is already at nextVersion,
+        // simulating a chain that was relabelled rather than appended.
+        changes: [],
+        releaseNotes: "## 2026.07.27.1\n\n**Changed:** something\n",
+      },
+    ],
+    skipped: [],
+  };
+
+  const { context, written } = mockContext(root, plan);
+  await model.methods["apply-bump"].execute({}, context);
+
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  const errors = applyResult.errors as Array<
+    { extension: string; error: string }
+  >;
+  assertEquals(applyResult.extensionsBumped, 0);
+  assertEquals(errors.length, 1);
+  assertStringIncludes(errors[0].error, "relabelled, not appended");
+
+  await cleanup();
+});
+
+Deno.test("plan-bump emits upgradeInserts and a test-assertion change", async () => {
+  // Fixture: a model with an upgrades: array (whose last toVersion matches the
+  // current version) and a test asserting the exact model version literal.
+  const { root, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  upgrades: [
+    {
+      toVersion: "2026.01.01.1",
+      description: "initial",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
+};
+`,
+    testContent:
+      `import { assertEquals } from "@std/assert";\nimport { model } from "./mod.ts";\nDeno.test("v", () => {\n  assertEquals(model.version, "2026.01.01.1");\n});\n`,
+  });
+
+  // Audit input: one stale extension with a stale npm dep so plan-bump produces
+  // a shipped change (and therefore a bump entry).
+  const audit = {
+    extensions: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        version: "2026.01.01.1",
+        stale: true,
+        npmDeps: [
+          {
+            name: "npm:zod",
+            current: "4.4.2",
+            latest: "4.4.3",
+            stale: true,
+          },
+        ],
+        testingDep: null,
+        manifestDeps: [],
+      },
+    ],
+  };
+
+  const { context, written } = mockContext(root, audit);
+  await model.methods["plan-bump"].execute({ skip_testing: false }, context);
+
+  const plan = written.find((w) => w.spec === "plan")?.data as Record<
+    string,
+    unknown
+  >;
+  const entries = plan.entries as Array<Record<string, unknown>>;
+  assertEquals(entries.length, 1);
+  const entry = entries[0];
+
+  // upgradeInserts targets the source file with the upgrades: array.
+  const inserts = entry.upgradeInserts as Array<
+    { file: string; toVersion: string; description: string }
+  >;
+  assertEquals(inserts.length, 1);
+  assertEquals(inserts[0].file, "extensions/models/mod.ts");
+  assertEquals(inserts[0].toVersion, entry.nextVersion);
+
+  // A test-assertion change updates the exact literal, targeting *_test.ts.
+  const changes = entry.changes as Array<
+    { file: string; find: string; replace: string; category: string }
+  >;
+  const ta = changes.find((c) => c.category === "test-assertion");
+  assertEquals(ta !== undefined, true);
+  assertEquals(ta!.file, "extensions/**/*_test.ts");
+  assertEquals(ta!.find, '.version, "2026.01.01.1"');
+  assertEquals(ta!.replace, `.version, "${entry.nextVersion}"`);
+
+  // No toVersion relabel change is emitted (the anti-pattern is gone).
+  const relabel = changes.find((c) => c.find.startsWith("toVersion:"));
+  assertEquals(relabel, undefined);
+
+  await cleanup();
+});

@@ -124,8 +124,20 @@ const BumpPlanEntrySchema = z.object({
       "manifest-pin",
       "manifest-version",
       "source-version",
+      "test-assertion",
     ]).describe("Which kind of version reference this change targets"),
   })).describe("Find/replace edits needed to apply this extension's bump"),
+  upgradeInserts: z.array(z.object({
+    file: z.string().describe(
+      "Source file (relative to extension dir) whose upgrades: array gets a new entry appended",
+    ),
+    toVersion: z.string().describe("toVersion for the appended upgrade entry"),
+    description: z.string().describe(
+      "Human-readable upgrade entry description",
+    ),
+  })).optional().describe(
+    "New no-op upgrade-chain entries to APPEND (never relabel) for model files with an upgrades: array. Applied after find/replace changes.",
+  ),
   releaseNotes: z.string().describe("Generated RELEASE_NOTES.md content"),
 });
 
@@ -728,16 +740,139 @@ async function readSourceVersions(
   return versions;
 }
 
+/** Finds shipped (non-test) source files that contain a model `upgrades:`
+ * array. A version bump on such a file requires APPENDING a new entry whose
+ * `toVersion` equals the new version — never relabelling the existing final
+ * entry, which would corrupt the migration ledger (see appendUpgradeEntry). */
+async function findUpgradeArrayFiles(extDir: string): Promise<string[]> {
+  const out: string[] = [];
+  const findResult = await run([
+    "find",
+    `${extDir}/extensions`,
+    "-name",
+    "*.ts",
+    "-not",
+    "-name",
+    "*_test.ts",
+  ]);
+  if (!findResult.success) return out;
+  for (const file of findResult.stdout.trim().split("\n")) {
+    if (!file) continue;
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    if (/upgrades:\s*\[/.test(content)) out.push(file);
+  }
+  return out;
+}
+
+/** Inserts a no-op upgrade entry (identity `upgradeAttributes`) immediately
+ * before the closing `]` of every `upgrades:` array in `content`, using a
+ * balanced-bracket scan so brackets inside `upgradeAttributes` bodies are
+ * handled correctly. Returns the rewritten content.
+ *
+ * The appended migration is intentionally identity `(old) => old`: the
+ * maintenance sweep only performs dependency/license bumps, which never change
+ * a model's data shape. This helper MUST NOT be used for a schema-changing
+ * bump — it would append an identity migration that silently fails to migrate
+ * stored data. */
+function appendUpgradeEntry(
+  content: string,
+  toVersion: string,
+  description: string,
+): string {
+  const entry = `    {\n` +
+    `      toVersion: "${toVersion}",\n` +
+    `      description:\n` +
+    `        ${JSON.stringify(description)},\n` +
+    `      upgradeAttributes: (old: Record<string, unknown>) => old,\n` +
+    `    },\n`;
+
+  // Locate each `upgrades: [` array and its matching `]` via bracket balance,
+  // then splice the entry in before the closing bracket. Process right-to-left
+  // so earlier indices stay valid. Note: the scan counts brackets literally and
+  // does not skip brackets inside string literals — safe here because upgrade
+  // descriptions in this repo contain none. Revisit if that changes.
+  const spans: Array<[number, number]> = [];
+  const re = /upgrades:\s*\[/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const openIdx = content.indexOf("[", m.index);
+    let depth = 0;
+    for (let i = openIdx; i < content.length; i++) {
+      const c = content[i];
+      if (c === "[") depth++;
+      else if (c === "]") {
+        depth--;
+        if (depth === 0) {
+          spans.push([openIdx, i]);
+          break;
+        }
+      }
+    }
+  }
+  for (const [, closeIdx] of spans.sort((a, b) => b[1] - a[1])) {
+    const lineStart = content.lastIndexOf("\n", closeIdx) + 1;
+    content = content.slice(0, lineStart) + entry + content.slice(lineStart);
+  }
+  return content;
+}
+
+/** Finds test files that assert an exact model version literal, e.g.
+ * `assertEquals(model.version, "2026.08.27.1")`. A version bump must update
+ * these literals or `deno test` fails. Returns a map of file -> set of exact
+ * version literals asserted. Pattern-based assertions
+ * (`assertMatch(model.version, /regex/)`) carry no literal and are unaffected. */
+async function findTestVersionAssertions(
+  extDir: string,
+): Promise<Map<string, Set<string>>> {
+  const result = new Map<string, Set<string>>();
+  const findResult = await run([
+    "find",
+    `${extDir}/extensions`,
+    "-name",
+    "*_test.ts",
+  ]);
+  if (!findResult.success) return result;
+  // Matches `.version, "YYYY.MM.DD.N"` — the exact-literal assertion form.
+  const re = /\.version,\s*["'](\d{4}\.\d{2}\.\d{2}\.\d+)["']/g;
+  for (const file of findResult.stdout.trim().split("\n")) {
+    if (!file) continue;
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    let m: RegExpExecArray | null;
+    const set = new Set<string>();
+    while ((m = re.exec(content)) !== null) set.add(m[1]!);
+    re.lastIndex = 0;
+    if (set.size > 0) result.set(file, set);
+  }
+  return result;
+}
+
 // =============================================================================
 // Validation Checks
 // =============================================================================
 
 /** Checks that the last upgrade chain entry's toVersion matches the model version,
  * AND that the model version matches the manifest version (if provided).
- * Returns an error message if broken, null if valid or no upgrades present. */
+ *
+ * When `previousVersion` is supplied (the version the bump came from), also
+ * verifies that an entry for `previousVersion` is STILL present in the chain.
+ * A missing previous entry is the signature of the relabel anti-pattern: a
+ * bump that overwrote the last `toVersion` in place instead of appending a new
+ * one, silently destroying a historical migration step. Returns an error
+ * message if broken, null if valid or no upgrades present. */
 async function checkUpgradeChain(
   extDir: string,
   manifestVersion?: string,
+  previousVersion?: string,
 ): Promise<string | null> {
   const tsFiles: string[] = [];
   try {
@@ -786,6 +921,28 @@ async function checkUpgradeChain(
     const lastToVersion = toVersionMatches[toVersionMatches.length - 1][1];
     if (lastToVersion !== modelVersion) {
       return `upgrade chain broken: last toVersion "${lastToVersion}" != model version "${modelVersion}"`;
+    }
+
+    // Relabel-anti-pattern guard: if this bump came from `previousVersion` and
+    // that version was itself a shipped release with its own chain entry, that
+    // entry must still be present. Its absence means the last toVersion was
+    // overwritten in place (relabelled) rather than a new entry appended —
+    // corrupting the migration ledger while still passing the last-toVersion
+    // check above. Only enforced when previousVersion differs from the new
+    // version and is not the very first entry.
+    if (
+      previousVersion &&
+      previousVersion !== modelVersion
+    ) {
+      const allToVersions = toVersionMatches.map((mm) => mm[1]);
+      const firstToVersion = allToVersions[0];
+      const previousMissing = !allToVersions.includes(previousVersion);
+      // Skip the guard when previousVersion predates the whole chain (nothing
+      // to preserve) — i.e. it's older than the chain's first entry.
+      if (previousMissing && previousVersion >= firstToVersion!) {
+        const relFile = file.slice(extDir.length + 1);
+        return `upgrade chain relabelled, not appended: ${relFile} no longer has an entry for the previous version "${previousVersion}". A new entry with toVersion "${modelVersion}" must be APPENDED, leaving prior entries intact.`;
+      }
     }
 
     // Cross-check: source model version must match manifest version.
@@ -872,7 +1029,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.28.1",
+  version: "2026.08.28.2",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1264,6 +1421,10 @@ export const model = {
           );
           const uniqueSourceVersions = new Set(sourceVersions.values());
 
+          // Emit `version:` find/replace edits ONLY. The upgrade chain is NOT
+          // handled by relabelling an existing `toVersion` (that corrupts the
+          // migration ledger — see appendUpgradeEntry); it is handled by the
+          // upgradeInserts below, which APPEND a new entry.
           if (uniqueSourceVersions.size === 0) {
             // No CalVer version fields found in source — fall back to manifest
             // version for the find pattern (extension may not have a version
@@ -1274,27 +1435,13 @@ export const model = {
               replace: `version: "${nextVer}"`,
               category: "source-version",
             });
-            changes.push({
-              file: "extensions/**/*.ts",
-              find: `toVersion: "${currentVersion}"`,
-              replace: `toVersion: "${nextVer}"`,
-              category: "source-version",
-            });
           } else {
-            // Emit a find/replace for each distinct source version found.
-            // This handles the case where the source drifted from the manifest.
             for (const srcVer of uniqueSourceVersions) {
               if (srcVer === nextVer) continue; // Already at target — skip
               changes.push({
                 file: "extensions/**/*.ts",
                 find: `version: "${srcVer}"`,
                 replace: `version: "${nextVer}"`,
-                category: "source-version",
-              });
-              changes.push({
-                file: "extensions/**/*.ts",
-                find: `toVersion: "${srcVer}"`,
-                replace: `toVersion: "${nextVer}"`,
                 category: "source-version",
               });
             }
@@ -1305,12 +1452,6 @@ export const model = {
                 file: "extensions/**/*.ts",
                 find: `version: "${currentVersion}"`,
                 replace: `version: "${nextVer}"`,
-                category: "source-version",
-              });
-              changes.push({
-                file: "extensions/**/*.ts",
-                find: `toVersion: "${currentVersion}"`,
-                replace: `toVersion: "${nextVer}"`,
                 category: "source-version",
               });
             }
@@ -1324,6 +1465,44 @@ export const model = {
             }
           }
 
+          // Upgrade-chain APPEND: every shipped model file with an `upgrades:`
+          // array needs a new entry whose toVersion equals nextVer, so the
+          // chain's final toVersion matches the bumped model version. The
+          // migration is identity — the maintenance sweep only bumps
+          // dependencies/licenses, which never change a model's data shape.
+          const upgradeFiles = await findUpgradeArrayFiles(
+            `${resolvedRoot}/${ext.dir}`,
+          );
+          const upgradeInserts = upgradeFiles.map((absFile) => ({
+            file: absFile.slice(`${resolvedRoot}/${ext.dir}`.length + 1),
+            toVersion: nextVer,
+            description:
+              "No schema changes — dependency/license maintenance bump",
+          }));
+
+          // Test-assertion updates: tests that assert an exact model version
+          // literal (assertEquals(model.version, "X")) must have the literal
+          // updated or `deno test` fails. Pattern-based assertions
+          // (assertMatch(model.version, /regex/)) carry no literal and need no
+          // change. Emit a find/replace per distinct asserted literal; the
+          // apply-bump glob deliberately includes *_test.ts.
+          const testAssertions = await findTestVersionAssertions(
+            `${resolvedRoot}/${ext.dir}`,
+          );
+          const assertedLiterals = new Set<string>();
+          for (const set of testAssertions.values()) {
+            for (const v of set) assertedLiterals.add(v);
+          }
+          for (const oldLit of assertedLiterals) {
+            if (oldLit === nextVer) continue;
+            changes.push({
+              file: "extensions/**/*_test.ts",
+              find: `.version, "${oldLit}"`,
+              replace: `.version, "${nextVer}"`,
+              category: "test-assertion",
+            });
+          }
+
           const releaseNotes = `## ${nextVer}\n\n${noteLines.join("\n\n")}\n`;
 
           entries.push({
@@ -1332,6 +1511,7 @@ export const model = {
             currentVersion,
             nextVersion: nextVer,
             changes,
+            upgradeInserts,
             releaseNotes,
           });
         }
@@ -1400,6 +1580,9 @@ export const model = {
             releaseNotes: string;
             nextVersion: string;
             currentVersion: string;
+            upgradeInserts?: Array<
+              { file: string; toVersion: string; description: string }
+            >;
           }>;
         }).entries;
 
@@ -1462,6 +1645,38 @@ export const model = {
                   // File may not exist for this extension
                 }
               }
+            }
+
+            // Upgrade-chain APPEND: splice a new no-op entry into every
+            // upgrades: array. Done after find/replace so the version fields
+            // are already at nextVersion. Idempotent — skip if an entry for
+            // nextVersion is already present (e.g. re-running a partial apply).
+            for (const ins of entry.upgradeInserts ?? []) {
+              const filePath = `${extDir}/${ins.file}`;
+              filesMatched++;
+              if (args.dry_run) continue;
+              let content: string;
+              try {
+                content = await Deno.readTextFile(filePath);
+              } catch {
+                continue; // File may not exist for this extension
+              }
+              if (
+                new RegExp(
+                  `toVersion:\\s*["']${
+                    ins.toVersion.replace(/\./g, "\\.")
+                  }["']`,
+                ).test(content)
+              ) {
+                continue; // Already appended
+              }
+              const updated = appendUpgradeEntry(
+                content,
+                ins.toVersion,
+                ins.description,
+              );
+              await Deno.writeTextFile(filePath, updated);
+              filesModified++;
             }
 
             // Write RELEASE_NOTES.md — prepend the new entry, preserving
@@ -1532,7 +1747,11 @@ export const model = {
             // broken chain undetected. Catch it here, at the point of writing,
             // regardless of what runs after.
             const chainError = !args.dry_run
-              ? await checkUpgradeChain(extDir, entry.nextVersion)
+              ? await checkUpgradeChain(
+                extDir,
+                entry.nextVersion,
+                entry.currentVersion,
+              )
               : null;
             if (chainError) {
               errors.push({ extension: entry.name, error: chainError });
