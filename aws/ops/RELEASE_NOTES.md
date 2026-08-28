@@ -1,3 +1,23 @@
+## 2026.08.28.1
+
+**Changed:** Bump @webframp/aws/logs 2026.08.20.1 → 2026.08.26.3
+
+**Changed:** Bump @webframp/aws/metrics 2026.08.20.1 → 2026.08.26.3
+
+**Changed:** Bump @webframp/aws/alarms 2026.08.20.1 → 2026.08.26.3
+
+**Changed:** Bump @webframp/aws/traces 2026.08.20.1 → 2026.08.26.3
+
+**Changed:** Bump @webframp/aws/inventory 2026.08.20.1 → 2026.08.26.3
+
+**Changed:** Bump @webframp/aws/networking 2026.08.20.1 → 2026.08.26.2
+
+**Changed:** Bump @webframp/aws/alarm-investigation 2026.08.20.1 → 2026.08.26.2
+
+**Changed:** Bump @webframp/aws/cost-explorer 2026.08.20.1 → 2026.08.26.2
+
+**Changed:** Bump @webframp/github 2026.07.18.1 → 2026.08.26.3
+
 ## 2026.08.26.1
 
 **Changed:** Normalized `deno.json` configuration for repo-wide consistency:

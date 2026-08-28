@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/terraform-drift"
-version: "2026.08.26.1"
+version: "2026.08.28.1"
 description: |
   Terraform drift detection for AWS — compares Terraform state against live
   AWS resources to find configuration drift.
@@ -44,6 +44,6 @@ labels:
   - infrastructure
   - terraform
 dependencies:
-  - "@webframp/terraform@2026.08.20.1"
-  - "@webframp/aws/inventory@2026.08.20.1"
-  - "@webframp/aws/networking@2026.08.20.1"
+  - "@webframp/terraform@2026.08.26.3"
+  - "@webframp/aws/inventory@2026.08.26.3"
+  - "@webframp/aws/networking@2026.08.26.2"

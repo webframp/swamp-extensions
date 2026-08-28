@@ -18,8 +18,8 @@ import {
   GetMetricDataCommand,
   GetMetricStatisticsCommand,
   ListMetricsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1114.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1120.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1120.0";
 
 const EXTENSION_NAME = "@webframp/aws/metrics";
 
@@ -300,7 +300,7 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.08.26.3",
+  version: "2026.08.28.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -361,7 +361,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.26.3",
+      toVersion: "2026.08.28.1",
       description:
         "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,

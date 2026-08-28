@@ -1,3 +1,13 @@
+## 2026.08.28.1
+
+**Changed:** Bump @aws-sdk/* 3.1114.0 → 3.1120.0 (3 packages)
+
+**Fixed:** Removed dead, unused `@aws-sdk/client-bedrock-agentcore` and
+`@aws-sdk/client-s3` entries from the `deno.json` import map. All source imports
+already use inline `npm:` specifiers, so the map entries were unreferenced; they
+were pinned at a stale 3.1091.0 and pulled a ghost version into `deno.lock`. No
+behavioral change.
+
 ## 2026.08.26.3
 
 **Fixed:** Restored inline `npm:zod@4.4.3` import specifiers so the registry

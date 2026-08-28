@@ -17,12 +17,12 @@ import {
   ListResourceRecordSetsCommand,
   Route53Client,
   type RRType,
-} from "npm:@aws-sdk/client-route-53@3.1114.0";
+} from "npm:@aws-sdk/client-route-53@3.1120.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1114.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
+} from "npm:@aws-sdk/client-sts@3.1120.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1120.0";
 
 const EXTENSION_NAME = "@webframp/aws/dns-observation";
 
@@ -499,7 +499,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.08.26.3",
+  version: "2026.08.28.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -553,7 +553,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.26.3",
+      toVersion: "2026.08.28.1",
       description:
         "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,

@@ -14,36 +14,36 @@ import { z } from "npm:zod@4.4.3";
 import {
   DescribeDBInstancesCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1114.0";
+} from "npm:@aws-sdk/client-rds@3.1120.0";
 import {
   DescribeInstancesCommand,
   DescribeVolumesCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1114.0";
+} from "npm:@aws-sdk/client-ec2@3.1120.0";
 import {
   DescribeTableCommand,
   DynamoDBClient,
   ListTablesCommand,
-} from "npm:@aws-sdk/client-dynamodb@3.1114.0";
+} from "npm:@aws-sdk/client-dynamodb@3.1120.0";
 import {
   GetFunctionConcurrencyCommand,
   LambdaClient,
   ListFunctionsCommand,
-} from "npm:@aws-sdk/client-lambda@3.1114.0";
-import { ListBucketsCommand, S3Client } from "npm:@aws-sdk/client-s3@3.1114.0";
+} from "npm:@aws-sdk/client-lambda@3.1120.0";
+import { ListBucketsCommand, S3Client } from "npm:@aws-sdk/client-s3@3.1120.0";
 import {
   ConfigServiceClient,
   SelectResourceConfigCommand,
-} from "npm:@aws-sdk/client-config-service@3.1114.0";
+} from "npm:@aws-sdk/client-config-service@3.1120.0";
 import {
   ResourceExplorer2Client,
   SearchCommand as RESearchCommand,
-} from "npm:@aws-sdk/client-resource-explorer-2@3.1114.0";
+} from "npm:@aws-sdk/client-resource-explorer-2@3.1120.0";
 import {
   GetResourcesCommand,
   ResourceGroupsTaggingAPIClient,
-} from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1114.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1114.0";
+} from "npm:@aws-sdk/client-resource-groups-tagging-api@3.1120.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1120.0";
 
 const EXTENSION_NAME = "@webframp/aws/inventory";
 
@@ -627,7 +627,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.08.26.3",
+  version: "2026.08.28.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -691,7 +691,7 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.08.26.3",
+      toVersion: "2026.08.28.1",
       description:
         "No schema changes — restored inline npm:zod specifier for registry scoring; retained strict mode",
       upgradeAttributes: (old: Record<string, unknown>) => old,
