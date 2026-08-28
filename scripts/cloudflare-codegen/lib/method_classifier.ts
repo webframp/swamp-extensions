@@ -195,11 +195,13 @@ export function generateModelSource(
   const apiImports: string[] = [];
   if (usesCfApi) apiImports.push("cfApi");
   if (usesCfApiPaginated) apiImports.push("cfApiPaginated");
-  // Every method that writes a resource routes its instance name through
-  // sanitizeInstanceName (path-traversal protection). Delete-only methods write
-  // no resource, so import it only when at least one non-delete method exists.
-  const writesResource = methods.some((m) => m.type !== "delete");
-  if (writesResource) apiImports.push("sanitizeInstanceName");
+  // sanitizeInstanceName is emitted only by bodies that build an instance name
+  // from an API-influenced value: every `create`, and any `get`/`update`
+  // targeting a resource by a path id. `list` ("main") and `action` ("latest")
+  // use constant instance names and never call it. Import it only when a body
+  // actually references it, or deno lint fails with no-unused-vars.
+  const usesSanitize = methods.some(methodEmitsSanitize);
+  if (usesSanitize) apiImports.push("sanitizeInstanceName");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -989,6 +991,22 @@ function sanitizeFieldName(name: string): string {
     .replace(/^\d/, "_$&"); // prefix leading digit with underscore
 }
 
+/**
+ * True when a method's generated body references sanitizeInstanceName. This
+ * MUST stay in lockstep with the body generators:
+ *   - create: always (wraps the API-returned id, falling back to "created")
+ *   - get / update: only when a trailing path param supplies the instance id
+ *     (otherwise the body uses the constant "latest"/"updated")
+ *   - list ("main"), action ("latest"), delete (no resource): never
+ */
+function methodEmitsSanitize(method: ClassifiedMethod): boolean {
+  if (method.type === "create") return true;
+  if (method.type === "get" || method.type === "update") {
+    return method.operation.pathParams.length > 0;
+  }
+  return false;
+}
+
 function toPascalCase(name: string): string {
   return name
     .split("_")
@@ -1004,9 +1022,16 @@ function toPascalCase(name: string): string {
  * shapes (records, unions, unknown) are returned unchanged.
  */
 function withPassthrough(zodExpr: string): string {
-  return zodExpr.startsWith("z.object({")
-    ? `${zodExpr}.passthrough()`
-    : zodExpr;
+  if (!zodExpr.startsWith("z.object({")) return zodExpr;
+  // `.passthrough()` must attach to the ZodObject, not a wrapper: a nullable
+  // object is `z.object({...}).nullable()` and ZodNullable has no
+  // `.passthrough()`. Insert before the trailing `.nullable()` in that case.
+  if (zodExpr.endsWith(".nullable()")) {
+    return `${
+      zodExpr.slice(0, -".nullable()".length)
+    }.passthrough().nullable()`;
+  }
+  return `${zodExpr}.passthrough()`;
 }
 
 function escapeStr(s: string): string {

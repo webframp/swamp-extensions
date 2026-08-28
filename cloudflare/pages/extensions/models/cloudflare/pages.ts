@@ -435,7 +435,7 @@ const PatchDomainSchema = z.object({
   zone_tag: z.string(),
 }).passthrough();
 
-const PagesPurgeBuildCacheSchema = z.object({}).nullable().passthrough();
+const PagesPurgeBuildCacheSchema = z.object({}).passthrough().nullable();
 
 const CreatePagesProjectConnectProjectSourceSchema = z.object({
   build_config: z.unknown().optional(),

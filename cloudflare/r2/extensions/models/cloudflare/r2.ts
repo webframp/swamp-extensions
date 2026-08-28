@@ -42,7 +42,7 @@ const GetCatalogDetailsSchema = z.object({
   status: z.unknown(),
 }).passthrough();
 
-const CreateStoreCredentialsSchema = z.object({}).nullable().passthrough();
+const CreateStoreCredentialsSchema = z.object({}).passthrough().nullable();
 
 const EnableCatalogSchema = z.object({
   id: z.string().describe(

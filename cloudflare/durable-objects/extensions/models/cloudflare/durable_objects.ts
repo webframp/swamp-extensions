@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import { cfApi, cfApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/durable-objects";
 

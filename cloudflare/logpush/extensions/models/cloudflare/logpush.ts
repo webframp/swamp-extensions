@@ -42,7 +42,7 @@ const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetAccountsAccountIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -72,7 +72,7 @@ const GetAccountsAccountIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetAccountsAccountIdLogpushJobsSchema = z.object({
   items: z.array(GetAccountsAccountIdLogpushJobsItemSchema),
@@ -102,7 +102,7 @@ const CreatePostAccountsAccountIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -120,7 +120,7 @@ const GetAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -138,31 +138,31 @@ const PutAccountsAccountIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostAccountsAccountIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostAccountsAccountIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const DeleteAccountsAccountIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostAccountsAccountIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdFieldsSchema = z.object({})
   .passthrough();
@@ -183,7 +183,7 @@ const GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushDatasetsDatasetIdJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushDatasetsDatasetIdJobsItemSchema),
@@ -203,7 +203,7 @@ const GetZonesZoneIdLogpushEdgeJobsItemSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushEdgeJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushEdgeJobsItemSchema),
@@ -223,7 +223,7 @@ const CreatePostZonesZoneIdLogpushEdgeJobsSchema = z.object({
   filter: z.unknown().optional(),
   sample: z.unknown().optional(),
   session_id: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   dataset: z.unknown().optional(),
@@ -241,7 +241,7 @@ const GetZonesZoneIdLogpushJobsItemSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushJobsSchema = z.object({
   items: z.array(GetZonesZoneIdLogpushJobsItemSchema),
@@ -271,7 +271,7 @@ const CreatePostZonesZoneIdLogpushJobsSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -289,7 +289,7 @@ const GetZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   dataset: z.unknown().optional(),
@@ -307,31 +307,31 @@ const PutZonesZoneIdLogpushJobsJobIdSchema = z.object({
   max_upload_records: z.unknown().optional(),
   name: z.unknown().optional(),
   output_options: z.unknown().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostZonesZoneIdLogpushOwnershipSchema = z.object({
   filename: z.string().optional(),
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostZonesZoneIdLogpushOwnershipValidateSchema = z.object({
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostZonesZoneIdLogpushValidateDestinationExistsSchema = z.object({
   exists: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 const CreatePostZonesZoneIdLogpushValidateOriginSchema = z.object({
   message: z.string().optional(),
   valid: z.boolean().optional(),
-}).nullable().passthrough();
+}).passthrough().nullable();
 
 // =============================================================================
 // Model Definition

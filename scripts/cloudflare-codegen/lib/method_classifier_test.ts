@@ -424,3 +424,35 @@ Deno.test("generateModelSource: list output item schema gets .passthrough()", ()
   // unknown API fields survive validation.
   assertEquals(src.includes("}).passthrough()"), true);
 });
+
+Deno.test("generateModelSource: nullable object schema gets passthrough before nullable", () => {
+  // A nullable object response must emit z.object({...}).passthrough().nullable(),
+  // never z.object({...}).nullable().passthrough() — ZodNullable has no
+  // .passthrough() and the latter fails to type-check.
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/zones/{zone_id}/api_gateway/settings/{setting_id}",
+    operationId: "api-shield-get-setting",
+    summary: "Retrieve setting",
+    pathParams: [
+      {
+        name: "setting_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    responseSchema: {
+      type: "object",
+      nullable: true,
+      properties: { enabled: { type: "boolean" } },
+      // deno-lint-ignore no-explicit-any
+    } as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(src.includes(".passthrough().nullable()"), true);
+  assertEquals(src.includes(".nullable().passthrough()"), false);
+});
