@@ -12,7 +12,13 @@ import {
   SimpleSpanProcessor,
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
 
-import { datastore } from "./mod.ts";
+import {
+  createSyncService,
+  createValkeyLock,
+  createValkeyVerifier,
+} from "./mod.ts";
+import type { Redis } from "npm:ioredis@6.0.0";
+import { FakeValkey } from "./_lib/fake_valkey.ts";
 import {
   Attr,
   commandSpan,
@@ -21,15 +27,26 @@ import {
   withSpan,
 } from "./_lib/tracing.ts";
 
-const VALKEY_URL = Deno.env.get("VALKEY_TEST_URL") ?? "redis://localhost:6380";
-
-function testConfig(prefix: string) {
+/**
+ * A provider backed by a single in-memory FakeValkey, wiring the same exported
+ * factories `createProvider` uses. Lets the behavioural span tests run with no
+ * live Valkey while still exercising the real lock/sync/verifier code paths.
+ */
+function fakeProvider(prefix: string = uniquePrefix()) {
+  const redis = new FakeValkey() as unknown as Redis;
   return {
-    url: VALKEY_URL,
-    prefix,
-    db: 0,
-    connectTimeoutMs: 5_000,
-    maxRetriesPerRequest: 1,
+    createLock: (
+      datastorePath: string,
+      options?: {
+        lockKey?: string;
+        ttlMs?: number;
+        retryIntervalMs?: number;
+        maxWaitMs?: number;
+      },
+    ) => createValkeyLock(redis, prefix, datastorePath, options),
+    createVerifier: () => createValkeyVerifier(redis, prefix, 0),
+    createSyncService: (_repoDir: string, cachePath: string) =>
+      createSyncService(redis, prefix, cachePath),
   };
 }
 
@@ -289,7 +306,7 @@ Deno.test({
   name: "lock acquire and release spans",
   fn: async () => {
     await withSpans(async (spans) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
+      const provider = fakeProvider();
       const lock = provider.createLock("/repo", { lockKey: "uncontended" });
       await lock.acquire();
       await lock.release();
@@ -316,7 +333,7 @@ Deno.test({
   name: "lock acquire span records contention, retry, and error on timeout",
   fn: async () => {
     await withSpans(async (spans) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
+      const provider = fakeProvider();
       const held = provider.createLock("/repo", { lockKey: "contended" });
       await held.acquire();
       try {
@@ -356,7 +373,7 @@ Deno.test({
   name: "withLock, inspect, and forceRelease spans",
   fn: async () => {
     await withSpans(async (spans) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
+      const provider = fakeProvider();
       const lock = provider.createLock("/repo", { lockKey: "wrapped" });
       await lock.withLock(() => Promise.resolve("done"));
 
@@ -388,7 +405,7 @@ Deno.test({
   name: "heartbeat renewal is deliberately not instrumented",
   fn: async () => {
     await withSpans(async (spans) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
+      const provider = fakeProvider();
       const lock = provider.createLock("/repo", { lockKey: "beating" });
       await lock.acquire();
       await lock.release();
@@ -413,8 +430,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await seedFile(cachePath, "data/m/i/a.json", "a");
         await seedFile(cachePath, "data/m/i/b.json", "b");
         await svc.pushChanged();
@@ -442,8 +459,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         // A missing sidecar reads as bulkInvalidated, so the fast path is only
         // reachable after a push has cleared that flag.
         await seedFile(cachePath, "data/m/i/a.json", "a");
@@ -467,8 +484,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await seedFile(cachePath, "data/m/i/a.json", "a");
         await svc.pushChanged();
         await svc.pullChanged();
@@ -503,8 +520,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await svc.pullChanged({
           context: { models: [{ modelType: "m", modelId: "i" }] },
         });
@@ -522,14 +539,14 @@ Deno.test({
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
         const prefix = uniquePrefix();
-        const provider = datastore.createProvider(testConfig(prefix));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider(prefix);
+        const svc = provider.createSyncService("/repo", cachePath);
         const relPath = "data/m/i/a.json";
         await seedFile(cachePath, relPath, "a");
         await svc.pushChanged();
 
         await withCache(async (other) => {
-          const svc2 = provider.createSyncService!("/repo", other);
+          const svc2 = provider.createSyncService("/repo", other);
           assertEquals(await svc2.hydrateFile!(relPath), true);
           assertEquals(await svc2.hydrateFile!("data/m/i/missing.json"), false);
           assertEquals(await svc2.hydrateFile!("../escape.json"), false);
@@ -559,8 +576,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await seedFile(cachePath, "data/m/i/a.json", "a");
         const manifest = await svc.preparePush();
         await svc.commitPush(manifest);
@@ -586,8 +603,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await svc.pushChanged(); // clears bulkInvalidated
         const manifest = await svc.preparePush();
         assertEquals(await svc.commitPush(manifest), 0);
@@ -609,8 +626,8 @@ Deno.test({
   fn: async () => {
     await withSpans(async (spans) => {
       await withCache(async (cachePath) => {
-        const provider = datastore.createProvider(testConfig(uniquePrefix()));
-        const svc = provider.createSyncService!("/repo", cachePath);
+        const provider = fakeProvider();
+        const svc = provider.createSyncService("/repo", cachePath);
         await seedFile(cachePath, "data/m/i/a.json", "a");
         await seedFile(cachePath, "data/m/i/b.json", "b");
         await svc.pushChanged();
@@ -636,7 +653,7 @@ Deno.test({
   name: "verifier emits PING and INFO spans",
   fn: async () => {
     await withSpans(async (spans) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
+      const provider = fakeProvider();
       const health = await provider.createVerifier().verify();
       assertEquals(health.healthy, true);
 
@@ -655,8 +672,8 @@ Deno.test({
     // host.
     assertEquals(trace.getActiveSpan(), undefined);
     await withCache(async (cachePath) => {
-      const provider = datastore.createProvider(testConfig(uniquePrefix()));
-      const svc = provider.createSyncService!("/repo", cachePath);
+      const provider = fakeProvider();
+      const svc = provider.createSyncService("/repo", cachePath);
       await seedFile(cachePath, "data/m/i/a.json", "a");
       assertEquals(await svc.pushChanged(), 1);
       assertEquals(await svc.pullChanged(), 0);
