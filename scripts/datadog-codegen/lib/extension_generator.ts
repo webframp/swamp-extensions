@@ -120,12 +120,18 @@ export function generateReleaseNotes(
   config: ServiceConfig,
   version: string,
   methodCount: number,
+  body?: string,
 ): string {
+  // A regeneration is not an initial release. Claiming otherwise in every
+  // version's notes misleads the consumers the notes exist for, so callers
+  // supply the body for anything but a first release.
+  const text = body ??
+    `**Added:** Initial code-generated release of @webframp/datadog/${config.name} with ${methodCount} methods covering the Datadog ${
+      config.name.replace(/-/g, " ")
+    } API surface.`;
   return `## ${version}
 
-**Added:** Initial code-generated release of @webframp/datadog/${config.name} with ${methodCount} methods covering the Datadog ${
-    config.name.replace(/-/g, " ")
-  } API surface.
+${text.trimEnd()}
 `;
 }
 
