@@ -75,6 +75,23 @@ const ExtensionStatusSchema = z.object({
   })).describe(
     "Imports that bypass the deno.json import map by naming a version directly",
   ),
+  pinDrift: z.array(z.object({
+    name: z.string().describe("npm package name"),
+    pinned: z.string().describe("Version this extension pins"),
+    modal: z.string().describe("Repo-wide consensus (modal) version"),
+  })).describe(
+    "npm packages this extension pins to a version differing from the repo-wide consensus. Distinct from staleness: a non-stale pin can still drift from the version every other extension uses.",
+  ),
+  metadataCoverage: z.object({
+    isModel: z.boolean().describe(
+      "Whether the extension is an observation model (has methods and resources)",
+    ),
+    missing: z.array(z.string()).describe(
+      "Standard metadata fields (durationMs, collectedBy, fetchedAt) absent from shipped source. Empty for non-models or fully-covered models.",
+    ),
+  }).describe(
+    "Coverage of the standard observation-output metadata triad (#386)",
+  ),
   stale: z.boolean().describe("Any dependency is stale"),
   lockDrifted: z.boolean().describe("Lock does not match deno.json"),
 });
@@ -92,6 +109,12 @@ const AuditSummarySchema = z.object({
     lockDrifted: z.number().describe("Extensions with deno.lock out of sync"),
     directSpecifiers: z.number().describe(
       "Extensions with imports bypassing the import map",
+    ),
+    pinDrift: z.number().describe(
+      "Extensions pinning an npm package to a non-consensus version",
+    ),
+    metadataGaps: z.number().describe(
+      "Model extensions missing one or more standard metadata fields",
     ),
   }),
   extensions: z.array(ExtensionStatusSchema).describe(
@@ -642,6 +665,97 @@ async function getQualityScore(extDir: string): Promise<number> {
   }
 }
 
+/** Standard observation-output metadata fields introduced repo-wide in #386.
+ * Every model extension should emit all three so downstream data carries
+ * provenance and timing. */
+const METADATA_FIELDS = ["durationMs", "collectedBy", "fetchedAt"] as const;
+
+/** Inspects an extension's shipped (non-test) source to determine whether it is
+ * an observation model (declares both `methods:` and `resources:`) and, if so,
+ * which of the standard metadata fields are absent. Returns `isModel: false`
+ * for non-model extensions (vaults, datastores, drivers, report/workflow-only),
+ * which are not expected to emit the triad.
+ *
+ * Heuristic: a field counts as present if its name appears anywhere in shipped
+ * source (including comments). This can under-report a gap if a field is named
+ * in a comment but never emitted — acceptable for an audit signal meant for
+ * human review, consistent with the rest of the audit's string-based checks.
+ *
+ * Exported for unit testing. */
+export async function checkMetadataCoverage(
+  extDir: string,
+): Promise<{ isModel: boolean; missing: string[] }> {
+  const findResult = await run([
+    "find",
+    `${extDir}/extensions`,
+    "-name",
+    "*.ts",
+    "-not",
+    "-name",
+    "*_test.ts",
+  ]);
+  if (!findResult.success) return { isModel: false, missing: [] };
+
+  let combined = "";
+  let isModel = false;
+  for (const file of findResult.stdout.trim().split("\n")) {
+    if (!file) continue;
+    let content: string;
+    try {
+      content = await Deno.readTextFile(file);
+    } catch {
+      continue;
+    }
+    combined += content;
+    if (/\bmethods:\s*\{/.test(content) && /\bresources:\s*\{/.test(content)) {
+      isModel = true;
+    }
+  }
+  if (!isModel) return { isModel: false, missing: [] };
+  const missing = METADATA_FIELDS.filter((f) => !combined.includes(f));
+  return { isModel: true, missing };
+}
+
+/** Computes the repo-wide modal (most common) pinned version for each npm
+ * package that appears in more than one extension. A package pinned to a single
+ * version everywhere has no drift; the modal is the consensus every extension
+ * should match (per the "exactly one pinned version repo-wide" convention).
+ *
+ * `extNpmMaps` maps extension dir -> (package -> pinned version). Returns a map
+ * of package -> modal version, only for packages used by ≥2 extensions.
+ *
+ * Exported for unit testing. */
+export function computeModalPins(
+  extNpmMaps: Map<string, Map<string, string>>,
+): Map<string, string> {
+  // package -> (version -> count)
+  const counts = new Map<string, Map<string, number>>();
+  for (const pkgMap of extNpmMaps.values()) {
+    for (const [pkg, ver] of pkgMap) {
+      if (!counts.has(pkg)) counts.set(pkg, new Map());
+      const vc = counts.get(pkg)!;
+      vc.set(ver, (vc.get(ver) ?? 0) + 1);
+    }
+  }
+  const modal = new Map<string, string>();
+  for (const [pkg, vc] of counts) {
+    const total = [...vc.values()].reduce((a, b) => a + b, 0);
+    if (total < 2) continue; // used by a single extension — nothing to compare
+    // Pick the highest-count version; tie-break by lexically greatest version
+    // so the result is deterministic.
+    let best: string | null = null;
+    let bestCount = -1;
+    for (const [ver, count] of vc) {
+      if (count > bestCount || (count === bestCount && ver > (best ?? ""))) {
+        best = ver;
+        bestCount = count;
+      }
+    }
+    if (best !== null) modal.set(pkg, best);
+  }
+  return modal;
+}
+
 /** Query registry for latest version of a swamp extension. */
 async function registryLatest(extName: string): Promise<string | null> {
   const result = await run([
@@ -1029,7 +1143,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.28.2",
+  version: "2026.08.28.3",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1109,6 +1223,9 @@ export const model = {
         for (const w of unpinnedWarnings) {
           context.logger.warn(w);
         }
+
+        // Repo-wide consensus (modal) pin per npm package, for drift detection.
+        const modalPins = computeModalPins(extNpmMaps);
 
         // Batch-query npm registry
         const timeoutMs = context.globalArgs.registry_timeout * 1000;
@@ -1197,6 +1314,20 @@ export const model = {
           // direct specifiers (bypass the import map)
           const directSpecifiers = await findDirectSpecifiers(dir);
 
+          // pin drift: packages this extension pins away from repo consensus
+          const pinDrift: Array<
+            { name: string; pinned: string; modal: string }
+          > = [];
+          for (const [pkg, ver] of npmImports) {
+            const modal = modalPins.get(pkg);
+            if (modal && ver !== modal) {
+              pinDrift.push({ name: pkg, pinned: ver, modal });
+            }
+          }
+
+          // metadata triad coverage (model extensions only)
+          const metadataCoverage = await checkMetadataCoverage(dir);
+
           const isStale = hasStaleNpm || hasStaleTesting || hasStaleManifest;
           extensions.push({
             name,
@@ -1208,6 +1339,8 @@ export const model = {
             manifestDeps,
             lockfileSync,
             directSpecifiers,
+            pinDrift,
+            metadataCoverage,
             stale: isStale,
             lockDrifted,
           });
@@ -1217,8 +1350,14 @@ export const model = {
         const lockDriftedCount = extensions.filter((e) => e.lockDrifted).length;
         const directSpecCount =
           extensions.filter((e) => e.directSpecifiers.length > 0).length;
+        const pinDriftCount =
+          extensions.filter((e) => e.pinDrift.length > 0).length;
+        const metadataGapCount = extensions.filter(
+          (e) =>
+            e.metadataCoverage.isModel && e.metadataCoverage.missing.length > 0,
+        ).length;
         context.logger.info(
-          `Audit complete: ${staleCount}/${extensions.length} stale, ${lockDriftedCount} lock-drifted, ${directSpecCount} with direct specifiers`,
+          `Audit complete: ${staleCount}/${extensions.length} stale, ${lockDriftedCount} lock-drifted, ${directSpecCount} with direct specifiers, ${pinDriftCount} pin-drifted, ${metadataGapCount} with metadata gaps`,
         );
 
         const handle = await context.writeResource("audit", "current-audit", {
@@ -1232,6 +1371,8 @@ export const model = {
             manifest: staleManifest,
             lockDrifted: lockDriftedCount,
             directSpecifiers: directSpecCount,
+            pinDrift: pinDriftCount,
+            metadataGaps: metadataGapCount,
           },
           extensions,
           durationMs: Date.now() - startMs,

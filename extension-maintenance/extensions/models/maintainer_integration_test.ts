@@ -11,7 +11,11 @@
  * @module
  */
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { model } from "./maintainer.ts";
+import {
+  checkMetadataCoverage,
+  computeModalPins,
+  model,
+} from "./maintainer.ts";
 
 /** Create a minimal extension fixture in a temp directory. */
 async function createFixture(opts: {
@@ -559,4 +563,81 @@ Deno.test("plan-bump emits upgradeInserts and a test-assertion change", async ()
   assertEquals(relabel, undefined);
 
   await cleanup();
+});
+
+Deno.test("computeModalPins flags the minority version as drift", () => {
+  // zod: 3 extensions on 4.4.3, 1 on 4.3.6 → modal 4.4.3.
+  // otel: only 1 extension → no consensus, excluded.
+  const maps = new Map<string, Map<string, string>>([
+    ["a", new Map([["npm:zod", "4.4.3"], ["npm:@opentelemetry/api", "1.9.1"]])],
+    ["b", new Map([["npm:zod", "4.4.3"]])],
+    ["c", new Map([["npm:zod", "4.4.3"]])],
+    ["d", new Map([["npm:zod", "4.3.6"]])],
+  ]);
+  const modal = computeModalPins(maps);
+  assertEquals(modal.get("npm:zod"), "4.4.3");
+  // otel used by a single extension — no modal computed.
+  assertEquals(modal.has("npm:@opentelemetry/api"), false);
+});
+
+Deno.test("computeModalPins returns nothing when every pin is uniform", () => {
+  const maps = new Map<string, Map<string, string>>([
+    ["a", new Map([["npm:zod", "4.4.3"]])],
+    ["b", new Map([["npm:zod", "4.4.3"]])],
+  ]);
+  const modal = computeModalPins(maps);
+  // A uniform pin still yields a modal (4.4.3), but no extension drifts from it.
+  assertEquals(modal.get("npm:zod"), "4.4.3");
+});
+
+Deno.test("checkMetadataCoverage detects a model missing a metadata field", async () => {
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  methods: { get: {} },
+  resources: { thing: {} },
+};
+// emits durationMs and collectedBy but not the third field
+const _meta = { durationMs: 1, collectedBy: "x" };
+`,
+  });
+  const cov = await checkMetadataCoverage(extDir);
+  assertEquals(cov.isModel, true);
+  assertEquals(cov.missing, ["fetchedAt"]);
+  await cleanup();
+  // silence unused root
+  void root;
+});
+
+Deno.test("checkMetadataCoverage returns isModel:false for a non-model extension", async () => {
+  const { root, extDir, cleanup } = await createFixture({
+    // A vault-like export: no methods/resources pair.
+    sourceContent: `export const vault = {
+  getName: () => "x",
+  get: () => null,
+};
+`,
+  });
+  const cov = await checkMetadataCoverage(extDir);
+  assertEquals(cov.isModel, false);
+  assertEquals(cov.missing, []);
+  await cleanup();
+  void root;
+});
+
+Deno.test("checkMetadataCoverage reports no gaps for a fully-covered model", async () => {
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  methods: { get: {} },
+  resources: { thing: {} },
+};
+const _meta = { durationMs: 1, collectedBy: "x", fetchedAt: "t" };
+`,
+  });
+  const cov = await checkMetadataCoverage(extDir);
+  assertEquals(cov.isModel, true);
+  assertEquals(cov.missing, []);
+  await cleanup();
+  void root;
 });
