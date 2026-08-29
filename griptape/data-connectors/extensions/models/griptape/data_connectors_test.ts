@@ -63,6 +63,17 @@ function startMockGtServer(
     const url = new URL(req.url);
     const path = url.pathname;
 
+    // Guard against a doubled "/api" prefix (base URL + already-/api-prefixed
+    // path). This is invisible to path.includes() matching, so assert it here:
+    // a regression that reintroduces it fails the test loudly instead of 404ing
+    // only in production.
+    if (path.includes("/api/api/")) {
+      return Response.json(
+        { message: `doubled /api prefix in request path: ${path}` },
+        { status: 500 },
+      );
+    }
+
     for (const [pattern, spec] of Object.entries(responses)) {
       if (path.includes(pattern)) {
         const status = spec.status ?? 200;
@@ -96,7 +107,7 @@ function installFetchMock(mockUrl: string): () => void {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (input, init) => {
     const reqUrl = typeof input === "string" ? input : input.toString();
-    const newUrl = reqUrl.replace("https://cloud.griptape.ai/api", mockUrl);
+    const newUrl = reqUrl.replace("https://cloud.griptape.ai", mockUrl);
     return originalFetch(newUrl, init);
   };
   return () => {

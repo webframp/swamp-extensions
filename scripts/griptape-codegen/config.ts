@@ -29,8 +29,16 @@ export const SPEC_SHA256 =
 /** Where generated extensions land, relative to the codegen dir (cwd). */
 export const OUTPUT_BASE = "../../griptape";
 
-/** Base URL Griptape Cloud serves the API from (spec `servers[0].url`). */
-export const GRIPTAPE_API_BASE = "https://cloud.griptape.ai/api";
+/**
+ * Base URL Griptape Cloud serves the API from.
+ *
+ * NOTE: the spec's `servers[0].url` is `https://cloud.griptape.ai/api`, but the
+ * spec's paths ALSO carry the `/api` prefix (e.g. `/api/threads`). Concatenating
+ * the server URL with a path would double the prefix
+ * (`.../api/api/threads` → 404). We emit the paths verbatim, so the base must be
+ * the origin only, WITHOUT `/api`.
+ */
+export const GRIPTAPE_API_BASE = "https://cloud.griptape.ai";
 
 /** Zod version to use in generated code. Must match the repo-wide pin. */
 export const ZOD_VERSION = "4.4.3";

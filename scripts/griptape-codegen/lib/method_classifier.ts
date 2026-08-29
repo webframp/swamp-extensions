@@ -187,10 +187,28 @@ export function classifyServiceMethods(
   return methods;
 }
 
-/** The type of the swamp resource each method's data is written under. */
-function resourceNameFor(method: ClassifiedMethod): string {
+/** Action verbs that PRODUCE a distinct sub-resource result (named
+ * `<target>_<verb>`, e.g. QueryKnowledgeBase -> knowledge_base_query), as
+ * opposed to verbs that act on the existing entity and return it (cancel,
+ * refresh, run — the result is the acted-on resource). */
+const RESULT_PRODUCING_VERBS = new Set(["query", "search"]);
+
+/** The type of the swamp resource each method's data is written under.
+ * Exported so the test generator shares one definition (no drift). */
+export function resourceNameFor(method: ClassifiedMethod): string {
   const { name, type } = method;
   if (type === "list") return name.replace(/^list_/, "");
+
+  // A query/search action returns a new sub-resource, not the parent entity.
+  // Naming it after the parent (by stripping the verb) collides with the parent
+  // entity's own resource slot and corrupts it. Instead move the verb to the
+  // end: query_knowledge_base -> knowledge_base_query, matching Griptape's
+  // KnowledgeBaseQuery/KnowledgeBaseSearch result types.
+  if (type === "action") {
+    const m = name.match(/^(query|search)_(.+)$/);
+    if (m && RESULT_PRODUCING_VERBS.has(m[1])) return `${m[2]}_${m[1]}`;
+  }
+
   return name.replace(
     /^(get|create|update|cancel|refresh|run|query|search|execute|start|send|save|allocate|renew|release|chat)_/,
     "",
@@ -430,8 +448,12 @@ function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   ) {
     return true;
   }
-  // Actions key on their path param when they have one.
-  if (type === "action" && operation.pathParams.length > 0) return true;
+  // Actions and scoped lists key on their path param when they have one.
+  if (
+    (type === "action" || type === "list") && operation.pathParams.length > 0
+  ) {
+    return true;
+  }
   return false;
 }
 
@@ -568,6 +590,15 @@ function generateListBody(
   );
   const excludeNames = [...pathParamNames, "page", "page_size"];
 
+  // A scoped list (one with a path param, e.g. list_messages under a thread)
+  // must key its snapshot on the scoping resource, or a second call with a
+  // different scope overwrites the first under a shared "main" instance. Only a
+  // top-level list (no path param) uses the constant "main".
+  const scopeParam = lastPathParam(method);
+  const instanceExpr = scopeParam
+    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(scopeParam.name)}))`
+    : '"main"';
+
   return `${indent}    const startMs = Date.now();
 ${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
@@ -587,7 +618,7 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, {
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),

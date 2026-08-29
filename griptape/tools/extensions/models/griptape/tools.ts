@@ -384,13 +384,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("tool_run_logs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "tool_run_logs",
+          sanitizeInstanceName(String(args.tool_run_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} tool_run_logs", {
           count: results.length,
@@ -767,13 +771,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("tool_deployments", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "tool_deployments",
+          sanitizeInstanceName(String(args.tool_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} tool_deployments", {
           count: results.length,
@@ -942,13 +950,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("tool_runs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "tool_runs",
+          sanitizeInstanceName(String(args.tool_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} tool_runs", {
           count: results.length,

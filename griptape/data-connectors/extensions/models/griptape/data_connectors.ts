@@ -485,13 +485,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("data_jobs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "data_jobs",
+          sanitizeInstanceName(String(args.data_connector_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} data_jobs", {
           count: results.length,

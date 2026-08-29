@@ -533,13 +533,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("assets", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "assets",
+          sanitizeInstanceName(String(args.bucket_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} assets", { count: results.length });
         return { dataHandles: [handle] };

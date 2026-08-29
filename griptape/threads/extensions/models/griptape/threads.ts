@@ -465,13 +465,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("messages", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "messages",
+          sanitizeInstanceName(String(args.thread_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} messages", {
           count: results.length,

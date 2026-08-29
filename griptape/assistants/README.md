@@ -17,7 +17,7 @@ swamp model create @webframp/griptape/assistants gt-assistants \
 The `apiKey` global argument overrides the `GT_CLOUD_API_KEY` environment
 variable and is wireable with a `vault.get(...)` expression. An optional
 `baseUrl` argument overrides `GT_CLOUD_BASE_URL` and the built-in default
-(`https://cloud.griptape.ai/api`).
+(`https://cloud.griptape.ai`).
 
 ## Methods
 

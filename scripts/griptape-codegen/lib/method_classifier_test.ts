@@ -11,6 +11,7 @@ import {
   entityIdCandidates,
   generateMethodName,
   generateModelSource,
+  resourceNameFor,
   splitOperationId,
 } from "./method_classifier.ts";
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
@@ -259,6 +260,97 @@ Deno.test("bodyReferencesArgs: detects args, ignores _args and comments", () => 
 // ---------------------------------------------------------------------------
 // generateModelSource — smoke test on a small hand-built group
 // ---------------------------------------------------------------------------
+
+Deno.test("resourceNameFor: query/search actions get a distinct sub-resource name", () => {
+  // query_knowledge_base must NOT collapse to knowledge_base (the parent entity
+  // slot) — it returns a distinct result, named knowledge_base_query.
+  const query = {
+    name: "query_knowledge_base",
+    type: "action" as const,
+    description: "",
+    operation: makeOp({
+      httpMethod: "post",
+      path: "/api/knowledge-bases/{knowledge_base_id}/query",
+      operationId: "QueryKnowledgeBase",
+    }),
+  };
+  assertEquals(resourceNameFor(query), "knowledge_base_query");
+
+  const search = {
+    name: "search_knowledge_base",
+    type: "action" as const,
+    description: "",
+    operation: makeOp({
+      httpMethod: "post",
+      path: "/api/knowledge-bases/{knowledge_base_id}/search",
+      operationId: "SearchKnowledgeBase",
+    }),
+  };
+  assertEquals(resourceNameFor(search), "knowledge_base_search");
+
+  // cancel acts on the existing entity and returns it — verb stripped, no append.
+  const cancel = {
+    name: "cancel_structure_run",
+    type: "action" as const,
+    description: "",
+    operation: makeOp({
+      httpMethod: "post",
+      path: "/api/structure-runs/{structure_run_id}/cancel",
+      operationId: "CancelStructureRun",
+    }),
+  };
+  assertEquals(resourceNameFor(cancel), "structure_run");
+});
+
+Deno.test("generateModelSource: scoped list keys instance on the scope param, not 'main'", () => {
+  // list_messages under a thread must key on thread_id, or a second thread's
+  // messages overwrite the first under a shared "messages"/"main" instance.
+  const config: ServiceConfig = {
+    name: "threads",
+    description: "Griptape Cloud Threads",
+    pathPrefixes: ["/api/threads"],
+    labels: ["griptape", "threads"],
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        httpMethod: "get",
+        path: "/api/threads/{thread_id}/messages",
+        operationId: "ListMessages",
+        isCollection: true,
+        listItemsKey: "messages",
+        pathParams: [
+          { name: "thread_id", in: "path", required: true } as never,
+        ],
+        responseSchema: {
+          type: "object",
+          properties: { message_id: { type: "string" } },
+        },
+      }),
+      makeOp({
+        httpMethod: "get",
+        path: "/api/threads",
+        operationId: "ListThreads",
+        isCollection: true,
+        listItemsKey: "threads",
+        responseSchema: {
+          type: "object",
+          properties: { thread_id: { type: "string" } },
+        },
+      }),
+    ],
+  };
+  const methods = classifyServiceMethods(group);
+  const src = generateModelSource(group, methods, "2026.01.01.1");
+  // Scoped list keys on the scope param.
+  assertStringIncludes(
+    src,
+    `context.writeResource("messages", sanitizeInstanceName(String(args.thread_id))`,
+  );
+  // Top-level list still uses the constant "main".
+  assertStringIncludes(src, `context.writeResource("threads", "main"`);
+});
 
 Deno.test("generateModelSource: action with a path param keys instance on it, not 'latest'", () => {
   // InvokeStructureWebhookPost = POST /api/structures/{structure_id}/webhook.

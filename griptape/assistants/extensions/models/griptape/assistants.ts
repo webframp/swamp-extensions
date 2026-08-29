@@ -498,13 +498,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("assistant_events", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "assistant_events",
+          sanitizeInstanceName(String(args.assistant_run_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} assistant_events", {
           count: results.length,
@@ -869,13 +873,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("assistant_runs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "assistant_runs",
+          sanitizeInstanceName(String(args.assistant_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} assistant_runs", {
           count: results.length,

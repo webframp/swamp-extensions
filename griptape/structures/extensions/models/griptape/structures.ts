@@ -552,13 +552,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("events", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "events",
+          sanitizeInstanceName(String(args.structure_run_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} events", { count: results.length });
         return { dataHandles: [handle] };
@@ -687,7 +691,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "structure_run_logs",
-          "main",
+          sanitizeInstanceName(String(args.structure_run_id)),
           {
             items: results,
             truncated,
@@ -751,13 +755,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("spans", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "spans",
+          sanitizeInstanceName(String(args.structure_run_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} spans", { count: results.length });
         return { dataHandles: [handle] };
@@ -1063,7 +1071,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "structure_deployments",
-          "main",
+          sanitizeInstanceName(String(args.structure_id)),
           {
             items: results,
             truncated,
@@ -1208,13 +1216,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("structure_runs", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "structure_runs",
+          sanitizeInstanceName(String(args.structure_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} structure_runs", {
           count: results.length,

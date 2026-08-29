@@ -777,7 +777,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "knowledge_base_jobs",
-          "main",
+          sanitizeInstanceName(String(args.knowledge_base_id)),
           {
             items: results,
             truncated,
@@ -921,7 +921,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "knowledge_base_queries",
-          "main",
+          sanitizeInstanceName(String(args.knowledge_base_id)),
           {
             items: results,
             truncated,
@@ -975,7 +975,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "knowledge_base",
+          "knowledge_base_query",
           sanitizeInstanceName(String(args.knowledge_base_id)),
           result,
         );
@@ -1021,7 +1021,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "knowledge_base",
+          "knowledge_base_search",
           sanitizeInstanceName(String(args.knowledge_base_id)),
           result,
         );
@@ -1079,7 +1079,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "knowledge_base_searches",
-          "main",
+          sanitizeInstanceName(String(args.knowledge_base_id)),
           {
             items: results,
             truncated,

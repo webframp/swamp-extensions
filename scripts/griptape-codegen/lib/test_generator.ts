@@ -4,13 +4,13 @@
  * Matches the Griptape runtime shape:
  * - No response envelope: single-resource endpoints return the entity directly.
  * - List endpoints return { <itemsKey>: [...], pagination: {...} }.
- * - The mock rewrites https://cloud.griptape.ai/api to the local server.
+ * - The mock rewrites the API base origin (GRIPTAPE_API_BASE) to the local server.
  *
  * Test fixtures are synthesized from the OpenAPI response schemas.
  */
 
 import type { ClassifiedMethod } from "./method_classifier.ts";
-import { sanitizeFieldName } from "./method_classifier.ts";
+import { resourceNameFor, sanitizeFieldName } from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 import { GRIPTAPE_API_BASE } from "../config.ts";
@@ -124,16 +124,6 @@ export function generateTestSource(
   return lines.join("\n");
 }
 
-/** Mirror of method_classifier.resourceNameFor (kept local to avoid export churn). */
-function resourceNameFor(method: ClassifiedMethod): string {
-  const { name, type } = method;
-  if (type === "list") return name.replace(/^list_/, "");
-  return name.replace(
-    /^(get|create|update|cancel|refresh|run|query|search|execute|start|send|save|allocate|renew|release|chat)_/,
-    "",
-  );
-}
-
 /** Generate the mock HTTP server helper. */
 function generateMockServer(): string {
   return `interface MockResponse {
@@ -148,6 +138,17 @@ function startMockGtServer(
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+
+    // Guard against a doubled "/api" prefix (base URL + already-/api-prefixed
+    // path). This is invisible to path.includes() matching, so assert it here:
+    // a regression that reintroduces it fails the test loudly instead of 404ing
+    // only in production.
+    if (path.includes("/api/api/")) {
+      return Response.json(
+        { message: \`doubled /api prefix in request path: \${path}\` },
+        { status: 500 },
+      );
+    }
 
     for (const [pattern, spec] of Object.entries(responses)) {
       if (path.includes(pattern)) {
