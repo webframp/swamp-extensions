@@ -37,12 +37,12 @@ const GetKnowledgeBaseJobSchema = z.looseObject({
   errors: z.array(z.unknown()).optional(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_job_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   status: z.unknown(),
@@ -55,12 +55,12 @@ const GetKnowledgeBaseQuerySchema = z.looseObject({
   entries: z.array(z.unknown()),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_query_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   query: z.string(),
@@ -71,12 +71,12 @@ const GetKnowledgeBaseSearchSchema = z.looseObject({
   created_by: z.string(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_search_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   query: z.string(),
@@ -92,13 +92,13 @@ const KnowledgeBasesItemSchema = z.looseObject({
   embedding_model: z.unknown().optional(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   schedule_expression: z.string().min(1).max(200).optional(),
@@ -129,13 +129,13 @@ const CreateKnowledgeBaseSchema = z.looseObject({
   embedding_model: z.unknown().optional(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   schedule_expression: z.string().min(1).max(200).optional(),
@@ -153,12 +153,12 @@ const KnowledgeBaseJobsItemSchema = z.looseObject({
   errors: z.array(z.unknown()).optional(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_job_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   status: z.unknown(),
@@ -183,12 +183,12 @@ const KnowledgeBaseQueriesItemSchema = z.looseObject({
   entries: z.array(z.unknown()),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_query_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   query: z.string(),
@@ -211,12 +211,12 @@ const KnowledgeBaseSearchesItemSchema = z.looseObject({
   created_by: z.string(),
   knowledge_base_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   knowledge_base_search_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   query: z.string(),
@@ -242,7 +242,7 @@ const ListKnowledgeBaseSearchesSchema = z.object({
 /** Griptape Cloud Knowledge Bases — RAG knowledge bases, queries, searches, and index jobs */
 export const model = {
   type: "@webframp/griptape/knowledge-bases",
-  version: "2026.08.28.1",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -329,6 +329,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("knowledge_base_job not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "knowledge_base_job",
           sanitizeInstanceName(String(args.knowledge_base_job_id)),
@@ -373,6 +378,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Ran cancel_knowledge_base_job (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "knowledge_base_job",
           sanitizeInstanceName(String(args.knowledge_base_job_id)),
@@ -412,6 +423,14 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info(
+            "knowledge_base_query not found (no content)",
+            {},
+          );
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "knowledge_base_query",
           sanitizeInstanceName(String(args.knowledge_base_query_id)),
@@ -450,6 +469,14 @@ export const model = {
           undefined,
           baseUrl,
         );
+
+        if (result === undefined || result === null) {
+          context.logger.info(
+            "knowledge_base_search not found (no content)",
+            {},
+          );
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "knowledge_base_search",
@@ -556,6 +583,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created knowledge_base (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
         const idCandidates = ["knowledge_base_id", "id"];
@@ -625,6 +658,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("knowledge_base not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "knowledge_base",
           sanitizeInstanceName(String(args.knowledge_base_id)),
@@ -678,6 +716,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated knowledge_base (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "knowledge_base",
@@ -829,6 +873,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created knowledge_base_job (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([
           String(args.knowledge_base_id),
@@ -974,6 +1024,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Ran query_knowledge_base (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "knowledge_base_query",
           sanitizeInstanceName(String(args.knowledge_base_id)),
@@ -1019,6 +1075,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Ran search_knowledge_base (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "knowledge_base_search",

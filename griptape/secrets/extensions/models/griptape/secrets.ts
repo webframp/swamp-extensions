@@ -35,12 +35,12 @@ const SecretsItemSchema = z.looseObject({
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   secret_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   updated_at: z.string(),
@@ -64,12 +64,12 @@ const CreateSecretSchema = z.looseObject({
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   secret_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   updated_at: z.string(),
@@ -82,7 +82,7 @@ const CreateSecretSchema = z.looseObject({
 /** Griptape Cloud Secrets — organization secret management */
 export const model = {
   type: "@webframp/griptape/secrets",
-  version: "2026.08.28.1",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -191,6 +191,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created secret (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
         const idCandidates = ["secret_id", "id"];
@@ -254,6 +260,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("secret not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "secret",
           sanitizeInstanceName(String(args.secret_id)),
@@ -298,6 +309,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated secret (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "secret",

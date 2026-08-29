@@ -36,14 +36,14 @@ const DataConnectorsItemSchema = z.looseObject({
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   description: z.string().optional(),
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   schedule_expression: z.string().optional(),
@@ -70,12 +70,12 @@ const CreateDataConnectorSchema = z.looseObject({
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   data_job_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ).optional(),
   description: z.string().optional(),
@@ -92,12 +92,12 @@ const DataJobsItemSchema = z.looseObject({
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   data_job_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   errors: z.array(z.unknown()).optional(),
@@ -124,12 +124,12 @@ const CreateDataJobSchema = z.looseObject({
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   data_job_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   errors: z.array(z.unknown()).optional(),
@@ -144,7 +144,7 @@ const CreateDataJobSchema = z.looseObject({
 /** Griptape Cloud Data Connectors — data source connectors and ingest jobs */
 export const model = {
   type: "@webframp/griptape/data-connectors",
-  version: "2026.08.28.1",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -271,6 +271,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created data_connector (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
         const idCandidates = ["data_connector_id", "id"];
@@ -340,6 +346,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("data_connector not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "data_connector",
           sanitizeInstanceName(String(args.data_connector_id)),
@@ -388,6 +399,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated data_connector (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "data_connector",
@@ -539,6 +556,12 @@ export const model = {
           baseUrl,
         );
 
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created data_job (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([
           String(args.data_connector_id),
@@ -605,6 +628,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("data_job not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "data_job",
           sanitizeInstanceName(String(args.data_job_id)),
@@ -648,6 +676,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Ran cancel_data_job (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "data_job",

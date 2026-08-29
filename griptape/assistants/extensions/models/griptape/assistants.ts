@@ -33,12 +33,12 @@ const GetAssistantRunSchema = z.looseObject({
   args: z.array(z.string()),
   assistant_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   assistant_run_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   completed_at: z.string().nullable().default(null),
@@ -48,7 +48,7 @@ const GetAssistantRunSchema = z.looseObject({
   knowledge_base_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -57,14 +57,14 @@ const GetAssistantRunSchema = z.looseObject({
   retriever_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   ruleset_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -74,19 +74,19 @@ const GetAssistantRunSchema = z.looseObject({
   structure_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   thread_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ).optional(),
   tool_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -96,13 +96,13 @@ const GetAssistantRunSchema = z.looseObject({
 const AssistantEventsItemSchema = z.looseObject({
   assistant_run_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   created_at: z.string(),
   event_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   origin: z.string(),
@@ -126,7 +126,7 @@ const ListAssistantEventsSchema = z.object({
 const AssistantsItemSchema = z.looseObject({
   assistant_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   created_at: z.string(),
@@ -136,7 +136,7 @@ const AssistantsItemSchema = z.looseObject({
   knowledge_base_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -144,34 +144,34 @@ const AssistantsItemSchema = z.looseObject({
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   retriever_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   ruleset_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   structure_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   tool_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -193,7 +193,7 @@ const ListAssistantsSchema = z.object({
 const CreateAssistantSchema = z.looseObject({
   assistant_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   created_at: z.string(),
@@ -203,7 +203,7 @@ const CreateAssistantSchema = z.looseObject({
   knowledge_base_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -211,34 +211,34 @@ const CreateAssistantSchema = z.looseObject({
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   retriever_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   ruleset_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   structure_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   tool_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -249,12 +249,12 @@ const AssistantRunsItemSchema = z.looseObject({
   args: z.array(z.string()),
   assistant_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   assistant_run_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   completed_at: z.string().nullable().default(null),
@@ -264,7 +264,7 @@ const AssistantRunsItemSchema = z.looseObject({
   knowledge_base_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -273,14 +273,14 @@ const AssistantRunsItemSchema = z.looseObject({
   retriever_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   ruleset_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -290,19 +290,19 @@ const AssistantRunsItemSchema = z.looseObject({
   structure_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
   thread_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ).optional(),
   tool_ids: z.array(
     z.string().regex(
       new RegExp(
-        "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
       ),
     ),
   ),
@@ -328,7 +328,7 @@ const ListAssistantRunsSchema = z.object({
 /** Griptape Cloud Assistants — assistant definitions and assistant runs */
 export const model = {
   type: "@webframp/griptape/assistants",
-  version: "2026.08.28.1",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -397,6 +397,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("assistant_run not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "assistant_run",
           sanitizeInstanceName(String(args.assistant_run_id)),
@@ -440,6 +445,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Ran cancel_assistant_run (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "assistant_run",
@@ -583,7 +594,7 @@ export const model = {
         knowledge_base_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -592,28 +603,28 @@ export const model = {
         retriever_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         ruleset_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         structure_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         tool_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -642,6 +653,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created assistant (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
@@ -706,6 +723,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("assistant not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "assistant",
           sanitizeInstanceName(String(args.assistant_id)),
@@ -724,7 +746,7 @@ export const model = {
         knowledge_base_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -733,21 +755,21 @@ export const model = {
         ruleset_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         structure_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         tool_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -780,6 +802,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated assistant (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "assistant",
@@ -898,35 +926,35 @@ export const model = {
         additional_knowledge_base_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         additional_retriever_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         additional_ruleset_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         additional_structure_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         additional_tool_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -935,7 +963,7 @@ export const model = {
         knowledge_base_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -946,14 +974,14 @@ export const model = {
         retriever_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         ruleset_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -961,13 +989,13 @@ export const model = {
         structure_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
         thread_id: z.string().regex(
           new RegExp(
-            "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ).optional().describe(
           "If provided, the run will be associated with the given thread. This takes precedence over new_thr...",
@@ -975,7 +1003,7 @@ export const model = {
         tool_ids: z.array(
           z.string().regex(
             new RegExp(
-              "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+              "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
             ),
           ),
         ).optional(),
@@ -1010,6 +1038,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created assistant_run (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([String(args.assistant_id)]);

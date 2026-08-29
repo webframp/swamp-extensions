@@ -109,7 +109,9 @@ function stringToZod(schema: SchemaObject): string {
   if (schema.pattern !== undefined) {
     // new RegExp(...) with a JSON-encoded source so backslashes and quotes in
     // the spec's pattern survive into valid TypeScript.
-    s += `.regex(new RegExp(${JSON.stringify(schema.pattern)}))`;
+    s += `.regex(new RegExp(${
+      JSON.stringify(normalizePattern(schema.pattern))
+    }))`;
   }
   return s;
 }
@@ -240,4 +242,21 @@ function truncateDescription(desc: string): string {
   const oneLine = desc.replace(/\s+/g, " ").trim();
   if (oneLine.length <= 100) return oneLine;
   return oneLine.slice(0, 97) + "...";
+}
+
+/**
+ * Normalize known-malformed regex patterns from the source spec before emitting
+ * them into generated Zod `.regex(...)` calls.
+ *
+ * The Griptape spec declares UUID fields with the character class
+ * `[0-9(a-f|A-F)]`. Inside a regex character class `|`, `(`, and `)` are
+ * LITERALS, not alternation/grouping — so the class matches the 16 hex digits
+ * PLUS `(`, `|`, `)`. A value like `(((( ...` then passes UUID validation and
+ * reaches the API, which rejects it with an unhelpful 400/404 instead of Zod
+ * surfacing a clear format error. Rewrite that class to the intended
+ * `[0-9a-fA-F]`. The replacement is global and idempotent; a well-formed
+ * pattern is returned unchanged.
+ */
+export function normalizePattern(pattern: string): string {
+  return pattern.replaceAll("[0-9(a-f|A-F)]", "[0-9a-fA-F]");
 }

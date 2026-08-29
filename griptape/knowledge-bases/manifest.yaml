@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/griptape/knowledge-bases"
-version: "2026.08.28.1"
+version: "2026.08.29.1"
 description: "Griptape Cloud Knowledge Bases — RAG knowledge bases, queries, searches, and index jobs"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

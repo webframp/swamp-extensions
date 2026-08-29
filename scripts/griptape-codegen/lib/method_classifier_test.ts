@@ -352,6 +352,35 @@ Deno.test("generateModelSource: scoped list keys instance on the scope param, no
   assertStringIncludes(src, `context.writeResource("threads", "main"`);
 });
 
+Deno.test("generateModelSource: action guards against a 204 undefined result", () => {
+  // cancel_* returns 204 with no body; griptapeApi yields undefined. The body
+  // must not call writeResource(..., undefined) — it should return no handles.
+  const config: ServiceConfig = {
+    name: "structures",
+    description: "Griptape Cloud Structures",
+    pathPrefixes: ["/api/structures"],
+    labels: ["griptape", "structures"],
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        httpMethod: "post",
+        path: "/api/structure-runs/{structure_run_id}/cancel",
+        operationId: "CancelStructureRun",
+        pathParams: [
+          { name: "structure_run_id", in: "path", required: true } as never,
+        ],
+        responseSchema: { type: "object", properties: {} },
+      }),
+    ],
+  };
+  const methods = classifyServiceMethods(group);
+  assertEquals(methods[0].type, "action");
+  const src = generateModelSource(group, methods, "2026.01.01.1");
+  assertStringIncludes(src, "if (result === undefined || result === null)");
+});
+
 Deno.test("generateModelSource: action with a path param keys instance on it, not 'latest'", () => {
   // InvokeStructureWebhookPost = POST /api/structures/{structure_id}/webhook.
   // Distinct structures must not collide onto one "latest" instance.

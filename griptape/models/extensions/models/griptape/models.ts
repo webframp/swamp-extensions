@@ -39,7 +39,7 @@ const ModelsItemSchema = z.looseObject({
   kwargs: z.unknown().optional(),
   model_config_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ).optional(),
   model_name: z.string(),
@@ -70,7 +70,7 @@ const CreateModelSchema = z.looseObject({
   kwargs: z.unknown().optional(),
   model_config_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ).optional(),
   model_name: z.string(),
@@ -82,12 +82,12 @@ const CreateModelSchema = z.looseObject({
 const AuthConfigsItemSchema = z.looseObject({
   api_key_secret_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   auth_config_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   base_url: z.string(),
@@ -112,12 +112,12 @@ const ListAuthConfigsSchema = z.object({
 const CreateAuthConfigSchema = z.looseObject({
   api_key_secret_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   auth_config_id: z.string().regex(
     new RegExp(
-      "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
   base_url: z.string(),
@@ -134,7 +134,7 @@ const CreateAuthConfigSchema = z.looseObject({
 /** Griptape Cloud Models — model configurations and provider auth configs */
 export const model = {
   type: "@webframp/griptape/models",
-  version: "2026.08.28.1",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [],
@@ -232,7 +232,7 @@ export const model = {
         active: z.boolean().optional(),
         auth_config_id: z.string().regex(
           new RegExp(
-            "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ),
         description: z.string().optional(),
@@ -264,6 +264,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created model (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
@@ -364,7 +370,7 @@ export const model = {
       arguments: z.object({
         api_key_secret_id: z.string().regex(
           new RegExp(
-            "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ),
         base_url: z.string(),
@@ -395,6 +401,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Created auth_config (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const record = result as Record<string, unknown>;
         const pathParamValues = new Set<string>([]);
@@ -461,6 +473,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("auth_config not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "auth_config",
           sanitizeInstanceName(String(args.auth_config_id)),
@@ -476,7 +493,7 @@ export const model = {
         auth_config_id: z.string(),
         api_key_secret_id: z.string().regex(
           new RegExp(
-            "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ).optional(),
         base_url: z.string().optional(),
@@ -513,6 +530,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated auth_config (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "auth_config",
@@ -587,6 +610,11 @@ export const model = {
           baseUrl,
         );
 
+        if (result === undefined || result === null) {
+          context.logger.info("model not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
         const handle = await context.writeResource(
           "model",
           sanitizeInstanceName(String(args.model_config_id)),
@@ -603,7 +631,7 @@ export const model = {
         active: z.boolean().optional(),
         auth_config_id: z.string().regex(
           new RegExp(
-            "^[0-9(a-f|A-F)]{8}-[0-9(a-f|A-F)]{4}-4[0-9(a-f|A-F)]{3}-[89ab][0-9(a-f|A-F)]{3}-[0-9(a-f|A-F)]{12}$",
+            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ).optional(),
         description: z.string().optional(),
@@ -639,6 +667,12 @@ export const model = {
           body,
           baseUrl,
         );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated model (no content)", {});
+          return { dataHandles: [] };
+        }
 
         const handle = await context.writeResource(
           "model",

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/griptape/models"
-version: "2026.08.28.1"
+version: "2026.08.29.1"
 description: "Griptape Cloud Models — model configurations and provider auth configs"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

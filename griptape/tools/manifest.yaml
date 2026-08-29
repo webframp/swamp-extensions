@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/griptape/tools"
-version: "2026.08.28.1"
+version: "2026.08.29.1"
 description: "Griptape Cloud Tools — hosted tools, activities, deployments, and tool runs"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

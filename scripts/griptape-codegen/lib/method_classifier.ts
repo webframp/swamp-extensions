@@ -650,6 +650,11 @@ ${indent}      undefined,
 ${indent}      baseUrl,
 ${indent}    );
 ${indent}
+${indent}    if (result === undefined || result === null) {
+${indent}      context.logger.info("${resourceName} not found (no content)", {});
+${indent}      return { dataHandles: [] };
+${indent}    }
+${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Fetched ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
@@ -678,6 +683,12 @@ ${indent}      \`${apiPath}\`,
 ${indent}      body,
 ${indent}      baseUrl,
 ${indent}    );
+${indent}
+${indent}    // A 204 No Content (or empty body) yields undefined; nothing to persist.
+${indent}    if (result === undefined || result === null) {
+${indent}      context.logger.info("Created ${resourceName} (no content)", {});
+${indent}      return { dataHandles: [] };
+${indent}    }
 ${indent}
 ${indent}    const record = result as Record<string, unknown>;
 ${indent}    const pathParamValues = new Set<string>([${
@@ -731,6 +742,12 @@ ${indent}      \`${apiPath}\`,
 ${indent}      body,
 ${indent}      baseUrl,
 ${indent}    );
+${indent}
+${indent}    // A 204 No Content (or empty body) yields undefined; nothing to persist.
+${indent}    if (result === undefined || result === null) {
+${indent}      context.logger.info("Updated ${resourceName} (no content)", {});
+${indent}      return { dataHandles: [] };
+${indent}    }
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Updated ${resourceName}", {});
@@ -791,6 +808,12 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}\`,${bodyArg}
 ${indent}      baseUrl,
 ${indent}    );
+${indent}
+${indent}    // A 204 No Content (or empty body) yields undefined; nothing to persist.
+${indent}    if (result === undefined || result === null) {
+${indent}      context.logger.info("Ran ${method.name} (no content)", {});
+${indent}      return { dataHandles: [] };
+${indent}    }
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Ran ${method.name}", {});
