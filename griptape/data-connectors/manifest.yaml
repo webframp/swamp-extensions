@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/data-connectors"
+version: "2026.08.28.1"
+description: "Griptape Cloud Data Connectors — data source connectors and ingest jobs"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/data_connectors.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - data-connectors
+  - ingest
+  - etl

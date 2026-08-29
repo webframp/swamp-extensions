@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/rulesets"
+version: "2026.08.28.1"
+description: "Griptape Cloud Rulesets — behavioral rulesets and their rules"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/rulesets.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - rulesets
+  - governance
+  - ai

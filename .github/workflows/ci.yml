@@ -111,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [cloudflare-codegen, ci-discover, datadog-codegen, snyk-codegen]
+        dir: [cloudflare-codegen, ci-discover, datadog-codegen, snyk-codegen, griptape-codegen]
         task: [check, lint, fmt:check, test]
     defaults:
       run:

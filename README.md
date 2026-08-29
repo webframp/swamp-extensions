@@ -73,6 +73,16 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/snyk/sso`](snyk/sso/) | Snyk SSO — single sign-on connection management for groups | None (uses fetch) |
 | [`@webframp/snyk/tenants`](snyk/tenants/) | Snyk Tenants — tenant and organization lifecycle management | None (uses fetch) |
 | [`@webframp/snyk/tests`](snyk/tests/) | Snyk Tests — on-demand package and dependency vulnerability testing | None (uses fetch) |
+| [`@webframp/griptape/threads`](griptape/threads/) | Griptape Cloud Threads — conversation threads and their messages | None (uses fetch) |
+| [`@webframp/griptape/assistants`](griptape/assistants/) | Griptape Cloud Assistants — assistant definitions and assistant runs | None (uses fetch) |
+| [`@webframp/griptape/structures`](griptape/structures/) | Griptape Cloud Structures — deployed structures, runs, logs, and spans | None (uses fetch) |
+| [`@webframp/griptape/knowledge-bases`](griptape/knowledge-bases/) | Griptape Cloud Knowledge Bases — RAG knowledge bases, queries, searches, and index jobs | None (uses fetch) |
+| [`@webframp/griptape/rulesets`](griptape/rulesets/) | Griptape Cloud Rulesets — behavioral rulesets and their rules | None (uses fetch) |
+| [`@webframp/griptape/tools`](griptape/tools/) | Griptape Cloud Tools — hosted tools, activities, deployments, and tool runs | None (uses fetch) |
+| [`@webframp/griptape/data-connectors`](griptape/data-connectors/) | Griptape Cloud Data Connectors — data source connectors and ingest jobs | None (uses fetch) |
+| [`@webframp/griptape/buckets`](griptape/buckets/) | Griptape Cloud Buckets — asset buckets and their stored assets | None (uses fetch) |
+| [`@webframp/griptape/secrets`](griptape/secrets/) | Griptape Cloud Secrets — organization secret management | None (uses fetch) |
+| [`@webframp/griptape/models`](griptape/models/) | Griptape Cloud Models — model configurations and provider auth configs | None (uses fetch) |
 | [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab merge request code review (GraphQL + REST) with a human approval gate and draft/edit/post workflow | None (uses fetch) |
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
 | [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
@@ -246,6 +256,18 @@ swamp extension pull @webframp/snyk/slack
 swamp extension pull @webframp/snyk/sso
 swamp extension pull @webframp/snyk/tenants
 swamp extension pull @webframp/snyk/tests
+
+# Griptape Cloud extensions
+swamp extension pull @webframp/griptape/threads
+swamp extension pull @webframp/griptape/assistants
+swamp extension pull @webframp/griptape/structures
+swamp extension pull @webframp/griptape/knowledge-bases
+swamp extension pull @webframp/griptape/rulesets
+swamp extension pull @webframp/griptape/tools
+swamp extension pull @webframp/griptape/data-connectors
+swamp extension pull @webframp/griptape/buckets
+swamp extension pull @webframp/griptape/secrets
+swamp extension pull @webframp/griptape/models
 
 # GCP extensions
 swamp extension pull @webframp/gcp/vertex-usage
