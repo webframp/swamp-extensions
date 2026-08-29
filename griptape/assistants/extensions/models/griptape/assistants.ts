@@ -42,7 +42,7 @@ const GetAssistantRunSchema = z.looseObject({
     ),
   ),
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   input: z.string().optional(),
   knowledge_base_ids: z.array(
@@ -90,7 +90,7 @@ const GetAssistantRunSchema = z.looseObject({
       ),
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const AssistantEventsItemSchema = z.looseObject({
@@ -99,7 +99,7 @@ const AssistantEventsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   event_id: z.string().regex(
     new RegExp(
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -129,7 +129,7 @@ const AssistantsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   input: z.string().optional(),
@@ -175,7 +175,7 @@ const AssistantsItemSchema = z.looseObject({
       ),
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListAssistantsSchema = z.object({
@@ -196,7 +196,7 @@ const CreateAssistantSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   input: z.string().optional(),
@@ -242,7 +242,7 @@ const CreateAssistantSchema = z.looseObject({
       ),
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const AssistantRunsItemSchema = z.looseObject({
@@ -258,7 +258,7 @@ const AssistantRunsItemSchema = z.looseObject({
     ),
   ),
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   input: z.string().optional(),
   knowledge_base_ids: z.array(
@@ -306,7 +306,7 @@ const AssistantRunsItemSchema = z.looseObject({
       ),
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListAssistantRunsSchema = z.object({
@@ -387,6 +387,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -715,6 +716,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

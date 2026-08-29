@@ -32,7 +32,7 @@ const GlobalArgsSchema = z.object({
 const ModelsItemSchema = z.looseObject({
   active: z.boolean().optional(),
   auth_config: z.unknown().optional(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   default: z.boolean(),
   description: z.string().optional(),
   editable: z.boolean().optional(),
@@ -45,7 +45,7 @@ const ModelsItemSchema = z.looseObject({
   model_name: z.string(),
   model_type: z.unknown(),
   source: z.string().optional(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListModelsSchema = z.object({
@@ -63,7 +63,7 @@ const ListModelsSchema = z.object({
 const CreateModelSchema = z.looseObject({
   active: z.boolean().optional(),
   auth_config: z.unknown().optional(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   default: z.boolean(),
   description: z.string().optional(),
   editable: z.boolean().optional(),
@@ -76,7 +76,7 @@ const CreateModelSchema = z.looseObject({
   model_name: z.string(),
   model_type: z.unknown(),
   source: z.string().optional(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const AuthConfigsItemSchema = z.looseObject({
@@ -91,10 +91,10 @@ const AuthConfigsItemSchema = z.looseObject({
     ),
   ),
   base_url: z.string(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   kwargs: z.unknown().optional(),
   name: z.string().min(1).max(200),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListAuthConfigsSchema = z.object({
@@ -121,10 +121,10 @@ const CreateAuthConfigSchema = z.looseObject({
     ),
   ),
   base_url: z.string(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   kwargs: z.unknown().optional(),
   name: z.string().min(1).max(200),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 // =============================================================================
@@ -463,6 +463,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -602,6 +603,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

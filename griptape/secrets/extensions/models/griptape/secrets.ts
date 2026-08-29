@@ -30,8 +30,8 @@ const GlobalArgsSchema = z.object({
 });
 
 const SecretsItemSchema = z.looseObject({
-  created_at: z.string(),
-  last_used: z.string(),
+  created_at: z.string().nullable(),
+  last_used: z.string().nullable(),
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
@@ -43,7 +43,7 @@ const SecretsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListSecretsSchema = z.object({
@@ -59,8 +59,8 @@ const ListSecretsSchema = z.object({
 });
 
 const CreateSecretSchema = z.looseObject({
-  created_at: z.string(),
-  last_used: z.string(),
+  created_at: z.string().nullable(),
+  last_used: z.string().nullable(),
   name: z.string(),
   organization_id: z.string().regex(
     new RegExp(
@@ -72,7 +72,7 @@ const CreateSecretSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 // =============================================================================
@@ -164,7 +164,7 @@ export const model = {
       description: "create operation",
       arguments: z.object({
         name: z.string().min(1).max(200),
-        value: z.string().min(1).max(200),
+        value: z.string().min(1).max(200).meta({ sensitive: true }),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -252,6 +252,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -279,7 +280,7 @@ export const model = {
       arguments: z.object({
         secret_id: z.string(),
         name: z.string().min(1).max(200).optional(),
-        value: z.string().min(1).max(200).optional(),
+        value: z.string().min(1).max(200).meta({ sensitive: true }).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,

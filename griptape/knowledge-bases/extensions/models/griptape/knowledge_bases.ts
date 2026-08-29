@@ -32,7 +32,7 @@ const GlobalArgsSchema = z.object({
 const GetKnowledgeBaseJobSchema = z.looseObject({
   bytes_ingested: z.number().optional(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   errors: z.array(z.unknown()).optional(),
   knowledge_base_id: z.string().regex(
@@ -50,7 +50,7 @@ const GetKnowledgeBaseJobSchema = z.looseObject({
 });
 
 const GetKnowledgeBaseQuerySchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   entries: z.array(z.unknown()),
   knowledge_base_id: z.string().regex(
@@ -67,7 +67,7 @@ const GetKnowledgeBaseQuerySchema = z.looseObject({
 });
 
 const GetKnowledgeBaseSearchSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   knowledge_base_id: z.string().regex(
     new RegExp(
@@ -86,7 +86,7 @@ const GetKnowledgeBaseSearchSchema = z.looseObject({
 const KnowledgeBasesItemSchema = z.looseObject({
   asset_paths: z.array(z.string()),
   config: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string().optional(),
   embedding_model: z.unknown().optional(),
@@ -104,7 +104,7 @@ const KnowledgeBasesItemSchema = z.looseObject({
   schedule_expression: z.string().min(1).max(200).optional(),
   transforms: z.array(z.unknown()).optional(),
   type: z.string().min(1).max(200),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   use_default_embedding_model: z.boolean().optional(),
 });
 
@@ -123,7 +123,7 @@ const ListKnowledgeBasesSchema = z.object({
 const CreateKnowledgeBaseSchema = z.looseObject({
   asset_paths: z.array(z.string()),
   config: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string().optional(),
   embedding_model: z.unknown().optional(),
@@ -141,14 +141,14 @@ const CreateKnowledgeBaseSchema = z.looseObject({
   schedule_expression: z.string().min(1).max(200).optional(),
   transforms: z.array(z.unknown()).optional(),
   type: z.string().min(1).max(200),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   use_default_embedding_model: z.boolean().optional(),
 });
 
 const KnowledgeBaseJobsItemSchema = z.looseObject({
   bytes_ingested: z.number().optional(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   errors: z.array(z.unknown()).optional(),
   knowledge_base_id: z.string().regex(
@@ -178,7 +178,7 @@ const ListKnowledgeBaseJobsSchema = z.object({
 });
 
 const KnowledgeBaseQueriesItemSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   entries: z.array(z.unknown()),
   knowledge_base_id: z.string().regex(
@@ -207,7 +207,7 @@ const ListKnowledgeBaseQueriesSchema = z.object({
 });
 
 const KnowledgeBaseSearchesItemSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   knowledge_base_id: z.string().regex(
     new RegExp(
@@ -319,6 +319,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -413,6 +414,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -460,6 +462,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -648,6 +651,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

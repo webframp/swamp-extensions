@@ -96,9 +96,16 @@ function schemaToZodInner(
 
 function stringToZod(schema: SchemaObject): string {
   let s = "z.string()";
-  if (schema.format === "date-time") {
-    // Keep as plain string — CF datetime fields vary in format precision
-    // and .datetime() is overly strict for observational data
+  if (schema.format === "date-time" && schema.nullable !== true) {
+    // Lifecycle timestamp fields (last_used, deleted_at, started_at, ...) are
+    // routinely null before the event occurs, and the Griptape spec is
+    // inconsistent about marking them nullable (e.g. `last_used` is declared
+    // required + non-nullable but the API returns null for a never-used
+    // secret). These are observational response fields, so accept null rather
+    // than throwing on writeResource validation. A real timestamp still
+    // validates. (When the spec DOES mark nullable, schemaToZod adds .nullable()
+    // itself — guard against double-wrapping here.)
+    s += ".nullable()";
   }
   if (schema.minLength !== undefined) {
     s += `.min(${schema.minLength})`;

@@ -11,6 +11,7 @@ import {
   entityIdCandidates,
   generateMethodName,
   generateModelSource,
+  isSensitiveFieldName,
   resourceNameFor,
   splitOperationId,
 } from "./method_classifier.ts";
@@ -350,6 +351,94 @@ Deno.test("generateModelSource: scoped list keys instance on the scope param, no
   );
   // Top-level list still uses the constant "main".
   assertStringIncludes(src, `context.writeResource("threads", "main"`);
+});
+
+Deno.test("isSensitiveFieldName: flags credentials, spares innocuous look-alikes", () => {
+  for (
+    const n of [
+      "value",
+      "secret",
+      "password",
+      "token",
+      "api_key",
+      "client_secret",
+      "access_token",
+    ]
+  ) {
+    assertEquals(isSensitiveFieldName(n), true, n);
+  }
+  for (
+    const n of ["name", "value_count", "token_limit", "description", "type"]
+  ) {
+    assertEquals(isSensitiveFieldName(n), false, n);
+  }
+});
+
+Deno.test("generateModelSource: create body marks a secret 'value' field sensitive", () => {
+  const config: ServiceConfig = {
+    name: "secrets",
+    description: "Griptape Cloud Secrets",
+    pathPrefixes: ["/api/secrets"],
+    labels: ["griptape", "secrets"],
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        httpMethod: "post",
+        path: "/api/secrets",
+        operationId: "CreateSecret",
+        requestBody: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            value: { type: "string" },
+          },
+          required: ["name", "value"],
+        },
+        responseSchema: {
+          type: "object",
+          properties: { secret_id: { type: "string" } },
+        },
+      }),
+    ],
+  };
+  const methods = classifyServiceMethods(group);
+  const src = generateModelSource(group, methods, "2026.01.01.1");
+  assertStringIncludes(src, "value: z.string()");
+  assertStringIncludes(src, "meta({ sensitive: true })");
+});
+
+Deno.test("generateModelSource: query-param arg is appended to the URL, not dropped", () => {
+  // InvokeStructureWebhookGet declares an api_key query param that must reach
+  // the URL, not be silently accepted and ignored.
+  const config: ServiceConfig = {
+    name: "structures",
+    description: "Griptape Cloud Structures",
+    pathPrefixes: ["/api/structures"],
+    labels: ["griptape", "structures"],
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        httpMethod: "get",
+        path: "/api/structures/{structure_id}/webhook",
+        operationId: "GetInvokeStructureWebhookGet",
+        pathParams: [
+          { name: "structure_id", in: "path", required: true } as never,
+        ],
+        queryParams: [
+          { name: "api_key", in: "query", schema: { type: "string" } } as never,
+        ],
+        responseSchema: { type: "object", properties: {} },
+      }),
+    ],
+  };
+  const methods = classifyServiceMethods(group);
+  const src = generateModelSource(group, methods, "2026.01.01.1");
+  assertStringIncludes(src, 'const queryKeys = new Set(["api_key"])');
+  assertStringIncludes(src, "${qs}");
 });
 
 Deno.test("generateModelSource: action guards against a 204 undefined result", () => {

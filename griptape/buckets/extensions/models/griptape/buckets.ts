@@ -35,7 +35,7 @@ const BucketsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   name: z.string(),
   organization_id: z.string().regex(
@@ -43,7 +43,7 @@ const BucketsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListBucketsSchema = z.object({
@@ -64,7 +64,7 @@ const CreateBucketSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   name: z.string(),
   organization_id: z.string().regex(
@@ -72,7 +72,7 @@ const CreateBucketSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const CreateAssetUrlSchema = z.looseObject({
@@ -83,7 +83,7 @@ const CreateAssetUrlSchema = z.looseObject({
 const AssetsItemSchema = z.looseObject({
   bucket_id: z.string().optional(),
   contents: z.unknown().optional(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   name: z.string(),
   organization_id: z.string().regex(
@@ -92,7 +92,7 @@ const AssetsItemSchema = z.looseObject({
     ),
   ),
   size: z.number().optional(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListAssetsSchema = z.object({
@@ -110,7 +110,7 @@ const ListAssetsSchema = z.object({
 const CreateAssetSchema = z.looseObject({
   bucket_id: z.string().optional(),
   contents: z.unknown().optional(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   name: z.string(),
   organization_id: z.string().regex(
@@ -119,7 +119,7 @@ const CreateAssetSchema = z.looseObject({
     ),
   ),
   size: z.number().optional(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 // =============================================================================
@@ -316,6 +316,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -672,12 +673,23 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
+        const queryKeys = new Set(["include_contents"]);
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && v !== null && queryKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
           `/api/buckets/${encodeURIComponent(String(args.bucket_id))}/assets/${
             encodeURIComponent(String(args.name))
-          }`,
+          }${qs}`,
           undefined,
           baseUrl,
         );

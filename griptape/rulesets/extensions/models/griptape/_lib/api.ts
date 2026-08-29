@@ -52,7 +52,10 @@ const MAX_RETRIES = 3;
  * present, otherwise backs off linearly. Returns the final Response.
  */
 async function gtFetch(url: string, init: RequestInit): Promise<Response> {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  // Retry only on 429. Attempts 0..MAX_RETRIES-1 back off and retry; the final
+  // attempt returns whatever it gets. Structured so the last statement is an
+  // unconditional return (no unreachable trailing throw).
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     const response = await fetch(url, init);
     if (response.status !== 429) return response;
 
@@ -62,13 +65,10 @@ async function gtFetch(url: string, init: RequestInit): Promise<Response> {
       ? parsed * 1000
       : 1000 * (attempt + 1);
     await response.text();
-    if (attempt < MAX_RETRIES) {
-      await new Promise((r) => setTimeout(r, delayMs));
-      continue;
-    }
-    return response;
+    await new Promise((r) => setTimeout(r, delayMs));
   }
-  throw new Error(`Griptape API request failed: ${url}`);
+  // Final attempt (after MAX_RETRIES backoffs): return its result as-is.
+  return await fetch(url, init);
 }
 
 /** Perform a single JSON request against the Griptape Cloud API. */

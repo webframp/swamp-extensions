@@ -31,7 +31,7 @@ const GlobalArgsSchema = z.object({
 
 const GetToolRunSchema = z.looseObject({
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -56,7 +56,7 @@ const GetToolRunSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ToolRunLogsItemSchema = z.string();
@@ -75,7 +75,7 @@ const ListToolRunLogsSchema = z.object({
 
 const ToolsItemSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -96,7 +96,7 @@ const ToolsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListToolsSchema = z.object({
@@ -113,7 +113,7 @@ const ListToolsSchema = z.object({
 
 const CreateToolSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -134,7 +134,7 @@ const CreateToolSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const CreateToolActivityRunSchema = z.unknown();
@@ -142,7 +142,7 @@ const CreateToolActivityRunSchema = z.unknown();
 const ToolDeploymentsItemSchema = z.looseObject({
   code_source: z.unknown(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -173,7 +173,7 @@ const ListToolDeploymentsSchema = z.object({
 const CreateToolDeploymentSchema = z.looseObject({
   code_source: z.unknown(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -193,7 +193,7 @@ const GetToolOpenApiRunSchema = z.unknown();
 
 const ToolRunsItemSchema = z.looseObject({
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -218,7 +218,7 @@ const ToolRunsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListToolRunsSchema = z.object({
@@ -323,6 +323,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -559,6 +560,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -918,6 +920,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

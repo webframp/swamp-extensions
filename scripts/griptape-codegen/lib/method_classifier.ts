@@ -501,6 +501,36 @@ export function buildApiPath(path: string): string {
   );
 }
 
+/**
+ * Emit a `const qs = ...` statement that builds a query string from the
+ * operation's declared query params (each pulled from `args` when present and
+ * percent-encoded), and return { stmt, urlSuffix } to splice into a body. When
+ * the operation has no query params, stmt is "" and urlSuffix is "".
+ *
+ * Without this, query-param arguments (e.g. the webhook `api_key` auth token)
+ * are accepted by the schema but silently never sent.
+ */
+function buildQueryString(
+  method: ClassifiedMethod,
+  indent: string,
+): { stmt: string; urlSuffix: string } {
+  const queryNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  if (queryNames.length === 0) return { stmt: "", urlSuffix: "" };
+
+  const stmt = `
+${indent}    const queryKeys = new Set(${JSON.stringify(queryNames)});
+${indent}    const queryParts: string[] = [];
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && v !== null && queryKeys.has(k)) {
+${indent}        queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`;
+  return { stmt, urlSuffix: "${qs}" };
+}
+
 /** Generate the arguments schema for a method. */
 function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
@@ -566,10 +596,17 @@ function generateArgsSchema(op: GroupedOperation): string {
       seenFields.add(fieldName);
       const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
       const optSuffix = required.has(name) ? "" : ".optional()";
+      // Mark credential-bearing fields sensitive so swamp redacts them in audit
+      // logs and the UI. The spec does not flag these, so key off the name.
+      const sensitive = isSensitiveFieldName(fieldName)
+        ? ".meta({ sensitive: true })"
+        : "";
       const desc = prop.description
         ? `.describe("${escapeStr(truncateStr(prop.description))}")`
         : "";
-      fields.push(`  ${fieldName}: ${fieldZod}${optSuffix}${desc},`);
+      fields.push(
+        `  ${fieldName}: ${fieldZod}${sensitive}${optSuffix}${desc},`,
+      );
     }
   }
 
@@ -641,11 +678,13 @@ function generateGetBody(
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"latest"';
+  const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
 
-  return `${indent}    const result = await griptapeApi<Record<string, unknown>>(
+  return `${qsStmt}
+${indent}    const result = await griptapeApi<Record<string, unknown>>(
 ${indent}      apiKey,
 ${indent}      "GET",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      undefined,
 ${indent}      baseUrl,
 ${indent}    );
@@ -800,12 +839,13 @@ function generateActionBody(
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"latest"';
+  const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
 
-  return `${bodyFilter}
+  return `${bodyFilter}${qsStmt}
 ${indent}    const result = await griptapeApi<Record<string, unknown>>(
 ${indent}      apiKey,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,${bodyArg}
+${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}      baseUrl,
 ${indent}    );
 ${indent}
@@ -934,6 +974,34 @@ export function toPascalCase(name: string): string {
 /** Sanitize an API field name to a safe object key / identifier fragment. */
 export function sanitizeFieldName(name: string): string {
   return name.replace(/-/g, "_");
+}
+
+/**
+ * True when a request-body field name denotes a credential/secret that swamp
+ * should redact in logs and the UI. The Griptape spec does not flag these, so
+ * the decision is name-based. Exact-match a curated set (plus a `*_token` /
+ * `*_secret` / `*_password` suffix rule) rather than a broad substring test, so
+ * innocuous fields like `value_count` or `token_limit` are not over-redacted.
+ */
+export function isSensitiveFieldName(name: string): boolean {
+  const n = name.toLowerCase();
+  const exact = new Set([
+    "value",
+    "secret",
+    "secret_value",
+    "password",
+    "token",
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "client_secret",
+    "private_key",
+    "credential",
+    "credentials",
+  ]);
+  if (exact.has(n)) return true;
+  return /_(token|secret|password|api_key|apikey)$/.test(n);
 }
 
 /** Escape a string for a double-quoted TypeScript literal. */

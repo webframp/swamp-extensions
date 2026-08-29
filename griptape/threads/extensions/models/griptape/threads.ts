@@ -31,7 +31,7 @@ const GlobalArgsSchema = z.object({
 
 const ThreadsItemSchema = z.looseObject({
   alias: z.string(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   message_count: z.number(),
   messages_length: z.number(),
@@ -47,7 +47,7 @@ const ThreadsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListThreadsSchema = z.object({
@@ -64,7 +64,7 @@ const ListThreadsSchema = z.object({
 
 const CreateThreadSchema = z.looseObject({
   alias: z.string(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   message_count: z.number(),
   messages_length: z.number(),
@@ -80,11 +80,11 @@ const CreateThreadSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const MessagesItemSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   index: z.number(),
   input: z.string(),
@@ -100,7 +100,7 @@ const MessagesItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListMessagesSchema = z.object({
@@ -116,7 +116,7 @@ const ListMessagesSchema = z.object({
 });
 
 const CreateMessageSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   index: z.number(),
   input: z.string(),
@@ -132,7 +132,7 @@ const CreateMessageSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 // =============================================================================
@@ -329,6 +329,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

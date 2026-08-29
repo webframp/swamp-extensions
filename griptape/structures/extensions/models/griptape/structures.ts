@@ -32,7 +32,7 @@ const GlobalArgsSchema = z.object({
 const GetStructureRunSchema = z.looseObject({
   args: z.array(z.string()),
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -55,11 +55,11 @@ const GetStructureRunSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const EventsItemSchema = z.looseObject({
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   event_id: z.string().regex(
     new RegExp(
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
@@ -104,12 +104,12 @@ const ListStructureRunLogsSchema = z.object({
 
 const SpansItemSchema = z.looseObject({
   attributes: z.unknown(),
-  end_time: z.string(),
+  end_time: z.string().nullable(),
   events: z.unknown(),
   name: z.string(),
   parent_id: z.string().optional(),
   span_id: z.string(),
-  start_time: z.string(),
+  start_time: z.string().nullable(),
   status: z.unknown(),
   trace_id: z.string(),
 });
@@ -128,7 +128,7 @@ const ListSpansSchema = z.object({
 
 const StructuresItemSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -149,7 +149,7 @@ const StructuresItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   webhook_enabled: z.boolean(),
 });
 
@@ -167,7 +167,7 @@ const ListStructuresSchema = z.object({
 
 const CreateStructureSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -188,14 +188,14 @@ const CreateStructureSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   webhook_enabled: z.boolean(),
 });
 
 const StructureDeploymentsItemSchema = z.looseObject({
   code_source: z.unknown(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -226,7 +226,7 @@ const ListStructureDeploymentsSchema = z.object({
 const CreateStructureDeploymentSchema = z.looseObject({
   code_source: z.unknown(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -245,7 +245,7 @@ const CreateStructureDeploymentSchema = z.looseObject({
 const StructureRunsItemSchema = z.looseObject({
   args: z.array(z.string()),
   completed_at: z.string().nullable().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   deployment_id: z.string().regex(
     new RegExp(
@@ -268,7 +268,7 @@ const StructureRunsItemSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListStructureRunsSchema = z.object({
@@ -285,7 +285,7 @@ const ListStructureRunsSchema = z.object({
 
 const GetInvokeStructureWebhookGetSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -306,13 +306,13 @@ const GetInvokeStructureWebhookGetSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   webhook_enabled: z.boolean(),
 });
 
 const InvokeStructureWebhookPostSchema = z.looseObject({
   code: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   description: z.string(),
   env_vars: z.array(z.unknown()),
@@ -333,7 +333,7 @@ const InvokeStructureWebhookPostSchema = z.looseObject({
       "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
     ),
   ),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
   webhook_enabled: z.boolean(),
 });
 
@@ -441,6 +441,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -943,6 +944,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -1376,12 +1378,23 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
+        const queryKeys = new Set(["api_key"]);
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && v !== null && queryKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
           `/api/structures/${
             encodeURIComponent(String(args.structure_id))
-          }/webhook`,
+          }/webhook${qs}`,
           undefined,
           baseUrl,
         );
@@ -1430,12 +1443,22 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
+        const queryKeys = new Set(["api_key"]);
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && v !== null && queryKeys.has(k)) {
+            queryParts.push(
+              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+            );
+          }
+        }
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "POST",
           `/api/structures/${
             encodeURIComponent(String(args.structure_id))
-          }/webhook`,
+          }/webhook${qs}`,
           body,
           baseUrl,
         );

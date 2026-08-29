@@ -32,7 +32,7 @@ const GlobalArgsSchema = z.object({
 const DataConnectorsItemSchema = z.looseObject({
   bucket_id: z.string().optional(),
   config: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
@@ -49,7 +49,7 @@ const DataConnectorsItemSchema = z.looseObject({
   schedule_expression: z.string().optional(),
   transforms: z.array(z.unknown()).optional(),
   type: z.string(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const ListDataConnectorsSchema = z.object({
@@ -66,7 +66,7 @@ const ListDataConnectorsSchema = z.object({
 
 const CreateDataConnectorSchema = z.looseObject({
   config: z.unknown(),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
@@ -82,13 +82,13 @@ const CreateDataConnectorSchema = z.looseObject({
   name: z.string(),
   schedule_expression: z.string().optional(),
   type: z.string(),
-  updated_at: z.string(),
+  updated_at: z.string().nullable(),
 });
 
 const DataJobsItemSchema = z.looseObject({
   bytes_ingested: z.number().optional(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
@@ -120,7 +120,7 @@ const ListDataJobsSchema = z.object({
 const CreateDataJobSchema = z.looseObject({
   bytes_ingested: z.number().optional(),
   completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string(),
+  created_at: z.string().nullable(),
   created_by: z.string(),
   data_connector_id: z.string().regex(
     new RegExp(
@@ -336,6 +336,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",
@@ -620,6 +621,7 @@ export const model = {
         },
       ) => {
         const { apiKey, baseUrl } = context.globalArgs;
+
         const result = await griptapeApi<Record<string, unknown>>(
           apiKey,
           "GET",

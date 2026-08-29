@@ -26,6 +26,20 @@ Deno.test("normalizePattern: the fixed class rejects stray parens/pipes", () => 
   assertEquals(re.test("deadbeef"), true);
 });
 
+Deno.test("schemaToZod: date-time field is nullable (lifecycle timestamps)", () => {
+  const zod = schemaToZod({ type: "string", format: "date-time" });
+  assertStringIncludes(zod, ".nullable()");
+});
+
+Deno.test("schemaToZod: spec-nullable date-time is not double-wrapped", () => {
+  const zod = schemaToZod({
+    type: "string",
+    format: "date-time",
+    nullable: true,
+  });
+  // Exactly one .nullable() (the outer wrapper), not two.
+  assertEquals(zod.match(/\.nullable\(\)/g)?.length, 1);
+});
 Deno.test("schemaToZod: emits the normalized regex for a UUID field", () => {
   const zod = schemaToZod({
     type: "string",
