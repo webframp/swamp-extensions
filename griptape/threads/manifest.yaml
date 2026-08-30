@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/threads"
+version: "2026.08.29.1"
+description: "Griptape Cloud Threads — conversation threads and their messages"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/threads.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - threads
+  - conversation
+  - ai

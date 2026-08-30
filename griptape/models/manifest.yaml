@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/models"
+version: "2026.08.29.1"
+description: "Griptape Cloud Models — model configurations and provider auth configs"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/models.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - models
+  - llm
+  - configuration

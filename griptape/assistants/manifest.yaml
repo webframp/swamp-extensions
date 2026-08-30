@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/assistants"
+version: "2026.08.29.1"
+description: "Griptape Cloud Assistants — assistant definitions and assistant runs"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/assistants.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - assistants
+  - agents
+  - ai

@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/griptape/structures"
+version: "2026.08.29.1"
+description: "Griptape Cloud Structures — deployed structures, runs, logs, and spans"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/structures.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - structures
+  - workflows
+  - ai
