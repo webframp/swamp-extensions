@@ -12,7 +12,7 @@ import { z } from "npm:zod@4.4.3";
 import {
   CloudFormationClient,
   ListStackResourcesCommand,
-} from "npm:@aws-sdk/client-cloudformation@3.1120.0";
+} from "npm:@aws-sdk/client-cloudformation@3.1121.0";
 import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
@@ -20,18 +20,18 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1120.0";
+} from "npm:@aws-sdk/client-ec2@3.1121.0";
 import {
   DescribeDBClustersCommand,
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1120.0";
+} from "npm:@aws-sdk/client-rds@3.1121.0";
 import {
   ListSecretsCommand,
   SecretsManagerClient,
-} from "npm:@aws-sdk/client-secrets-manager@3.1120.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1120.0";
+} from "npm:@aws-sdk/client-secrets-manager@3.1121.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1121.0";
 
 const EXTENSION_NAME = "@webframp/aws/adopt";
 
@@ -1251,7 +1251,7 @@ function planInstanceName(stackName: string): string {
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.08.28.2",
+  version: "2026.08.29.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1322,6 +1322,12 @@ export const model = {
       toVersion: "2026.08.28.2",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.08.29.1",
+      description:
+        "Dependency bump: AWS SDK 3.1120.0 → 3.1121.0, no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
