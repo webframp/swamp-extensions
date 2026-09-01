@@ -1,0 +1,76 @@
+manifestVersion: 1
+name: "@webframp/aws/kiro-usage"
+version: "2026.09.01.1"
+description: |
+  AWS Kiro per-user usage and spend monitoring — queries the Cost and Usage
+  Report (CUR) via Athena for seat cost and credit consumption per IAM
+  Identity Store principal, resolves principals to names/emails, and
+  reconciles the account-level enterprise discount (EDP).
+
+  Cost Explorer collapses every Kiro line item to `NoResourceId` and cannot
+  attribute spend to individuals; the CUR carries the principal on each
+  per-user line, so this model uses CUR-via-Athena rather than Cost Explorer.
+
+  ## Authentication
+
+  Uses the AWS credential chain (profiles, SSO, credential-process). Configure
+  a profile with Athena + CUR S3 read in the account hosting the CUR table,
+  and (for identity resolution) a profile with `identitystore:DescribeUser`.
+
+  ## Required IAM Permissions
+
+  - `athena:StartQueryExecution`
+  - `athena:GetQueryExecution`
+  - `athena:GetQueryResults`
+  - `s3:GetObject` (on the Athena results bucket and the CUR bucket)
+  - `glue:GetTable`, `glue:GetDatabase` (Glue catalog for the CUR table)
+  - `identitystore:DescribeUser` (only when `resolveIdentities` is true)
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/kiro-usage kiro-usage \
+    --global-arg 'curProfile=my-root/ReadOnlyPlus' \
+    --global-arg 'athenaDatabase=awscurdatabase' \
+    --global-arg 'athenaTable=my_cur_table' \
+    --global-arg 'athenaWorkgroup=primary' \
+    --global-arg 'athenaOutputLocation=s3://aws-athena-query-results-…/' \
+    --global-arg 'identityStoreId=d-1234567890'
+
+  # Scan the most recent complete month
+  swamp model method run kiro-usage scan
+
+  # Scan a specific billing period
+  swamp model method run kiro-usage scan --input month=2026-08-01
+  ```
+
+  ## Method
+
+  - **scan** — Query the CUR for one billing period, resolve identities, and
+    write a per-user `scan_results` resource with tier rollup and EDP
+    reconciliation.
+
+  ## Report
+
+  - **@webframp/aws/kiro-usage-report** — Method-scope report rendering the
+    per-user table, tier rollup, and cost reconciliation.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/kiro_usage.ts
+reports:
+  - kiro_usage_report.ts
+labels:
+  - ai
+  - aws
+  - kiro
+  - finops
+  - cost
+  - monitoring
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
