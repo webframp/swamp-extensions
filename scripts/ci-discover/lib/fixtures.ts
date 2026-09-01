@@ -4,7 +4,7 @@
  * Shapes are copied from the real repository rather than invented, including the
  * cases most likely to break a naive implementation:
  *   - two-level nesting (`cloudflare/kv` beside a top-level `cloudflare`)
- *   - names that do not mirror their directory (`driver/nix` -> `@webframp/nix`)
+ *   - names that do not mirror their directory (`vault/pass` -> `@webframp/pass`)
  *   - a real dependency fan-in (`aws/inventory` has four dependents)
  *   - a dotted directory that must not register as an extension
  *
@@ -64,7 +64,6 @@ export const FIXTURE_FILES: Record<string, string> = {
   "terraform/manifest.yaml": manifest("@webframp/terraform"),
 
   // Names that do not mirror their directory.
-  "driver/nix/manifest.yaml": manifest("@webframp/nix"),
   "vault/pass/manifest.yaml": manifest("@webframp/pass"),
   "datastore/postgres/manifest.yaml": manifest("@webframp/postgres-datastore"),
 

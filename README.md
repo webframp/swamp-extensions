@@ -1,6 +1,6 @@
 # Swamp Extensions
 
-Extensions for [swamp](https://github.com/swamp-club/swamp) providing model integrations, workflow+report combos, vault providers, datastore backends, and execution drivers.
+Extensions for [swamp](https://github.com/swamp-club/swamp) providing model integrations, workflow+report combos, vault providers, and datastore backends.
 
 ## Model Extensions
 
@@ -114,7 +114,6 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/aws/drift-state`](aws/drift-state/) | Drift-detection workflow — composes baseline/drift state from other AWS model data into timelines and velocity trends | `@webframp/aws/adopt`, `@webframp/aws/inventory` |
 | [`@webframp/aws/securityhub-findings`](aws/securityhub-findings/) | Security Hub findings triage workflow — queries findings across an AWS Organization and generates a triage report | None |
 | [`@webframp/ai-usage`](ai-usage/) | Cross-provider AI usage workflow — runs Bedrock, Vertex AI, and Azure OpenAI usage models in parallel, then generates a unified report, gracefully handling unconfigured providers | `@webframp/aws/bedrock-usage`, `@webframp/gcp/vertex-usage`, `@webframp/azure/openai-usage` |
-| [`@webframp/agentcore-bootstrap`](agentcore-bootstrap/) | One-shot bootstrap workflow — builds/pushes the AgentCore worker image, provisions ECR and a Bedrock AgentCore runtime, and outputs the runtimeArn for driver configuration | `@webframp/container-image`, `@webframp/agentcore` |
 | [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban flow-metrics and sprint-summary reports plus a scaffold-story workflow, built on top of `@webframp/redmine` | `@webframp/redmine` |
 | [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 | [`@webframp/bench-datastore`](bench-datastore/) | Datastore benchmarking harness — two workflow-based scenarios (throughput breadth and write-stress depth) exercising any datastore backend under sustained load without lock contention | None |
@@ -137,14 +136,6 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/postgres-datastore`](datastore/postgres/) | Stores swamp runtime data in PostgreSQL (RDS/Aurora/Aurora Serverless v2) with fencing-token-based distributed locking | `postgres` (npm client) |
 | [`@webframp/azure-blob-datastore`](datastore/azure-blob/) | Stores swamp runtime data in Azure Blob Storage with native blob-lease distributed locking and ETag-conditional shard-index writes | None (uses fetch) |
 | [`@webframp/dynamodb-datastore`](datastore/dynamodb/) | Stores swamp runtime data in AWS DynamoDB (single-table design) with conditional-write distributed locking and chunked blob storage | `@aws-sdk/client-dynamodb`, `@aws-sdk/lib-dynamodb` |
-
-## Driver Extensions
-
-| Extension | Description | Dependencies |
-|-----------|-------------|--------------|
-| [`@webframp/nix`](driver/nix/) | Nix execution driver — runs model methods inside a Nix shell environment | Requires `nix` |
-| [`@webframp/dry-run`](driver/dry-run/) | Dry-run execution driver — logs method calls without executing them | None |
-| [`@webframp/agentcore`](driver/agentcore/) | AWS Bedrock AgentCore execution driver — runs model methods in isolated microVM sessions with S3-based coordination | `@aws-sdk/client-bedrock-agentcore`, `@aws-sdk/client-s3` |
 
 ## Installation
 
@@ -188,7 +179,6 @@ swamp extension pull @webframp/aws/adopt
 swamp extension pull @webframp/aws/drift-state
 swamp extension pull @webframp/aws/securityhub-findings
 swamp extension pull @webframp/ai-usage
-swamp extension pull @webframp/agentcore-bootstrap
 swamp extension pull @webframp/redmine-kanban
 swamp extension pull @webframp/bench-datastore
 
@@ -287,11 +277,6 @@ swamp extension pull @webframp/valkey-datastore
 swamp extension pull @webframp/postgres-datastore
 swamp extension pull @webframp/azure-blob-datastore
 swamp extension pull @webframp/dynamodb-datastore
-
-# Driver extensions
-swamp extension pull @webframp/nix
-swamp extension pull @webframp/dry-run
-swamp extension pull @webframp/agentcore
 ```
 
 ## Usage
