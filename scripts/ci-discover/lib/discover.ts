@@ -153,8 +153,8 @@ export function discoverExtensions(
  * Map published name to directory.
  *
  * Required rather than convenient: the directory does NOT mirror the name for
- * several families — `driver/nix` publishes as `@webframp/nix`, `vault/pass` as
- * `@webframp/pass`, `datastore/postgres` as `@webframp/postgres-datastore`.
+ * several families — `vault/pass` publishes as `@webframp/pass`,
+ * `datastore/postgres` as `@webframp/postgres-datastore`.
  * Deriving a path from a dependency specifier would miss all of them.
  */
 export function nameToDir(exts: Extension[]): Map<string, string> {

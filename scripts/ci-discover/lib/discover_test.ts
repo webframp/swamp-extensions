@@ -53,9 +53,8 @@ Deno.test("discover: does not descend into an extension's own tree", () => {
 
 Deno.test("discover: name does not have to mirror the directory", () => {
   const map = nameToDir(found);
-  // Real cases. Deriving a directory from a dependency specifier would miss all
-  // three, which is why resolution goes through this map.
-  assertEquals(map.get("@webframp/nix"), "driver/nix");
+  // Real cases. Deriving a directory from a dependency specifier would miss
+  // both, which is why resolution goes through this map.
   assertEquals(map.get("@webframp/pass"), "vault/pass");
   assertEquals(map.get("@webframp/postgres-datastore"), "datastore/postgres");
 });
