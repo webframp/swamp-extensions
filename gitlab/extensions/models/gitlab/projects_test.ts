@@ -73,6 +73,7 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "delete_mr_note",
+    "get_issue",
     "get_job_log",
     "get_merge_request",
     "get_pipeline_jobs",
@@ -156,6 +157,77 @@ Deno.test("globalArguments requires host and token", () => {
 Deno.test("globalArguments rejects empty host", () => {
   const result = model.globalArguments.safeParse({ host: "", token: "t" });
   assertEquals(result.success, false);
+});
+
+// =============================================================================
+// Upgrade Chain Tests
+// =============================================================================
+
+function upgradeTo(toVersion: string) {
+  const entry = (model.upgrades as Array<
+    {
+      toVersion: string;
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ) => Record<string, unknown>;
+    }
+  >).find((u) => u.toVersion === toVersion);
+  assertExists(entry, `upgrade entry ${toVersion} exists`);
+  return entry;
+}
+
+Deno.test("upgrade chain tail matches model version", () => {
+  const upgrades = model.upgrades as Array<{ toVersion: string }>;
+  assertEquals(upgrades[upgrades.length - 1].toVersion, model.version);
+});
+
+Deno.test("upgrade chain is ordered chronologically by toVersion", () => {
+  const versions = (model.upgrades as Array<{ toVersion: string }>).map((u) =>
+    u.toVersion
+  );
+  const sorted = [...versions].sort();
+  assertEquals(versions, sorted);
+});
+
+Deno.test("2026.07.30.1 upgrade does not touch globalArguments", () => {
+  // Regression: this upgrade previously injected sourceBranch/targetBranch/
+  // webUrl into globalArguments, which are not valid global args (only host
+  // and token are). A resource schema change must be a no-op on global args.
+  const before = { host: "git.example.org", token: "t" };
+  const after = upgradeTo("2026.07.30.1").upgradeAttributes({ ...before });
+  assertEquals(after, before);
+});
+
+Deno.test("2026.09.02.1 upgrade strips stray globalArguments keys", () => {
+  // Cleans up instances already poisoned by the old 2026.07.30.1 migration.
+  const poisoned = {
+    host: "git.example.org",
+    token: "t",
+    sourceBranch: null,
+    targetBranch: null,
+    webUrl: null,
+  };
+  const after = upgradeTo("2026.09.02.1").upgradeAttributes(poisoned);
+  assertEquals(after, { host: "git.example.org", token: "t" });
+});
+
+Deno.test("2026.09.02.1 upgrade is a no-op on clean globalArguments", () => {
+  const clean = { host: "git.example.org", token: "t" };
+  const after = upgradeTo("2026.09.02.1").upgradeAttributes({ ...clean });
+  assertEquals(after, clean);
+});
+
+Deno.test("upgraded globalArguments pass schema validation", () => {
+  // End-to-end: a poisoned instance, once upgraded, must validate.
+  const poisoned = {
+    host: "git.example.org",
+    token: "t",
+    sourceBranch: null,
+    targetBranch: null,
+    webUrl: null,
+  };
+  const cleaned = upgradeTo("2026.09.02.1").upgradeAttributes(poisoned);
+  assertEquals(model.globalArguments.safeParse(cleaned).success, true);
 });
 
 Deno.test("project argument rejects empty string", () => {
@@ -649,6 +721,86 @@ Deno.test("create_issue throws on mutation errors", async () => {
         ),
       Error,
       "createIssue failed",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_issue argument schema requires project and iid", () => {
+  const missing = model.methods.get_issue.arguments.safeParse({
+    project: "org/repo",
+  });
+  assertEquals(missing.success, false);
+  const emptyProject = model.methods.get_issue.arguments.safeParse({
+    project: "",
+    iid: 1,
+  });
+  assertEquals(emptyProject.success, false);
+  const ok = model.methods.get_issue.arguments.safeParse({
+    project: "org/repo",
+    iid: 56,
+  });
+  assertEquals(ok.success, true);
+});
+
+Deno.test("get_issue writes issueDetail resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issue: {
+          iid: 56,
+          title: "SDP Subjects",
+          description: "Full description body of the work item.",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/56",
+          labels: { nodes: [{ title: "tier-1" }] },
+          createdAt: "2026-08-01T00:00:00Z",
+          updatedAt: "2026-08-15T00:00:00Z",
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_issue.execute(
+      { project: "org/repo", iid: 56 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].specName, "issueDetail");
+    assertEquals(resources[0].name, "org~repo-56");
+    const data = resources[0].data as any;
+    assertEquals(data.project, "org/repo");
+    assertEquals(data.iid, 56);
+    assertEquals(data.title, "SDP Subjects");
+    assertEquals(data.description, "Full description body of the work item.");
+    assertEquals(data.state, "opened");
+    assertEquals(data.webUrl, "https://git.example.org/org/repo/-/issues/56");
+    assertEquals(data.labels, ["tier-1"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_issue throws when issue not found", async () => {
+  const restore = mockGraphqlFetch({
+    data: { project: { issue: null } },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_issue.execute(
+          { project: "org/repo", iid: 404 },
+          context as any,
+        ),
+      Error,
+      "Issue #404 not found",
     );
   } finally {
     restore();

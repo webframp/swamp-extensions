@@ -1096,6 +1096,17 @@ query issueNotes($fullPath: ID!, $iid: String!, $first: Int!) {
   }
 }`;
 
+const GET_ISSUE_QUERY = `
+query getIssue($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    issue(iid: $iid) {
+      iid title description state webUrl
+      labels { nodes { title } }
+      createdAt updatedAt
+    }
+  }
+}`;
+
 const MR_NOTES_QUERY = `
 query mrNotes($fullPath: ID!, $iid: String!, $last: Int!) {
   project(fullPath: $fullPath) {
@@ -1378,6 +1389,29 @@ function gqlMapIssue(node: any): z.infer<typeof IssueSchema> {
   };
 }
 
+// Maps a GraphQL issue node into the issueDetail shape. Unlike gqlMapIssue,
+// this includes description and webUrl, matching the fields selected by
+// GET_ISSUE_QUERY and the create/update issue mutations.
+function gqlMapIssueDetail(
+  node: any,
+  project: string,
+): Omit<
+  z.infer<typeof IssueDetailSchema>,
+  "fetchedAt" | "durationMs" | "collectedBy"
+> {
+  return {
+    project,
+    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    title: node.title ?? "",
+    description: node.description ?? "",
+    state: node.state ?? "",
+    webUrl: node.webUrl ?? "",
+    labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
+    createdAt: node.createdAt ?? "",
+    updatedAt: node.updatedAt ?? "",
+  };
+}
+
 function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
   const rawId = node.id ?? "";
   // Extract numeric ID from gid://gitlab/Note/123
@@ -1558,7 +1592,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.01.1",
+  version: "2026.09.02.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1569,13 +1603,12 @@ export const model = {
     {
       toVersion: "2026.07.30.1",
       description:
-        "Add sourceBranch, targetBranch, webUrl to mergeStatus resource",
-      upgradeAttributes: (old: Record<string, unknown>) => ({
-        ...old,
-        sourceBranch: null,
-        targetBranch: null,
-        webUrl: null,
-      }),
+        "Added sourceBranch, targetBranch, webUrl to the mergeStatus " +
+        "resource schema. No globalArguments change — resource schema " +
+        "changes require no attribute migration. (Prior releases erroneously " +
+        "injected these fields into globalArguments here; the upgrade to " +
+        "2026.09.02.1 removes them.)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
       toVersion: "2026.08.12.1",
@@ -1639,6 +1672,24 @@ export const model = {
         "additive — previously-stored MR lists validate on read via the " +
         "field defaults.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.02.1",
+      description: "Added the get_issue method (issueDetail resource; no " +
+        "globalArguments change). Also removes the stray sourceBranch, " +
+        "targetBranch, and webUrl keys that a prior 2026.07.30.1 upgrade " +
+        "erroneously injected into globalArguments — they are not valid " +
+        "global arguments (only host and token are) and broke method " +
+        "execution with an 'Unknown argument(s)' validation error.",
+      upgradeAttributes: (old: Record<string, unknown>) => {
+        const {
+          sourceBranch: _sourceBranch,
+          targetBranch: _targetBranch,
+          webUrl: _webUrl,
+          ...rest
+        } = old;
+        return rest;
+      },
     },
   ],
   reports: ["@webframp/review-dashboard"],
@@ -2135,6 +2186,48 @@ export const model = {
         );
         ctx.logger.info("Found {count} pipelines for {project}", {
           count: pipelines.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_issue: {
+      description:
+        "Get a single issue including its description body (for reading " +
+        "work-item details). Returns issue detail keyed by project and iid.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, GET_ISSUE_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const issue = data.project?.issue;
+        if (!issue) {
+          throw new Error(
+            `Issue #${args.iid} not found in ${args.project}`,
+          );
+        }
+        const handle = await ctx.writeResource(
+          "issueDetail",
+          `${sanitizeName(args.project)}-${args.iid}`,
+          {
+            ...gqlMapIssueDetail(issue, args.project),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Fetched issue #{iid} in {project}", {
+          iid: args.iid,
           project: args.project,
         });
         return { dataHandles: [handle] };
