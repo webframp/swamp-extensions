@@ -78,6 +78,7 @@ Deno.test("model has all expected methods", () => {
     "get_pipeline_jobs",
     "get_project_info",
     "list_branches",
+    "list_commits",
     "list_issue_notes",
     "list_issues",
     "list_labels",
@@ -112,6 +113,7 @@ Deno.test("model has all expected resources", () => {
   assertEquals(resourceNames.sort(), [
     "branches",
     "bulkTodoResult",
+    "commits",
     "dashboard",
     "discussionResolution",
     "discussions",
@@ -330,6 +332,10 @@ Deno.test("list_merge_requests writes mergeRequests resource via GraphQL", async
             draft: false,
             createdAt: "2026-04-13T00:00:00Z",
             updatedAt: "2026-04-13T00:00:00Z",
+            mergedAt: "2026-04-14T09:30:00Z",
+            approvedBy: {
+              nodes: [{ username: "reviewer1" }, { username: "reviewer2" }],
+            },
             labels: { nodes: [{ title: "enhancement" }] },
           }],
           pageInfo: { hasNextPage: false },
@@ -353,6 +359,127 @@ Deno.test("list_merge_requests writes mergeRequests resource via GraphQL", async
     assertEquals(data.truncated, false);
     assertEquals(data.mergeRequests[0].sourceBranch, "feature");
     assertEquals(data.mergeRequests[0].labels, ["enhancement"]);
+    assertEquals(data.mergeRequests[0].mergedAt, "2026-04-14T09:30:00Z");
+    assertEquals(data.mergeRequests[0].approvers, ["reviewer1", "reviewer2"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_merge_requests defaults mergedAt to null when absent", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        mergeRequests: {
+          nodes: [{
+            iid: 43,
+            title: "Open MR, not yet merged",
+            state: "opened",
+            author: { username: "dev" },
+            sourceBranch: "wip",
+            targetBranch: "main",
+            draft: false,
+            createdAt: "2026-04-13T00:00:00Z",
+            updatedAt: "2026-04-13T00:00:00Z",
+            labels: { nodes: [] },
+          }],
+          pageInfo: { hasNextPage: false },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_merge_requests.execute(
+      { project: "group/repo", state: "opened" },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.mergeRequests[0].mergedAt, null);
+    assertEquals(data.mergeRequests[0].approvers, []);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_commits maps REST commits into the commits resource", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/repository/commits?per_page=100&since=2026-01-01T00%3A00%3A00Z":
+      {
+        status: 200,
+        body: [
+          {
+            id: "abc123",
+            short_id: "abc123",
+            title: "Fix the thing",
+            author_name: "Alice Dev",
+            author_email: "alice@example.org",
+            committed_date: "2026-04-10T12:00:00Z",
+            web_url: "https://git.example.org/group/repo/-/commit/abc123",
+          },
+        ],
+        headers: { "x-next-page": "" },
+      },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_commits.execute(
+      {
+        project: "group/repo",
+        ref: "",
+        since: "2026-01-01T00:00:00Z",
+        perPage: 100,
+      },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].specName, "commits");
+    assertEquals(resources[0].name, "group~repo-default-commits");
+    const data = resources[0].data as any;
+    assertEquals(data.count, 1);
+    assertEquals(data.truncated, false);
+    assertEquals(data.commits[0].authorName, "Alice Dev");
+    assertEquals(data.commits[0].authorEmail, "alice@example.org");
+    assertEquals(data.commits[0].committedDate, "2026-04-10T12:00:00Z");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_commits flags truncated=true when a next page exists", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/repository/commits?per_page=100": {
+      status: 200,
+      body: [
+        {
+          id: "def456",
+          short_id: "def456",
+          title: "First page commit",
+          author_name: "Bob Dev",
+          author_email: "bob@example.org",
+          committed_date: "2026-04-11T09:00:00Z",
+          web_url: "https://git.example.org/group/repo/-/commit/def456",
+        },
+      ],
+      // A non-empty x-next-page means more commits remain unfetched.
+      headers: { "x-next-page": "2" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_commits.execute(
+      { project: "group/repo", ref: "", since: "", perPage: 100 },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.count, 1);
+    assertEquals(data.truncated, true); // honestly reports the unfetched page
   } finally {
     restore();
   }
