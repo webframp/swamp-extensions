@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "check": "deno check extensions/models/devops-measurement/crew_reference.ts extensions/models/devops-measurement/collect_gitlab.ts extensions/models/devops-measurement/collect_redmine.ts extensions/models/devops-measurement/collect_teams.ts extensions/models/devops-measurement/collect_cloudtrail.ts extensions/models/devops-measurement/events.ts extensions/models/devops-measurement/scoring.ts extensions/models/devops-measurement/interaction_graph.ts extensions/models/devops-measurement/_lib/event.ts extensions/reports/force_multiplier_report.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt extensions/",
+    "fmt:check": "deno fmt --check extensions/",
+    "test": "deno test --allow-env extensions/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-import-prefix"
+      ]
+    }
+  },
+  "imports": {
+    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
+  }
+}

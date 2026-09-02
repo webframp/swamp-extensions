@@ -1,0 +1,177 @@
+id: 8b1e5c34-0d2a-4f6b-9a71-4c2e6d5f0a10
+name: "@webframp/devops-measurement/measure"
+description: |
+  Observe DevOps cross-boundary collaboration end to end and produce the
+  force-multiplier report.
+
+  The swamp-native realization of the Go collect→score→serve pipeline: the
+  GitLab collector translates already-fetched GitLab activity into uniform
+  events; the aggregation step unions and windows them into one canonical set;
+  scoring and the interaction graph then run in parallel over that identical
+  set; and the workflow-scope report joins scores with graph centrality,
+  re-classifies tiers (centrality gates Tier 1), and renders the headline.
+
+  Prerequisites (run out of band or on their own cadence):
+    - crew-reference `load` has populated the roster/mappings.
+    - @webframp/gitlab methods (list_merge_requests, list_mr_notes,
+      list_commits) have produced the raw activity this workflow reads via CEL.
+
+  Data flow (CEL wires each step to prior models' latest data):
+    collect-gitlab.sync
+      ← @webframp/gitlab MR/notes/commits + crew-reference
+    events.aggregate
+      ← collect-gitlab batch
+    scoring.score           (parallel)  ← events
+    interaction-graph.build (parallel)  ← events + crew-reference
+    report (workflow scope) ← scoring + interaction-graph step data
+tags:
+  devops: "true"
+  measurement: "true"
+reports:
+  require:
+    - "@webframp/devops-measurement/force-multiplier"
+inputs:
+  properties:
+    windowHours:
+      type: integer
+      default: 2160
+      description: Rolling window in hours (default 2160h ≈ 90 days)
+    hubThreshold:
+      type: integer
+      default: 3
+      description: Minimum in-degree to flag a person as a network hub
+    bridgeThreshold:
+      type: integer
+      default: 3
+      description: Minimum distinct crews helped to flag a person as a bridge
+  required: []
+jobs:
+  - name: measure
+    description: Collect, aggregate, score, and graph cross-boundary activity
+    steps:
+      - name: collect-gitlab
+        description: Translate GitLab activity into uniform events
+        task:
+          type: model_method
+          modelIdOrName: collect-gitlab
+          methodName: sync
+          inputs:
+            # Arrays of @webframp/gitlab result envelopes. @webframp/gitlab is a
+            # generic client that emits one flat envelope per call (per project
+            # for MRs/commits, per MR for notes); the collector groups by the
+            # envelope's project/noteableIid internally. Add one array entry per
+            # gitlab instance you run. Example wires a single project "100".
+            mergeRequestLists:
+              - ${{ data.latest("gitlab", "100-opened").attributes }}
+            mrNotesLists: []
+            commitLists:
+              - ${{ data.latest("gitlab", "100-commits").attributes }}
+            crewReference: ${{ data.latest("crew-reference", "reference-current").attributes }}
+        dependsOn: []
+
+      - name: collect-redmine
+        description: Translate Redmine issue journals into events
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: collect-redmine
+          methodName: sync
+          inputs:
+            # Array of @webframp/redmine get_issue detail records (self-contained:
+            # project, author, journals). One array entry per get_issue instance.
+            issues:
+              - ${{ data.latest("redmine", "issue-7").attributes }}
+            crewReference: ${{ data.latest("crew-reference", "reference-current").attributes }}
+        dependsOn: []
+
+      - name: collect-teams
+        description: Translate Teams channel messages into events
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: collect-teams
+          methodName: sync
+          inputs:
+            # Array of @webframp/microsoft/teams channelMessages envelopes (each
+            # { channelId, messages[] }). One array entry per channel instance.
+            channels:
+              - ${{ data.latest("teams", "chan-1").attributes }}
+            crewReference: ${{ data.latest("crew-reference", "reference-current").attributes }}
+        dependsOn: []
+
+      - name: collect-cloudtrail
+        description: Translate CloudTrail write activity into events
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: collect-cloudtrail
+          methodName: sync
+          inputs:
+            # TEMPLATE WIRING — inactive until an upstream activity-source model
+            # exists. @swamp/aws/cloudtrail is infrastructure-management, not a
+            # LookupEvents source, so no "cloudtrail" model emits this shape yet.
+            # This step is allowFailure:true and every dependent uses
+            # condition:completed, so the pipeline degrades cleanly while the
+            # source is absent. When a CloudTrail activity model ships, point
+            # this at its flat per-event output.
+            events: ${{ data.latest("cloudtrail", "events-current").attributes.events }}
+            crewReference: ${{ data.latest("crew-reference", "reference-current").attributes }}
+        dependsOn: []
+
+      - name: aggregate
+        description: Union + window events from all collectors into the canonical set
+        task:
+          type: model_method
+          modelIdOrName: events
+          methodName: aggregate
+          inputs:
+            windowHours: ${{ inputs.windowHours }}
+            batches:
+              - ${{ data.latest("collect-gitlab", "gitlab-events").attributes }}
+              - ${{ data.latest("collect-redmine", "redmine-events").attributes }}
+              - ${{ data.latest("collect-teams", "teams-events").attributes }}
+              - ${{ data.latest("collect-cloudtrail", "cloudtrail-events").attributes }}
+        dependsOn:
+          - step: collect-gitlab
+            condition:
+              type: succeeded
+          - step: collect-redmine
+            condition:
+              type: completed
+          - step: collect-teams
+            condition:
+              type: completed
+          - step: collect-cloudtrail
+            condition:
+              type: completed
+
+      - name: score
+        description: Cross-boundary + force-multiplier scoring
+        task:
+          type: model_method
+          modelIdOrName: scoring
+          methodName: score
+          inputs:
+            events: ${{ data.latest("events", "events-current").attributes.events }}
+        dependsOn:
+          - step: aggregate
+            condition:
+              type: succeeded
+
+      - name: graph
+        description: Build interaction graph, centrality, and rank
+        task:
+          type: model_method
+          modelIdOrName: interaction-graph
+          methodName: build
+          inputs:
+            events: ${{ data.latest("events", "events-current").attributes.events }}
+            crewReference: ${{ data.latest("crew-reference", "reference-current").attributes }}
+            hubThreshold: ${{ inputs.hubThreshold }}
+            bridgeThreshold: ${{ inputs.bridgeThreshold }}
+        dependsOn:
+          - step: aggregate
+            condition:
+              type: succeeded
+    dependsOn: []
+version: 1

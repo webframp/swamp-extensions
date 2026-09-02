@@ -102,6 +102,14 @@ const MergeRequestSchema = z.object({
   updatedAt: z.string().describe(
     "Timestamp the merge request was last updated",
   ),
+  mergedAt: z.string().nullable().default(null).describe(
+    "Timestamp the merge request was merged, or null if not merged. " +
+      "Enables downstream review-outcome / unblock-rate analysis.",
+  ),
+  approvers: z.array(z.string()).default([]).describe(
+    "Usernames who approved (reviewed) this merge request. Enables " +
+      "cross-boundary review attribution: an approver helps the MR author.",
+  ),
   labels: z.array(z.string()).describe("Labels applied to the merge request"),
 });
 
@@ -115,6 +123,38 @@ const MergeRequestListSchema = z.object({
     "Whether more merge requests exist beyond this page",
   ),
   state: z.string().describe("State filter used for the query"),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CommitSchema = z.object({
+  id: z.string().describe("Commit SHA"),
+  shortId: z.string().describe("Abbreviated commit SHA"),
+  title: z.string().describe("Commit title (first line of the message)"),
+  authorName: z.string().describe("Commit author name"),
+  authorEmail: z.string().describe("Commit author email"),
+  committedDate: z.string().describe("ISO 8601 timestamp the commit was made"),
+  webUrl: z.string().default("").describe("Web URL for the commit"),
+});
+
+const CommitListSchema = z.object({
+  project: z.string().describe("Project the commits belong to"),
+  ref: z.string().default("").describe(
+    "Branch or ref the commits were listed from (empty = default branch)",
+  ),
+  commits: z.array(CommitSchema).describe("Commits matching the query"),
+  count: z.number().describe("Number of commits returned"),
+  truncated: z.boolean().describe(
+    "Whether more commits exist beyond this page",
+  ),
+  since: z.string().default("").describe(
+    "Lower time bound applied to the query (ISO 8601), empty if none",
+  ),
   fetchedAt: z.string().describe("Timestamp the list was fetched"),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -999,9 +1039,10 @@ query mergeRequests($fullPath: ID!, $state: MergeRequestState, $first: Int!) {
   project(fullPath: $fullPath) {
     mergeRequests(state: $state, first: $first, sort: UPDATED_DESC) {
       nodes {
-        iid title state draft createdAt updatedAt
+        iid title state draft createdAt updatedAt mergedAt
         sourceBranch targetBranch
         author { username }
+        approvedBy { nodes { username } }
         labels { nodes { title } }
       }
       pageInfo { hasNextPage }
@@ -1317,6 +1358,10 @@ function gqlMapMR(node: any): z.infer<typeof MergeRequestSchema> {
     draft: node.draft ?? false,
     createdAt: node.createdAt ?? "",
     updatedAt: node.updatedAt ?? "",
+    mergedAt: node.mergedAt ?? null,
+    approvers: node.approvedBy?.nodes?.map((a: any) => a?.username).filter(
+      Boolean,
+    ) ?? [],
     labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
   };
 }
@@ -1460,6 +1505,8 @@ function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
     draft: raw.draft ?? false,
     createdAt: raw.created_at ?? "",
     updatedAt: raw.updated_at ?? "",
+    mergedAt: raw.merged_at ?? null,
+    approvers: Array.isArray(raw.approvers) ? raw.approvers : [],
     labels: raw.labels ?? [],
   };
 }
@@ -1511,7 +1558,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.08.28.1",
+  version: "2026.09.01.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1584,6 +1631,15 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.01.1",
+      description:
+        "Added optional nullable mergedAt and approvers[] fields to merge " +
+        "requests, and a new list_commits method (commits resource). All " +
+        "additive — previously-stored MR lists validate on read via the " +
+        "field defaults.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -1603,6 +1659,12 @@ export const model = {
     mergeRequests: {
       description: "List of merge requests for a project",
       schema: MergeRequestListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    commits: {
+      description: "List of commits for a project",
+      schema: CommitListSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -1868,6 +1930,87 @@ export const model = {
           count: mrs.length,
           project: args.project,
           state: args.state,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_commits: {
+      description:
+        "List commits for a project (optionally a branch), newest first. " +
+        "Supports a `since` lower time bound for windowed collection. Uses " +
+        "the REST repository/commits endpoint. Enables commit-based " +
+        "cross-boundary attribution (who commits to another crew's repo).",
+      arguments: z.object({
+        project: z.string().min(1).describe(
+          "Project path (group/repo) or numeric ID",
+        ),
+        ref: z.string().default("").describe(
+          "Branch or ref to list from; empty uses the default branch",
+        ),
+        since: z.string().default("").describe(
+          "Only commits after this ISO 8601 timestamp; empty = no lower bound",
+        ),
+        perPage: z.number().int().min(1).max(100).default(100).describe(
+          "Page size (max 100)",
+        ),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          ref: string;
+          since: string;
+          perPage: number;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const params: Record<string, string> = {
+          per_page: String(args.perPage),
+        };
+        if (args.ref !== "") params.ref_name = args.ref;
+        if (args.since !== "") params.since = args.since;
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          `/repository/commits`,
+          params,
+        );
+        const raw = Array.isArray(data) ? data : [];
+        const commits = raw.map((c: any) => ({
+          id: c.id ?? "",
+          shortId: c.short_id ?? "",
+          title: c.title ?? "",
+          authorName: c.author_name ?? "",
+          authorEmail: c.author_email ?? "",
+          committedDate: c.committed_date ?? "",
+          webUrl: c.web_url ?? "",
+        }));
+        const handle = await ctx.writeResource(
+          "commits",
+          // Include the ref so collecting commits from different branches of
+          // the same project does not clobber a single "<project>-commits"
+          // instance. `since` is intentionally not in the key — a newer window
+          // for the same (project, ref) legitimately supersedes the prior one.
+          `${sanitizeName(args.project)}-${args.ref || "default"}-commits`,
+          {
+            project: args.project,
+            ref: args.ref,
+            commits,
+            count: commits.length,
+            truncated,
+            since: args.since,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Found {count} commits for {project}", {
+          count: commits.length,
+          project: args.project,
         });
         return { dataHandles: [handle] };
       },
