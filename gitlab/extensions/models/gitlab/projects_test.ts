@@ -73,6 +73,7 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "delete_mr_note",
+    "get_issue",
     "get_job_log",
     "get_merge_request",
     "get_pipeline_jobs",
@@ -649,6 +650,86 @@ Deno.test("create_issue throws on mutation errors", async () => {
         ),
       Error,
       "createIssue failed",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_issue argument schema requires project and iid", () => {
+  const missing = model.methods.get_issue.arguments.safeParse({
+    project: "org/repo",
+  });
+  assertEquals(missing.success, false);
+  const emptyProject = model.methods.get_issue.arguments.safeParse({
+    project: "",
+    iid: 1,
+  });
+  assertEquals(emptyProject.success, false);
+  const ok = model.methods.get_issue.arguments.safeParse({
+    project: "org/repo",
+    iid: 56,
+  });
+  assertEquals(ok.success, true);
+});
+
+Deno.test("get_issue writes issueDetail resource via GraphQL", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issue: {
+          iid: 56,
+          title: "SDP Subjects",
+          description: "Full description body of the work item.",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/56",
+          labels: { nodes: [{ title: "tier-1" }] },
+          createdAt: "2026-08-01T00:00:00Z",
+          updatedAt: "2026-08-15T00:00:00Z",
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_issue.execute(
+      { project: "org/repo", iid: 56 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].specName, "issueDetail");
+    assertEquals(resources[0].name, "org~repo-56");
+    const data = resources[0].data as any;
+    assertEquals(data.project, "org/repo");
+    assertEquals(data.iid, 56);
+    assertEquals(data.title, "SDP Subjects");
+    assertEquals(data.description, "Full description body of the work item.");
+    assertEquals(data.state, "opened");
+    assertEquals(data.webUrl, "https://git.example.org/org/repo/-/issues/56");
+    assertEquals(data.labels, ["tier-1"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_issue throws when issue not found", async () => {
+  const restore = mockGraphqlFetch({
+    data: { project: { issue: null } },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_issue.execute(
+          { project: "org/repo", iid: 404 },
+          context as any,
+        ),
+      Error,
+      "Issue #404 not found",
     );
   } finally {
     restore();

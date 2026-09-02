@@ -1096,6 +1096,17 @@ query issueNotes($fullPath: ID!, $iid: String!, $first: Int!) {
   }
 }`;
 
+const GET_ISSUE_QUERY = `
+query getIssue($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    issue(iid: $iid) {
+      iid title description state webUrl
+      labels { nodes { title } }
+      createdAt updatedAt
+    }
+  }
+}`;
+
 const MR_NOTES_QUERY = `
 query mrNotes($fullPath: ID!, $iid: String!, $last: Int!) {
   project(fullPath: $fullPath) {
@@ -1378,6 +1389,29 @@ function gqlMapIssue(node: any): z.infer<typeof IssueSchema> {
   };
 }
 
+// Maps a GraphQL issue node into the issueDetail shape. Unlike gqlMapIssue,
+// this includes description and webUrl, matching the fields selected by
+// GET_ISSUE_QUERY and the create/update issue mutations.
+function gqlMapIssueDetail(
+  node: any,
+  project: string,
+): Omit<
+  z.infer<typeof IssueDetailSchema>,
+  "fetchedAt" | "durationMs" | "collectedBy"
+> {
+  return {
+    project,
+    iid: typeof node.iid === "string" ? parseInt(node.iid, 10) : node.iid,
+    title: node.title ?? "",
+    description: node.description ?? "",
+    state: node.state ?? "",
+    webUrl: node.webUrl ?? "",
+    labels: node.labels?.nodes?.map((l: any) => l.title) ?? [],
+    createdAt: node.createdAt ?? "",
+    updatedAt: node.updatedAt ?? "",
+  };
+}
+
 function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
   const rawId = node.id ?? "";
   // Extract numeric ID from gid://gitlab/Note/123
@@ -1558,7 +1592,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.01.1",
+  version: "2026.09.02.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2135,6 +2169,48 @@ export const model = {
         );
         ctx.logger.info("Found {count} pipelines for {project}", {
           count: pipelines.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_issue: {
+      description:
+        "Get a single issue including its description body (for reading " +
+        "work-item details). Returns issue detail keyed by project and iid.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, GET_ISSUE_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const issue = data.project?.issue;
+        if (!issue) {
+          throw new Error(
+            `Issue #${args.iid} not found in ${args.project}`,
+          );
+        }
+        const handle = await ctx.writeResource(
+          "issueDetail",
+          `${sanitizeName(args.project)}-${args.iid}`,
+          {
+            ...gqlMapIssueDetail(issue, args.project),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+            fetchedAt: new Date().toISOString(),
+          },
+        );
+        ctx.logger.info("Fetched issue #{iid} in {project}", {
+          iid: args.iid,
           project: args.project,
         });
         return { dataHandles: [handle] };

@@ -1,3 +1,11 @@
+## 2026.09.02.1
+
+**Added:** `get_issue` method — fetches a single issue by `project` and `iid`,
+including its `description` body, via GraphQL `project.issue(iid)`. Writes the
+existing `issueDetail` resource (the same shape produced by `create_issue` and
+`update_issue`). Enables reading full work-item details, such as a directly
+addressed tier-1 to-do, without creating or mutating the issue.
+
 ## 2026.09.01.1
 
 **Added:** `mergedAt` field on merge requests (GraphQL `mergedAt`, REST
