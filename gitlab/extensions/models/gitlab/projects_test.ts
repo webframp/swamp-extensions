@@ -230,7 +230,6 @@ Deno.test("upgraded globalArguments pass schema validation", () => {
   assertEquals(model.globalArguments.safeParse(cleaned).success, true);
 });
 
-
 Deno.test("project argument rejects empty string", () => {
   const result = model.methods.list_issues.arguments.safeParse({
     project: "",

@@ -1675,8 +1675,7 @@ export const model = {
     },
     {
       toVersion: "2026.09.02.1",
-      description:
-        "Added the get_issue method (issueDetail resource; no " +
+      description: "Added the get_issue method (issueDetail resource; no " +
         "globalArguments change). Also removes the stray sourceBranch, " +
         "targetBranch, and webUrl keys that a prior 2026.07.30.1 upgrade " +
         "erroneously injected into globalArguments — they are not valid " +
