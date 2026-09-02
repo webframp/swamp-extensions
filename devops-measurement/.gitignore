@@ -1,0 +1,16 @@
+# Local swamp state, not extension source. These are created by running the
+# models/workflow locally (instances, vaults, pulled upstream bundles) and must
+# not be committed — they are per-checkout runtime artifacts.
+#
+# The .swamp/ runtime dir is already ignored repo-wide (root .gitignore), but
+# these sit outside it:
+
+# Model instance definitions created by `swamp model create` (local testing).
+/models/
+
+# Vault artifacts created by `swamp vault create` (may hold encrypted secrets).
+/vaults/
+
+# Pull-tracking manifest written by `swamp extension pull` (records local
+# .swamp/ bundle paths + timestamps for composed upstreams).
+extensions/models/upstream_extensions.json

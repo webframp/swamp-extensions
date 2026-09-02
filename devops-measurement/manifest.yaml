@@ -1,0 +1,56 @@
+manifestVersion: 1
+name: "@webframp/devops-measurement"
+version: "2026.09.01.1"
+description: |
+  Observe DevOps team effectiveness through cross-boundary collaboration.
+  Watches the tools an organization already uses (GitLab, Redmine, Teams,
+  CloudTrail), records each activity as an immutable event tagged with the
+  crew that performed it and the crew that benefited, and surfaces the people
+  whose help crosses crew boundaries most often and most effectively —
+  the force multipliers.
+
+  An observation engine, not a system of record: events are append-only,
+  crews and members are reference data, and scoring is a pure function of the
+  accumulated event history that can be re-run at any time.
+
+  ## Contexts (models)
+
+  - **crew-reference** — roster of members→crews and resources→crews
+  - **collect-gitlab / collect-redmine / collect-teams / collect-cloudtrail** —
+    one translation model per source; each `sync` emits uniform events
+  - **events** — the deduplicated, append-only event log (`aggregate`)
+  - **scoring** — cross-boundary ratio, reach, tier, force-multiplier (`score`)
+  - **interaction-graph** — HELPED graph and centrality (`build`)
+
+  Realizes the design in the measurement system's DDD design docs
+  (Milestone 9: swamp integration).
+labels:
+  - devops
+  - measurement
+  - cross-boundary
+  - collaboration
+  - force-multiplier
+  - observation
+repository: https://github.com/webframp/swamp-extensions
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+models:
+  - devops-measurement/crew_reference.ts
+  - devops-measurement/collect_gitlab.ts
+  - devops-measurement/collect_redmine.ts
+  - devops-measurement/collect_teams.ts
+  - devops-measurement/collect_cloudtrail.ts
+  - devops-measurement/events.ts
+  - devops-measurement/scoring.ts
+  - devops-measurement/interaction_graph.ts
+reports:
+  - force_multiplier_report.ts
+workflows:
+  - workflow-8b1e5c34-0d2a-4f6b-9a71-4c2e6d5f0a10.yaml
+additionalFiles:
+  - LICENSE.md
+  - README.md
+  - extensions/models/devops-measurement/COLLECTORS.md
