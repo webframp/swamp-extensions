@@ -6,6 +6,18 @@ existing `issueDetail` resource (the same shape produced by `create_issue` and
 `update_issue`). Enables reading full work-item details, such as a directly
 addressed tier-1 to-do, without creating or mutating the issue.
 
+**Fixed:** the `2026.07.30.1` upgrade erroneously injected `sourceBranch`,
+`targetBranch`, and `webUrl` into `globalArguments` (only `host` and `token`
+are valid), which broke **every** method on upgraded instances with an
+`Unknown argument(s)` validation error. That upgrade is now a no-op on global
+arguments (the `mergeStatus` fields it described belong to a resource schema,
+which needs no attribute migration), and the `2026.09.02.1` upgrade removes the
+stray keys from any instance already poisoned by it.
+
+**Upgrade note:** running any method on an existing instance migrates it to
+`2026.09.02.1` and strips the stray global-argument keys automatically. No
+manual intervention is required.
+
 ## 2026.09.01.1
 
 **Added:** `mergedAt` field on merge requests (GraphQL `mergedAt`, REST

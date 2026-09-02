@@ -1603,13 +1603,12 @@ export const model = {
     {
       toVersion: "2026.07.30.1",
       description:
-        "Add sourceBranch, targetBranch, webUrl to mergeStatus resource",
-      upgradeAttributes: (old: Record<string, unknown>) => ({
-        ...old,
-        sourceBranch: null,
-        targetBranch: null,
-        webUrl: null,
-      }),
+        "Added sourceBranch, targetBranch, webUrl to the mergeStatus " +
+        "resource schema. No globalArguments change — resource schema " +
+        "changes require no attribute migration. (Prior releases erroneously " +
+        "injected these fields into globalArguments here; the upgrade to " +
+        "2026.09.02.1 removes them.)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
       toVersion: "2026.08.12.1",
@@ -1673,6 +1672,25 @@ export const model = {
         "additive — previously-stored MR lists validate on read via the " +
         "field defaults.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.02.1",
+      description:
+        "Added the get_issue method (issueDetail resource; no " +
+        "globalArguments change). Also removes the stray sourceBranch, " +
+        "targetBranch, and webUrl keys that a prior 2026.07.30.1 upgrade " +
+        "erroneously injected into globalArguments — they are not valid " +
+        "global arguments (only host and token are) and broke method " +
+        "execution with an 'Unknown argument(s)' validation error.",
+      upgradeAttributes: (old: Record<string, unknown>) => {
+        const {
+          sourceBranch: _sourceBranch,
+          targetBranch: _targetBranch,
+          webUrl: _webUrl,
+          ...rest
+        } = old;
+        return rest;
+      },
     },
   ],
   reports: ["@webframp/review-dashboard"],

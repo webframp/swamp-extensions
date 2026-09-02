@@ -159,6 +159,78 @@ Deno.test("globalArguments rejects empty host", () => {
   assertEquals(result.success, false);
 });
 
+// =============================================================================
+// Upgrade Chain Tests
+// =============================================================================
+
+function upgradeTo(toVersion: string) {
+  const entry = (model.upgrades as Array<
+    {
+      toVersion: string;
+      upgradeAttributes: (
+        old: Record<string, unknown>,
+      ) => Record<string, unknown>;
+    }
+  >).find((u) => u.toVersion === toVersion);
+  assertExists(entry, `upgrade entry ${toVersion} exists`);
+  return entry;
+}
+
+Deno.test("upgrade chain tail matches model version", () => {
+  const upgrades = model.upgrades as Array<{ toVersion: string }>;
+  assertEquals(upgrades[upgrades.length - 1].toVersion, model.version);
+});
+
+Deno.test("upgrade chain is ordered chronologically by toVersion", () => {
+  const versions = (model.upgrades as Array<{ toVersion: string }>).map((u) =>
+    u.toVersion
+  );
+  const sorted = [...versions].sort();
+  assertEquals(versions, sorted);
+});
+
+Deno.test("2026.07.30.1 upgrade does not touch globalArguments", () => {
+  // Regression: this upgrade previously injected sourceBranch/targetBranch/
+  // webUrl into globalArguments, which are not valid global args (only host
+  // and token are). A resource schema change must be a no-op on global args.
+  const before = { host: "git.example.org", token: "t" };
+  const after = upgradeTo("2026.07.30.1").upgradeAttributes({ ...before });
+  assertEquals(after, before);
+});
+
+Deno.test("2026.09.02.1 upgrade strips stray globalArguments keys", () => {
+  // Cleans up instances already poisoned by the old 2026.07.30.1 migration.
+  const poisoned = {
+    host: "git.example.org",
+    token: "t",
+    sourceBranch: null,
+    targetBranch: null,
+    webUrl: null,
+  };
+  const after = upgradeTo("2026.09.02.1").upgradeAttributes(poisoned);
+  assertEquals(after, { host: "git.example.org", token: "t" });
+});
+
+Deno.test("2026.09.02.1 upgrade is a no-op on clean globalArguments", () => {
+  const clean = { host: "git.example.org", token: "t" };
+  const after = upgradeTo("2026.09.02.1").upgradeAttributes({ ...clean });
+  assertEquals(after, clean);
+});
+
+Deno.test("upgraded globalArguments pass schema validation", () => {
+  // End-to-end: a poisoned instance, once upgraded, must validate.
+  const poisoned = {
+    host: "git.example.org",
+    token: "t",
+    sourceBranch: null,
+    targetBranch: null,
+    webUrl: null,
+  };
+  const cleaned = upgradeTo("2026.09.02.1").upgradeAttributes(poisoned);
+  assertEquals(model.globalArguments.safeParse(cleaned).success, true);
+});
+
+
 Deno.test("project argument rejects empty string", () => {
   const result = model.methods.list_issues.arguments.safeParse({
     project: "",
