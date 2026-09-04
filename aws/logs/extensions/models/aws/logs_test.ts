@@ -8,7 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1121.0";
+import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1126.0";
 import { model } from "./logs.ts";
 
 // =============================================================================

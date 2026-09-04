@@ -7,8 +7,8 @@ import {
   assertMatch,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { AthenaClient } from "npm:@aws-sdk/client-athena@3.1121.0";
-import { IdentitystoreClient } from "npm:@aws-sdk/client-identitystore@3.1121.0";
+import { AthenaClient } from "npm:@aws-sdk/client-athena@3.1126.0";
+import { IdentitystoreClient } from "npm:@aws-sdk/client-identitystore@3.1126.0";
 import {
   buildDiscountQuery,
   buildPerUserQuery,

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/kiro-usage"
-version: "2026.09.01.1"
+version: "2026.09.04.1"
 description: |
   AWS Kiro per-user usage and spend monitoring — queries the Cost and Usage
   Report (CUR) via Athena for seat cost and credit consumption per IAM

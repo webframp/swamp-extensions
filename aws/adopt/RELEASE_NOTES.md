@@ -1,3 +1,13 @@
+## 2026.09.04.1
+
+**Changed:** Bump @aws-sdk/* 3.1121.0 → 3.1126.0 (5 packages)
+
+**Changed:** Bump @swamp/aws/ec2 2026.08.28.1 → 2026.09.03.1
+
+**Changed:** Bump @swamp/aws/rds 2026.08.28.1 → 2026.09.02.1
+
+**Changed:** Bump @swamp/aws/secretsmanager 2026.08.28.1 → 2026.09.03.1
+
 ## 2026.08.29.1
 
 **Changed:** Bump @aws-sdk/* 3.1120.0 → 3.1121.0. Dependency-only update; no schema, API, or behavioral changes.

@@ -1,3 +1,13 @@
+## 2026.09.04.1
+
+**Changed:** Bump @webframp/aws/bedrock-usage 2026.08.28.1 → 2026.08.29.1
+
+**Changed:** Bump @webframp/gcp/vertex-usage 2026.08.26.2 → 2026.08.28.1
+
+**Changed:** Bump @webframp/azure/openai-usage 2026.08.26.2 → 2026.08.28.1
+
+**Changed:** Bump @webframp/anthropic/analytics 2026.08.26.2 → 2026.08.28.1
+
 ## 2026.08.28.3
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the

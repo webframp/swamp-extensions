@@ -1,3 +1,7 @@
+## 2026.09.04.1
+
+**Changed:** Bump @webframp/cloudflare 2026.08.26.3 → 2026.08.28.1
+
 ## 2026.08.28.2
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the
