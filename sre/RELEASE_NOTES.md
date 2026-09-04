@@ -1,3 +1,9 @@
+## 2026.09.04.1
+
+**Changed:** Bump @webframp/network 2026.08.26.2 → 2026.08.28.1
+
+**Changed:** Bump @webframp/system 2026.08.26.2 → 2026.08.28.1
+
 ## 2026.08.28.2
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the

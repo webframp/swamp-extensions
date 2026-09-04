@@ -493,7 +493,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.08.28.3",
+  version: "2026.09.04.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -553,6 +553,12 @@ export const model = {
       toVersion: "2026.08.28.3",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.04.1",
+      description:
+        "Dependency bump: refreshed @webframp/aws/adopt and @webframp/aws/inventory pins; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

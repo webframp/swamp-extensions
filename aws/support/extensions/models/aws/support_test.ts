@@ -3,8 +3,8 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
-import { SupportClient } from "npm:@aws-sdk/client-support@3.1121.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1121.0";
+import { SupportClient } from "npm:@aws-sdk/client-support@3.1126.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1126.0";
 import { model } from "./support.ts";
 
 // =============================================================================

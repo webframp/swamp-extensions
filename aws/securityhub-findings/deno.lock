@@ -5,10 +5,13 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "npm:@aws-sdk/client-organizations@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/client-organizations@3.1121.0": "3.1121.0",
+    "npm:@aws-sdk/client-organizations@3.1126.0": "3.1126.0",
     "npm:@aws-sdk/client-securityhub@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/client-securityhub@3.1121.0": "3.1121.0",
+    "npm:@aws-sdk/client-securityhub@3.1126.0": "3.1126.0",
     "npm:@aws-sdk/credential-providers@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/credential-providers@3.1121.0": "3.1121.0",
+    "npm:@aws-sdk/credential-providers@3.1126.0": "3.1126.0",
     "npm:zod@4.4.3": "4.4.3"
   },
   "jsr": {
@@ -49,6 +52,19 @@
         "tslib"
       ]
     },
+    "@aws-sdk/client-organizations@3.1126.0": {
+      "integrity": "sha512-kS/5jfjAxTxdJo/N/apVbUJv0lAXZzU6r7G9d099CIbXEF1JaoYW5yTTfhcJlu7jLoez1Hu+HgeV3WTOLWTQRQ==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-securityhub@3.1120.0": {
       "integrity": "sha512-jZ5Yd8YTY17JYvNRBp/MsgIEcXB68f4yhRduDUC3tlp6JMFyw6vy6T+RHtkPYvr8Lkifv1yRqn45LwebMaGnWw==",
       "dependencies": [
@@ -64,6 +80,19 @@
     },
     "@aws-sdk/client-securityhub@3.1121.0": {
       "integrity": "sha512-O6E+/DWHCDl2l5DI1Oqr/K7oUmz54ZpnH5OKmWFAmM+GovNfIVzaF8GWSAY99oZkDoaIy5BwmLOnIOt6g9MUTQ==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-securityhub@3.1126.0": {
+      "integrity": "sha512-IoFU76XIDjwhFap3YJm0PG6is1uB8MqMpuK5bd1/tDpipvv9m/UK0sZ0Fi8DBg+eKwUADsvk0NxW0Bzc5OF09w==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
@@ -149,8 +178,8 @@
         "tslib"
       ]
     },
-    "@aws-sdk/credential-provider-node@3.972.81": {
-      "integrity": "sha512-Rml+WitoFvXmv6JZ18U/xGdGDGGvB/mOin0ya0lTnTrdC0Z1lrVxTYh7iNklZBcvcRMrs4DoEf6xy1KWyrLQQw==",
+    "@aws-sdk/credential-provider-node@3.972.82": {
+      "integrity": "sha512-znDkEOGXB8W3kG1LJUKP3foBZY/9qLM0eil/DxWXSp37XsdsRLQHE/d/OaCGGVgKpA6znR38h/+INk8do1FjiA==",
       "dependencies": [
         "@aws-sdk/credential-provider-env",
         "@aws-sdk/credential-provider-http",
@@ -221,6 +250,27 @@
     },
     "@aws-sdk/credential-providers@3.1121.0": {
       "integrity": "sha512-lWdkLauoXNDH/lwYWFpYnFhtYqt0lLrQAyuyxak31PiKD5UQ4YT2z3rQckzEfIGyP1VBGvC+n6Ziqm3y3HKmmQ==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-cognito-identity",
+        "@aws-sdk/credential-provider-env",
+        "@aws-sdk/credential-provider-http",
+        "@aws-sdk/credential-provider-ini",
+        "@aws-sdk/credential-provider-login",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/credential-provider-process",
+        "@aws-sdk/credential-provider-sso",
+        "@aws-sdk/credential-provider-web-identity",
+        "@aws-sdk/nested-clients",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/credential-provider-imds",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/credential-providers@3.1126.0": {
+      "integrity": "sha512-OWu4fqH48e6yUceFs1r0fgC88gpuD/MaFggKoRXXTrjT2VicQQSO9tqlCWd2qmQNAXbwfV8/HGeRm6l9P4FSRA==",
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-cognito-identity",

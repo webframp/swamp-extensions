@@ -1,3 +1,7 @@
+## 2026.09.04.1
+
+**Changed:** Bump @aws-sdk/* 3.1121.0 → 3.1126.0 (5 packages)
+
 ## 2026.08.29.1
 
 **Changed:** Bump @aws-sdk/* 3.1120.0 → 3.1121.0. Dependency-only update; no schema, API, or behavioral changes.

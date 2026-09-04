@@ -1,3 +1,7 @@
+## 2026.09.04.1
+
+**Changed:** Bump @aws-sdk/* 3.1121.0 → 3.1126.0 (3 packages)
+
 ## 2026.09.01.1
 
 **Added:** Initial release of `@webframp/aws/kiro-usage`.

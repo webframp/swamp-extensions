@@ -29,12 +29,12 @@ import {
   GetQueryExecutionCommand,
   GetQueryResultsCommand,
   StartQueryExecutionCommand,
-} from "npm:@aws-sdk/client-athena@3.1121.0";
+} from "npm:@aws-sdk/client-athena@3.1126.0";
 import {
   DescribeUserCommand,
   IdentitystoreClient,
-} from "npm:@aws-sdk/client-identitystore@3.1121.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1121.0";
+} from "npm:@aws-sdk/client-identitystore@3.1126.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1126.0";
 
 const EXTENSION_NAME = "@webframp/aws/kiro-usage";
 
@@ -600,7 +600,7 @@ interface ScanContext {
 /** AWS Kiro per-user usage and spend model. */
 export const model = {
   type: "@webframp/aws/kiro-usage",
-  version: "2026.09.01.1",
+  version: "2026.09.04.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [],
 

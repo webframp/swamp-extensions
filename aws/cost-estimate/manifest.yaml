@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-estimate"
-version: "2026.08.29.1"
+version: "2026.09.04.1"
 description: |
   Calculate AWS infrastructure costs from inventory data or planned specs.
 
