@@ -602,7 +602,14 @@ export const model = {
   type: "@webframp/aws/kiro-usage",
   version: "2026.09.04.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.04.1",
+      description:
+        "Dependency bump: AWS SDK 3.1121.0 → 3.1126.0, no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     scan_results: {
