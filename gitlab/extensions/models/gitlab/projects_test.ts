@@ -1890,14 +1890,37 @@ Deno.test("get_file surfaces the last error when every candidate fails non-404",
   }
 });
 
-Deno.test("get_file rejects a binary Content-Type instead of decoding it as text", async () => {
+Deno.test("get_file rejects binary content (a NUL byte) instead of decoding it as text", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    // Real PNG bytes: magic header followed by an IHDR chunk whose length
+    // field is mostly zero bytes — representative of the NUL bytes that
+    // show up early in essentially every binary format.
     return Promise.resolve(
-      new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
-        status: 200,
-        headers: { "content-type": "image/png" },
-      }),
+      new Response(
+        new Uint8Array([
+          0x89,
+          0x50,
+          0x4e,
+          0x47,
+          0x0d,
+          0x0a,
+          0x1a,
+          0x0a,
+          0x00,
+          0x00,
+          0x00,
+          0x0d,
+          0x49,
+          0x48,
+          0x44,
+          0x52,
+        ]),
+        {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        },
+      ),
     );
   };
   try {
@@ -1911,20 +1934,20 @@ Deno.test("get_file rejects a binary Content-Type instead of decoding it as text
           context as any,
         ),
       Error,
-      "non-text content-type",
+      "binary content detected",
     );
   } finally {
     globalThis.fetch = original;
   }
 });
 
-Deno.test("get_file accepts a text-ish non-text/ Content-Type like application/json", async () => {
+Deno.test("get_file accepts a text file served with an unhelpful Content-Type (e.g. Dockerfile as application/octet-stream)", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
     return Promise.resolve(
-      new Response(`{"key":"value"}`, {
+      new Response(`FROM alpine\nRUN echo hi\n`, {
         status: 200,
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/octet-stream" },
       }),
     );
   };
@@ -1933,12 +1956,63 @@ Deno.test("get_file accepts a text-ish non-text/ Content-Type like application/j
       globalArgs: TEST_GLOBAL_ARGS,
     });
     await model.methods.get_file.execute(
-      { url: "https://git.example.org/group/proj/-/blob/main/data.json" },
+      { url: "https://git.example.org/group/proj/-/blob/main/Dockerfile" },
       context as any,
     );
     const d = getWrittenResources().find((x) => x.specName === "fileContent")!
       .data as any;
-    assertEquals(d.content, `{"key":"value"}`);
+    assertEquals(d.content, "FROM alpine\nRUN echo hi\n");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file warns when a binary candidate is skipped even though another split resolves as text", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate ("feat" / "my-feature/logo.png") is a real
+  // binary file; the correct long-ref split ("feat/my-feature" / "logo.png")
+  // happens to resolve as text. The binary candidate must not be silently
+  // dropped — a warning should note it was skipped.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response(new Uint8Array([0x00, 0x01, 0x02, 0x03]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response("hello", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources, getLogsByLevel } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/logo.png",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.content, "hello");
+    const warnLogs = getLogsByLevel("warning");
+    assertEquals(
+      warnLogs.some((l: any) => l.message.includes("Skipped binary content")),
+      true,
+    );
   } finally {
     globalThis.fetch = original;
   }

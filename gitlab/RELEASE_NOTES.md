@@ -17,14 +17,18 @@ no longer aborts the whole call — later candidates still get a chance to
 resolve. Writes a new `fileContent` resource,
 with a collision-resistant instance name (hashed project/ref/path) so
 distinct files with hyphenated components can't overwrite each other.
-Only text/code files are supported — a non-text `Content-Type` (e.g. an
-image or archive) is rejected with a clear error rather than decoded as
-corrupted text. Content is capped at 500KB measured in bytes (not JS
-string length), truncating on a UTF-8 codepoint boundary so a multi-byte
-character straddling the cap isn't corrupted into a replacement
-character, and common credential patterns are redacted, same as
-`get_job_log`'s trace
-handling.
+Only text/code files are supported — binary content (images, archives,
+compiled artifacts) is detected by sniffing for a NUL byte, the same
+heuristic Git itself uses, rather than trusting `Content-Type` alone
+(GitLab's raw-file endpoint commonly serves extension-less text files
+like `Dockerfile` or `Jenkinsfile` as `application/octet-stream`). If a
+resolved candidate turns out to be binary while a different ref/path
+split resolves as text, that candidate is skipped and a warning notes it
+so the mismatch isn't silent. Content is capped at 500KB measured in
+bytes (not JS string length), truncating on a UTF-8 codepoint boundary so
+a multi-byte character straddling the cap isn't corrupted into a
+replacement character, and common credential patterns are redacted, same
+as `get_job_log`'s trace handling.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a

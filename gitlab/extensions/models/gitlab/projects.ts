@@ -1553,8 +1553,11 @@ class GitLabClient {
    * Like getProjectText, but returns null on a 404 instead of throwing, so
    * callers can probe multiple candidate paths (e.g. disambiguating a ref
    * that may contain slashes) without treating "not this one" as fatal.
-   * Rejects a non-text Content-Type (e.g. an image or archive) rather than
-   * decoding binary bytes as corrupted text.
+   * Rejects binary content (images, archives, compiled artifacts) rather
+   * than decoding it as corrupted text. Detection sniffs the fetched bytes
+   * for a NUL byte rather than trusting Content-Type alone — GitLab's
+   * raw-file endpoint commonly serves extension-less text files
+   * (Dockerfile, Jenkinsfile, Makefile) as application/octet-stream.
    */
   async getProjectTextOrNull(
     project: string,
@@ -1568,40 +1571,28 @@ class GitLabClient {
       const text = await resp.text();
       throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
     }
-    const contentType = resp.headers.get("content-type");
-    if (!isTextContentType(contentType)) {
-      await resp.body?.cancel();
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    if (isBinaryContent(bytes)) {
       throw new Error(
-        `GitLab GET ${project}${path}: non-text content-type "${contentType}" — get_file only supports text/code files`,
+        `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
       );
     }
-    return resp.text();
+    return new TextDecoder().decode(bytes);
   }
 }
 
 /**
- * Whether a Content-Type header describes text content get_file should
- * decode, rather than binary content (images, archives, compiled
- * artifacts) that would be corrupted by UTF-8 decoding. A missing header
- * is treated as text, since GitLab's raw-file endpoint does not always set
- * one for plain text.
+ * Whether a fetched file's bytes look binary rather than text, using the
+ * same NUL-byte heuristic Git uses to classify blobs: text files essentially
+ * never contain a NUL byte, while binary formats (images, archives,
+ * compiled artifacts) almost always do within the first few KB.
  */
-function isTextContentType(contentType: string | null): boolean {
-  if (!contentType) return true;
-  const type = contentType.split(";")[0].trim().toLowerCase();
-  if (type.startsWith("text/")) return true;
-  if (type.endsWith("+json") || type.endsWith("+xml")) return true;
-  const textIshTypes = new Set([
-    "application/json",
-    "application/xml",
-    "application/javascript",
-    "application/x-javascript",
-    "application/x-yaml",
-    "application/yaml",
-    "application/x-sh",
-    "application/toml",
-  ]);
-  return textIshTypes.has(type);
+function isBinaryContent(bytes: Uint8Array): boolean {
+  const sniffLength = Math.min(bytes.length, 8000);
+  for (let i = 0; i < sniffLength; i++) {
+    if (bytes[i] === 0) return true;
+  }
+  return false;
 }
 
 // =============================================================================
@@ -2270,9 +2261,9 @@ export const model = {
         `ref ends and the path begins (up to ${MAX_REF_CANDIDATES} splits). ` +
         "Content is capped at " +
         `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
-        "redacted. Only text/code files are supported — a non-text " +
-        "Content-Type (e.g. an image or archive) is rejected rather than " +
-        "decoded as corrupted text.",
+        "redacted. Only text/code files are supported — binary content " +
+        "(images, archives, compiled artifacts) is detected and rejected " +
+        "rather than decoded as corrupted text.",
       arguments: z.object({
         url: z.string().min(1).url().describe(
           "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>",
@@ -2289,6 +2280,7 @@ export const model = {
           ctx.globalArgs.token,
         );
         const matches: Array<{ ref: string; path: string; raw: string }> = [];
+        const skippedBinaryRefs: string[] = [];
         let lastError: unknown;
         for (const candidate of candidates) {
           try {
@@ -2302,9 +2294,16 @@ export const model = {
               matches.push({ ref: candidate.ref, path: candidate.path, raw });
             }
           } catch (err) {
-            // A non-404 error (e.g. GitLab rejecting a malformed ref) rules
-            // out this candidate, not every remaining one — keep probing and
-            // only surface the error if nothing else resolves.
+            // A non-404 error (e.g. GitLab rejecting a malformed ref, or a
+            // binary-content rejection) rules out this candidate, not every
+            // remaining one — keep probing and only surface the error if
+            // nothing else resolves.
+            if (
+              err instanceof Error &&
+              err.message.includes("binary content detected")
+            ) {
+              skippedBinaryRefs.push(candidate.ref);
+            }
             lastError = err;
           }
         }
@@ -2322,6 +2321,19 @@ export const model = {
             {
               url: args.url,
               count: matches.length,
+              project,
+              ref: matches[0].ref,
+            },
+          );
+        }
+        if (skippedBinaryRefs.length > 0) {
+          ctx.logger.warn(
+            "Skipped binary content for {url}: ref(s) {refs} in {project} " +
+              "resolved but were rejected as binary; using text match {ref} " +
+              "instead — verify this is the file you intended",
+            {
+              url: args.url,
+              refs: skippedBinaryRefs.join(", "),
               project,
               ref: matches[0].ref,
             },
