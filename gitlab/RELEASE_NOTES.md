@@ -17,10 +17,13 @@ no longer aborts the whole call — later candidates still get a chance to
 resolve. Writes a new `fileContent` resource,
 with a collision-resistant instance name (hashed project/ref/path) so
 distinct files with hyphenated components can't overwrite each other.
-Content is capped at 500KB measured in bytes (not JS string length),
-truncating on a UTF-8 codepoint boundary so a multi-byte character
-straddling the cap isn't corrupted into a replacement character, and
-common credential patterns are redacted, same as `get_job_log`'s trace
+Only text/code files are supported — a non-text `Content-Type` (e.g. an
+image or archive) is rejected with a clear error rather than decoded as
+corrupted text. Content is capped at 500KB measured in bytes (not JS
+string length), truncating on a UTF-8 codepoint boundary so a multi-byte
+character straddling the cap isn't corrupted into a replacement
+character, and common credential patterns are redacted, same as
+`get_job_log`'s trace
 handling.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.

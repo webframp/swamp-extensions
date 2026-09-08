@@ -1553,6 +1553,8 @@ class GitLabClient {
    * Like getProjectText, but returns null on a 404 instead of throwing, so
    * callers can probe multiple candidate paths (e.g. disambiguating a ref
    * that may contain slashes) without treating "not this one" as fatal.
+   * Rejects a non-text Content-Type (e.g. an image or archive) rather than
+   * decoding binary bytes as corrupted text.
    */
   async getProjectTextOrNull(
     project: string,
@@ -1566,8 +1568,40 @@ class GitLabClient {
       const text = await resp.text();
       throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
     }
+    const contentType = resp.headers.get("content-type");
+    if (!isTextContentType(contentType)) {
+      await resp.body?.cancel();
+      throw new Error(
+        `GitLab GET ${project}${path}: non-text content-type "${contentType}" — get_file only supports text/code files`,
+      );
+    }
     return resp.text();
   }
+}
+
+/**
+ * Whether a Content-Type header describes text content get_file should
+ * decode, rather than binary content (images, archives, compiled
+ * artifacts) that would be corrupted by UTF-8 decoding. A missing header
+ * is treated as text, since GitLab's raw-file endpoint does not always set
+ * one for plain text.
+ */
+function isTextContentType(contentType: string | null): boolean {
+  if (!contentType) return true;
+  const type = contentType.split(";")[0].trim().toLowerCase();
+  if (type.startsWith("text/")) return true;
+  if (type.endsWith("+json") || type.endsWith("+xml")) return true;
+  const textIshTypes = new Set([
+    "application/json",
+    "application/xml",
+    "application/javascript",
+    "application/x-javascript",
+    "application/x-yaml",
+    "application/yaml",
+    "application/x-sh",
+    "application/toml",
+  ]);
+  return textIshTypes.has(type);
 }
 
 // =============================================================================
@@ -2236,7 +2270,9 @@ export const model = {
         `ref ends and the path begins (up to ${MAX_REF_CANDIDATES} splits). ` +
         "Content is capped at " +
         `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
-        "redacted.",
+        "redacted. Only text/code files are supported — a non-text " +
+        "Content-Type (e.g. an image or archive) is rejected rather than " +
+        "decoded as corrupted text.",
       arguments: z.object({
         url: z.string().min(1).url().describe(
           "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>",

@@ -1890,6 +1890,60 @@ Deno.test("get_file surfaces the last error when every candidate fails non-404",
   }
 });
 
+Deno.test("get_file rejects a binary Content-Type instead of decoding it as text", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      }),
+    );
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: "https://git.example.org/group/proj/-/blob/main/logo.png" },
+          context as any,
+        ),
+      Error,
+      "non-text content-type",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file accepts a text-ish non-text/ Content-Type like application/json", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(`{"key":"value"}`, {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/data.json" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.content, `{"key":"value"}`);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {
