@@ -1,3 +1,18 @@
+## 2026.09.08.2
+
+**Added:** `get_file` method — fetches a file's raw content at a given ref
+via the REST `repository/files/:path/raw` endpoint. Accepts a GitLab blob URL
+(e.g. `https://<host>/<group>/<project>/-/blob/<ref>/<path>`, the kind you'd
+paste from the web UI) and parses `project`, `ref`, and `path` from it. The
+URL's host must match the model instance's configured `host` — a URL for a
+different GitLab instance is rejected. Writes a new `fileContent` resource.
+Content is capped at 500KB and common credential patterns are redacted, same
+as `get_job_log`'s trace handling.
+
+**Upgrade note:** no schema or globalArguments change for existing resources.
+Running any method on an existing instance migrates it to `2026.09.08.2` as a
+no-op.
+
 ## 2026.09.08.1
 
 **Fixed:** the manifest description's method list (published to the registry

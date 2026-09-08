@@ -73,6 +73,7 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "delete_mr_note",
+    "get_file",
     "get_issue",
     "get_job_log",
     "get_merge_request",
@@ -118,6 +119,7 @@ Deno.test("model has all expected resources", () => {
     "dashboard",
     "discussionResolution",
     "discussions",
+    "fileContent",
     "issueDetail",
     "issues",
     "jobLog",
@@ -1452,6 +1454,112 @@ Deno.test("get_job_log returns the redacted tail of the trace", async () => {
     // the token (which is inside the tail) is redacted
     assertEquals(d.log.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
     assertEquals(d.log.includes("[REDACTED]"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file parses a blob URL and returns redacted content", async () => {
+  const original = globalThis.fetch;
+  const content =
+    "token: glpat-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345\nother: fine\n";
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (
+      url.includes(
+        "/projects/appsvc%2Faws-org/repository/files/scripts%2Fpolicy.json/raw",
+      ) &&
+      url.includes("ref=master")
+    ) {
+      return Promise.resolve(
+        new Response(content, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/appsvc/aws-org/-/blob/master/scripts/policy.json",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.project, "appsvc/aws-org");
+    assertEquals(d.ref, "master");
+    assertEquals(d.path, "scripts/policy.json");
+    assertEquals(d.content.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
+    assertEquals(d.content.includes("[REDACTED]"), true);
+    assertEquals(d.content.includes("other: fine"), true);
+    assertEquals(d.truncated, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file rejects a URL whose host does not match the configured host", async () => {
+  const { context } = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        {
+          url: "https://other.example.org/group/proj/-/blob/main/file.txt",
+        },
+        context as any,
+      ),
+    Error,
+  );
+});
+
+Deno.test("get_file rejects a URL that is not a GitLab blob URL", async () => {
+  const { context } = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        { url: "https://git.example.org/group/proj/-/tree/main" },
+        context as any,
+      ),
+    Error,
+  );
+});
+
+Deno.test("get_file truncates content beyond the size cap", async () => {
+  const original = globalThis.fetch;
+  const big = "x".repeat(500_100);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(big, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url: "https://git.example.org/group/proj/-/blob/main/big.txt",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    assertEquals(d.content.length, 500_000);
   } finally {
     globalThis.fetch = original;
   }

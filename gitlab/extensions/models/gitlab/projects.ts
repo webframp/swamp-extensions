@@ -14,6 +14,9 @@ import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/gitlab";
 
+/** Cap on stored file content for get_file — guards against pasting a URL to a huge generated file. */
+const MAX_FILE_CHARS = 500_000;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -787,6 +790,26 @@ const JobLogSchema = z.object({
   ),
 });
 
+const FileContentSchema = z.object({
+  project: z.string().describe("Project the file belongs to"),
+  ref: z.string().describe("Branch, tag, or commit the file was read at"),
+  path: z.string().describe("File path within the repository"),
+  content: z.string().describe(
+    "File content, redacted for common credential patterns; truncated at " +
+      `${MAX_FILE_CHARS / 1000}KB for very large files`,
+  ),
+  truncated: z.boolean().describe(
+    "Whether the content was cut off at the size cap",
+  ),
+  fetchedAt: z.string().describe("Timestamp the file was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const RetryResultSchema = z.object({
   project: z.string().describe("Project the job/pipeline belongs to"),
   kind: z.enum(["job", "pipeline"]).describe(
@@ -1550,6 +1573,43 @@ function sanitizeName(project: string): string {
 }
 
 /**
+ * Parses a GitLab blob URL (https://<host>/<project>/-/blob/<ref>/<path>)
+ * into its project, ref, and path components. Assumes the ref itself
+ * contains no slashes (true for branch names like main/master and tags) —
+ * GitLab's own URL scheme is ambiguous for refs with slashes, since the
+ * ref and path are concatenated with no distinguishing separator.
+ */
+function parseBlobUrl(
+  url: string,
+  expectedHost: string,
+): { project: string; ref: string; path: string } {
+  const parsed = new URL(url);
+  if (parsed.host !== expectedHost) {
+    throw new Error(
+      `URL host ${parsed.host} does not match configured host ${expectedHost}`,
+    );
+  }
+  const pathname = parsed.pathname.replace(/^\//, "");
+  const marker = "/-/blob/";
+  const idx = pathname.indexOf(marker);
+  if (idx === -1) {
+    throw new Error(`URL is not a GitLab blob URL (missing /-/blob/): ${url}`);
+  }
+  const project = pathname.slice(0, idx);
+  const rest = pathname.slice(idx + marker.length);
+  const slashIdx = rest.indexOf("/");
+  if (!project || slashIdx === -1) {
+    throw new Error(`Could not parse project/ref/path from URL: ${url}`);
+  }
+  const ref = rest.slice(0, slashIdx);
+  const path = decodeURIComponent(rest.slice(slashIdx + 1));
+  if (!ref || !path) {
+    throw new Error(`Could not parse project/ref/path from URL: ${url}`);
+  }
+  return { project, ref, path };
+}
+
+/**
  * Best-effort redaction of common credential patterns from CI log text before
  * it is persisted. Not exhaustive — CI logs can still leak secrets — but masks
  * the obvious ones (GitLab/GitHub tokens, AWS keys, bearer tokens, URL creds,
@@ -1592,7 +1652,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.08.1",
+  version: "2026.09.08.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1700,6 +1760,14 @@ export const model = {
         "in code but missing from the registry-facing method list).",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.08.2",
+      description:
+        "Added the get_file method (fileContent resource; no globalArguments " +
+        "change). Fetches a file's raw content at a ref from a pasted GitLab " +
+        "blob URL, for impact review of a specific config/policy file.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -1725,6 +1793,12 @@ export const model = {
     commits: {
       description: "List of commits for a project",
       schema: CommitListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    fileContent: {
+      description: "Raw content of a file at a given ref",
+      schema: FileContentSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2071,6 +2145,64 @@ export const model = {
         ctx.logger.info("Found {count} commits for {project}", {
           count: commits.length,
           project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_file: {
+      description:
+        "Fetch a file's raw content at a given ref via GitLab's REST raw-file " +
+        "endpoint. Accepts a GitLab blob URL (https://<host>/<project>/-/blob/" +
+        "<ref>/<path>, e.g. pasted from the web UI) and parses project, ref, " +
+        "and path from it — the URL's host must match this instance's " +
+        "configured host. Content is capped at " +
+        `${MAX_FILE_CHARS / 1000}KB and common credential patterns are ` +
+        "redacted.",
+      arguments: z.object({
+        url: z.string().min(1).url().describe(
+          "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>",
+        ),
+      }),
+      execute: async (args: { url: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
+        const { project, ref, path } = parseBlobUrl(
+          args.url,
+          ctx.globalArgs.host,
+        );
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.getProjectText(
+          project,
+          `/repository/files/${encodeURIComponent(path)}/raw?ref=${
+            encodeURIComponent(ref)
+          }`,
+        );
+        const redacted = redactSecrets(raw);
+        const truncated = redacted.length > MAX_FILE_CHARS;
+        const content = truncated
+          ? redacted.slice(0, MAX_FILE_CHARS)
+          : redacted;
+        const handle = await ctx.writeResource(
+          "fileContent",
+          `${sanitizeName(project)}-${sanitizeName(ref)}-${sanitizeName(path)}`,
+          {
+            project,
+            ref,
+            path,
+            content,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Fetched {path} @ {ref} from {project}", {
+          path,
+          ref,
+          project,
         });
         return { dataHandles: [handle] };
       },
