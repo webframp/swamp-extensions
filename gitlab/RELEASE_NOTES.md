@@ -38,7 +38,11 @@ handling. `truncated` reflects whether the network read itself was cut
 short, not just whether the post-redaction content still exceeds the
 cap — a large file with a credential near the front can shrink under
 500KB once redacted, but real data was still dropped upstream, so the
-flag stays honest instead of silently reporting a complete file.
+flag stays honest instead of silently reporting a complete file. If the
+network read cap itself lands mid-character, the dangling lead byte at
+the tail is trimmed rather than decoded into a replacement character
+(U+FFFD) — this is checked independently of the final 500KB trim, since
+redaction can shrink content enough to skip that second trim entirely.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a

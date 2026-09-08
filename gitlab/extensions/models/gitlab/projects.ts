@@ -1581,7 +1581,7 @@ class GitLabClient {
         `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
       );
     }
-    return { text: decodeUtf8UpToBoundary(bytes, bytes.length), truncated };
+    return { text: decodeUtf8TrimmingIncompleteTail(bytes), truncated };
   }
 }
 
@@ -1718,6 +1718,36 @@ function decodeUtf8UpToBoundary(bytes: Uint8Array, maxBytes: number): string {
   // continuation bytes to land on a lead byte (or ASCII byte) boundary.
   while (end > 0 && (bytes[end] & 0xc0) === 0x80) {
     end--;
+  }
+  return new TextDecoder().decode(bytes.slice(0, end));
+}
+
+/**
+ * Decodes the full extent of a byte buffer that may itself end mid-codepoint
+ * (e.g. a network read cut off at an arbitrary byte, with no known cut
+ * position to check the following byte against). Unlike
+ * decodeUtf8UpToBoundary, which looks at the byte just past a known cut
+ * point, this walks backward from the buffer's actual end to find the last
+ * lead byte and checks whether enough continuation bytes followed it to
+ * form a complete sequence — trimming the whole incomplete tail if not.
+ */
+function decodeUtf8TrimmingIncompleteTail(bytes: Uint8Array): string {
+  let end = bytes.length;
+  let i = end - 1;
+  let continuationBytes = 0;
+  while (i >= 0 && (bytes[i] & 0xc0) === 0x80 && continuationBytes < 3) {
+    continuationBytes++;
+    i--;
+  }
+  if (i >= 0) {
+    const leadByte = bytes[i];
+    let seqLen = 1;
+    if ((leadByte & 0xf8) === 0xf0) seqLen = 4;
+    else if ((leadByte & 0xf0) === 0xe0) seqLen = 3;
+    else if ((leadByte & 0xe0) === 0xc0) seqLen = 2;
+    if (seqLen > 1 && end - i < seqLen) {
+      end = i;
+    }
   }
   return new TextDecoder().decode(bytes.slice(0, end));
 }

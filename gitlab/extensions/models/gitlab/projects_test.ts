@@ -1742,6 +1742,48 @@ Deno.test("get_file truncates multi-byte UTF-8 content on a codepoint boundary",
   }
 });
 
+Deno.test("get_file does not leak a replacement character when the network cap lands mid-codepoint and redaction hides it from the final trim", async () => {
+  const original = globalThis.fetch;
+  // Credential near the front shrinks by 6 bytes on redaction, dropping the
+  // final re-encoded length under MAX_FILE_BYTES (500,000) even though the
+  // network read cap (500,004) landed exactly on the lead byte of a 2-byte
+  // "é" (0xC3 0xA9), with its continuation byte cut off. If the network-side
+  // decode doesn't trim that dangling lead byte itself, the resulting U+FFFD
+  // survives (the final MAX_FILE_BYTES trim never runs, since the shrunk
+  // content is already under the cap) and ends up in stored content.
+  const credential = "AKIA" + "B".repeat(16) + "\n"; // 21 bytes
+  const leadBytePos = 500_004 - 1;
+  const fillerLen = leadBytePos - credential.length;
+  const body = new Uint8Array(500_010);
+  body.set(new TextEncoder().encode(credential), 0);
+  body.fill(0x78, credential.length, credential.length + fillerLen);
+  body[leadBytePos] = 0xc3; // dangling lead byte of "é", cut off by the cap
+  body[leadBytePos + 1] = 0xa9; // continuation byte, past the network cap
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/config.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.content.includes("�"), false);
+    assertEquals(d.truncated, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_file logs a warning and uses the shortest ref when multiple candidates resolve", async () => {
   const original = globalThis.fetch;
   // Both "feat" (with path "my-feature/README.md") and "feat/my-feature"
