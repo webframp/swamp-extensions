@@ -73,6 +73,7 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "delete_mr_note",
+    "get_file",
     "get_issue",
     "get_job_log",
     "get_merge_request",
@@ -118,6 +119,7 @@ Deno.test("model has all expected resources", () => {
     "dashboard",
     "discussionResolution",
     "discussions",
+    "fileContent",
     "issueDetail",
     "issues",
     "jobLog",
@@ -1452,6 +1454,784 @@ Deno.test("get_job_log returns the redacted tail of the trace", async () => {
     // the token (which is inside the tail) is redacted
     assertEquals(d.log.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
     assertEquals(d.log.includes("[REDACTED]"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file parses a blob URL and returns redacted content", async () => {
+  const original = globalThis.fetch;
+  const content =
+    "token: glpat-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345\nother: fine\n";
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (
+      url.includes(
+        "/projects/appsvc%2Faws-org/repository/files/scripts%2Fpolicy.json/raw",
+      ) &&
+      url.includes("ref=master")
+    ) {
+      return Promise.resolve(
+        new Response(content, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/appsvc/aws-org/-/blob/master/scripts/policy.json",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.project, "appsvc/aws-org");
+    assertEquals(d.ref, "master");
+    assertEquals(d.path, "scripts/policy.json");
+    assertEquals(d.content.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
+    assertEquals(d.content.includes("[REDACTED]"), true);
+    assertEquals(d.content.includes("other: fine"), true);
+    assertEquals(d.truncated, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file rejects a URL whose host does not match the configured host", async () => {
+  const { context } = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        {
+          url: "https://other.example.org/group/proj/-/blob/main/file.txt",
+        },
+        context as any,
+      ),
+    Error,
+  );
+});
+
+Deno.test("get_file rejects a URL that is not a GitLab blob URL", async () => {
+  const { context } = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        { url: "https://git.example.org/group/proj/-/tree/main" },
+        context as any,
+      ),
+    Error,
+  );
+});
+
+Deno.test("get_file truncates content beyond the size cap", async () => {
+  const original = globalThis.fetch;
+  const big = "x".repeat(500_100);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(big, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url: "https://git.example.org/group/proj/-/blob/main/big.txt",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    assertEquals(d.content.length, 500_000);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file decodes a percent-encoded ref instead of double-encoding it", async () => {
+  const original = globalThis.fetch;
+  // "café" as it would appear in a browser-copied blob URL.
+  const encodedRef = encodeURIComponent("café");
+  let requestedUrl = "";
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    requestedUrl = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    return Promise.resolve(
+      new Response("content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url: `https://git.example.org/group/proj/-/blob/${encodedRef}/f.txt`,
+      },
+      context as any,
+    );
+    // The request sent to GitLab must carry a single level of encoding for
+    // "café", not the double-encoded "caf%25C3%25A9".
+    assertEquals(requestedUrl.includes(`ref=${encodedRef}`), true);
+    assertEquals(requestedUrl.includes("%25"), false);
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "café");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file disambiguates a ref containing slashes by probing candidates", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    // Only the longer ref candidate ("feat/my-feature") actually exists;
+    // the shorter candidate ("feat" as ref, "my-feature/README.md" as path)
+    // must 404 so the method falls through to the correct split.
+    if (
+      url.includes("/repository/files/README.md/raw") &&
+      url.includes(`ref=${encodeURIComponent("feat/my-feature")}`)
+    ) {
+      return Promise.resolve(
+        new Response("hello", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.path, "README.md");
+    assertEquals(d.content, "hello");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file throws when no ref/path split resolves against the API", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          {
+            url:
+              "https://git.example.org/group/proj/-/blob/nonexistent/file.txt",
+          },
+          context as any,
+        ),
+      Error,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file throws a descriptive error on a malformed percent-encoding in the URL", async () => {
+  // A literal "%" not followed by two hex digits (e.g. a real filename like
+  // "100%complete.md") makes decodeURIComponent throw a bare URIError.
+  // No fetch should even happen — parsing fails before any network call.
+  const { context } = createModelTestContext({
+    globalArgs: TEST_GLOBAL_ARGS,
+  });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        {
+          url: "https://git.example.org/group/proj/-/blob/main/100%complete.md",
+        },
+        context as any,
+      ),
+    Error,
+    "Malformed percent-encoding",
+  );
+});
+
+Deno.test("get_file writes collision-resistant instance names for distinct project/ref/path triples", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response("content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context: ctxA, getWrittenResources: writtenA } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/foo-bar/-/blob/baz/qux.txt" },
+      ctxA as any,
+    );
+    const nameA = writtenA().find((x) => x.specName === "fileContent")!.name;
+
+    const { context: ctxB, getWrittenResources: writtenB } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/foo/-/blob/bar-baz/qux.txt" },
+      ctxB as any,
+    );
+    const nameB = writtenB().find((x) => x.specName === "fileContent")!.name;
+
+    assertEquals(nameA === nameB, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file truncates multi-byte UTF-8 content on a codepoint boundary", async () => {
+  const original = globalThis.fetch;
+  // "é" is 2 bytes in UTF-8 (0xC3 0xA9). Pad so the 500,000-byte cap lands
+  // exactly between the lead byte and its continuation byte.
+  const padding = "a".repeat(500_000 - 1);
+  const body = padding + "é";
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/f.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    // The dangling lead byte of "é" must be dropped whole, not decoded into
+    // a replacement character (U+FFFD).
+    assertEquals(d.content, padding);
+    assertEquals(d.content.includes("�"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file does not leak a replacement character when the network cap lands mid-codepoint and redaction hides it from the final trim", async () => {
+  const original = globalThis.fetch;
+  // Credential near the front shrinks by 6 bytes on redaction, dropping the
+  // final re-encoded length under MAX_FILE_BYTES (500,000) even though the
+  // network read cap (500,004) landed exactly on the lead byte of a 2-byte
+  // "é" (0xC3 0xA9), with its continuation byte cut off. If the network-side
+  // decode doesn't trim that dangling lead byte itself, the resulting U+FFFD
+  // survives (the final MAX_FILE_BYTES trim never runs, since the shrunk
+  // content is already under the cap) and ends up in stored content.
+  const credential = "AKIA" + "B".repeat(16) + "\n"; // 21 bytes
+  const leadBytePos = 500_004 - 1;
+  const fillerLen = leadBytePos - credential.length;
+  const body = new Uint8Array(500_010);
+  body.set(new TextEncoder().encode(credential), 0);
+  body.fill(0x78, credential.length, credential.length + fillerLen);
+  body[leadBytePos] = 0xc3; // dangling lead byte of "é", cut off by the cap
+  body[leadBytePos + 1] = 0xa9; // continuation byte, past the network cap
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/config.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.content.includes("�"), false);
+    assertEquals(d.truncated, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file does not corrupt a complete non-UTF-8 file whose last byte looks like a UTF-8 lead byte", async () => {
+  const original = globalThis.fetch;
+  // "caf" followed by a raw 0xE9 (Latin-1 "é", not the 2-byte UTF-8 form).
+  // The file is complete — nowhere near the size cap — so the trailing
+  // 0xE9 is genuine content, not a network-cut dangling lead byte. Trimming
+  // it on a UTF-8 heuristic would silently drop a real byte from a file
+  // that was never truncated.
+  const body = new Uint8Array([0x63, 0x61, 0x66, 0xe9]);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/legacy.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, false);
+    assertEquals(d.content.length, 4);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file logs a warning and uses the shortest ref when multiple candidates resolve", async () => {
+  const original = globalThis.fetch;
+  // Both "feat" (with path "my-feature/README.md") and "feat/my-feature"
+  // (with path "README.md") resolve — e.g. a branch and a tag sharing a
+  // slash-containing name. The shortest-ref candidate must win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    // Exact-match (not includes) the query value — "ref=feat" is a substring
+    // of "ref=feat%2Fmy-feature", so a loose match would make both
+    // candidates resolve to this same branch and defeat the test.
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response("short-ref-content", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response("long-ref-content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources, getLogsByLevel } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat");
+    assertEquals(d.path, "my-feature/README.md");
+    assertEquals(d.content, "short-ref-content");
+    const warnLogs = getLogsByLevel("warning");
+    assertEquals(
+      warnLogs.some((l: any) => l.message.includes("Ambiguous ref/path")),
+      true,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file bounds the number of ref/path candidates probed for a deep path", async () => {
+  const original = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    requestCount++;
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    // 30 path segments after /-/blob/ would otherwise probe 29 candidates;
+    // the cap must stop it far short of that.
+    const deepPath = Array.from({ length: 30 }, (_, i) => `seg${i}`).join("/");
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: `https://git.example.org/group/proj/-/blob/${deepPath}` },
+          context as any,
+        ),
+      Error,
+    );
+    assertEquals(requestCount <= 10, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file keeps probing after a non-404 error on an earlier candidate", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate ("feat" / "my-feature/README.md") errors with a
+  // 422 instead of a clean 404 (e.g. GitLab rejecting a malformed ref); the
+  // longer, correct split ("feat/my-feature" / "README.md") must still be
+  // tried and win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(new Response("bad ref", { status: 422 }));
+    }
+    return Promise.resolve(
+      new Response("hello", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.path, "README.md");
+    assertEquals(d.content, "hello");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file surfaces the last error when every candidate fails non-404", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(new Response("server exploded", { status: 500 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: "https://git.example.org/group/proj/-/blob/main/f.txt" },
+          context as any,
+        ),
+      Error,
+      "500",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file rejects binary content (a NUL byte) instead of decoding it as text", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    // Real PNG bytes: magic header followed by an IHDR chunk whose length
+    // field is mostly zero bytes — representative of the NUL bytes that
+    // show up early in essentially every binary format.
+    return Promise.resolve(
+      new Response(
+        new Uint8Array([
+          0x89,
+          0x50,
+          0x4e,
+          0x47,
+          0x0d,
+          0x0a,
+          0x1a,
+          0x0a,
+          0x00,
+          0x00,
+          0x00,
+          0x0d,
+          0x49,
+          0x48,
+          0x44,
+          0x52,
+        ]),
+        {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        },
+      ),
+    );
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: "https://git.example.org/group/proj/-/blob/main/logo.png" },
+          context as any,
+        ),
+      Error,
+      "binary content detected",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file accepts a text file served with an unhelpful Content-Type (e.g. Dockerfile as application/octet-stream)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(`FROM alpine\nRUN echo hi\n`, {
+        status: 200,
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/Dockerfile" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.content, "FROM alpine\nRUN echo hi\n");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file warns when a binary candidate is skipped even though another split resolves as text", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate ("feat" / "my-feature/logo.png") is a real
+  // binary file; the correct long-ref split ("feat/my-feature" / "logo.png")
+  // happens to resolve as text. The binary candidate must not be silently
+  // dropped — a warning should note it was skipped.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response(new Uint8Array([0x00, 0x01, 0x02, 0x03]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response("hello", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources, getLogsByLevel } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/logo.png",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.content, "hello");
+    const warnLogs = getLogsByLevel("warning");
+    assertEquals(
+      warnLogs.some((l: any) => l.message.includes("Skipped binary content")),
+      true,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file surfaces the binary-content error over a later candidate's unrelated failure", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate resolves as binary; the long-ref candidate
+  // fails with an unrelated 500. The binary error is more useful (the
+  // target file was found, it's just an unsupported type) and must win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response(new Uint8Array([0x00, 0x01, 0x02, 0x03]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("server exploded", { status: 500 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          {
+            url:
+              "https://git.example.org/group/proj/-/blob/feat/my-feature/logo.png",
+          },
+          context as any,
+        ),
+      Error,
+      "binary content detected",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file reports truncated even when redaction shrinks content below the cap", async () => {
+  const original = globalThis.fetch;
+  // A file larger than the network read cap (500,004 bytes), with a
+  // credential near the start that redaction shrinks by 6 bytes (AKIA + 16
+  // chars -> "AKIA[REDACTED]"). If `truncated` were derived only from the
+  // post-redaction length, this would shrink to 499,998 bytes — under the
+  // 500,000-byte cap — and falsely report truncated=false despite real file
+  // data being dropped at the network layer.
+  // A trailing non-word byte is required after the credential so the
+  // regex's \b boundary actually matches — filler made of word characters
+  // (e.g. "x") right up against "...BBBB" would suppress the match entirely
+  // and make redactSecrets a no-op, hiding the scenario this test targets.
+  const credential = "AKIA" + "B".repeat(16) + "\n";
+  const filler = new Uint8Array(500_010 - credential.length).fill(0x78);
+  const body = new Uint8Array(500_010);
+  body.set(new TextEncoder().encode(credential), 0);
+  body.set(filler, credential.length);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/config.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file does not buffer an unbounded response body before truncating", async () => {
+  const original = globalThis.fetch;
+  const CHUNK = new Uint8Array(1024).fill(0x61); // 1KB of "a"
+  let chunksServed = 0;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Never signals done — a real oversized/streaming file. If the
+        // client buffered the whole body before truncating, this would
+        // hang (or exhaust memory) instead of completing.
+        chunksServed++;
+        controller.enqueue(CHUNK);
+      },
+    });
+    return Promise.resolve(
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/huge.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    assertEquals(d.content.length, 500_000);
+    // 500,004 bytes / 1KB chunks needs ~489 pulls; bounded reading must stop
+    // far short of thousands of pulls that an unbounded read would allow.
+    assertEquals(chunksServed < 1000, true);
   } finally {
     globalThis.fetch = original;
   }

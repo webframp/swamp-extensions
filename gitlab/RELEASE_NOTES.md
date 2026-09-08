@@ -1,3 +1,59 @@
+## 2026.09.08.2
+
+**Added:** `get_file` method — fetches a file's raw content at a given ref
+via the REST `repository/files/:path/raw` endpoint. Accepts a GitLab blob URL
+(e.g. `https://<host>/<group>/<project>/-/blob/<ref>/<path>`, the kind you'd
+paste from the web UI) and resolves `project`, `ref`, and `path` from it. A
+ref containing slashes (e.g. `feat/my-feature`) is disambiguated by probing
+the API for each plausible ref/path split, rather than guessing the first
+one. The URL's host must match the model instance's configured `host`,
+tolerating an explicit default port (`:443`) — a URL for a different GitLab
+instance is rejected. If more than one ref/path split resolves (e.g. a
+branch and a tag sharing a slash-containing name), a warning is logged and
+the shortest-ref candidate is used; probing is bounded to 10 splits so a
+pathologically deep path can't force an unbounded burst of API calls, and
+a non-404 error on one candidate (e.g. GitLab rejecting a malformed ref)
+no longer aborts the whole call — later candidates still get a chance to
+resolve. Writes a new `fileContent` resource,
+with a collision-resistant instance name (hashed project/ref/path) so
+distinct files with hyphenated components can't overwrite each other.
+Only text/code files are supported — binary content (images, archives,
+compiled artifacts) is detected by sniffing for a NUL byte, the same
+heuristic Git itself uses, rather than trusting `Content-Type` alone
+(GitLab's raw-file endpoint commonly serves extension-less text files
+like `Dockerfile` or `Jenkinsfile` as `application/octet-stream`). If a
+resolved candidate turns out to be binary while a different ref/path
+split resolves as text, that candidate is skipped and a warning notes it
+so the mismatch isn't silent — and if every candidate is either binary or
+missing, the binary rejection is what surfaces (it means the target file
+was found, just of an unsupported type), not a less useful later error.
+The response body is read up to the size cap and the rest of the stream
+is discarded, so an oversized file (a multi-GB vendored bundle, a SQL
+dump) is never fully buffered into memory before being trimmed down.
+Content is capped at 500KB measured in bytes (not JS string length),
+truncating on a UTF-8 codepoint boundary so a multi-byte character
+straddling the cap isn't corrupted into a replacement character, and
+common credential patterns are redacted, same as `get_job_log`'s trace
+handling. `truncated` reflects whether the network read itself was cut
+short, not just whether the post-redaction content still exceeds the
+cap — a large file with a credential near the front can shrink under
+500KB once redacted, but real data was still dropped upstream, so the
+flag stays honest instead of silently reporting a complete file. If the
+network read cap itself lands mid-character, the dangling lead byte at
+the tail is trimmed rather than decoded into a replacement character
+(U+FFFD) — this is checked independently of the final 500KB trim, since
+redaction can shrink content enough to skip that second trim entirely.
+That trim only applies when the read was actually cut short; a complete
+file's genuine trailing bytes (e.g. Latin-1 text ending in a byte that
+happens to match a UTF-8 lead-byte pattern) are left alone rather than
+guessed at. A malformed percent-escape in the URL (e.g. a real filename
+like `100%complete.md`) now surfaces as a descriptive error naming the
+URL instead of a bare `URIError`.
+
+**Upgrade note:** no schema or globalArguments change for existing resources.
+Running any method on an existing instance migrates it to `2026.09.08.2` as a
+no-op.
+
 ## 2026.09.08.1
 
 **Fixed:** the manifest description's method list (published to the registry

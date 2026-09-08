@@ -14,6 +14,12 @@ import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/gitlab";
 
+/** Cap (in bytes, not chars) on stored file content for get_file — guards against pasting a URL to a huge generated file. */
+const MAX_FILE_BYTES = 500_000;
+
+/** Cap on ref/path split candidates probed by get_file — guards against a pathologically deep blob URL path forcing an unbounded burst of API calls. */
+const MAX_REF_CANDIDATES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -787,6 +793,26 @@ const JobLogSchema = z.object({
   ),
 });
 
+const FileContentSchema = z.object({
+  project: z.string().describe("Project the file belongs to"),
+  ref: z.string().describe("Branch, tag, or commit the file was read at"),
+  path: z.string().describe("File path within the repository"),
+  content: z.string().describe(
+    "File content, redacted for common credential patterns; truncated at " +
+      `${MAX_FILE_BYTES / 1000}KB (bytes) for very large files`,
+  ),
+  truncated: z.boolean().describe(
+    "Whether the content was cut off at the size cap",
+  ),
+  fetchedAt: z.string().describe("Timestamp the file was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const RetryResultSchema = z.object({
   project: z.string().describe("Project the job/pipeline belongs to"),
   kind: z.enum(["job", "pipeline"]).describe(
@@ -1522,6 +1548,118 @@ class GitLabClient {
     }
     return resp.text();
   }
+
+  /**
+   * Like getProjectText, but returns null on a 404 instead of throwing, so
+   * callers can probe multiple candidate paths (e.g. disambiguating a ref
+   * that may contain slashes) without treating "not this one" as fatal.
+   * Rejects binary content (images, archives, compiled artifacts) rather
+   * than decoding it as corrupted text. Detection sniffs the fetched bytes
+   * for a NUL byte rather than trusting Content-Type alone — GitLab's
+   * raw-file endpoint commonly serves extension-less text files
+   * (Dockerfile, Jenkinsfile, Makefile) as application/octet-stream.
+   * The body is read up to maxBytes and the rest of the stream is
+   * discarded, so a huge file doesn't get fully buffered into memory
+   * before the caller's own size cap trims it back down.
+   */
+  async getProjectTextOrNull(
+    project: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<{ text: string; truncated: boolean } | null> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      headers: this.headers(),
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
+    }
+    const { bytes, truncated } = await readBoundedBytes(resp, maxBytes);
+    if (isBinaryContent(bytes)) {
+      throw new Error(
+        `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
+      );
+    }
+    // Only the truncated case can have a dangling multi-byte sequence at
+    // the tail caused by our own cap — an untruncated read is the complete
+    // file, and trimming its genuine trailing bytes on a UTF-8 heuristic
+    // would silently corrupt non-UTF-8 (e.g. Latin-1) text that happens to
+    // end in a byte matching a UTF-8 lead-byte pattern.
+    const text = truncated
+      ? decodeUtf8TrimmingIncompleteTail(bytes)
+      : new TextDecoder().decode(bytes);
+    return { text, truncated };
+  }
+}
+
+/**
+ * Reads at most maxBytes from a response body and cancels the underlying
+ * stream once that cap is reached, instead of buffering the entire body
+ * (which could be gigabytes) before the caller truncates it back down.
+ * `truncated` reports whether more data existed past maxBytes, so callers
+ * that also truncate downstream (e.g. after shrinking text via redaction)
+ * don't lose the signal that source data was actually cut off.
+ */
+async function readBoundedBytes(
+  resp: Response,
+  maxBytes: number,
+): Promise<{ bytes: Uint8Array; truncated: boolean }> {
+  if (!resp.body) {
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    return {
+      bytes: buf.length > maxBytes ? buf.slice(0, maxBytes) : buf,
+      truncated: buf.length > maxBytes,
+    };
+  }
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let truncated = false;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+    // A single chunk can carry more bytes than maxBytes (e.g. the whole
+    // body arrives in one read), so total can already exceed maxBytes here
+    // — that alone proves data was dropped. Only the exact-boundary case
+    // (total === maxBytes) is ambiguous and needs a peek to tell whether
+    // the stream happened to end right there or has more behind it.
+    if (total > maxBytes) {
+      truncated = true;
+    } else if (total === maxBytes) {
+      const { done } = await reader.read();
+      if (!done) truncated = true;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  const combined = new Uint8Array(Math.min(total, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    if (offset >= combined.length) break;
+    const take = Math.min(chunk.length, combined.length - offset);
+    combined.set(chunk.subarray(0, take), offset);
+    offset += take;
+  }
+  return { bytes: combined, truncated };
+}
+
+/**
+ * Whether a fetched file's bytes look binary rather than text, using the
+ * same NUL-byte heuristic Git uses to classify blobs: text files essentially
+ * never contain a NUL byte, while binary formats (images, archives,
+ * compiled artifacts) almost always do within the first few KB.
+ */
+function isBinaryContent(bytes: Uint8Array): boolean {
+  const sniffLength = Math.min(bytes.length, 8000);
+  for (let i = 0; i < sniffLength; i++) {
+    if (bytes[i] === 0) return true;
+  }
+  return false;
 }
 
 // =============================================================================
@@ -1547,6 +1685,141 @@ function mapMR(raw: any): z.infer<typeof MergeRequestSchema> {
 
 function sanitizeName(project: string): string {
   return project.replace(/\//g, "~");
+}
+
+/**
+ * Deterministic short hash (SHA-1, first 16 hex chars) for building
+ * collision-resistant resource instance names from variable components that
+ * may themselves contain the separator character used to join them.
+ */
+async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
+
+/**
+ * Normalizes a URL's host:port for comparison, stripping an explicit port
+ * when it matches the scheme's default (e.g. ":443" on https) so that
+ * "git.example.org" and "git.example.org:443" are recognized as the same
+ * host.
+ */
+function normalizedHostPort(url: URL): string {
+  const defaultPort = url.protocol === "https:" ? "443" : "80";
+  const port = url.port === "" || url.port === defaultPort ? "" : url.port;
+  return port ? `${url.hostname}:${port}` : url.hostname;
+}
+
+/**
+ * Decodes UTF-8 bytes up to (at most) maxBytes, trimming back to the nearest
+ * codepoint boundary so a multi-byte character straddling the cap is dropped
+ * whole rather than decoded as a replacement character (U+FFFD).
+ */
+function decodeUtf8UpToBoundary(bytes: Uint8Array, maxBytes: number): string {
+  let end = maxBytes;
+  // A UTF-8 continuation byte matches 0b10xxxxxx; back up over any trailing
+  // continuation bytes to land on a lead byte (or ASCII byte) boundary.
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) {
+    end--;
+  }
+  return new TextDecoder().decode(bytes.slice(0, end));
+}
+
+/**
+ * Decodes the full extent of a byte buffer that may itself end mid-codepoint
+ * (e.g. a network read cut off at an arbitrary byte, with no known cut
+ * position to check the following byte against). Unlike
+ * decodeUtf8UpToBoundary, which looks at the byte just past a known cut
+ * point, this walks backward from the buffer's actual end to find the last
+ * lead byte and checks whether enough continuation bytes followed it to
+ * form a complete sequence — trimming the whole incomplete tail if not.
+ */
+function decodeUtf8TrimmingIncompleteTail(bytes: Uint8Array): string {
+  let end = bytes.length;
+  let i = end - 1;
+  let continuationBytes = 0;
+  while (i >= 0 && (bytes[i] & 0xc0) === 0x80 && continuationBytes < 3) {
+    continuationBytes++;
+    i--;
+  }
+  // i can land on another continuation byte if the walk hit the 3-byte cap
+  // inside a longer run of them (malformed UTF-8) — that's not a lead byte,
+  // so there's no valid boundary to trim to; leave the buffer as-is rather
+  // than guessing.
+  if (i >= 0 && (bytes[i] & 0xc0) !== 0x80) {
+    const leadByte = bytes[i];
+    let seqLen = 1;
+    if ((leadByte & 0xf8) === 0xf0) seqLen = 4;
+    else if ((leadByte & 0xf0) === 0xe0) seqLen = 3;
+    else if ((leadByte & 0xe0) === 0xc0) seqLen = 2;
+    if (seqLen > 1 && end - i < seqLen) {
+      end = i;
+    }
+  }
+  return new TextDecoder().decode(bytes.slice(0, end));
+}
+
+/**
+ * Parses a GitLab blob URL (https://<host>/<project>/-/blob/<ref>/<path>)
+ * into its project and every plausible (ref, path) split of the remainder.
+ * GitLab's URL scheme concatenates ref and path with no distinguishing
+ * separator, so a ref containing slashes (e.g. "feat/my-feature") is
+ * ambiguous from the URL alone — candidates are returned shortest-ref-first
+ * so callers can probe the API and take the first split that actually
+ * resolves, rather than guessing.
+ */
+function parseBlobUrl(
+  url: string,
+  expectedHost: string,
+): { project: string; candidates: Array<{ ref: string; path: string }> } {
+  const parsed = new URL(url);
+  const expected = new URL(`https://${expectedHost}`);
+  if (normalizedHostPort(parsed) !== normalizedHostPort(expected)) {
+    throw new Error(
+      `URL host ${parsed.host} does not match configured host ${expectedHost}`,
+    );
+  }
+  const pathname = parsed.pathname.replace(/^\//, "");
+  const marker = "/-/blob/";
+  const idx = pathname.indexOf(marker);
+  if (idx === -1) {
+    throw new Error(`URL is not a GitLab blob URL (missing /-/blob/): ${url}`);
+  }
+  const project = decodeUriComponentOrThrow(pathname.slice(0, idx), url);
+  const rest = pathname.slice(idx + marker.length);
+  const segments = rest.split("/").filter((s) => s.length > 0);
+  if (!project || segments.length < 2) {
+    throw new Error(`Could not parse project/ref/path from URL: ${url}`);
+  }
+  const candidates: Array<{ ref: string; path: string }> = [];
+  const maxSplit = Math.min(segments.length - 1, MAX_REF_CANDIDATES);
+  for (let i = 1; i <= maxSplit; i++) {
+    candidates.push({
+      ref: decodeUriComponentOrThrow(segments.slice(0, i).join("/"), url),
+      path: decodeUriComponentOrThrow(segments.slice(i).join("/"), url),
+    });
+  }
+  return { project, candidates };
+}
+
+/**
+ * decodeURIComponent throws a bare, unhelpful URIError on a malformed
+ * percent-escape (e.g. a literal "%" not followed by two hex digits, as in
+ * a real filename like "100%complete.md"). Rethrows with the offending URL
+ * so this failure is as diagnosable as every other rejection in
+ * parseBlobUrl, instead of surfacing as an unrelated-looking crash.
+ */
+function decodeUriComponentOrThrow(segment: string, url: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new Error(`Malformed percent-encoding in blob URL: ${url}`);
+  }
 }
 
 /**
@@ -1582,7 +1855,10 @@ type ModelContext = {
     instance: string,
     data: unknown,
   ) => Promise<{ name: string }>;
-  logger: { info: (msg: string, props: Record<string, unknown>) => void };
+  logger: {
+    info: (msg: string, props: Record<string, unknown>) => void;
+    warn: (msg: string, props: Record<string, unknown>) => void;
+  };
 };
 
 // =============================================================================
@@ -1592,7 +1868,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.08.1",
+  version: "2026.09.08.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1700,6 +1976,14 @@ export const model = {
         "in code but missing from the registry-facing method list).",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.08.2",
+      description:
+        "Added the get_file method (fileContent resource; no globalArguments " +
+        "change). Fetches a file's raw content at a ref from a pasted GitLab " +
+        "blob URL, for impact review of a specific config/policy file.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -1725,6 +2009,12 @@ export const model = {
     commits: {
       description: "List of commits for a project",
       schema: CommitListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    fileContent: {
+      description: "Raw content of a file at a given ref",
+      schema: FileContentSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2071,6 +2361,140 @@ export const model = {
         ctx.logger.info("Found {count} commits for {project}", {
           count: commits.length,
           project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_file: {
+      description:
+        "Fetch a file's raw content at a given ref via GitLab's REST raw-file " +
+        "endpoint. Accepts a GitLab blob URL (https://<host>/<project>/-/blob/" +
+        "<ref>/<path>, e.g. pasted from the web UI) and resolves project, ref, " +
+        "and path from it — the URL's host must match this instance's " +
+        "configured host. A ref containing slashes is disambiguated by " +
+        "probing the API, since GitLab's URL scheme does not mark where the " +
+        `ref ends and the path begins (up to ${MAX_REF_CANDIDATES} splits). ` +
+        "Content is capped at " +
+        `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
+        "redacted. Only text/code files are supported — binary content " +
+        "(images, archives, compiled artifacts) is detected and rejected " +
+        "rather than decoded as corrupted text.",
+      arguments: z.object({
+        url: z.string().min(1).url().describe(
+          "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>",
+        ),
+      }),
+      execute: async (args: { url: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
+        const { project, candidates } = parseBlobUrl(
+          args.url,
+          ctx.globalArgs.host,
+        );
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const matches: Array<
+          { ref: string; path: string; raw: string; sourceTruncated: boolean }
+        > = [];
+        const skippedBinaryRefs: string[] = [];
+        let binaryError: unknown;
+        let lastError: unknown;
+        for (const candidate of candidates) {
+          try {
+            const result = await client.getProjectTextOrNull(
+              project,
+              `/repository/files/${
+                encodeURIComponent(candidate.path)
+              }/raw?ref=${encodeURIComponent(candidate.ref)}`,
+              MAX_FILE_BYTES + 4,
+            );
+            if (result !== null) {
+              matches.push({
+                ref: candidate.ref,
+                path: candidate.path,
+                raw: result.text,
+                sourceTruncated: result.truncated,
+              });
+            }
+          } catch (err) {
+            // A non-404 error (e.g. GitLab rejecting a malformed ref, or a
+            // binary-content rejection) rules out this candidate, not every
+            // remaining one — keep probing and only surface the error if
+            // nothing else resolves.
+            if (
+              err instanceof Error &&
+              err.message.includes("binary content detected")
+            ) {
+              skippedBinaryRefs.push(candidate.ref);
+              binaryError ??= err;
+            }
+            lastError = err;
+          }
+        }
+        if (matches.length === 0) {
+          // A binary-content rejection is more useful than a later,
+          // unrelated candidate's error (e.g. a transient 500) — the file
+          // the URL pointed at was found, it's just an unsupported type.
+          if (binaryError) throw binaryError;
+          if (lastError) throw lastError;
+          throw new Error(
+            `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
+          );
+        }
+        if (matches.length > 1) {
+          ctx.logger.warn(
+            "Ambiguous ref/path split for {url}: {count} candidates resolved " +
+              "in {project} (e.g. a branch and a tag sharing a slash-containing " +
+              "name); using the shortest ref match {ref}",
+            {
+              url: args.url,
+              count: matches.length,
+              project,
+              ref: matches[0].ref,
+            },
+          );
+        }
+        if (skippedBinaryRefs.length > 0) {
+          ctx.logger.warn(
+            "Skipped binary content for {url}: ref(s) {refs} in {project} " +
+              "resolved but were rejected as binary; using text match {ref} " +
+              "instead — verify this is the file you intended",
+            {
+              url: args.url,
+              refs: skippedBinaryRefs.join(", "),
+              project,
+              ref: matches[0].ref,
+            },
+          );
+        }
+        const { ref, path, raw, sourceTruncated } = matches[0];
+        const redacted = redactSecrets(raw);
+        const encoded = new TextEncoder().encode(redacted);
+        const truncated = sourceTruncated || encoded.length > MAX_FILE_BYTES;
+        const content = encoded.length > MAX_FILE_BYTES
+          ? decodeUtf8UpToBoundary(encoded, MAX_FILE_BYTES)
+          : redacted;
+        const instanceName = await shortHash(`${project}\0${ref}\0${path}`);
+        const handle = await ctx.writeResource(
+          "fileContent",
+          instanceName,
+          {
+            project,
+            ref,
+            path,
+            content,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Fetched {path} @ {ref} from {project}", {
+          path,
+          ref,
+          project,
         });
         return { dataHandles: [handle] };
       },
