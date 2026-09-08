@@ -1592,7 +1592,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.02.1",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1690,6 +1690,15 @@ export const model = {
         } = old;
         return rest;
       },
+    },
+    {
+      toVersion: "2026.09.08.1",
+      description:
+        "No schema changes — manifest description now lists all methods " +
+        "(list_commits, get_issue, list_mr_discussions, resolve_mr_discussion, " +
+        "set_mr_reviewers, remove_mr_reviewers, unassign_from_mrs were shipped " +
+        "in code but missing from the registry-facing method list).",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
   reports: ["@webframp/review-dashboard"],
