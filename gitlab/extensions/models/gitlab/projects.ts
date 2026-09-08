@@ -1566,7 +1566,7 @@ class GitLabClient {
     project: string,
     path: string,
     maxBytes: number,
-  ): Promise<string | null> {
+  ): Promise<{ text: string; truncated: boolean } | null> {
     const resp = await fetch(`${this.projectUrl(project)}${path}`, {
       headers: this.headers(),
     });
@@ -1575,13 +1575,13 @@ class GitLabClient {
       const text = await resp.text();
       throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
     }
-    const bytes = await readBoundedBytes(resp, maxBytes);
+    const { bytes, truncated } = await readBoundedBytes(resp, maxBytes);
     if (isBinaryContent(bytes)) {
       throw new Error(
         `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
       );
     }
-    return new TextDecoder().decode(bytes);
+    return { text: decodeUtf8UpToBoundary(bytes, bytes.length), truncated };
   }
 }
 
@@ -1589,24 +1589,35 @@ class GitLabClient {
  * Reads at most maxBytes from a response body and cancels the underlying
  * stream once that cap is reached, instead of buffering the entire body
  * (which could be gigabytes) before the caller truncates it back down.
+ * `truncated` reports whether more data existed past maxBytes, so callers
+ * that also truncate downstream (e.g. after shrinking text via redaction)
+ * don't lose the signal that source data was actually cut off.
  */
 async function readBoundedBytes(
   resp: Response,
   maxBytes: number,
-): Promise<Uint8Array> {
+): Promise<{ bytes: Uint8Array; truncated: boolean }> {
   if (!resp.body) {
     const buf = new Uint8Array(await resp.arrayBuffer());
-    return buf.length > maxBytes ? buf.slice(0, maxBytes) : buf;
+    return {
+      bytes: buf.length > maxBytes ? buf.slice(0, maxBytes) : buf,
+      truncated: buf.length > maxBytes,
+    };
   }
   const reader = resp.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
+  let truncated = false;
   try {
     while (total < maxBytes) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
       total += value.length;
+    }
+    if (total >= maxBytes) {
+      const { done } = await reader.read();
+      if (!done) truncated = true;
     }
   } finally {
     await reader.cancel().catch(() => {});
@@ -1619,7 +1630,7 @@ async function readBoundedBytes(
     combined.set(chunk.subarray(0, take), offset);
     offset += take;
   }
-  return combined;
+  return { bytes: combined, truncated };
 }
 
 /**
@@ -2320,21 +2331,28 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const matches: Array<{ ref: string; path: string; raw: string }> = [];
+        const matches: Array<
+          { ref: string; path: string; raw: string; sourceTruncated: boolean }
+        > = [];
         const skippedBinaryRefs: string[] = [];
         let binaryError: unknown;
         let lastError: unknown;
         for (const candidate of candidates) {
           try {
-            const raw = await client.getProjectTextOrNull(
+            const result = await client.getProjectTextOrNull(
               project,
               `/repository/files/${
                 encodeURIComponent(candidate.path)
               }/raw?ref=${encodeURIComponent(candidate.ref)}`,
               MAX_FILE_BYTES + 4,
             );
-            if (raw !== null) {
-              matches.push({ ref: candidate.ref, path: candidate.path, raw });
+            if (result !== null) {
+              matches.push({
+                ref: candidate.ref,
+                path: candidate.path,
+                raw: result.text,
+                sourceTruncated: result.truncated,
+              });
             }
           } catch (err) {
             // A non-404 error (e.g. GitLab rejecting a malformed ref, or a
@@ -2387,11 +2405,11 @@ export const model = {
             },
           );
         }
-        const { ref, path, raw } = matches[0];
+        const { ref, path, raw, sourceTruncated } = matches[0];
         const redacted = redactSecrets(raw);
         const encoded = new TextEncoder().encode(redacted);
-        const truncated = encoded.length > MAX_FILE_BYTES;
-        const content = truncated
+        const truncated = sourceTruncated || encoded.length > MAX_FILE_BYTES;
+        const content = encoded.length > MAX_FILE_BYTES
           ? decodeUtf8UpToBoundary(encoded, MAX_FILE_BYTES)
           : redacted;
         const instanceName = await shortHash(`${project}\0${ref}\0${path}`);

@@ -2060,6 +2060,43 @@ Deno.test("get_file surfaces the binary-content error over a later candidate's u
   }
 });
 
+Deno.test("get_file reports truncated even when redaction shrinks content below the cap", async () => {
+  const original = globalThis.fetch;
+  // A file larger than the network read cap (500,004 bytes), with a
+  // credential near the start that redaction shrinks by 6 bytes (AKIA + 16
+  // chars -> "AKIA[REDACTED]"). If `truncated` were derived only from the
+  // post-redaction length, this would shrink to 499,998 bytes — under the
+  // 500,000-byte cap — and falsely report truncated=false despite real file
+  // data being dropped at the network layer.
+  const credential = "AKIA" + "B".repeat(16);
+  const filler = new Uint8Array(500_010 - credential.length).fill(0x78);
+  const body = new Uint8Array(500_010);
+  body.set(new TextEncoder().encode(credential), 0);
+  body.set(filler, credential.length);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/config.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_file does not buffer an unbounded response body before truncating", async () => {
   const original = globalThis.fetch;
   const CHUNK = new Uint8Array(1024).fill(0x61); // 1KB of "a"

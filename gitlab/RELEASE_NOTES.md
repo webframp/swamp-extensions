@@ -34,7 +34,11 @@ Content is capped at 500KB measured in bytes (not JS string length),
 truncating on a UTF-8 codepoint boundary so a multi-byte character
 straddling the cap isn't corrupted into a replacement character, and
 common credential patterns are redacted, same as `get_job_log`'s trace
-handling.
+handling. `truncated` reflects whether the network read itself was cut
+short, not just whether the post-redaction content still exceeds the
+cap — a large file with a credential near the front can shrink under
+500KB once redacted, but real data was still dropped upstream, so the
+flag stays honest instead of silently reporting a complete file.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a
