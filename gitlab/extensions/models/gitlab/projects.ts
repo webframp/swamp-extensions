@@ -1790,7 +1790,7 @@ function parseBlobUrl(
   if (idx === -1) {
     throw new Error(`URL is not a GitLab blob URL (missing /-/blob/): ${url}`);
   }
-  const project = decodeURIComponent(pathname.slice(0, idx));
+  const project = decodeUriComponentOrThrow(pathname.slice(0, idx), url);
   const rest = pathname.slice(idx + marker.length);
   const segments = rest.split("/").filter((s) => s.length > 0);
   if (!project || segments.length < 2) {
@@ -1800,11 +1800,26 @@ function parseBlobUrl(
   const maxSplit = Math.min(segments.length - 1, MAX_REF_CANDIDATES);
   for (let i = 1; i <= maxSplit; i++) {
     candidates.push({
-      ref: decodeURIComponent(segments.slice(0, i).join("/")),
-      path: decodeURIComponent(segments.slice(i).join("/")),
+      ref: decodeUriComponentOrThrow(segments.slice(0, i).join("/"), url),
+      path: decodeUriComponentOrThrow(segments.slice(i).join("/"), url),
     });
   }
   return { project, candidates };
+}
+
+/**
+ * decodeURIComponent throws a bare, unhelpful URIError on a malformed
+ * percent-escape (e.g. a literal "%" not followed by two hex digits, as in
+ * a real filename like "100%complete.md"). Rethrows with the offending URL
+ * so this failure is as diagnosable as every other rejection in
+ * parseBlobUrl, instead of surfacing as an unrelated-looking crash.
+ */
+function decodeUriComponentOrThrow(segment: string, url: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new Error(`Malformed percent-encoding in blob URL: ${url}`);
+  }
 }
 
 /**

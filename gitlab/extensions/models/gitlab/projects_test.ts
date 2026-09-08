@@ -1675,6 +1675,26 @@ Deno.test("get_file throws when no ref/path split resolves against the API", asy
   }
 });
 
+Deno.test("get_file throws a descriptive error on a malformed percent-encoding in the URL", async () => {
+  // A literal "%" not followed by two hex digits (e.g. a real filename like
+  // "100%complete.md") makes decodeURIComponent throw a bare URIError.
+  // No fetch should even happen — parsing fails before any network call.
+  const { context } = createModelTestContext({
+    globalArgs: TEST_GLOBAL_ARGS,
+  });
+  await assertRejects(
+    () =>
+      model.methods.get_file.execute(
+        {
+          url: "https://git.example.org/group/proj/-/blob/main/100%complete.md",
+        },
+        context as any,
+      ),
+    Error,
+    "Malformed percent-encoding",
+  );
+});
+
 Deno.test("get_file writes collision-resistant instance names for distinct project/ref/path triples", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {

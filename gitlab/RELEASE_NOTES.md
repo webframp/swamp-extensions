@@ -46,7 +46,9 @@ redaction can shrink content enough to skip that second trim entirely.
 That trim only applies when the read was actually cut short; a complete
 file's genuine trailing bytes (e.g. Latin-1 text ending in a byte that
 happens to match a UTF-8 lead-byte pattern) are left alone rather than
-guessed at.
+guessed at. A malformed percent-escape in the URL (e.g. a real filename
+like `100%complete.md`) now surfaces as a descriptive error naming the
+URL instead of a bare `URIError`.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a
