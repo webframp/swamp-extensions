@@ -14,8 +14,8 @@ import { z } from "npm:zod@4.4.3";
 
 const EXTENSION_NAME = "@webframp/gitlab";
 
-/** Cap on stored file content for get_file — guards against pasting a URL to a huge generated file. */
-const MAX_FILE_CHARS = 500_000;
+/** Cap (in bytes, not chars) on stored file content for get_file — guards against pasting a URL to a huge generated file. */
+const MAX_FILE_BYTES = 500_000;
 
 // =============================================================================
 // Schemas
@@ -796,7 +796,7 @@ const FileContentSchema = z.object({
   path: z.string().describe("File path within the repository"),
   content: z.string().describe(
     "File content, redacted for common credential patterns; truncated at " +
-      `${MAX_FILE_CHARS / 1000}KB for very large files`,
+      `${MAX_FILE_BYTES / 1000}KB (bytes) for very large files`,
   ),
   truncated: z.boolean().describe(
     "Whether the content was cut off at the size cap",
@@ -1545,6 +1545,26 @@ class GitLabClient {
     }
     return resp.text();
   }
+
+  /**
+   * Like getProjectText, but returns null on a 404 instead of throwing, so
+   * callers can probe multiple candidate paths (e.g. disambiguating a ref
+   * that may contain slashes) without treating "not this one" as fatal.
+   */
+  async getProjectTextOrNull(
+    project: string,
+    path: string,
+  ): Promise<string | null> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      headers: this.headers(),
+    });
+    if (resp.status === 404) return null;
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.text();
+  }
 }
 
 // =============================================================================
@@ -1573,18 +1593,49 @@ function sanitizeName(project: string): string {
 }
 
 /**
+ * Deterministic short hash (SHA-1, first 16 hex chars) for building
+ * collision-resistant resource instance names from variable components that
+ * may themselves contain the separator character used to join them.
+ */
+async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
+}
+
+/**
+ * Normalizes a URL's host:port for comparison, stripping an explicit port
+ * when it matches the scheme's default (e.g. ":443" on https) so that
+ * "git.example.org" and "git.example.org:443" are recognized as the same
+ * host.
+ */
+function normalizedHostPort(url: URL): string {
+  const defaultPort = url.protocol === "https:" ? "443" : "80";
+  const port = url.port === "" || url.port === defaultPort ? "" : url.port;
+  return port ? `${url.hostname}:${port}` : url.hostname;
+}
+
+/**
  * Parses a GitLab blob URL (https://<host>/<project>/-/blob/<ref>/<path>)
- * into its project, ref, and path components. Assumes the ref itself
- * contains no slashes (true for branch names like main/master and tags) —
- * GitLab's own URL scheme is ambiguous for refs with slashes, since the
- * ref and path are concatenated with no distinguishing separator.
+ * into its project and every plausible (ref, path) split of the remainder.
+ * GitLab's URL scheme concatenates ref and path with no distinguishing
+ * separator, so a ref containing slashes (e.g. "feat/my-feature") is
+ * ambiguous from the URL alone — candidates are returned shortest-ref-first
+ * so callers can probe the API and take the first split that actually
+ * resolves, rather than guessing.
  */
 function parseBlobUrl(
   url: string,
   expectedHost: string,
-): { project: string; ref: string; path: string } {
+): { project: string; candidates: Array<{ ref: string; path: string }> } {
   const parsed = new URL(url);
-  if (parsed.host !== expectedHost) {
+  const expected = new URL(`https://${expectedHost}`);
+  if (normalizedHostPort(parsed) !== normalizedHostPort(expected)) {
     throw new Error(
       `URL host ${parsed.host} does not match configured host ${expectedHost}`,
     );
@@ -1597,16 +1648,18 @@ function parseBlobUrl(
   }
   const project = decodeURIComponent(pathname.slice(0, idx));
   const rest = pathname.slice(idx + marker.length);
-  const slashIdx = rest.indexOf("/");
-  if (!project || slashIdx === -1) {
+  const segments = rest.split("/").filter((s) => s.length > 0);
+  if (!project || segments.length < 2) {
     throw new Error(`Could not parse project/ref/path from URL: ${url}`);
   }
-  const ref = decodeURIComponent(rest.slice(0, slashIdx));
-  const path = decodeURIComponent(rest.slice(slashIdx + 1));
-  if (!ref || !path) {
-    throw new Error(`Could not parse project/ref/path from URL: ${url}`);
+  const candidates: Array<{ ref: string; path: string }> = [];
+  for (let i = 1; i < segments.length; i++) {
+    candidates.push({
+      ref: decodeURIComponent(segments.slice(0, i).join("/")),
+      path: decodeURIComponent(segments.slice(i).join("/")),
+    });
   }
-  return { project, ref, path };
+  return { project, candidates };
 }
 
 /**
@@ -2154,10 +2207,12 @@ export const model = {
       description:
         "Fetch a file's raw content at a given ref via GitLab's REST raw-file " +
         "endpoint. Accepts a GitLab blob URL (https://<host>/<project>/-/blob/" +
-        "<ref>/<path>, e.g. pasted from the web UI) and parses project, ref, " +
+        "<ref>/<path>, e.g. pasted from the web UI) and resolves project, ref, " +
         "and path from it — the URL's host must match this instance's " +
-        "configured host. Content is capped at " +
-        `${MAX_FILE_CHARS / 1000}KB and common credential patterns are ` +
+        "configured host. A ref containing slashes is disambiguated by " +
+        "probing the API, since GitLab's URL scheme does not mark where the " +
+        "ref ends and the path begins. Content is capped at " +
+        `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
         "redacted.",
       arguments: z.object({
         url: z.string().min(1).url().describe(
@@ -2166,7 +2221,7 @@ export const model = {
       }),
       execute: async (args: { url: string }, ctx: ModelContext) => {
         const startMs = Date.now();
-        const { project, ref, path } = parseBlobUrl(
+        const { project, candidates } = parseBlobUrl(
           args.url,
           ctx.globalArgs.host,
         );
@@ -2174,20 +2229,35 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const raw = await client.getProjectText(
-          project,
-          `/repository/files/${encodeURIComponent(path)}/raw?ref=${
-            encodeURIComponent(ref)
-          }`,
-        );
+        let resolved: { ref: string; path: string; raw: string } | undefined;
+        for (const candidate of candidates) {
+          const raw = await client.getProjectTextOrNull(
+            project,
+            `/repository/files/${encodeURIComponent(candidate.path)}/raw?ref=${
+              encodeURIComponent(candidate.ref)
+            }`,
+          );
+          if (raw !== null) {
+            resolved = { ref: candidate.ref, path: candidate.path, raw };
+            break;
+          }
+        }
+        if (!resolved) {
+          throw new Error(
+            `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
+          );
+        }
+        const { ref, path, raw } = resolved;
         const redacted = redactSecrets(raw);
-        const truncated = redacted.length > MAX_FILE_CHARS;
+        const encoded = new TextEncoder().encode(redacted);
+        const truncated = encoded.length > MAX_FILE_BYTES;
         const content = truncated
-          ? redacted.slice(0, MAX_FILE_CHARS)
+          ? new TextDecoder().decode(encoded.slice(0, MAX_FILE_BYTES))
           : redacted;
+        const instanceName = await shortHash(`${project}\0${ref}\0${path}`);
         const handle = await ctx.writeResource(
           "fileContent",
-          `${sanitizeName(project)}-${sanitizeName(ref)}-${sanitizeName(path)}`,
+          instanceName,
           {
             project,
             ref,

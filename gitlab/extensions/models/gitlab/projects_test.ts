@@ -1605,6 +1605,109 @@ Deno.test("get_file decodes a percent-encoded ref instead of double-encoding it"
   }
 });
 
+Deno.test("get_file disambiguates a ref containing slashes by probing candidates", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    // Only the longer ref candidate ("feat/my-feature") actually exists;
+    // the shorter candidate ("feat" as ref, "my-feature/README.md" as path)
+    // must 404 so the method falls through to the correct split.
+    if (
+      url.includes("/repository/files/README.md/raw") &&
+      url.includes(`ref=${encodeURIComponent("feat/my-feature")}`)
+    ) {
+      return Promise.resolve(
+        new Response("hello", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.path, "README.md");
+    assertEquals(d.content, "hello");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file throws when no ref/path split resolves against the API", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          {
+            url:
+              "https://git.example.org/group/proj/-/blob/nonexistent/file.txt",
+          },
+          context as any,
+        ),
+      Error,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file writes collision-resistant instance names for distinct project/ref/path triples", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response("content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context: ctxA, getWrittenResources: writtenA } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/foo-bar/-/blob/baz/qux.txt" },
+      ctxA as any,
+    );
+    const nameA = writtenA().find((x) => x.specName === "fileContent")!.name;
+
+    const { context: ctxB, getWrittenResources: writtenB } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/foo/-/blob/bar-baz/qux.txt" },
+      ctxB as any,
+    );
+    const nameB = writtenB().find((x) => x.specName === "fileContent")!.name;
+
+    assertEquals(nameA === nameB, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {
