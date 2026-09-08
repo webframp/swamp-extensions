@@ -2018,6 +2018,89 @@ Deno.test("get_file warns when a binary candidate is skipped even though another
   }
 });
 
+Deno.test("get_file surfaces the binary-content error over a later candidate's unrelated failure", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate resolves as binary; the long-ref candidate
+  // fails with an unrelated 500. The binary error is more useful (the
+  // target file was found, it's just an unsupported type) and must win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response(new Uint8Array([0x00, 0x01, 0x02, 0x03]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("server exploded", { status: 500 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          {
+            url:
+              "https://git.example.org/group/proj/-/blob/feat/my-feature/logo.png",
+          },
+          context as any,
+        ),
+      Error,
+      "binary content detected",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file does not buffer an unbounded response body before truncating", async () => {
+  const original = globalThis.fetch;
+  const CHUNK = new Uint8Array(1024).fill(0x61); // 1KB of "a"
+  let chunksServed = 0;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Never signals done — a real oversized/streaming file. If the
+        // client buffered the whole body before truncating, this would
+        // hang (or exhaust memory) instead of completing.
+        chunksServed++;
+        controller.enqueue(CHUNK);
+      },
+    });
+    return Promise.resolve(
+      new Response(stream, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/huge.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    assertEquals(d.content.length, 500_000);
+    // 500,004 bytes / 1KB chunks needs ~489 pulls; bounded reading must stop
+    // far short of thousands of pulls that an unbounded read would allow.
+    assertEquals(chunksServed < 1000, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {

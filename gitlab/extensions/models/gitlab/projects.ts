@@ -1558,10 +1558,14 @@ class GitLabClient {
    * for a NUL byte rather than trusting Content-Type alone — GitLab's
    * raw-file endpoint commonly serves extension-less text files
    * (Dockerfile, Jenkinsfile, Makefile) as application/octet-stream.
+   * The body is read up to maxBytes and the rest of the stream is
+   * discarded, so a huge file doesn't get fully buffered into memory
+   * before the caller's own size cap trims it back down.
    */
   async getProjectTextOrNull(
     project: string,
     path: string,
+    maxBytes: number,
   ): Promise<string | null> {
     const resp = await fetch(`${this.projectUrl(project)}${path}`, {
       headers: this.headers(),
@@ -1571,7 +1575,7 @@ class GitLabClient {
       const text = await resp.text();
       throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
     }
-    const bytes = new Uint8Array(await resp.arrayBuffer());
+    const bytes = await readBoundedBytes(resp, maxBytes);
     if (isBinaryContent(bytes)) {
       throw new Error(
         `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
@@ -1579,6 +1583,43 @@ class GitLabClient {
     }
     return new TextDecoder().decode(bytes);
   }
+}
+
+/**
+ * Reads at most maxBytes from a response body and cancels the underlying
+ * stream once that cap is reached, instead of buffering the entire body
+ * (which could be gigabytes) before the caller truncates it back down.
+ */
+async function readBoundedBytes(
+  resp: Response,
+  maxBytes: number,
+): Promise<Uint8Array> {
+  if (!resp.body) {
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    return buf.length > maxBytes ? buf.slice(0, maxBytes) : buf;
+  }
+  const reader = resp.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  const combined = new Uint8Array(Math.min(total, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    if (offset >= combined.length) break;
+    const take = Math.min(chunk.length, combined.length - offset);
+    combined.set(chunk.subarray(0, take), offset);
+    offset += take;
+  }
+  return combined;
 }
 
 /**
@@ -2281,6 +2322,7 @@ export const model = {
         );
         const matches: Array<{ ref: string; path: string; raw: string }> = [];
         const skippedBinaryRefs: string[] = [];
+        let binaryError: unknown;
         let lastError: unknown;
         for (const candidate of candidates) {
           try {
@@ -2289,6 +2331,7 @@ export const model = {
               `/repository/files/${
                 encodeURIComponent(candidate.path)
               }/raw?ref=${encodeURIComponent(candidate.ref)}`,
+              MAX_FILE_BYTES + 4,
             );
             if (raw !== null) {
               matches.push({ ref: candidate.ref, path: candidate.path, raw });
@@ -2303,11 +2346,16 @@ export const model = {
               err.message.includes("binary content detected")
             ) {
               skippedBinaryRefs.push(candidate.ref);
+              binaryError ??= err;
             }
             lastError = err;
           }
         }
         if (matches.length === 0) {
+          // A binary-content rejection is more useful than a later,
+          // unrelated candidate's error (e.g. a transient 500) — the file
+          // the URL pointed at was found, it's just an unsupported type.
+          if (binaryError) throw binaryError;
           if (lastError) throw lastError;
           throw new Error(
             `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
