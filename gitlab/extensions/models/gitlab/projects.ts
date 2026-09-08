@@ -1595,13 +1595,13 @@ function parseBlobUrl(
   if (idx === -1) {
     throw new Error(`URL is not a GitLab blob URL (missing /-/blob/): ${url}`);
   }
-  const project = pathname.slice(0, idx);
+  const project = decodeURIComponent(pathname.slice(0, idx));
   const rest = pathname.slice(idx + marker.length);
   const slashIdx = rest.indexOf("/");
   if (!project || slashIdx === -1) {
     throw new Error(`Could not parse project/ref/path from URL: ${url}`);
   }
-  const ref = rest.slice(0, slashIdx);
+  const ref = decodeURIComponent(rest.slice(0, slashIdx));
   const path = decodeURIComponent(rest.slice(slashIdx + 1));
   if (!ref || !path) {
     throw new Error(`Could not parse project/ref/path from URL: ${url}`);

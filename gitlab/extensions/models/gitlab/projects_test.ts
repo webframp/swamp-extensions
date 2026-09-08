@@ -1565,6 +1565,46 @@ Deno.test("get_file truncates content beyond the size cap", async () => {
   }
 });
 
+Deno.test("get_file decodes a percent-encoded ref instead of double-encoding it", async () => {
+  const original = globalThis.fetch;
+  // "café" as it would appear in a browser-copied blob URL.
+  const encodedRef = encodeURIComponent("café");
+  let requestedUrl = "";
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    requestedUrl = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    return Promise.resolve(
+      new Response("content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url: `https://git.example.org/group/proj/-/blob/${encodedRef}/f.txt`,
+      },
+      context as any,
+    );
+    // The request sent to GitLab must carry a single level of encoding for
+    // "café", not the double-encoded "caf%25C3%25A9".
+    assertEquals(requestedUrl.includes(`ref=${encodedRef}`), true);
+    assertEquals(requestedUrl.includes("%25"), false);
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "café");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {
