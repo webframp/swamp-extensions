@@ -2068,7 +2068,11 @@ Deno.test("get_file reports truncated even when redaction shrinks content below 
   // post-redaction length, this would shrink to 499,998 bytes — under the
   // 500,000-byte cap — and falsely report truncated=false despite real file
   // data being dropped at the network layer.
-  const credential = "AKIA" + "B".repeat(16);
+  // A trailing non-word byte is required after the credential so the
+  // regex's \b boundary actually matches — filler made of word characters
+  // (e.g. "x") right up against "...BBBB" would suppress the match entirely
+  // and make redactSecrets a no-op, hiding the scenario this test targets.
+  const credential = "AKIA" + "B".repeat(16) + "\n";
   const filler = new Uint8Array(500_010 - credential.length).fill(0x78);
   const body = new Uint8Array(500_010);
   body.set(new TextEncoder().encode(credential), 0);

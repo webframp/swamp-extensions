@@ -1615,7 +1615,14 @@ async function readBoundedBytes(
       chunks.push(value);
       total += value.length;
     }
-    if (total >= maxBytes) {
+    // A single chunk can carry more bytes than maxBytes (e.g. the whole
+    // body arrives in one read), so total can already exceed maxBytes here
+    // — that alone proves data was dropped. Only the exact-boundary case
+    // (total === maxBytes) is ambiguous and needs a peek to tell whether
+    // the stream happened to end right there or has more behind it.
+    if (total > maxBytes) {
+      truncated = true;
+    } else if (total === maxBytes) {
       const { done } = await reader.read();
       if (!done) truncated = true;
     }
