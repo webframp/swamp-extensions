@@ -10,7 +10,9 @@ one. The URL's host must match the model instance's configured `host`,
 tolerating an explicit default port (`:443`) — a URL for a different GitLab
 instance is rejected. If more than one ref/path split resolves (e.g. a
 branch and a tag sharing a slash-containing name), a warning is logged and
-the shortest-ref candidate is used. Writes a new `fileContent` resource,
+the shortest-ref candidate is used; probing is bounded to 10 splits so a
+pathologically deep path can't force an unbounded burst of API calls.
+Writes a new `fileContent` resource,
 with a collision-resistant instance name (hashed project/ref/path) so
 distinct files with hyphenated components can't overwrite each other.
 Content is capped at 500KB measured in bytes (not JS string length),

@@ -1793,6 +1793,34 @@ Deno.test("get_file logs a warning and uses the shortest ref when multiple candi
   }
 });
 
+Deno.test("get_file bounds the number of ref/path candidates probed for a deep path", async () => {
+  const original = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    requestCount++;
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    // 30 path segments after /-/blob/ would otherwise probe 29 candidates;
+    // the cap must stop it far short of that.
+    const deepPath = Array.from({ length: 30 }, (_, i) => `seg${i}`).join("/");
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: `https://git.example.org/group/proj/-/blob/${deepPath}` },
+          context as any,
+        ),
+      Error,
+    );
+    assertEquals(requestCount <= 10, true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {

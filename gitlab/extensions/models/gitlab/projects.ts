@@ -17,6 +17,9 @@ const EXTENSION_NAME = "@webframp/gitlab";
 /** Cap (in bytes, not chars) on stored file content for get_file — guards against pasting a URL to a huge generated file. */
 const MAX_FILE_BYTES = 500_000;
 
+/** Cap on ref/path split candidates probed by get_file — guards against a pathologically deep blob URL path forcing an unbounded burst of API calls. */
+const MAX_REF_CANDIDATES = 10;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -1668,7 +1671,8 @@ function parseBlobUrl(
     throw new Error(`Could not parse project/ref/path from URL: ${url}`);
   }
   const candidates: Array<{ ref: string; path: string }> = [];
-  for (let i = 1; i < segments.length; i++) {
+  const maxSplit = Math.min(segments.length - 1, MAX_REF_CANDIDATES);
+  for (let i = 1; i <= maxSplit; i++) {
     candidates.push({
       ref: decodeURIComponent(segments.slice(0, i).join("/")),
       path: decodeURIComponent(segments.slice(i).join("/")),
@@ -2229,7 +2233,8 @@ export const model = {
         "and path from it — the URL's host must match this instance's " +
         "configured host. A ref containing slashes is disambiguated by " +
         "probing the API, since GitLab's URL scheme does not mark where the " +
-        "ref ends and the path begins. Content is capped at " +
+        `ref ends and the path begins (up to ${MAX_REF_CANDIDATES} splits). ` +
+        "Content is capped at " +
         `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
         "redacted.",
       arguments: z.object({
