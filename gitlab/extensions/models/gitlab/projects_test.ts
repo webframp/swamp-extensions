@@ -1753,7 +1753,10 @@ Deno.test("get_file logs a warning and uses the shortest ref when multiple candi
       : input instanceof URL
       ? input.toString()
       : (input as Request).url;
-    if (url.includes(`ref=${encodeURIComponent("feat")}`)) {
+    // Exact-match (not includes) the query value — "ref=feat" is a substring
+    // of "ref=feat%2Fmy-feature", so a loose match would make both
+    // candidates resolve to this same branch and defeat the test.
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
       return Promise.resolve(
         new Response("short-ref-content", {
           status: 200,
