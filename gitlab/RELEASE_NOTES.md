@@ -43,6 +43,10 @@ network read cap itself lands mid-character, the dangling lead byte at
 the tail is trimmed rather than decoded into a replacement character
 (U+FFFD) — this is checked independently of the final 500KB trim, since
 redaction can shrink content enough to skip that second trim entirely.
+That trim only applies when the read was actually cut short; a complete
+file's genuine trailing bytes (e.g. Latin-1 text ending in a byte that
+happens to match a UTF-8 lead-byte pattern) are left alone rather than
+guessed at.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a

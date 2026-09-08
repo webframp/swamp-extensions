@@ -1581,7 +1581,15 @@ class GitLabClient {
         `GitLab GET ${project}${path}: binary content detected — get_file only supports text/code files`,
       );
     }
-    return { text: decodeUtf8TrimmingIncompleteTail(bytes), truncated };
+    // Only the truncated case can have a dangling multi-byte sequence at
+    // the tail caused by our own cap — an untruncated read is the complete
+    // file, and trimming its genuine trailing bytes on a UTF-8 heuristic
+    // would silently corrupt non-UTF-8 (e.g. Latin-1) text that happens to
+    // end in a byte matching a UTF-8 lead-byte pattern.
+    const text = truncated
+      ? decodeUtf8TrimmingIncompleteTail(bytes)
+      : new TextDecoder().decode(bytes);
+    return { text, truncated };
   }
 }
 
@@ -1739,7 +1747,11 @@ function decodeUtf8TrimmingIncompleteTail(bytes: Uint8Array): string {
     continuationBytes++;
     i--;
   }
-  if (i >= 0) {
+  // i can land on another continuation byte if the walk hit the 3-byte cap
+  // inside a longer run of them (malformed UTF-8) — that's not a lead byte,
+  // so there's no valid boundary to trim to; leave the buffer as-is rather
+  // than guessing.
+  if (i >= 0 && (bytes[i] & 0xc0) !== 0x80) {
     const leadByte = bytes[i];
     let seqLen = 1;
     if ((leadByte & 0xf8) === 0xf0) seqLen = 4;

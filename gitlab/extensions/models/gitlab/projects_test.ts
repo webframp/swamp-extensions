@@ -1784,6 +1784,39 @@ Deno.test("get_file does not leak a replacement character when the network cap l
   }
 });
 
+Deno.test("get_file does not corrupt a complete non-UTF-8 file whose last byte looks like a UTF-8 lead byte", async () => {
+  const original = globalThis.fetch;
+  // "caf" followed by a raw 0xE9 (Latin-1 "é", not the 2-byte UTF-8 form).
+  // The file is complete — nowhere near the size cap — so the trailing
+  // 0xE9 is genuine content, not a network-cut dangling lead byte. Trimming
+  // it on a UTF-8 heuristic would silently drop a real byte from a file
+  // that was never truncated.
+  const body = new Uint8Array([0x63, 0x61, 0x66, 0xe9]);
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/legacy.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, false);
+    assertEquals(d.content.length, 4);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_file logs a warning and uses the shortest ref when multiple candidates resolve", async () => {
   const original = globalThis.fetch;
   // Both "feat" (with path "my-feature/README.md") and "feat/my-feature"
