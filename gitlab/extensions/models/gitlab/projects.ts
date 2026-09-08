@@ -1621,6 +1621,21 @@ function normalizedHostPort(url: URL): string {
 }
 
 /**
+ * Decodes UTF-8 bytes up to (at most) maxBytes, trimming back to the nearest
+ * codepoint boundary so a multi-byte character straddling the cap is dropped
+ * whole rather than decoded as a replacement character (U+FFFD).
+ */
+function decodeUtf8UpToBoundary(bytes: Uint8Array, maxBytes: number): string {
+  let end = maxBytes;
+  // A UTF-8 continuation byte matches 0b10xxxxxx; back up over any trailing
+  // continuation bytes to land on a lead byte (or ASCII byte) boundary.
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) {
+    end--;
+  }
+  return new TextDecoder().decode(bytes.slice(0, end));
+}
+
+/**
  * Parses a GitLab blob URL (https://<host>/<project>/-/blob/<ref>/<path>)
  * into its project and every plausible (ref, path) split of the remainder.
  * GitLab's URL scheme concatenates ref and path with no distinguishing
@@ -1695,7 +1710,10 @@ type ModelContext = {
     instance: string,
     data: unknown,
   ) => Promise<{ name: string }>;
-  logger: { info: (msg: string, props: Record<string, unknown>) => void };
+  logger: {
+    info: (msg: string, props: Record<string, unknown>) => void;
+    warn: (msg: string, props: Record<string, unknown>) => void;
+  };
 };
 
 // =============================================================================
@@ -2229,7 +2247,7 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        let resolved: { ref: string; path: string; raw: string } | undefined;
+        const matches: Array<{ ref: string; path: string; raw: string }> = [];
         for (const candidate of candidates) {
           const raw = await client.getProjectTextOrNull(
             project,
@@ -2238,21 +2256,33 @@ export const model = {
             }`,
           );
           if (raw !== null) {
-            resolved = { ref: candidate.ref, path: candidate.path, raw };
-            break;
+            matches.push({ ref: candidate.ref, path: candidate.path, raw });
           }
         }
-        if (!resolved) {
+        if (matches.length === 0) {
           throw new Error(
             `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
           );
         }
-        const { ref, path, raw } = resolved;
+        if (matches.length > 1) {
+          ctx.logger.warn(
+            "Ambiguous ref/path split for {url}: {count} candidates resolved " +
+              "in {project} (e.g. a branch and a tag sharing a slash-containing " +
+              "name); using the shortest ref match {ref}",
+            {
+              url: args.url,
+              count: matches.length,
+              project,
+              ref: matches[0].ref,
+            },
+          );
+        }
+        const { ref, path, raw } = matches[0];
         const redacted = redactSecrets(raw);
         const encoded = new TextEncoder().encode(redacted);
         const truncated = encoded.length > MAX_FILE_BYTES;
         const content = truncated
-          ? new TextDecoder().decode(encoded.slice(0, MAX_FILE_BYTES))
+          ? decodeUtf8UpToBoundary(encoded, MAX_FILE_BYTES)
           : redacted;
         const instanceName = await shortHash(`${project}\0${ref}\0${path}`);
         const handle = await ctx.writeResource(

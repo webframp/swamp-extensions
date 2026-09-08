@@ -1708,6 +1708,91 @@ Deno.test("get_file writes collision-resistant instance names for distinct proje
   }
 });
 
+Deno.test("get_file truncates multi-byte UTF-8 content on a codepoint boundary", async () => {
+  const original = globalThis.fetch;
+  // "é" is 2 bytes in UTF-8 (0xC3 0xA9). Pad so the 500,000-byte cap lands
+  // exactly between the lead byte and its continuation byte.
+  const padding = "a".repeat(500_000 - 1);
+  const body = padding + "é";
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(
+      new Response(body, {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { url: "https://git.example.org/group/proj/-/blob/main/f.txt" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.truncated, true);
+    // The dangling lead byte of "é" must be dropped whole, not decoded into
+    // a replacement character (U+FFFD).
+    assertEquals(d.content, padding);
+    assertEquals(d.content.includes("�"), false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file logs a warning and uses the shortest ref when multiple candidates resolve", async () => {
+  const original = globalThis.fetch;
+  // Both "feat" (with path "my-feature/README.md") and "feat/my-feature"
+  // (with path "README.md") resolve — e.g. a branch and a tag sharing a
+  // slash-containing name. The shortest-ref candidate must win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.includes(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(
+        new Response("short-ref-content", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response("long-ref-content", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources, getLogsByLevel } =
+      createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat");
+    assertEquals(d.path, "my-feature/README.md");
+    assertEquals(d.content, "short-ref-content");
+    const warnLogs = getLogsByLevel("warning");
+    assertEquals(
+      warnLogs.some((l: any) => l.message.includes("Ambiguous ref/path")),
+      true,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {

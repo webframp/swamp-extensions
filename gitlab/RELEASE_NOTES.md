@@ -8,11 +8,16 @@ ref containing slashes (e.g. `feat/my-feature`) is disambiguated by probing
 the API for each plausible ref/path split, rather than guessing the first
 one. The URL's host must match the model instance's configured `host`,
 tolerating an explicit default port (`:443`) — a URL for a different GitLab
-instance is rejected. Writes a new `fileContent` resource, with a
-collision-resistant instance name (hashed project/ref/path) so distinct
-files with hyphenated components can't overwrite each other. Content is
-capped at 500KB measured in bytes (not JS string length) and common
-credential patterns are redacted, same as `get_job_log`'s trace handling.
+instance is rejected. If more than one ref/path split resolves (e.g. a
+branch and a tag sharing a slash-containing name), a warning is logged and
+the shortest-ref candidate is used. Writes a new `fileContent` resource,
+with a collision-resistant instance name (hashed project/ref/path) so
+distinct files with hyphenated components can't overwrite each other.
+Content is capped at 500KB measured in bytes (not JS string length),
+truncating on a UTF-8 codepoint boundary so a multi-byte character
+straddling the cap isn't corrupted into a replacement character, and
+common credential patterns are redacted, same as `get_job_log`'s trace
+handling.
 
 **Upgrade note:** no schema or globalArguments change for existing resources.
 Running any method on an existing instance migrates it to `2026.09.08.2` as a
