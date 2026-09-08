@@ -2253,18 +2253,27 @@ export const model = {
           ctx.globalArgs.token,
         );
         const matches: Array<{ ref: string; path: string; raw: string }> = [];
+        let lastError: unknown;
         for (const candidate of candidates) {
-          const raw = await client.getProjectTextOrNull(
-            project,
-            `/repository/files/${encodeURIComponent(candidate.path)}/raw?ref=${
-              encodeURIComponent(candidate.ref)
-            }`,
-          );
-          if (raw !== null) {
-            matches.push({ ref: candidate.ref, path: candidate.path, raw });
+          try {
+            const raw = await client.getProjectTextOrNull(
+              project,
+              `/repository/files/${
+                encodeURIComponent(candidate.path)
+              }/raw?ref=${encodeURIComponent(candidate.ref)}`,
+            );
+            if (raw !== null) {
+              matches.push({ ref: candidate.ref, path: candidate.path, raw });
+            }
+          } catch (err) {
+            // A non-404 error (e.g. GitLab rejecting a malformed ref) rules
+            // out this candidate, not every remaining one — keep probing and
+            // only surface the error if nothing else resolves.
+            lastError = err;
           }
         }
         if (matches.length === 0) {
+          if (lastError) throw lastError;
           throw new Error(
             `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
           );

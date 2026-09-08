@@ -1824,6 +1824,72 @@ Deno.test("get_file bounds the number of ref/path candidates probed for a deep p
   }
 });
 
+Deno.test("get_file keeps probing after a non-404 error on an earlier candidate", async () => {
+  const original = globalThis.fetch;
+  // The short-ref candidate ("feat" / "my-feature/README.md") errors with a
+  // 422 instead of a clean 404 (e.g. GitLab rejecting a malformed ref); the
+  // longer, correct split ("feat/my-feature" / "README.md") must still be
+  // tried and win.
+  globalThis.fetch = (input: string | URL | Request, _init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith(`ref=${encodeURIComponent("feat")}`)) {
+      return Promise.resolve(new Response("bad ref", { status: 422 }));
+    }
+    return Promise.resolve(
+      new Response("hello", {
+        status: 200,
+        headers: { "content-type": "text/plain" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      {
+        url:
+          "https://git.example.org/group/proj/-/blob/feat/my-feature/README.md",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.ref, "feat/my-feature");
+    assertEquals(d.path, "README.md");
+    assertEquals(d.content, "hello");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file surfaces the last error when every candidate fails non-404", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, _init?: RequestInit) => {
+    return Promise.resolve(new Response("server exploded", { status: 500 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_file.execute(
+          { url: "https://git.example.org/group/proj/-/blob/main/f.txt" },
+          context as any,
+        ),
+      Error,
+      "500",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_merge_request handles an MR with no head pipeline", async () => {
   const restore = mockGraphqlFetch({
     data: {
