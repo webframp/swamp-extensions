@@ -1,3 +1,15 @@
+## 2026.09.08.1
+
+**Fixed:** the manifest description's method list (published to the registry
+and README) was missing seven methods that already shipped in code:
+`list_commits`, `get_issue`, `list_mr_discussions`, `resolve_mr_discussion`,
+`set_mr_reviewers`, `remove_mr_reviewers`, and `unassign_from_mrs`. Users
+browsing the registry entry had no way to discover these without reading
+source. No behavioral change — documentation only.
+
+**Upgrade note:** no schema or globalArguments change. Running any method on
+an existing instance migrates it to `2026.09.08.1` as a no-op.
+
 ## 2026.09.02.1
 
 **Added:** `get_issue` method — fetches a single issue by `project` and `iid`,

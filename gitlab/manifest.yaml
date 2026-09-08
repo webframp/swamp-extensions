@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.09.02.1"
+version: "2026.09.08.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -40,7 +40,10 @@ description: |
 
   **Read:**
   - list_projects, get_project_info, list_merge_requests, list_issues
+  - list_commits (REST repository/commits; optional ref + since bound)
+  - get_issue (full description body, keyed by project + iid)
   - list_releases, list_pipelines, list_issue_notes, list_mr_notes
+  - list_mr_discussions (resolvable threads + resolution state + diff position)
   - list_labels, list_members, list_branches
   - list_my_merge_requests (GraphQL — cross-project dashboard + todos)
   - list_todos (GraphQL — ALL todos, paginated past the 20-cap, each with target lifecycle state)
@@ -53,6 +56,9 @@ description: |
   - create_merge_request, update_merge_request, merge, add_mr_note
   - update_mr_note / delete_mr_note (edit or remove an MR comment by id)
   - set_mr_assignees (assign/reassign/unassign by username; CE keeps one, EE many)
+  - unassign_from_mrs (fan-out: remove an assignee from many MRs in a project)
+  - set_mr_reviewers / remove_mr_reviewers (replace or fan-out-remove reviewers by username)
+  - resolve_mr_discussion (resolve/unresolve an MR discussion thread; mutating)
   - create_label
   - mark_todo_done (clear a handled to-do off the pending queue)
   - mark_todos_done (bulk-clear many todos in one call, sequential; companion to mark_todo_done)
