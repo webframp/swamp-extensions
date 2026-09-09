@@ -129,12 +129,15 @@ export const extension = {
         const version = versions[0];
         if (
           !version?.base_commit_sha ||
+          !version.start_commit_sha ||
           version.head_commit_sha !== args.expectedHeadSha
         ) {
           throw new Error(
             "MR head SHA changed; recollect and review before posting",
           );
         }
+        const resourceName = `${project}-${args.iid}-${args.expectedHeadSha}`;
+        const existing = await context.readResource(resourceName);
         const discussions: Array<
           {
             discussionId: string;
@@ -142,8 +145,15 @@ export const extension = {
             path: string;
             newLine: number;
           }
-        > = [];
+        > = Array.isArray(existing?.discussions)
+          ? [...(existing?.discussions as typeof discussions)]
+          : [];
+        const posted = new Set(
+          discussions.map((d) => `${d.path}:${d.newLine}`),
+        );
         for (const comment of args.comments) {
+          const key = `${comment.path}:${comment.newLine}`;
+          if (posted.has(key)) continue;
           const response = await request(
             context,
             `/projects/${project}/merge_requests/${args.iid}/discussions`,
@@ -178,6 +188,15 @@ export const extension = {
             path: comment.path,
             newLine: comment.newLine,
           });
+          posted.add(key);
+          await context.writeResource("inlineReview", resourceName, {
+            project: args.project,
+            iid: args.iid,
+            expectedHeadSha: args.expectedHeadSha,
+            action: args.action,
+            discussions,
+            postedAt: new Date().toISOString(),
+          });
         }
         if (args.action === "request_changes") {
           const response = await fetch(
@@ -198,7 +217,7 @@ export const extension = {
         }
         const handle = await context.writeResource(
           "inlineReview",
-          `${project}-${args.iid}-${args.expectedHeadSha}`,
+          resourceName,
           {
             project: args.project,
             iid: args.iid,

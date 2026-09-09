@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@1.0.19";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@systeminit/swamp-testing";
 import { extension } from "./triage.ts";
 
@@ -44,6 +44,79 @@ Deno.test("get_issue_context bounds stored comments", async () => {
     const contextData = written[0].data as { context: { comments: unknown[] } };
     assertEquals(contextData.context.comments.length, 2);
     assertEquals(contextData.context.comments[0], { id: 2 });
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("create_issue parses the created issue number from gh's output URL", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_command: string, _options: unknown) {}
+    output() {
+      return Promise.resolve({
+        success: true,
+        stdout: new TextEncoder().encode(
+          "https://github.com/webframp/swamp-extensions/issues/42\n",
+        ),
+        stderr: new Uint8Array(),
+      });
+    }
+  };
+  try {
+    await extension.methods.create_issue.execute(
+      {
+        repo: "webframp/swamp-extensions",
+        title: "Example",
+        body: "Body",
+        idempotencyKey: "create-1",
+      },
+      context as never,
+    );
+    const written = getWrittenResources();
+    assertEquals(written.length, 1);
+    const action = written[0].data as { target: number };
+    assertEquals(action.target, 42);
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
+
+Deno.test("create_issue throws when gh's output does not contain a parseable issue URL", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_command: string, _options: unknown) {}
+    output() {
+      return Promise.resolve({
+        success: true,
+        stdout: new TextEncoder().encode("not a url"),
+        stderr: new Uint8Array(),
+      });
+    }
+  };
+  try {
+    await assertRejects(
+      () =>
+        extension.methods.create_issue.execute(
+          {
+            repo: "webframp/swamp-extensions",
+            title: "Example",
+            body: "Body",
+            idempotencyKey: "create-2",
+          },
+          context as never,
+        ),
+      Error,
+      "Could not parse issue number",
+    );
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;

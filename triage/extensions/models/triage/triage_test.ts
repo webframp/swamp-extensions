@@ -183,3 +183,68 @@ Deno.test("authorization releases only the persisted approved action payload", a
     idempotencyKey: "close-issue-1",
   });
 });
+Deno.test("record_context accepts a context whose sourceRevision matches its canonical content hash", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const base = {
+    schemaVersion: 1 as const,
+    target: {
+      provider: "github" as const,
+      kind: "issue" as const,
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/issues/2",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 2,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open" as const,
+    labels: [],
+    conversation: [],
+    truncation: [],
+  };
+  const sourceRevision = await hash({
+    ...base,
+    sourceRevision: undefined,
+    fetchedAt: undefined,
+  });
+  const handle = await model.methods.record_context.execute(
+    { context: { ...base, sourceRevision } },
+    context as never,
+  );
+  assertEquals(handle.dataHandles[0].name, sourceRevision);
+  assertEquals(resources.get(sourceRevision)?.title, "Example");
+});
+Deno.test("record_context rejects a sourceRevision that does not match the canonical content hash", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const payload = {
+    schemaVersion: 1 as const,
+    target: {
+      provider: "github" as const,
+      kind: "issue" as const,
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/issues/3",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 3,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision: "not-the-real-hash",
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open" as const,
+    labels: [],
+    conversation: [],
+    truncation: [],
+  };
+  await assertRejects(
+    () =>
+      model.methods.record_context.execute(
+        { context: payload },
+        context as never,
+      ),
+    Error,
+    "does not match canonical content hash",
+  );
+});

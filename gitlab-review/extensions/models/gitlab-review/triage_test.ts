@@ -111,3 +111,76 @@ Deno.test("post_inline_review validates changed lines and records discussions", 
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("post_inline_review does not repost a discussion already recorded from a prior attempt", async () => {
+  const originalFetch = globalThis.fetch;
+  let discussionPosts = 0;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const path = new URL(String(input)).pathname;
+    if (path.endsWith("/versions")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{
+            base_commit_sha: "base",
+            start_commit_sha: "start",
+            head_commit_sha: "expected-head",
+          }]),
+          { status: 200 },
+        ),
+      );
+    }
+    discussionPosts++;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          id: `discussion-${discussionPosts}`,
+          notes: [{ id: 10 + discussionPosts }],
+        }),
+        { status: 201 },
+      ),
+    );
+  };
+  const resourceName = `${encodeURIComponent(project)}-${iid}-expected-head`;
+  const priorAttempt = {
+    [`mrDiff-${encodeURIComponent(project)}-${iid}`]:
+      storedResources[`mrDiff-${encodeURIComponent(project)}-${iid}`],
+    [resourceName]: {
+      project,
+      iid,
+      expectedHeadSha: "expected-head",
+      action: "comment",
+      discussions: [{
+        discussionId: "discussion-already-posted",
+        noteId: 1,
+        path: "src/example.ts",
+        newLine: 1,
+      }],
+      postedAt: "2026-09-08T00:00:00.000Z",
+    },
+  };
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: priorAttempt,
+  });
+  try {
+    await extension.methods.post_inline_review.execute({
+      project,
+      iid,
+      expectedHeadSha: "expected-head",
+      action: "comment",
+      comments: [{ path: "src/example.ts", newLine: 1, body: "Review note" }],
+    }, context as never);
+    assertEquals(discussionPosts, 0);
+    const written = getWrittenResources().at(-1)?.data as {
+      discussions: unknown[];
+    };
+    assertEquals(written.discussions, [{
+      discussionId: "discussion-already-posted",
+      noteId: 1,
+      path: "src/example.ts",
+      newLine: 1,
+    }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

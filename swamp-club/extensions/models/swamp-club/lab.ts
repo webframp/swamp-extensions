@@ -28,7 +28,7 @@ type Context = {
 };
 function url(host: string, path: string) {
   return `https://${
-    host.replace(/^https:\/\//, "").replace(/\/+$/, "")
+    host.replace(/^https?:\/\//, "").replace(/\/+$/, "")
   }/api/v1${path}`;
 }
 async function request(ctx: Context, path: string, init?: RequestInit) {

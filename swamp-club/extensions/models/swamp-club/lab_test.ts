@@ -59,6 +59,44 @@ Deno.test("get_lab_issue_context bounds comments and reports truncation", async 
   }
 });
 
+Deno.test("get_lab_issue_context strips an http:// prefix from a misconfigured host", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  globalThis.fetch = (input: string | URL | Request) => {
+    requestedUrl = String(input);
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          issue: {
+            type: "bug",
+            status: "open",
+            title: "Example",
+            body: "Details",
+            authorUsername: "reporter",
+            comments: [],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+  };
+  const { context } = createModelTestContext({
+    globalArgs: { ...globalArgs, host: "http://swamp-club.com" },
+  });
+  try {
+    await model.methods.get_lab_issue_context.execute(
+      { issueNumber: 12 },
+      context as never,
+    );
+    assertEquals(
+      requestedUrl.startsWith("https://swamp-club.com/api/v1/"),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("post_ripple sends the exact idempotency marker and records comment ID", async () => {
   const originalFetch = globalThis.fetch;
   let requestBody = "";

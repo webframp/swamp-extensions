@@ -170,13 +170,21 @@ export const extension = {
           "--body",
           `${args.body}\n\n${marker}`,
         ]);
+        const createdNumber = typeof result === "string"
+          ? Number(/\/issues\/(\d+)\s*$/.exec(result)?.[1])
+          : NaN;
+        if (!Number.isInteger(createdNumber)) {
+          throw new Error(
+            `Could not parse issue number from gh issue create output: ${result}`,
+          );
+        }
         const handle = await context.writeResource(
           "triageAction",
           `${args.repo.replace("/", "-")}-create-${args.idempotencyKey}`,
           {
             repo: args.repo,
             action: "create_issue",
-            target: 0,
+            target: createdNumber,
             idempotencyKey: args.idempotencyKey,
             result,
             recordedAt: new Date().toISOString(),
