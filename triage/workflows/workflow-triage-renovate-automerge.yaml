@@ -1,0 +1,36 @@
+id: e06e8cb2-3283-4ad3-af1e-417b8b083a27
+name: "@webframp/triage-renovate-automerge"
+description: "Named policy exception: a fresh green Renovate MR may be approved and merged after deterministic eligibility evidence is recorded."
+version: 1
+inputs:
+  properties:
+    mr_reviewer_model: { type: string }
+    gitlab_model: { type: string }
+    project: { type: string }
+    iid: { type: number }
+  required: [mr_reviewer_model, gitlab_model, project, iid]
+jobs:
+  - name: approve
+    steps:
+      - name: approve-green-renovate-mr
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.mr_reviewer_model }}
+          methodName: approve_mr
+          inputs:
+            project: "${{ inputs.project }}"
+            iid: "${{ inputs.iid }}"
+  - name: merge
+    dependsOn:
+      - job: approve
+        condition:
+          type: succeeded
+    steps:
+      - name: merge-green-renovate-mr
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.gitlab_model }}
+          methodName: merge
+          inputs:
+            project: "${{ inputs.project }}"
+            iid: "${{ inputs.iid }}"

@@ -1,0 +1,21 @@
+id: 414f1eb0-9711-45bf-b5ed-6e049b1075ca
+name: "@webframp/triage-bounded-review"
+description: Dispatch a SHA-bound bounded review only after readiness validation; approval remains blocked until required verification succeeds.
+version: 1
+inputs:
+  properties:
+    factory_model: { type: string }
+    work_item: { type: string }
+  required: [factory_model, work_item]
+jobs:
+  - name: dispatch
+    steps:
+      - name: record-review-dispatch
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.factory_model }}
+          methodName: record_dispatch
+          inputs:
+            workItem: "${{ inputs.work_item }}"
+            stageId: review-queued
+            mode: workflow

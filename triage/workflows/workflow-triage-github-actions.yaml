@@ -1,0 +1,32 @@
+id: f3f478d6-e8ae-41d6-8def-1b121ca8de2c
+name: "@webframp/triage-github-actions"
+description: Release and execute one persisted Sean-approved GitHub action through the typed GitHub model.
+version: 1
+inputs:
+  properties:
+    triage_model: { type: string }
+    github_model: { type: string }
+    bundle_hash: { type: string }
+    action_id: { type: string }
+  required: [triage_model, github_model, bundle_hash, action_id]
+jobs:
+  - name: execute
+    steps:
+      - name: authorize-persisted-github-action
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.triage_model }}
+          methodName: authorize_github_action
+          inputs:
+            bundleHash: "${{ inputs.bundle_hash }}"
+            actionId: "${{ inputs.action_id }}"
+      - name: execute-authorized-github-action
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.github_model }}
+          methodName: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.methodName }}'
+          inputs: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.payload }}'
+        dependsOn:
+          - step: authorize-persisted-github-action
+            condition:
+              type: succeeded
