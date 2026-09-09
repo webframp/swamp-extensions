@@ -138,6 +138,10 @@ const FindingsItemSchema = z.object({
           versions: z.array(z.string()),
         }),
       ).optional(),
+      vulnerable_functions_list: z.array(z.object({
+        function_id: z.unknown(),
+        versions: z.array(z.string()),
+      })).optional(),
     }),
     z.object({
       affected_hash_ranges: z.array(z.string()).optional(),
@@ -227,7 +231,7 @@ const ListFindingsSchema = z.object({
 /** Snyk Tests — on-demand package and dependency vulnerability testing */
 export const model = {
   type: "@webframp/snyk/tests",
-  version: "2026.08.28.2",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -262,6 +266,11 @@ export const model = {
     },
     {
       toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -318,7 +327,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("test", id, result);
         context.logger.info("Created test {id}", { id });

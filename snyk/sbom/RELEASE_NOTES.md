@@ -1,5 +1,4 @@
-## 2026.08.28.2
+## 2026.09.08.1
 
-Hardened codegen: instance names sanitized against path traversal; 429
-rate-limit retry with Retry-After; string schema patterns emit regex validation;
-output schemas passthrough unknown fields.
+**Added:** Initial code-generated release of @webframp/snyk/sbom with 3 methods
+covering the Snyk sbom API surface.
