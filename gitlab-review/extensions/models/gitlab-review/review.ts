@@ -323,7 +323,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.08.28.1",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -389,6 +389,12 @@ export const model = {
       toVersion: "2026.08.28.1",
       description:
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.08.1",
+      description:
+        "Additive: SHA-bound inline review resource and posting method",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

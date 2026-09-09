@@ -1,3 +1,9 @@
+## 2026.09.08.1
+
+**Added:** SHA-bound, changed-line-validated batch inline review posting for approval-gated triage.
+
+**Upgrade note:** Existing review resources are unchanged.
+
 ## 2026.08.28.1
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the

@@ -3,7 +3,7 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/models/gitlab-review/review.ts",
+    "check": "deno check extensions/models/gitlab-review/review.ts extensions/models/gitlab-review/triage.ts",
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
