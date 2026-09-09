@@ -1,0 +1,19 @@
+manifestVersion: 1
+name: "@webframp/falai/organization"
+version: "2026.09.09.1"
+description: "fal.ai Organization — teams, usage, billing events, focus reports"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - falai/organization.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - falai
+  - organization
+  - teams

@@ -1,0 +1,20 @@
+manifestVersion: 1
+name: "@webframp/falai/models"
+version: "2026.09.09.1"
+description: "fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - falai/models.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - falai
+  - models
+  - pricing
+  - analytics
