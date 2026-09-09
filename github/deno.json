@@ -3,7 +3,7 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/models/github/repos.ts",
+    "check": "deno check extensions/models/github/repos.ts extensions/models/github/triage.ts",
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",

@@ -1,3 +1,9 @@
+## 2026.09.08.1
+
+**Added:** Bounded triage context collection and explicit issue, comment, close, and workflow-run actions for approval-gated orchestration.
+
+**Upgrade note:** Existing model resources are unchanged.
+
 ## 2026.08.28.1
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the
