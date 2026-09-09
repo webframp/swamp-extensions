@@ -504,7 +504,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.08.28.2",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -539,6 +539,11 @@ export const model = {
     },
     {
       toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -791,7 +796,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("team", id, result);
         context.logger.info("Created team {id}", { id });
@@ -914,7 +919,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "add_team_hierarchy_link",
@@ -1275,7 +1280,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("sync_teams", id, result);
         context.logger.info("Created sync_teams {id}", { id });
@@ -1515,7 +1520,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("team_link", id, result);
         context.logger.info("Created team_link {id}", { id });
@@ -1772,7 +1777,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "team_membership",
@@ -1984,7 +1989,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "team_notification_rule",

@@ -192,7 +192,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.08.28.2",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -227,6 +227,11 @@ export const model = {
     },
     {
       toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -357,7 +362,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "on_call_escalation_policy",
@@ -576,7 +581,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "on_call_schedule",
@@ -1069,7 +1074,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "user_notification_channel",
@@ -1276,7 +1281,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "user_notification_rule",

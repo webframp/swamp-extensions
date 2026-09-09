@@ -1040,7 +1040,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.08.28.2",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1075,6 +1075,11 @@ export const model = {
     },
     {
       toVersion: "2026.08.28.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -1503,7 +1508,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "synthetics_downtime",
@@ -1801,7 +1806,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "set_on_demand_concurrency_cap",
@@ -1868,7 +1873,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "synthetics_suite",
@@ -2436,7 +2441,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "synthetics_network_test",
@@ -2662,7 +2667,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "get_test_file_download_url",
@@ -2715,7 +2720,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "get_test_file_multipart_presigned_urls",
@@ -2773,7 +2778,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "abort_test_file_multipart_upload",
@@ -2833,7 +2838,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "complete_test_file_multipart_upload",
