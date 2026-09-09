@@ -73,6 +73,15 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/snyk/sso`](snyk/sso/) | Snyk SSO — single sign-on connection management for groups | None (uses fetch) |
 | [`@webframp/snyk/tenants`](snyk/tenants/) | Snyk Tenants — tenant and organization lifecycle management | None (uses fetch) |
 | [`@webframp/snyk/tests`](snyk/tests/) | Snyk Tests — on-demand package and dependency vulnerability testing | None (uses fetch) |
+| [`@webframp/falai/account`](falai/account/) | fal.ai Account — billing, focus reports, model access controls, and account metadata | None (uses fetch) |
+| [`@webframp/falai/assets`](falai/assets/) | fal.ai Assets — media library, characters, collections, tags, uploads, favorites | None (uses fetch) |
+| [`@webframp/falai/compute`](falai/compute/) | fal.ai Compute — dedicated GPU compute instances | None (uses fetch) |
+| [`@webframp/falai/keys`](falai/keys/) | fal.ai API Keys — key management | None (uses fetch) |
+| [`@webframp/falai/models`](falai/models/) | fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search | None (uses fetch) |
+| [`@webframp/falai/organization`](falai/organization/) | fal.ai Organization — teams, usage, billing events, focus reports | None (uses fetch) |
+| [`@webframp/falai/serverless`](falai/serverless/) | fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage | None (uses fetch) |
+| [`@webframp/falai/storage`](falai/storage/) | fal.ai Storage — file ACLs, signed URLs, storage settings | None (uses fetch) |
+| [`@webframp/falai/workflows`](falai/workflows/) | fal.ai Workflows — workflow definitions | None (uses fetch) |
 | [`@webframp/griptape/threads`](griptape/threads/) | Griptape Cloud Threads — conversation threads and their messages | None (uses fetch) |
 | [`@webframp/griptape/assistants`](griptape/assistants/) | Griptape Cloud Assistants — assistant definitions and assistant runs | None (uses fetch) |
 | [`@webframp/griptape/structures`](griptape/structures/) | Griptape Cloud Structures — deployed structures, runs, logs, and spans | None (uses fetch) |
@@ -247,6 +256,17 @@ swamp extension pull @webframp/snyk/sso
 swamp extension pull @webframp/snyk/tenants
 swamp extension pull @webframp/snyk/tests
 
+# fal.ai extensions
+swamp extension pull @webframp/falai/account
+swamp extension pull @webframp/falai/assets
+swamp extension pull @webframp/falai/compute
+swamp extension pull @webframp/falai/keys
+swamp extension pull @webframp/falai/models
+swamp extension pull @webframp/falai/organization
+swamp extension pull @webframp/falai/serverless
+swamp extension pull @webframp/falai/storage
+swamp extension pull @webframp/falai/workflows
+
 # Griptape Cloud extensions
 swamp extension pull @webframp/griptape/threads
 swamp extension pull @webframp/griptape/assistants
@@ -370,6 +390,24 @@ swamp model create @webframp/redmine tracker \
 swamp workflow run @webframp/scaffold-story \
   --input subject="ADDS | LDAP | Implement Geographic Redundancy"
 ```
+
+### fal.ai account and GPU compute audit
+
+```bash
+swamp extension pull @webframp/falai/account
+swamp extension pull @webframp/falai/compute
+
+swamp model create @webframp/falai/account falai-account \
+  --global-arg apiToken=FAL_API_KEY
+swamp model create @webframp/falai/compute falai-compute \
+  --global-arg apiToken=FAL_API_KEY
+
+swamp model method run falai-account get_account_billing
+swamp model method run falai-compute list_compute_instances
+```
+
+If `apiToken` is omitted, every `@webframp/falai/*` model falls back to the
+`FAL_KEY` environment variable (fal.ai's standard SDK env var).
 
 ### Terraform state reader
 
