@@ -84,8 +84,12 @@ export async function ddApi(
 
   // 429 rate limit: read Retry-After, wait, retry once
   if (response.status === 429) {
+    const retryAfterRaw = parseInt(
+      response.headers.get("Retry-After") ?? "5",
+      10,
+    );
     const retryAfter = Math.min(
-      parseInt(response.headers.get("Retry-After") ?? "5", 10),
+      Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
       60,
     );
     await response.body?.cancel();
@@ -199,8 +203,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -268,8 +276,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -334,8 +346,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -388,8 +404,12 @@ export async function ddApiPaginated(
 
     // 429 retry
     if (response.status === 429) {
+      const retryAfterRaw = parseInt(
+        response.headers.get("Retry-After") ?? "5",
+        10,
+      );
       const retryAfter = Math.min(
-        parseInt(response.headers.get("Retry-After") ?? "5", 10),
+        Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
         60,
       );
       await response.body?.cancel();
@@ -575,8 +595,12 @@ export async function ddApiPostPaginated(
 
     // 429 retry
     if (response.status === 429) {
+      const retryAfterRaw = parseInt(
+        response.headers.get("Retry-After") ?? "5",
+        10,
+      );
       const retryAfter = Math.min(
-        parseInt(response.headers.get("Retry-After") ?? "5", 10),
+        Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
         60,
       );
       await response.body?.cancel();

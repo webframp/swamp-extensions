@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/datadog/security-rules"
-version: "2026.08.28.2"
+version: "2026.09.08.1"
 description: "Datadog Security Rules — detection rule CRUD and management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
