@@ -151,11 +151,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_api_key.execute({
-        "key_id": "abc123def456",
-        "key_secret": "sk_live_abc123...",
-        "key": "abc123def456:sk_live_abc123...",
-      }, context);
+      >).create_api_key.execute({ "alias": "Production Key" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

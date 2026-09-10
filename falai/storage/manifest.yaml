@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/falai/storage"
-version: "2026.09.09.1"
+version: "2026.09.09.2"
 description: "fal.ai Storage — file ACLs, signed URLs, storage settings"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

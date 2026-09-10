@@ -215,45 +215,57 @@ export function sanitizeInstanceName(name: string): string {
 const MAX_RETRIES = 3;
 
 /**
+ * Result of a fetch, with the body already drained to text exactly once —
+ * Response.text()/.json() can only be called once per response, so every
+ * caller reads FalFetchResult.body instead of touching response.text() again.
+ */
+interface FalFetchResult {
+  response: Response;
+  body: string;
+}
+
+/**
  * Perform a fetch with bounded retry on HTTP 429. Honors the \`Retry-After\`
  * header when present (seconds), otherwise backs off linearly. Returns the
- * final Response for the caller to inspect; does not throw on non-429 statuses.
+ * final response with its body pre-drained to text; does not throw on
+ * non-429 statuses.
  */
 async function falFetch(
   url: string,
   init: RequestInit,
-): Promise<Response> {
+): Promise<FalFetchResult> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const response = await fetch(url, init);
-    if (response.status !== 429) return response;
+    if (response.status !== 429) {
+      return { response, body: await response.text() };
+    }
 
     const retryAfter = response.headers.get("Retry-After");
     const parsed = retryAfter ? Number(retryAfter) : NaN;
     const delayMs = Number.isFinite(parsed) ? parsed * 1000 : 1000 * (attempt + 1);
     // Drain the body so the connection can be reused.
-    await response.text();
+    const body = await response.text();
     if (attempt < MAX_RETRIES) {
       await new Promise((r) => setTimeout(r, delayMs));
       continue;
     }
-    return response;
+    return { response, body };
   }
   // Unreachable: the loop returns on the final attempt.
   throw new Error(\`fal.ai API request failed: \${url}\`);
 }
 
 /** Extract a human-readable error message from a fal.ai error response body. */
-async function extractErrorMessage(response: Response): Promise<string> {
-  const text = await response.text();
+function extractErrorMessage(body: string): string {
   try {
-    const parsed = JSON.parse(text) as FalErrorBody;
+    const parsed = JSON.parse(body) as FalErrorBody;
     if (parsed.error?.message) {
       return parsed.error.message;
     }
   } catch {
     // Not JSON — fall through to the raw text.
   }
-  return text.slice(0, 500);
+  return body.slice(0, 500);
 }
 
 export async function falApi<T>(
@@ -269,27 +281,26 @@ export async function falApi<T>(
     "Content-Type": "application/json",
   };
 
-  const response = await falFetch(url, {
+  const { response, body: responseBody } = await falFetch(url, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (response.status === 429) {
-    await response.text();
     throw new Error(\`fal.ai API rate limited after \${MAX_RETRIES} retries: \${method} \${path}\`);
   }
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message = extractErrorMessage(responseBody);
     throw new Error(\`fal.ai API error: \${method} \${path} returned \${response.status} \${response.statusText}: \${message}\`);
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || responseBody === "") {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  return JSON.parse(responseBody) as T;
 }
 
 const MAX_PAGES = 20;
@@ -314,7 +325,7 @@ export async function falApiPaginated<T>(
   apiToken: string,
   path: string,
   resultsField: string,
-  params?: Record<string, string>,
+  params?: Record<string, string | string[]>,
 ): Promise<PaginatedResult<T>> {
   const token = resolveToken(apiToken);
   const allResults: T[] = [];
@@ -323,30 +334,34 @@ export async function falApiPaginated<T>(
   let truncated = false;
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    const queryParams = new URLSearchParams({
-      ...params,
-      limit: String(limit),
-      ...(cursor ? { cursor } : {}),
-    });
+    const queryParams = new URLSearchParams();
+    for (const [k, v] of Object.entries(params ?? {})) {
+      if (Array.isArray(v)) {
+        for (const item of v) queryParams.append(k, item);
+      } else {
+        queryParams.append(k, v);
+      }
+    }
+    queryParams.set("limit", String(limit));
+    if (cursor) queryParams.set("cursor", cursor);
 
     const url = \`\${FAL_API_BASE}\${path}?\${queryParams}\`;
-    const response = await falFetch(url, {
+    const { response, body: responseBody } = await falFetch(url, {
       headers: {
         "Authorization": \`Key \${token}\`,
       },
     });
 
     if (response.status === 429) {
-      await response.text();
       throw new Error(\`fal.ai API rate limited after \${MAX_RETRIES} retries: GET \${path}\`);
     }
 
     if (!response.ok) {
-      const message = await extractErrorMessage(response);
+      const message = extractErrorMessage(responseBody);
       throw new Error(\`fal.ai API error: GET \${path} returned \${response.status} \${response.statusText}: \${message}\`);
     }
 
-    const data = (await response.json()) as Record<string, unknown>;
+    const data = JSON.parse(responseBody) as Record<string, unknown>;
     const items = (data[resultsField] as T[] | undefined) ?? [];
     allResults.push(...items);
 
@@ -354,7 +369,13 @@ export async function falApiPaginated<T>(
     const nextCursor = typeof data.next_cursor === "string" ? data.next_cursor : undefined;
 
     if (hasMore !== undefined) {
-      if (!hasMore || !nextCursor) break;
+      if (!hasMore) break;
+      if (!nextCursor) {
+        // has_more is true but the API gave us no cursor to continue with —
+        // more data exists that this call cannot reach.
+        truncated = true;
+        break;
+      }
       cursor = nextCursor;
     } else {
       // No has_more/next_cursor in the response: fall back to the

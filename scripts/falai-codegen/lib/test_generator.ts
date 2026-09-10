@@ -246,7 +246,7 @@ function generateExecutionTest(
   }
 
   if (method.type === "create") {
-    const createArgs = buildFinalTestArgs(method, fixture);
+    const createArgs = buildFinalTestArgs(method, generateRequestFixture(method));
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
   sanitizeResources: false,
@@ -307,7 +307,7 @@ function generateExecutionTest(
   }
 
   // Default: action/update
-  const actionArgs = buildFinalTestArgs(method, fixture);
+  const actionArgs = buildFinalTestArgs(method, generateRequestFixture(method));
   return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
   sanitizeResources: false,
@@ -350,6 +350,41 @@ function generateFixture(method: ClassifiedMethod): Record<string, unknown> {
   const schema = method.operation.responseSchema;
   if (!schema) return { id: "fixture-123" };
   return synthesizeValue(schema) as Record<string, unknown>;
+}
+
+/**
+ * Synthesize test arguments matching the request-body shape the method's
+ * Zod schema actually expects — mirroring generateArgsSchema's wrapping
+ * decision in method_classifier.ts. The response schema (used for the mock
+ * server body) is often shaped nothing like the request body — e.g. a
+ * `body: z.union([...])`-wrapped request against a flat response — so reusing
+ * the response fixture as request args produces a call the real schema would
+ * reject.
+ */
+function generateRequestFixture(
+  method: ClassifiedMethod,
+): Record<string, unknown> {
+  const reqBody = method.operation.requestBody;
+  if (!reqBody) return {};
+
+  if (reqBody.type === "array" && reqBody.items) {
+    return { items: [synthesizeValue(reqBody.items)] };
+  }
+
+  if (reqBody.oneOf) {
+    return { body: synthesizeValue(reqBody.oneOf[0]) };
+  }
+
+  if (reqBody.properties) {
+    const obj: Record<string, unknown> = {};
+    for (const [name, prop] of Object.entries(reqBody.properties)) {
+      if (name === "id") continue;
+      obj[name] = synthesizeValue(prop);
+    }
+    return obj;
+  }
+
+  return {};
 }
 
 /** Synthesize a value matching a schema (for test fixtures) */

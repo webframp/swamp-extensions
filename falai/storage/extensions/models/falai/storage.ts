@@ -80,10 +80,16 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_storage_file_acl": {
@@ -136,12 +142,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/storage/files/acl?${qs}` : `/storage/files/acl`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -149,14 +160,16 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["rules"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["rules"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource(
           "get_storage_file_acl",
           "main",
           {
             items,
-            truncated: false,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -164,7 +177,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} get_storage_file_acl", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -210,7 +223,12 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["url"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
+          if (v === undefined || !queryKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) {
+              queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
+            }
+          } else {
             queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
           }
         }
@@ -267,7 +285,12 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["url"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
+          if (v === undefined || !queryKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) {
+              queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
+            }
+          } else {
             queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
           }
         }
@@ -281,7 +304,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "sign_storage_file_url",

@@ -17,7 +17,7 @@
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import { schemaToZod } from "./type_mapper.ts";
-import { ZOD_VERSION } from "../config.ts";
+import { SENSITIVE_RESPONSE_FIELDS, ZOD_VERSION } from "../config.ts";
 
 export type MethodType =
   | "list"
@@ -524,12 +524,13 @@ function generateListBody(
   if (method.operation.pagination.paginated) {
     const excludeNames = [...pathParamNames, "limit", "cursor"];
     return `${indent}    const startMs = Date.now();
-${indent}    const params: Record<string, string> = {};
+${indent}    const params: Record<string, string | string[]> = {};
 ${indent}    const excludeKeys = new Set<string>(${
       JSON.stringify(excludeNames)
     });
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+${indent}      if (v === undefined || excludeKeys.has(k)) continue;
+${indent}      params[k] = Array.isArray(v) ? v.map(String) : String(v);
 ${indent}    }
 ${indent}
 ${indent}    const { results, truncated } = await falApiPaginated<Record<string, unknown>>(
@@ -557,29 +558,46 @@ ${indent}    return { dataHandles: [handle] };`;
 
   // Unpaginated list (no limit/cursor params) — single fetch.
   const excludeNames = [...pathParamNames];
+  const hasLimit = method.operation.queryParams.some((p) =>
+    sanitizeFieldName(p.name) === "limit"
+  );
   return `${indent}    const startMs = Date.now();
-${indent}    const params: Record<string, string> = {};
+${indent}    const params = new URLSearchParams();
 ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
   });
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+${indent}      if (v === undefined || excludeKeys.has(k)) continue;
+${indent}      if (Array.isArray(v)) {
+${indent}        for (const item of v) params.append(k, String(item));
+${indent}      } else {
+${indent}        params.append(k, String(v));
+${indent}      }
 ${indent}    }
-${indent}    const qs = new URLSearchParams(params).toString();
+${indent}    const qs = params.toString();
 ${indent}    const url = qs ? \`${apiPath}?\${qs}\` : \`${apiPath}\`;
 ${indent}
 ${indent}    const result = await falApi<Record<string, unknown>>(apiToken, "GET", url);
-${indent}    const items = (result as Record<string, unknown>)["${resultsField}"] ?? [];
-${indent}
+${indent}    const items = ((result as Record<string, unknown>)["${resultsField}"] ?? []) as unknown[];
+${indent}${
+    hasLimit
+      ? `    // No cursor/offset in this response: a full page equal to the
+${indent}    // requested limit means more results may exist that we didn't fetch.
+${indent}    const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+${indent}    const truncated = limit !== undefined && items.length === limit;
+${indent}`
+      : `    const truncated = false;
+${indent}`
+  }
 ${indent}    const handle = await context.writeResource("${resourceName}", "main", {
 ${indent}      items,
-${indent}      truncated: false,
+${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
 ${indent}      durationMs: Date.now() - startMs,
 ${indent}      collectedBy: EXTENSION_NAME,
 ${indent}    });
 ${indent}
-${indent}    context.logger.info("Found {count} ${resourceName}", { count: (items as unknown[]).length });
+${indent}    context.logger.info("Found {count} ${resourceName}", { count: items.length });
 ${indent}    return { dataHandles: [handle] };`;
 }
 
@@ -628,7 +646,12 @@ function buildQueryString(
     ? `\n${indent}    const queryParts: string[] = [];
 ${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}      if (v === undefined || !queryKeys.has(k)) continue;
+${indent}      if (Array.isArray(v)) {
+${indent}        for (const item of v) queryParts.push(\`\${k}=\${encodeURIComponent(String(item))}\`);
+${indent}      } else {
+${indent}        queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
 ${indent}    }
 ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
     : "";
@@ -678,6 +701,21 @@ ${indent}    }\n`;
   return { queryBuild, pathSuffix, bodySetup, bodyArg };
 }
 
+/**
+ * Resolve the response field that identifies a newly created resource, from
+ * the operation's documented response schema — falling back to "id" when the
+ * schema is unavailable or carries no id-shaped property. fal.ai operations
+ * don't all echo back a bare "id" (e.g. createApiKey returns "key_id"), so a
+ * hardcoded ".id" silently collapses every created instance onto one slot.
+ */
+function resolveIdFieldName(method: ClassifiedMethod): string {
+  const props = method.operation.responseSchema?.properties;
+  if (!props) return "id";
+  if ("id" in props) return "id";
+  const idLike = Object.keys(props).find((k) => /_id$/.test(k));
+  return idLike ?? "id";
+}
+
 /** Generate create method body */
 function generateCreateBody(
   method: ClassifiedMethod,
@@ -689,6 +727,21 @@ function generateCreateBody(
     method,
     indent,
   );
+  const idField = resolveIdFieldName(method);
+  const sensitiveFields = SENSITIVE_RESPONSE_FIELDS[method.operation.operationId];
+
+  const redactBlock = sensitiveFields?.length
+    ? `\n${indent}    // ${
+      JSON.stringify(sensitiveFields)
+    } are one-time credential fields fal.ai never
+${indent}    // returns again — persisting them would expose them to anyone with
+${indent}    // datastore read access, so they are dropped before writeResource.
+${indent}    const stored: Record<string, unknown> = { ...result };
+${indent}    for (const field of ${JSON.stringify(sensitiveFields)}) {
+${indent}      delete stored[field];
+${indent}    }\n`
+    : "";
+  const storedVar = sensitiveFields?.length ? "stored" : "result";
 
   return `${bodySetup}${queryBuild}
 ${indent}
@@ -698,9 +751,9 @@ ${indent}      "POST",
 ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      ${bodySetup ? "body" : "args"},
 ${indent}    );
-${indent}
-${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
-${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${redactBlock}${indent}
+${indent}    const id = sanitizeInstanceName(String((result as Record<string, unknown>)["${idField}"] ?? "created"));
+${indent}    const handle = await context.writeResource("${resourceName}", id, ${storedVar});
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
 }

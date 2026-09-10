@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/falai/keys"
-version: "2026.09.09.1"
+version: "2026.09.09.2"
 description: "fal.ai API Keys — key management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

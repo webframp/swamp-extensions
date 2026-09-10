@@ -533,10 +533,16 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "assets": {
@@ -734,10 +740,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -794,12 +801,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/assets/collections?${qs}` : `/assets/collections`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -807,14 +819,19 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["collections"] ?? [];
+        const items = ((result as Record<string, unknown>)["collections"] ??
+          []) as unknown[];
+        // No cursor/offset in this response: a full page equal to the
+        // requested limit means more results may exist that we didn't fetch.
+        const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+        const truncated = limit !== undefined && items.length === limit;
 
         const handle = await context.writeResource(
           "asset_collections",
           "main",
           {
             items,
-            truncated: false,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -822,7 +839,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} asset_collections", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -872,7 +889,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "asset_collection",
@@ -1032,12 +1049,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["collection_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs
           ? `/assets/collections/${args.collection_id}/hierarchy?${qs}`
           : `/assets/collections/${args.collection_id}/hierarchy`;
@@ -1047,14 +1069,16 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["ancestors"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["ancestors"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource(
           "get_asset_collection_hierarchy",
           "main",
           {
             items,
-            truncated: false,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -1062,7 +1086,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} get_asset_collection_hierarchy", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -1177,7 +1201,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "move_asset_collection",
@@ -1240,14 +1264,15 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>([
           "collection_id",
           "limit",
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -1328,7 +1353,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "add_asset_to_collection",
@@ -1414,12 +1439,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/assets/characters?${qs}` : `/assets/characters`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -1427,18 +1457,23 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["characters"] ?? [];
+        const items = ((result as Record<string, unknown>)["characters"] ??
+          []) as unknown[];
+        // No cursor/offset in this response: a full page equal to the
+        // requested limit means more results may exist that we didn't fetch.
+        const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+        const truncated = limit !== undefined && items.length === limit;
 
         const handle = await context.writeResource("asset_characters", "main", {
           items,
-          truncated: false,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} asset_characters", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -1484,7 +1519,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "asset_character",
@@ -1708,12 +1743,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/assets/tags?${qs}` : `/assets/tags`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -1721,18 +1761,20 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["tags"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["tags"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource("asset_tags", "main", {
           items,
-          truncated: false,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} asset_tags", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -1766,7 +1808,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource("asset_tag", id, result);
         context.logger.info("Created asset_tag {id}", { id });
@@ -1942,7 +1984,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource("upload_asset", id, result);
         context.logger.info("Created upload_asset {id}", { id });
@@ -2012,7 +2054,12 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["depth"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
+          if (v === undefined || !queryKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) {
+              queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
+            }
+          } else {
             queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
           }
         }
@@ -2069,7 +2116,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "favorite_asset",
@@ -2117,7 +2164,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "unfavorite_asset",
@@ -2149,12 +2196,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs
           ? `/assets/${args.asset_id}/tags?${qs}`
           : `/assets/${args.asset_id}/tags`;
@@ -2164,14 +2216,16 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["tags"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["tags"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource(
           "asset_tags_for_asset",
           "main",
           {
             items,
-            truncated: false,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -2179,7 +2233,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} asset_tags_for_asset", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -2228,7 +2282,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource(
           "assign_asset_tag",

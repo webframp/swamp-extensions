@@ -113,6 +113,18 @@ export const SERVICES: ServiceConfig[] = [
   },
 ];
 
+/**
+ * Response fields to strip before a `create`/`update` method persists its
+ * result to the datastore, keyed by OpenAPI `operationId`. fal.ai's
+ * `createApiKey` response carries a one-time secret (`key_secret`, and the
+ * combined `key` field) that the API documents as returned only once and
+ * never retrievable again — persisting it verbatim would expose it to
+ * anyone with datastore read access (`swamp data get`, audits).
+ */
+export const SENSITIVE_RESPONSE_FIELDS: Record<string, string[]> = {
+  createApiKey: ["key_secret", "key"],
+};
+
 /** Get today's CalVer version */
 export function calver(): string {
   const now = new Date();

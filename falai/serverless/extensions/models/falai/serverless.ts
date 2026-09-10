@@ -337,10 +337,16 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_analytics": {
@@ -473,10 +479,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -538,12 +545,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/serverless/apps?${qs}` : `/serverless/apps`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -551,19 +563,19 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["apps"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["apps"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource("apps", "main", {
           items,
-          truncated: false,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
-        context.logger.info("Found {count} apps", {
-          count: (items as unknown[]).length,
-        });
+        context.logger.info("Found {count} apps", { count: items.length });
         return { dataHandles: [handle] };
       },
     },
@@ -677,12 +689,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["owner", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs
           ? `/serverless/apps/${args.owner}/${args.name}/runners/history?${qs}`
           : `/serverless/apps/${args.owner}/${args.name}/runners/history`;
@@ -692,14 +709,16 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["history"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["history"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource(
           "get_runner_history",
           "main",
           {
             items,
-            truncated: false,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -707,7 +726,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} get_runner_history", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -796,7 +815,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>([
           "owner",
           "name",
@@ -804,7 +823,8 @@ export const model = {
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -865,7 +885,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>([
           "owner",
           "name",
@@ -873,7 +893,8 @@ export const model = {
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -1095,7 +1116,12 @@ export const model = {
           "request_id",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
+          if (v === undefined || !queryKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) {
+              queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
+            }
+          } else {
             queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
           }
         }
@@ -1170,10 +1196,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -1267,10 +1294,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<

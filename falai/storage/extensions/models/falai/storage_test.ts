@@ -154,8 +154,8 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).set_storage_file_acl.execute({
-        "user": "some-user",
-        "decision": "allow",
+        "default": "allow",
+        "rules": [{ "user": "some-user", "decision": "allow" }],
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -201,10 +201,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).sign_storage_file_url.execute({
-        "signed_url":
-          "https://v3.fal.media/files/b/0a1b2c3d/output.png?identity=...",
-      }, context);
+      >).sign_storage_file_url.execute(
+        { "expiration_seconds": 3600 },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

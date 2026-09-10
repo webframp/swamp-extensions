@@ -187,32 +187,28 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_workflow.execute({
-        "workflow": {
+        "name": "my-image-workflow",
+        "title": "My Image Generation Workflow",
+        "contents": {
           "name": "my-image-workflow",
-          "title": "My Image Generation Workflow",
-          "user_nickname": "johndoe",
-          "created_at": "2024-01-15T10:30:00Z",
-          "is_public": true,
-          "contents": {
-            "nodes": {
-              "node_a1b2c3": {
-                "id": "node_a1b2c3",
-                "type": "model",
-                "app": "fal-ai/flux/dev",
-                "depends": [],
-                "input": { "prompt": "$input.prompt" },
-                "metadata": { "position": { "x": 300, "y": 100 } },
-              },
-              "output": {
-                "id": "output",
-                "type": "output",
-                "depends": ["node_a1b2c3"],
-                "fields": { "image": "$node_a1b2c3.images.0.url" },
-                "metadata": { "position": { "x": 600, "y": 100 } },
-              },
+          "version": "1.0.0",
+          "nodes": {
+            "node_a1b2c3": {
+              "id": "node_a1b2c3",
+              "type": "run",
+              "app": "fal-ai/flux/dev",
+              "depends": [],
+              "input": { "prompt": "$input.prompt" },
+              "metadata": { "position": { "x": 300, "y": 100 } },
             },
           },
+          "output": { "image": "$node_a1b2c3.images.0.url" },
+          "schema": {
+            "input": { "prompt": { "type": "string" } },
+            "output": { "image": { "type": "string" } },
+          },
         },
+        "is_public": false,
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

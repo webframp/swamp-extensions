@@ -285,7 +285,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).upload_from_url.execute({ "file": "test-id-123" }, context);
+      >).upload_from_url.execute({
+        "url": "https://example.com",
+        "file": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

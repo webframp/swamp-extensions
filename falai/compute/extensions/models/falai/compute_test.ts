@@ -167,13 +167,9 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_compute_instance.execute({
-        "id": "inst_abc123xyz",
         "instance_type": "gpu_1x_h100_sxm5",
-        "region": "us-west",
+        "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... user@host",
         "sector": "sector_1",
-        "ip": "203.0.113.42",
-        "status": "ready",
-        "creator_user_nickname": "developer",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

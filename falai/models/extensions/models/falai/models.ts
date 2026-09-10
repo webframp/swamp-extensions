@@ -341,10 +341,16 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "get_models": {
@@ -440,10 +446,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -500,12 +507,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/models/pricing?${qs}` : `/models/pricing`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -513,18 +525,20 @@ export const model = {
           "GET",
           url,
         );
-        const items = (result as Record<string, unknown>)["prices"] ?? [];
+        const items =
+          ((result as Record<string, unknown>)["prices"] ?? []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource("get_pricing", "main", {
           items,
-          truncated: false,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
         context.logger.info("Found {count} get_pricing", {
-          count: (items as unknown[]).length,
+          count: items.length,
         });
         return { dataHandles: [handle] };
       },
@@ -650,10 +664,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -741,10 +756,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -834,10 +850,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -961,10 +978,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -1052,10 +1070,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<

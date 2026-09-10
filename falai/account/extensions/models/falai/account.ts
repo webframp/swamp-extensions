@@ -53,10 +53,16 @@ const GetMetaSchema = z.object({
 /** fal.ai Account — billing, focus reports, model access controls, and account metadata */
 export const model = {
   type: "@webframp/falai/account",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "account_billing": {
@@ -100,7 +106,12 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["expand"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && queryKeys.has(k)) {
+          if (v === undefined || !queryKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) {
+              queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
+            }
+          } else {
             queryParts.push(`${k}=${encodeURIComponent(String(v))}`);
           }
         }
@@ -139,12 +150,17 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
         }
-        const qs = new URLSearchParams(params).toString();
+        const qs = params.toString();
         const url = qs ? `/meta?${qs}` : `/meta`;
 
         const result = await falApi<Record<string, unknown>>(
@@ -153,19 +169,19 @@ export const model = {
           url,
         );
         const items =
-          (result as Record<string, unknown>)["webhook_ip_ranges"] ?? [];
+          ((result as Record<string, unknown>)["webhook_ip_ranges"] ??
+            []) as unknown[];
+        const truncated = false;
 
         const handle = await context.writeResource("get_meta", "main", {
           items,
-          truncated: false,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
-        context.logger.info("Found {count} get_meta", {
-          count: (items as unknown[]).length,
-        });
+        context.logger.info("Found {count} get_meta", { count: items.length });
         return { dataHandles: [handle] };
       },
     },

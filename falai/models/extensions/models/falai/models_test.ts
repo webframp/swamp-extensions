@@ -193,9 +193,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).estimate_pricing.execute({
-        "estimate_type": "historical_api_price",
-        "total_cost": 3.75,
-        "currency": "USD",
+        "body": { "estimate_type": "historical_api_price", "endpoints": {} },
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

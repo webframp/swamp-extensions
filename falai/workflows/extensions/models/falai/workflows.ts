@@ -71,10 +71,16 @@ const CreateWorkflowSchema = z.object({
 /** fal.ai Workflows — workflow definitions */
 export const model = {
   type: "@webframp/falai/workflows",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "workflows": {
@@ -125,10 +131,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -208,7 +215,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["id"] ?? "created"),
         );
         const handle = await context.writeResource("workflow", id, result);
         context.logger.info("Created workflow {id}", { id });

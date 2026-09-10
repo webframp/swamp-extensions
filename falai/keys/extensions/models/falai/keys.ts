@@ -68,10 +68,16 @@ const CreateApiKeySchema = z.object({
 /** fal.ai API Keys — key management */
 export const model = {
   type: "@webframp/falai/keys",
-  version: "2026.09.09.1",
+  version: "2026.09.09.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "api_keys": {
@@ -118,10 +124,11 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
+        const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+          if (v === undefined || excludeKeys.has(k)) continue;
+          params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
 
         const { results, truncated } = await falApiPaginated<
@@ -184,10 +191,18 @@ export const model = {
           args,
         );
 
+        // ["key_secret","key"] are one-time credential fields fal.ai never
+        // returns again — persisting them would expose them to anyone with
+        // datastore read access, so they are dropped before writeResource.
+        const stored: Record<string, unknown> = { ...result };
+        for (const field of ["key_secret", "key"]) {
+          delete stored[field];
+        }
+
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String((result as Record<string, unknown>)["key_id"] ?? "created"),
         );
-        const handle = await context.writeResource("api_key", id, result);
+        const handle = await context.writeResource("api_key", id, stored);
         context.logger.info("Created api_key {id}", { id });
         return { dataHandles: [handle] };
       },

@@ -242,22 +242,13 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_asset_collection.execute({
-        "collection": {
-          "id": "test-value",
-          "type": "manual",
-          "name": "test-value",
-          "description": "test-value",
-          "icon": "test-value",
-          "color": "test-value",
-          "cover_image_url": "test-value",
-          "character_identifier": "test-value",
-          "parent_collection_id": "test-value",
-          "is_favorited": true,
-          "filters": null,
-          "asset_count": 1,
-          "created_at": "test-value",
-          "updated_at": "test-value",
-        },
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "https://example.com",
+        "parent_collection_id": "test-value",
+        "filters": null,
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -378,22 +369,12 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_asset_collection.execute({
-        "collection": {
-          "id": "test-value",
-          "type": "manual",
-          "name": "test-value",
-          "description": "test-value",
-          "icon": "test-value",
-          "color": "test-value",
-          "cover_image_url": "test-value",
-          "character_identifier": "test-value",
-          "parent_collection_id": "test-value",
-          "is_favorited": true,
-          "filters": null,
-          "asset_count": 1,
-          "created_at": "test-value",
-          "updated_at": "test-value",
-        },
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "https://example.com",
+        "filters": null,
         "collection_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
@@ -493,25 +474,10 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).favorite_asset_collection.execute({
-        "collection": {
-          "id": "test-value",
-          "type": "manual",
-          "name": "test-value",
-          "description": "test-value",
-          "icon": "test-value",
-          "color": "test-value",
-          "cover_image_url": "test-value",
-          "character_identifier": "test-value",
-          "parent_collection_id": "test-value",
-          "is_favorited": true,
-          "filters": null,
-          "asset_count": 1,
-          "created_at": "test-value",
-          "updated_at": "test-value",
-        },
-        "collection_id": "test-id-123",
-      }, context);
+      >).favorite_asset_collection.execute(
+        { "collection_id": "test-id-123" },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
