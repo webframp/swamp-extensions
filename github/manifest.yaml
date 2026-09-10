@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/github"
-version: "2026.08.28.1"
+version: "2026.09.08.1"
 description: |
   Query GitHub data using the gh CLI for repository, PR, issue, release, and workflow visibility.
 
@@ -45,9 +45,17 @@ description: |
   - **list_issues** - List issues for a repository
   - **list_releases** - List releases for a repository
   - **list_workflows** - List recent workflow runs for a repository
+  - **get_issue_context** - Collect a bounded issue snapshot for triage
+  - **get_pull_request_context** - Collect a bounded PR snapshot with head SHA and checks
+  - **create_issue** - Create an approved triage issue
+  - **add_issue_comment** - Post an approved triage comment
+  - **close_issue** - Close an approved triage issue
+  - **get_workflow_run** - Read an exact workflow run
+  - **retry_workflow_run** - Retry an approved workflow run
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - github/repos.ts
+  - github/triage.ts
 labels:
   - api
   - devops

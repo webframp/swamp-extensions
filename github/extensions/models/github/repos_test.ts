@@ -37,6 +37,9 @@ Deno.test("model has all expected resources", () => {
     "releases",
     "repo_info",
     "repos",
+    "triageAction",
+    "triageIssue",
+    "triagePullRequest",
     "workflow_runs",
   ]);
 });

@@ -1,0 +1,36 @@
+id: 5b3a4b38-5399-488f-a813-4efc382f4293
+name: "@webframp/triage-intake"
+description: Parse and authorize a URL, then persist only a validated assessment before readiness routing.
+version: 1
+inputs:
+  properties:
+    triage_model: { type: string }
+    factory_model: { type: string }
+    work_item: { type: string }
+    url: { type: string }
+  required: [triage_model, factory_model, work_item, url]
+jobs:
+  - name: collect
+    steps:
+      - name: parse-and-authorize
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.triage_model }}
+          methodName: parse_target
+          inputs:
+            url: "${{ inputs.url }}"
+  - name: await-assessment
+    dependsOn:
+      - job: collect
+        condition:
+          type: succeeded
+    steps:
+      - name: record-assessment-dispatch
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.factory_model }}
+          methodName: record_dispatch
+          inputs:
+            workItem: "${{ inputs.work_item }}"
+            stageId: assessment-pending
+            mode: workflow

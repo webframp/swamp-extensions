@@ -1,0 +1,9 @@
+manifestVersion: 1
+name: "@webframp/swamp-club"
+version: "2026.09.08.1"
+description: "Narrow, typed Swamp Club Lab issue intake and approved-ripple adapter."
+repository: "https://github.com/webframp/swamp-extensions"
+models: [swamp-club/lab.ts]
+additionalFiles: [README.md, LICENSE.md]
+platforms: [linux-x86_64, linux-aarch64, darwin-x86_64, darwin-aarch64]
+labels: [swamp-club, lab, triage]

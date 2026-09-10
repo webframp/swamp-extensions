@@ -1,0 +1,32 @@
+id: 86ad4197-3e2f-4132-bac3-2b97acfac383
+name: "@webframp/triage-gitlab-actions"
+description: Release and execute one persisted Sean-approved GitLab review action only through mr-reviewer.
+version: 1
+inputs:
+  properties:
+    triage_model: { type: string }
+    mr_reviewer_model: { type: string }
+    bundle_hash: { type: string }
+    action_id: { type: string }
+  required: [triage_model, mr_reviewer_model, bundle_hash, action_id]
+jobs:
+  - name: execute
+    steps:
+      - name: authorize-persisted-gitlab-review-action
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.triage_model }}
+          methodName: authorize_gitlab_review_action
+          inputs:
+            bundleHash: "${{ inputs.bundle_hash }}"
+            actionId: "${{ inputs.action_id }}"
+      - name: execute-authorized-gitlab-review-action
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.mr_reviewer_model }}
+          methodName: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.methodName }}'
+          inputs: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.payload }}'
+        dependsOn:
+          - step: authorize-persisted-gitlab-review-action
+            condition:
+              type: succeeded

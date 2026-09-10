@@ -1,0 +1,26 @@
+manifestVersion: 1
+name: "@webframp/triage"
+version: "2026.09.08.1"
+description: "Cross-provider, approval-gated triage policy, workflows, prompts, and factory definition."
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - triage/triage.ts
+workflows:
+  - workflow-triage-intake.yaml
+  - workflow-triage-bounded-review.yaml
+  - workflow-triage-github-actions.yaml
+  - workflow-triage-gitlab-actions.yaml
+  - workflow-triage-swamp-club-actions.yaml
+  - workflow-triage-renovate-automerge.yaml
+dependencies:
+  - "@swamp/software-factory@2026.06.24.1"
+  - "@swamp/agent-runner@2026.08.23.1"
+  - "@swamp/deno-runner@2026.08.23.1"
+  - "@dougschaefer/writing-voice@2026.06.29.1"
+  - "@webframp/github@2026.09.08.1"
+  - "@webframp/gitlab@2026.09.08.2"
+  - "@webframp/gitlab-review@2026.09.08.1"
+  - "@webframp/swamp-club@2026.09.08.1"
+additionalFiles: [README.md, LICENSE.md, skills/triage/SKILL.md, prompts/assessment.md, prompts/review.md, prompts/external-message.md, factory/triage-factory.yaml]
+platforms: [linux-x86_64, linux-aarch64, darwin-x86_64, darwin-aarch64]
+labels: [triage, workflow, approval, github, gitlab, swamp-club]

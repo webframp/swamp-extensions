@@ -323,7 +323,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.08.28.1",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -391,6 +391,12 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.08.1",
+      description:
+        "Additive: SHA-bound inline review resource and posting method",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     mrDiff: {
@@ -414,6 +420,26 @@ export const model = {
     lineComment: {
       description: "Record of a diff-positioned line comment",
       schema: LineCommentSchema,
+      lifetime: "30d" as const,
+      garbageCollection: 20,
+    },
+    inlineReview: {
+      description: "SHA-bound batch inline review evidence",
+      schema: z.object({
+        project: z.string(),
+        iid: z.number(),
+        expectedHeadSha: z.string(),
+        action: z.enum(["comment", "request_changes"]),
+        discussions: z.array(
+          z.object({
+            discussionId: z.string(),
+            noteId: z.number(),
+            path: z.string(),
+            newLine: z.number(),
+          }),
+        ),
+        postedAt: z.string(),
+      }).strict(),
       lifetime: "30d" as const,
       garbageCollection: 20,
     },

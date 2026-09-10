@@ -257,7 +257,7 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.08.28.1",
+  version: "2026.09.08.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -319,6 +319,12 @@ export const model = {
         "No schema changes — normalized license to Apache-2.0 and corrected copyright holder to Sean Escriva",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.08.1",
+      description:
+        "Additive: bounded triage context and approval-gated issue and workflow methods",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -357,6 +363,41 @@ export const model = {
       schema: WorkflowRunListSchema,
       lifetime: "10m" as const,
       garbageCollection: 10,
+    },
+    triageIssue: {
+      description: "Exact GitHub issue context for triage",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        context: z.unknown(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "30m" as const,
+      garbageCollection: 10,
+    },
+    triagePullRequest: {
+      description: "Exact GitHub PR context for triage",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        context: z.unknown(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    triageAction: {
+      description: "GitHub triage action evidence",
+      schema: z.object({
+        repo: repoArg(),
+        action: z.string(),
+        target: z.number(),
+        idempotencyKey: z.string(),
+        result: z.unknown(),
+        recordedAt: z.string(),
+      }),
+      lifetime: "30d" as const,
+      garbageCollection: 20,
     },
   },
 

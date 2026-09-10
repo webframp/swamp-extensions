@@ -1,0 +1,32 @@
+id: 25d72031-01c1-4d44-a321-bcad99a93202
+name: "@webframp/triage-swamp-club-actions"
+description: Release and post one persisted Sean-approved Swamp Club acknowledgement ripple through the narrow adapter.
+version: 1
+inputs:
+  properties:
+    triage_model: { type: string }
+    swamp_club_model: { type: string }
+    bundle_hash: { type: string }
+    action_id: { type: string }
+  required: [triage_model, swamp_club_model, bundle_hash, action_id]
+jobs:
+  - name: execute
+    steps:
+      - name: authorize-persisted-swamp-club-ripple
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.triage_model }}
+          methodName: authorize_swamp_club_action
+          inputs:
+            bundleHash: "${{ inputs.bundle_hash }}"
+            actionId: "${{ inputs.action_id }}"
+      - name: post-authorized-ripple
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.swamp_club_model }}
+          methodName: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.methodName }}'
+          inputs: '${{ data.latest(inputs.triage_model, "authorized-" + inputs.bundle_hash + "-" + inputs.action_id).attributes.payload }}'
+        dependsOn:
+          - step: authorize-persisted-swamp-club-ripple
+            condition:
+              type: succeeded

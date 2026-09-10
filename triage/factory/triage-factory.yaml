@@ -1,0 +1,32 @@
+stages:
+  - id: collecting
+    initial: true
+    artifacts: [{ name: triage-context, schema: { type: object } }]
+    transitions: [{ id: context-saved, to: assessment-pending, gates: [{ type: artifact-exists, artifact: triage-context }] }, { id: rejected, to: rejected }]
+  - id: assessment-pending
+    artifacts: [{ name: triage-assessment, schema: { type: object } }]
+    transitions: [{ id: assessment-saved, to: readiness-decided, gates: [{ type: artifact-exists, artifact: triage-assessment }] }, { id: assessment-failed, to: assessment-failed }]
+  - id: readiness-decided
+    transitions: [{ id: queue-review, to: review-queued }, { id: draft-actions, to: action-drafting }, { id: defer, to: deferred }, { id: dismiss, to: dismissed }]
+  - id: review-queued
+    maxCycles: 7
+    artifacts: [{ name: review-findings, schema: { type: object } }]
+    transitions: [{ id: review-complete, to: action-drafting, gates: [{ type: artifact-exists, artifact: review-findings }] }]
+  - id: action-drafting
+    artifacts: [{ name: action-bundle, schema: { type: object } }]
+    transitions: [{ id: bundle-saved, to: awaiting-approval, gates: [{ type: artifact-exists, artifact: action-bundle }] }]
+  - id: awaiting-approval
+    transitions: [{ id: approved, to: executing, gates: [{ type: human-approval, gateId: action-bundle-approval }] }, { id: recollect, to: collecting }, { id: redraft, to: action-drafting }]
+  - id: executing
+    transitions: [{ id: executed, to: verifying }, { id: failed, to: execution-failed }]
+  - id: verifying
+    transitions: [{ id: verified, to: completed }, { id: failed, to: execution-failed }]
+  - id: assessment-failed
+    transitions: [{ id: retry, to: assessment-pending }]
+  - id: execution-failed
+    transitions: [{ id: redraft, to: action-drafting }]
+  - { id: rejected, terminal: true }
+  - { id: blocked, terminal: true }
+  - { id: deferred, terminal: true }
+  - { id: dismissed, terminal: true }
+  - { id: completed, terminal: true }
