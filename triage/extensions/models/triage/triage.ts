@@ -128,7 +128,6 @@ const ActionSchema = z.object({
     "gitlab.post_inline_review",
     "swamp_club.post_ripple",
   ]),
-  target: z.record(z.string(), z.unknown()),
   payload: z.record(z.string(), z.unknown()),
   dependsOn: z.array(text),
   idempotencyKey: text,
@@ -311,42 +310,93 @@ function actionProvider(action: Action): Provider {
   if (action.type.startsWith("gitlab.")) return "gitlab";
   return "swamp_club";
 }
-const SAME_SOURCE_ACTION_TYPES = new Set<Action["type"]>([
-  "github.add_issue_comment",
-  "github.close_issue",
-  "github.retry_workflow_run",
-  "gitlab.post_review",
-  "gitlab.post_inline_review",
-]);
-function targetMatchesSource(
+function requireMatchingIdempotencyKey(action: Action): void {
+  const payload = action.payload as Record<string, unknown>;
+  if (payload.idempotencyKey !== action.idempotencyKey) {
+    throw new Error(
+      `Action ${action.id} payload.idempotencyKey does not match its idempotencyKey`,
+    );
+  }
+}
+// Which physical provider instance executes an authorized payload (which
+// GitHub App installation, which GitLab host, which Swamp Club deployment)
+// is fixed by the calling workflow's own model selection
+// (`modelIdOrName: ${{ inputs.github_model }}` etc.), not by this model —
+// the same trust boundary applies to every authorize_*_action method. This
+// function validates only within-instance addressing (repo/iid/issueNumber)
+// against the assessed source; it has no visibility into, and cannot
+// validate, which instance a workflow has wired up. github's repo strings
+// happen to be globally unique, so a repo match incidentally also proves
+// same-instance; swamp_club's issueNumber is a small per-deployment
+// integer with no such guarantee, but there is still no host field on its
+// payload to cross-check — that binding is out of this model's authority
+// by design, not a gap.
+function validatePayloadTarget(
   action: Action,
   source: z.infer<typeof ContextSchema>,
-): boolean {
-  const target = action.target as Record<string, unknown>;
-  const provider = actionProvider(action);
-  if (provider === "github") {
-    return target.repository === source.target.repository &&
-      target.iid === source.target.iid;
-  }
-  if (provider === "gitlab") {
-    return target.project === source.target.project &&
-      target.iid === source.target.iid;
-  }
-  return target.host === source.target.host &&
-    target.iid === source.target.iid;
-}
-function actionTargetAllowed(
-  action: Action,
   config: z.infer<typeof GlobalArgsSchema>,
-): boolean {
-  const target = action.target as Record<string, unknown>;
-  const provider = actionProvider(action);
-  if (provider === "github") {
-    return typeof target.repository === "string" &&
-      allowed({ provider, host: "", repository: target.repository }, config);
+): void {
+  const payload = action.payload as Record<string, unknown>;
+  switch (action.type) {
+    case "github.add_issue_comment":
+    case "github.close_issue":
+      requireMatchingIdempotencyKey(action);
+      if (
+        payload.repo !== source.target.repository ||
+        payload.number !== source.target.iid
+      ) {
+        throw new Error(
+          `Action ${action.id} payload does not target the assessed source`,
+        );
+      }
+      return;
+    case "github.retry_workflow_run":
+      requireMatchingIdempotencyKey(action);
+      // No workflow-run identifier is captured in the assessed source
+      // context, so this can only be scoped to the assessed repository,
+      // not to a specific run.
+      if (payload.repo !== source.target.repository) {
+        throw new Error(
+          `Action ${action.id} payload targets a different repository than the assessed source`,
+        );
+      }
+      return;
+    case "gitlab.post_review":
+    case "gitlab.post_inline_review":
+      if (
+        payload.project !== source.target.project ||
+        payload.iid !== source.target.iid
+      ) {
+        throw new Error(
+          `Action ${action.id} payload does not target the assessed source`,
+        );
+      }
+      return;
+    case "github.create_issue":
+      requireMatchingIdempotencyKey(action);
+      if (
+        typeof payload.repo !== "string" ||
+        !allowed(
+          { provider: "github", host: "", repository: payload.repo },
+          config,
+        )
+      ) {
+        throw new Error(
+          `Action ${action.id} payload target is not authorized by this triage instance`,
+        );
+      }
+      return;
+    case "swamp_club.post_ripple":
+      requireMatchingIdempotencyKey(action);
+      if (payload.issueNumber !== source.target.iid) {
+        throw new Error(
+          `Action ${action.id} payload does not target the assessed source`,
+        );
+      }
+      return;
+    default:
+      throw new Error(`Unhandled action type: ${action.type}`);
   }
-  return typeof target.host === "string" &&
-    allowed({ provider, host: target.host }, config);
 }
 function actionMethod(action: Action): string {
   return action.type.slice(action.type.indexOf(".") + 1);
@@ -432,17 +482,7 @@ async function authorizeAction(
   if (actionProvider(action) !== provider) {
     throw new Error(`Action ${actionId} is not a ${provider} action`);
   }
-  if (SAME_SOURCE_ACTION_TYPES.has(action.type)) {
-    if (!targetMatchesSource(action, source)) {
-      throw new Error(
-        `Action ${actionId} target does not match the assessed source target`,
-      );
-    }
-  } else if (!actionTargetAllowed(action, context.globalArgs)) {
-    throw new Error(
-      `Action ${actionId} target is not authorized by this triage instance`,
-    );
-  }
+  validatePayloadTarget(action, source, context.globalArgs);
   const authorized = {
     bundleHash,
     actionId,
@@ -597,7 +637,8 @@ export const model = {
         if (
           assessment.securitySignal !== "none" &&
           (assessment.disposition === "needs_author_feedback" ||
-            assessment.disposition === "reroute_to_github")
+            assessment.disposition === "reroute_to_github" ||
+            assessment.disposition === "review")
         ) {
           throw new Error(
             "Security-signaled assessment cannot propose publicly-visible content",
@@ -649,6 +690,14 @@ export const model = {
         ) {
           throw new Error(
             "Action dependencies must reference distinct actions in the bundle without cycles",
+          );
+        }
+        const idempotencyKeys = new Set(
+          bundle.actions.map((action) => action.idempotencyKey),
+        );
+        if (idempotencyKeys.size !== bundle.actions.length) {
+          throw new Error(
+            "Action idempotencyKeys must be unique within a bundle",
           );
         }
         const bundleHash = await hash(bundle);

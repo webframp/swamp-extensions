@@ -93,7 +93,6 @@ async function persistedAction(
     actions: [{
       id: "close-issue",
       type: "github.close_issue" as const,
-      target: { repository: "webframp/swamp-extensions", iid: 1 },
       payload: {
         repo: "webframp/swamp-extensions",
         number: 1,
@@ -205,7 +204,6 @@ Deno.test("build_action_bundle rejects a two-node dependency cycle", async () =>
       {
         id: "action-a",
         type: "github.close_issue" as const,
-        target: { repository: "webframp/swamp-extensions", iid: 9 },
         payload: {
           repo: "webframp/swamp-extensions",
           number: 9,
@@ -218,7 +216,6 @@ Deno.test("build_action_bundle rejects a two-node dependency cycle", async () =>
       {
         id: "action-b",
         type: "github.close_issue" as const,
-        target: { repository: "webframp/swamp-extensions", iid: 9 },
         payload: {
           repo: "webframp/swamp-extensions",
           number: 9,
@@ -238,6 +235,88 @@ Deno.test("build_action_bundle rejects a two-node dependency cycle", async () =>
       ),
     Error,
     "without cycles",
+  );
+});
+Deno.test("build_action_bundle rejects reused idempotencyKeys across distinct actions", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-dup-key";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "github",
+      kind: "issue",
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/issues/9",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 9,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "issue" as const,
+    classification: "bug" as const,
+    priority: "low" as const,
+    disposition: "close" as const,
+    confidence: "high" as const,
+    summary: "Safe to close",
+    evidence: [{ contextId: "body", claim: "No reproduction details" }],
+    questions: [],
+    recommendedNextAction: "Close the duplicate",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const bundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-dup-key",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [
+      {
+        id: "close-9",
+        type: "github.close_issue" as const,
+        payload: {
+          repo: "webframp/swamp-extensions",
+          number: 9,
+          idempotencyKey: "shared-key",
+        },
+        dependsOn: [],
+        idempotencyKey: "shared-key",
+        verify: {},
+      },
+      {
+        id: "close-10",
+        type: "github.close_issue" as const,
+        payload: {
+          repo: "webframp/swamp-extensions",
+          number: 10,
+          idempotencyKey: "shared-key",
+        },
+        dependsOn: [],
+        idempotencyKey: "shared-key",
+        verify: {},
+      },
+    ],
+  };
+  await assertRejects(
+    () =>
+      model.methods.build_action_bundle.execute(
+        { bundle },
+        context as never,
+      ),
+    Error,
+    "idempotencyKeys must be unique",
   );
 });
 Deno.test("approval requires Sean", () => {
@@ -303,7 +382,7 @@ Deno.test("authorization releases only the persisted approved action payload", a
     idempotencyKey: "close-issue-1",
   });
 });
-Deno.test("authorization rejects an action whose target does not match the assessed source", async () => {
+Deno.test("authorization rejects an action whose payload does not match the assessed source", async () => {
   const resources = new Map<string, Record<string, unknown>>();
   const context = testContext(resources);
   const sourceRevision = "source-mismatch";
@@ -351,10 +430,9 @@ Deno.test("authorization rejects an action whose target does not match the asses
     actions: [{
       id: "close-issue",
       type: "github.close_issue" as const,
-      target: { repository: "webframp/some-other-repo", iid: 1 },
       payload: {
-        repo: "webframp/some-other-repo",
-        number: 1,
+        repo: "webframp/swamp-extensions",
+        number: 999,
         idempotencyKey: "close-issue-1",
       },
       dependsOn: [],
@@ -380,7 +458,7 @@ Deno.test("authorization rejects an action whose target does not match the asses
         actionId: "close-issue",
       }, context as never),
     Error,
-    "target does not match the assessed source target",
+    "payload does not target the assessed source",
   );
 });
 Deno.test("authorization rejects a new-target action outside the configured allowlist", async () => {
@@ -432,7 +510,6 @@ Deno.test("authorization rejects a new-target action outside the configured allo
     actions: [{
       id: "create-issue",
       type: "github.create_issue" as const,
-      target: { repository: "not-in-the-allowlist/repo" },
       payload: {
         repo: "not-in-the-allowlist/repo",
         title: "Example",
@@ -462,7 +539,374 @@ Deno.test("authorization rejects a new-target action outside the configured allo
         actionId: "create-issue",
       }, context as never),
     Error,
-    "target is not authorized",
+    "payload target is not authorized",
+  );
+});
+Deno.test("authorization releases a retry_workflow_run action scoped to the assessed repository", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-retry";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "github",
+      kind: "pull_request",
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/pull/5",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 5,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "change" as const,
+    classification: "maintenance" as const,
+    priority: "low" as const,
+    disposition: "retry_ci" as const,
+    confidence: "high" as const,
+    summary: "Flaky failure, retry the run",
+    evidence: [{ contextId: "body", claim: "Known flaky test" }],
+    questions: [],
+    recommendedNextAction: "Retry the failed workflow run",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-retry",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "retry-run",
+      type: "github.retry_workflow_run" as const,
+      payload: {
+        repo: "webframp/swamp-extensions",
+        runId: 987654,
+        failedOnly: true,
+        idempotencyKey: "retry-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "retry-1",
+      verify: {},
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["retry-run"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await model.methods.authorize_github_action.execute({
+    bundleHash,
+    actionId: "retry-run",
+  }, context as never);
+  const authorized = resources.get(`authorized-${bundleHash}-retry-run`);
+  assertEquals(authorized?.methodName, "retry_workflow_run");
+  assertEquals(authorized?.payload, {
+    repo: "webframp/swamp-extensions",
+    runId: 987654,
+    failedOnly: true,
+    idempotencyKey: "retry-1",
+  });
+});
+Deno.test("authorization rejects a retry_workflow_run action targeting a different repository than the assessed source", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-retry-mismatch";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "github",
+      kind: "pull_request",
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/pull/5",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 5,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "change" as const,
+    classification: "maintenance" as const,
+    priority: "low" as const,
+    disposition: "retry_ci" as const,
+    confidence: "high" as const,
+    summary: "Flaky failure, retry the run",
+    evidence: [{ contextId: "body", claim: "Known flaky test" }],
+    questions: [],
+    recommendedNextAction: "Retry the failed workflow run",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-retry-mismatch",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "retry-run",
+      type: "github.retry_workflow_run" as const,
+      payload: {
+        repo: "webframp/some-other-repo",
+        runId: 987654,
+        failedOnly: true,
+        idempotencyKey: "retry-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "retry-1",
+      verify: {},
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["retry-run"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await assertRejects(
+    () =>
+      model.methods.authorize_github_action.execute({
+        bundleHash,
+        actionId: "retry-run",
+      }, context as never),
+    Error,
+    "targets a different repository than the assessed source",
+  );
+});
+Deno.test("authorization releases a swamp_club.post_ripple action scoped to the assessed lab issue", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-ripple";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "swamp_club",
+      kind: "lab_issue",
+      canonicalUrl: "https://swamp-club.com/lab/42",
+      host: "swamp-club.com",
+      iid: 42,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "issue" as const,
+    classification: "question" as const,
+    priority: "low" as const,
+    disposition: "monitor" as const,
+    confidence: "high" as const,
+    summary: "Acknowledge",
+    evidence: [{ contextId: "body", claim: "Needs a reply" }],
+    questions: [],
+    recommendedNextAction: "Post a ripple",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-ripple",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "post-ripple",
+      type: "swamp_club.post_ripple" as const,
+      payload: {
+        issueNumber: 42,
+        body: "Acknowledged",
+        idempotencyKey: "ripple-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "ripple-1",
+      verify: {},
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["post-ripple"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await model.methods.authorize_swamp_club_action.execute({
+    bundleHash,
+    actionId: "post-ripple",
+  }, context as never);
+  const authorized = resources.get(`authorized-${bundleHash}-post-ripple`);
+  assertEquals(authorized?.methodName, "post_ripple");
+  assertEquals(authorized?.payload, {
+    issueNumber: 42,
+    body: "Acknowledged",
+    idempotencyKey: "ripple-1",
+  });
+});
+Deno.test("authorization rejects a swamp_club.post_ripple action targeting a different lab issue than the assessed source", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-ripple-mismatch";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "swamp_club",
+      kind: "lab_issue",
+      canonicalUrl: "https://swamp-club.com/lab/42",
+      host: "swamp-club.com",
+      iid: 42,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "issue" as const,
+    classification: "question" as const,
+    priority: "low" as const,
+    disposition: "monitor" as const,
+    confidence: "high" as const,
+    summary: "Acknowledge",
+    evidence: [{ contextId: "body", claim: "Needs a reply" }],
+    questions: [],
+    recommendedNextAction: "Post a ripple",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-ripple-mismatch",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "post-ripple",
+      type: "swamp_club.post_ripple" as const,
+      payload: {
+        issueNumber: 999,
+        body: "Acknowledged",
+        idempotencyKey: "ripple-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "ripple-1",
+      verify: {},
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["post-ripple"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await assertRejects(
+    () =>
+      model.methods.authorize_swamp_club_action.execute({
+        bundleHash,
+        actionId: "post-ripple",
+      }, context as never),
+    Error,
+    "payload does not target the assessed source",
+  );
+});
+Deno.test("authorization rejects an action whose payload.idempotencyKey does not match its idempotencyKey", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const { bundleHash } = await persistedAction(resources);
+  const unsealedBundle = resources.get(bundleHash)!;
+  const tamperedActions = (unsealedBundle.actions as Array<
+    Record<string, unknown>
+  >).map((action) => ({
+    ...action,
+    payload: {
+      ...(action.payload as Record<string, unknown>),
+      idempotencyKey: "different-key",
+    },
+  }));
+  const tamperedBundleHash = await hash({
+    schemaVersion: unsealedBundle.schemaVersion,
+    id: unsealedBundle.id,
+    sourceRevision: unsealedBundle.sourceRevision,
+    assessmentHash: unsealedBundle.assessmentHash,
+    voiceProfile: unsealedBundle.voiceProfile,
+    actions: tamperedActions,
+  });
+  resources.set(tamperedBundleHash, {
+    ...unsealedBundle,
+    actions: tamperedActions,
+    bundleHash: tamperedBundleHash,
+  });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash: tamperedBundleHash,
+      assessmentHash: String(unsealedBundle.assessmentHash),
+      sourceRevision: String(unsealedBundle.sourceRevision),
+      approvedActionIds: ["close-issue"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await assertRejects(
+    () =>
+      model.methods.authorize_github_action.execute({
+        bundleHash: tamperedBundleHash,
+        actionId: "close-issue",
+      }, context as never),
+    Error,
+    "payload.idempotencyKey does not match its idempotencyKey",
   );
 });
 Deno.test("record_assessment rejects a security-signaled reroute_to_github disposition", async () => {
@@ -503,6 +947,52 @@ Deno.test("record_assessment rejects a security-signaled reroute_to_github dispo
           evidence: [{ contextId: "body", claim: "Looks exploitable" }],
           questions: [],
           recommendedNextAction: "Open a tracking issue",
+          securitySignal: "confirmed",
+        },
+      }, context as never),
+    Error,
+    "publicly-visible content",
+  );
+});
+Deno.test("record_assessment rejects a security-signaled review disposition", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-security-review";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "gitlab",
+      kind: "merge_request",
+      canonicalUrl:
+        "https://git.bethelservice.org/group/project/-/merge_requests/1",
+      host: "git.bethelservice.org",
+      project: "group/project",
+      iid: 1,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  await assertRejects(
+    () =>
+      model.methods.record_assessment.execute({
+        assessment: {
+          schemaVersion: 1,
+          contextHash: sourceRevision,
+          targetKind: "change",
+          classification: "security",
+          priority: "high",
+          disposition: "review",
+          confidence: "high",
+          summary: "Possible vulnerability introduced by this change",
+          evidence: [{ contextId: "body", claim: "Looks exploitable" }],
+          questions: [],
+          recommendedNextAction: "Flag privately, do not post publicly",
           securitySignal: "confirmed",
         },
       }, context as never),

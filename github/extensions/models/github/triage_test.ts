@@ -50,6 +50,44 @@ Deno.test("get_issue_context bounds stored comments", async () => {
   }
 });
 
+Deno.test("get_pull_request_context bounds both comments and reviews", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_command: string, _options: unknown) {}
+    output() {
+      return Promise.resolve({
+        success: true,
+        stdout: new TextEncoder().encode(JSON.stringify({
+          number: 5,
+          title: "Example",
+          comments: [{ id: 1 }, { id: 2 }, { id: 3 }],
+          reviews: [{ id: "r1" }, { id: "r2" }, { id: "r3" }],
+        })),
+        stderr: new Uint8Array(),
+      });
+    }
+  };
+  try {
+    await extension.methods[0].get_pull_request_context.execute(
+      { repo: "webframp/swamp-extensions", number: 5, maxComments: 2 },
+      context as never,
+    );
+    const written = getWrittenResources();
+    const contextData = written[0].data as {
+      context: { comments: unknown[]; reviews: unknown[] };
+    };
+    assertEquals(contextData.context.comments.length, 2);
+    assertEquals(contextData.context.reviews.length, 2);
+    assertEquals(contextData.context.reviews[0], { id: "r2" });
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
 Deno.test("create_issue parses the created issue number from gh's output URL", async () => {
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: {},

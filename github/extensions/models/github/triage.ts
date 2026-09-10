@@ -105,6 +105,9 @@ export const extension = {
         if (Array.isArray(data.comments)) {
           data.comments = data.comments.slice(-args.maxComments);
         }
+        if (Array.isArray(data.reviews)) {
+          data.reviews = data.reviews.slice(-args.maxComments);
+        }
         const handle = await context.writeResource(
           "triagePullRequest",
           `${key(args.repo)}-${args.number}`,

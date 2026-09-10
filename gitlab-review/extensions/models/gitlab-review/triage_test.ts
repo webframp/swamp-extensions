@@ -172,6 +172,43 @@ Deno.test("post_inline_review accepts a changed line following a no-newline-at-e
     globalThis.fetch = originalFetch;
   }
 });
+Deno.test("post_inline_review rejects two comments at the same path and line in one request", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify([{
+          base_commit_sha: "base",
+          start_commit_sha: "start",
+          head_commit_sha: "expected-head",
+        }]),
+        { status: 200 },
+      ),
+    );
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources,
+  });
+  try {
+    await assertRejects(
+      () =>
+        extension.methods[0].post_inline_review.execute({
+          project,
+          iid,
+          expectedHeadSha: "expected-head",
+          action: "comment",
+          comments: [
+            { path: "src/example.ts", newLine: 1, body: "First" },
+            { path: "src/example.ts", newLine: 1, body: "Second" },
+          ],
+        }, context as never),
+      Error,
+      "is duplicated in this request",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 Deno.test("post_inline_review does not repost a discussion already recorded from a prior attempt", async () => {
   const originalFetch = globalThis.fetch;
   let discussionPosts = 0;

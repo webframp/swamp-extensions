@@ -83,6 +83,16 @@ export const extension = {
         const files = Array.isArray(snapshot.diffs)
           ? snapshot.diffs as Record<string, unknown>[]
           : [];
+        const seenPositions = new Set<string>();
+        for (const comment of args.comments) {
+          const position = `${comment.path}:${comment.newLine}`;
+          if (seenPositions.has(position)) {
+            throw new Error(
+              `Comment ${position} is duplicated in this request`,
+            );
+          }
+          seenPositions.add(position);
+        }
         for (const comment of args.comments) {
           const file = files.find((f) => f.newPath === comment.path);
           if (
