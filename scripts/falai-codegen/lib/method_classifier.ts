@@ -534,15 +534,22 @@ ${indent}    const excludeKeys = new Set<string>(${
       JSON.stringify(excludeNames)
     });
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v === undefined || excludeKeys.has(k)) continue;
+${indent}      if (v === undefined || v === null || excludeKeys.has(k)) continue;
 ${indent}      params[k] = Array.isArray(v) ? v.map(String) : String(v);
 ${indent}    }
+${indent}    const requestedLimit = args.limit !== undefined
+${indent}      ? Number(args.limit)
+${indent}      : undefined;
+${indent}    const requestedCursor = typeof args.cursor === "string"
+${indent}      ? args.cursor
+${indent}      : undefined;
 ${indent}
 ${indent}    const { results, truncated } = await falApiPaginated<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      \`${apiPath}\`,
 ${indent}      "${resultsField}",
 ${indent}      params,
+${indent}      { limit: requestedLimit, cursor: requestedCursor },
 ${indent}    );
 ${indent}
 ${indent}    if (truncated) {
@@ -572,7 +579,7 @@ ${indent}    const excludeKeys = new Set<string>(${
     JSON.stringify(excludeNames)
   });
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v === undefined || excludeKeys.has(k)) continue;
+${indent}      if (v === undefined || v === null || excludeKeys.has(k)) continue;
 ${indent}      if (Array.isArray(v)) {
 ${indent}        for (const item of v) params.append(k, String(item));
 ${indent}      } else {
@@ -673,7 +680,7 @@ function buildQueryString(
     ? `\n${indent}    const queryParts: string[] = [];
 ${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v === undefined || !queryKeys.has(k)) continue;
+${indent}      if (v === undefined || v === null || !queryKeys.has(k)) continue;
 ${indent}      if (Array.isArray(v)) {
 ${indent}        for (const item of v) queryParts.push(\`\${k}=\${encodeURIComponent(String(item))}\`);
 ${indent}      } else {
@@ -939,10 +946,17 @@ ${indent}    return { dataHandles: [handle] };`;
 }
 
 /** Build the API path with template literal substitution */
+/**
+ * A path parameter value flows straight from caller input into a URL path
+ * segment. Left bare, a value like "abc/../../admin" changes which path
+ * segment fetch() actually requests. encodeURIComponent keeps every path
+ * param confined to its own segment.
+ */
 function buildApiPath(path: string): string {
   return path.replace(
     /\{([^}]+)\}/g,
-    (_, name) => `\${args.${sanitizeFieldName(name)}}`,
+    (_, name) =>
+      `\${encodeURIComponent(String(args.${sanitizeFieldName(name)}))}`,
   );
 }
 

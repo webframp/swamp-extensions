@@ -538,7 +538,7 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -549,6 +549,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -753,9 +758,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -764,6 +775,7 @@ export const model = {
           `/assets`,
           "assets",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -814,7 +826,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -938,7 +950,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/assets/collections/${args.collection_id}`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
         );
 
         const handle = await context.writeResource(
@@ -996,7 +1010,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
-          `/assets/collections/${args.collection_id}`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
           body,
         );
 
@@ -1033,7 +1049,9 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/assets/collections/${args.collection_id}`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
         );
 
         context.logger.info("Deleted resource {id}", {
@@ -1066,7 +1084,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["collection_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -1075,8 +1093,12 @@ export const model = {
         }
         const qs = params.toString();
         const url = qs
-          ? `/assets/collections/${args.collection_id}/hierarchy?${qs}`
-          : `/assets/collections/${args.collection_id}/hierarchy`;
+          ? `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/hierarchy?${qs}`
+          : `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/hierarchy`;
 
         const result = await falApi<Record<string, unknown>>(
           apiToken,
@@ -1129,7 +1151,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/collections/${args.collection_id}/favorite`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/favorite`,
         );
 
         const handle = await context.writeResource(
@@ -1165,7 +1189,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/collections/${args.collection_id}/unfavorite`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/unfavorite`,
         );
 
         const handle = await context.writeResource(
@@ -1210,7 +1236,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/collections/${args.collection_id}/move`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/move`,
           body,
         );
 
@@ -1289,17 +1317,26 @@ export const model = {
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
         >(
           apiToken,
-          `/assets/collections/${args.collection_id}/assets`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/assets`,
           "assets",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -1366,7 +1403,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/collections/${args.collection_id}/assets`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/assets`,
           body,
         );
 
@@ -1422,7 +1461,9 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/assets/collections/${args.collection_id}/assets`,
+          `/assets/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/assets`,
           body,
         );
 
@@ -1461,7 +1502,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -1577,7 +1618,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/assets/characters/${args.character_id}`,
+          `/assets/characters/${encodeURIComponent(String(args.character_id))}`,
         );
 
         const handle = await context.writeResource(
@@ -1631,7 +1672,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
-          `/assets/characters/${args.character_id}`,
+          `/assets/characters/${encodeURIComponent(String(args.character_id))}`,
           body,
         );
 
@@ -1668,7 +1709,7 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/assets/characters/${args.character_id}`,
+          `/assets/characters/${encodeURIComponent(String(args.character_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.character_id });
@@ -1699,7 +1740,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/characters/${args.character_id}/favorite`,
+          `/assets/characters/${
+            encodeURIComponent(String(args.character_id))
+          }/favorite`,
         );
 
         const handle = await context.writeResource(
@@ -1735,7 +1778,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/characters/${args.character_id}/unfavorite`,
+          `/assets/characters/${
+            encodeURIComponent(String(args.character_id))
+          }/unfavorite`,
         );
 
         const handle = await context.writeResource(
@@ -1769,7 +1814,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -1921,7 +1966,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "PATCH",
-          `/assets/tags/${args.tag_id}`,
+          `/assets/tags/${encodeURIComponent(String(args.tag_id))}`,
           body,
         );
 
@@ -1958,7 +2003,7 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/assets/tags/${args.tag_id}`,
+          `/assets/tags/${encodeURIComponent(String(args.tag_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.tag_id });
@@ -2046,7 +2091,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/assets/${args.asset_id}`,
+          `/assets/${encodeURIComponent(String(args.asset_id))}`,
         );
 
         const handle = await context.writeResource(
@@ -2085,7 +2130,7 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["depth"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || !queryKeys.has(k)) continue;
+          if (v === undefined || v === null || !queryKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) {
               queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
@@ -2098,7 +2143,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/assets/${args.asset_id}/lineage${qs}`,
+          `/assets/${encodeURIComponent(String(args.asset_id))}/lineage${qs}`,
         );
 
         const handle = await context.writeResource(
@@ -2232,7 +2277,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["asset_id"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -2241,8 +2286,8 @@ export const model = {
         }
         const qs = params.toString();
         const url = qs
-          ? `/assets/${args.asset_id}/tags?${qs}`
-          : `/assets/${args.asset_id}/tags`;
+          ? `/assets/${encodeURIComponent(String(args.asset_id))}/tags?${qs}`
+          : `/assets/${encodeURIComponent(String(args.asset_id))}/tags`;
 
         const result = await falApi<Record<string, unknown>>(
           apiToken,
@@ -2310,7 +2355,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/assets/tags/${args.tag_id}/assign`,
+          `/assets/tags/${encodeURIComponent(String(args.tag_id))}/assign`,
           body,
         );
 
@@ -2366,7 +2411,7 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/assets/tags/${args.tag_id}/assign`,
+          `/assets/tags/${encodeURIComponent(String(args.tag_id))}/assign`,
           body,
         );
 

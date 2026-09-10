@@ -341,7 +341,7 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -352,6 +352,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -454,9 +459,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -465,6 +476,7 @@ export const model = {
           `/models`,
           "models",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -515,7 +527,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -672,9 +684,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -683,6 +701,7 @@ export const model = {
           `/models/usage`,
           "time_series",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -764,9 +783,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -775,6 +800,7 @@ export const model = {
           `/models/analytics`,
           "time_series",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -858,9 +884,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -869,6 +901,7 @@ export const model = {
           `/models/billing-events`,
           "billing_events",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -922,7 +955,9 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/models/requests/${args.request_id}/payloads`,
+          `/models/requests/${
+            encodeURIComponent(String(args.request_id))
+          }/payloads`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.request_id });
@@ -986,9 +1021,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -997,6 +1038,7 @@ export const model = {
           `/models/requests/by-endpoint`,
           "items",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -1078,9 +1120,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -1089,6 +1137,7 @@ export const model = {
           `/models/requests/search`,
           "results",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {

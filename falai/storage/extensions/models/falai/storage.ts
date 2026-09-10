@@ -80,7 +80,7 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -91,6 +91,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -150,7 +155,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -228,7 +233,7 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["url"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || !queryKeys.has(k)) continue;
+          if (v === undefined || v === null || !queryKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) {
               queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
@@ -290,7 +295,7 @@ export const model = {
         const queryParts: string[] = [];
         const queryKeys = new Set(["url"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || !queryKeys.has(k)) continue;
+          if (v === undefined || v === null || !queryKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) {
               queryParts.push(`${k}=${encodeURIComponent(String(item))}`);

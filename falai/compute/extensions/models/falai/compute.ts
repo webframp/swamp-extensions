@@ -105,7 +105,7 @@ const CreateComputeInstanceSchema = z.object({
 /** fal.ai Compute — dedicated GPU compute instances */
 export const model = {
   type: "@webframp/falai/compute",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -116,6 +116,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -166,9 +171,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -177,6 +188,7 @@ export const model = {
           `/compute/instances`,
           "instances",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -276,7 +288,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/compute/instances/${args.id}`,
+          `/compute/instances/${encodeURIComponent(String(args.id))}`,
         );
 
         const handle = await context.writeResource(
@@ -312,7 +324,7 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/compute/instances/${args.id}`,
+          `/compute/instances/${encodeURIComponent(String(args.id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.id });

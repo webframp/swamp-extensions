@@ -68,7 +68,7 @@ const CreateApiKeySchema = z.object({
 /** fal.ai API Keys — key management */
 export const model = {
   type: "@webframp/falai/keys",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -79,6 +79,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -132,9 +137,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -143,6 +154,7 @@ export const model = {
           `/keys`,
           "keys",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -238,7 +250,7 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/keys/${args.key_id}`,
+          `/keys/${encodeURIComponent(String(args.key_id))}`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.key_id });

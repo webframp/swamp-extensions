@@ -171,6 +171,14 @@ export interface PaginatedResult<T> {
   totalFetched: number;
 }
 
+export interface PaginationOptions {
+  /** Caller-requested result cap. Stops fetching once reached; results are
+   * sliced to exactly this many. Omit to fetch every page up to MAX_PAGES. */
+  limit?: number;
+  /** Caller-supplied cursor to resume from, rather than starting at page 1. */
+  cursor?: string;
+}
+
 /**
  * Fetch every page of a cursor-paginated fal.ai list endpoint.
  *
@@ -180,17 +188,24 @@ export interface PaginatedResult<T> {
  * When the response carries `next_cursor`/`has_more`, those drive the stop
  * condition; otherwise pagination stops once a page is shorter than the
  * requested limit, matching cloudflare-codegen's fallback heuristic.
+ *
+ * `options.limit`/`options.cursor` are the *caller's* pagination args (the
+ * method's own `limit`/`cursor` schema fields) — distinct from the internal
+ * per-request page size below, which is always 100 regardless of what the
+ * caller asked for.
  */
 export async function falApiPaginated<T>(
   apiToken: string,
   path: string,
   resultsField: string,
   params?: Record<string, string | string[]>,
+  options?: PaginationOptions,
 ): Promise<PaginatedResult<T>> {
   const token = resolveToken(apiToken);
   const allResults: T[] = [];
-  const limit = 100;
-  let cursor: string | undefined;
+  const pageSize = 100;
+  const targetLimit = options?.limit;
+  let cursor: string | undefined = options?.cursor;
   let truncated = false;
 
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -202,7 +217,7 @@ export async function falApiPaginated<T>(
         queryParams.append(k, v);
       }
     }
-    queryParams.set("limit", String(limit));
+    queryParams.set("limit", String(pageSize));
     if (cursor) queryParams.set("cursor", cursor);
 
     const url = `${FAL_API_BASE}${path}?${queryParams}`;
@@ -236,6 +251,15 @@ export async function falApiPaginated<T>(
       ? data.next_cursor
       : undefined;
 
+    if (targetLimit !== undefined && allResults.length >= targetLimit) {
+      // Reached the caller's requested count. More data may still exist
+      // beyond it — truncated reflects that possibility, not an error.
+      truncated = allResults.length > targetLimit ||
+        hasMore === true ||
+        (hasMore === undefined && items.length >= pageSize);
+      break;
+    }
+
     if (hasMore !== undefined) {
       if (!hasMore) break;
       if (!nextCursor) {
@@ -248,7 +272,7 @@ export async function falApiPaginated<T>(
     } else {
       // No has_more/next_cursor in the response: fall back to the
       // shorter-than-requested-page heuristic.
-      if (items.length < limit) break;
+      if (items.length < pageSize) break;
       if (page >= MAX_PAGES) {
         truncated = true;
         break;
@@ -268,5 +292,8 @@ export async function falApiPaginated<T>(
     }
   }
 
-  return { results: allResults, truncated, totalFetched: allResults.length };
+  const results = targetLimit !== undefined
+    ? allResults.slice(0, targetLimit)
+    : allResults;
+  return { results, truncated, totalFetched: allResults.length };
 }

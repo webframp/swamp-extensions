@@ -337,7 +337,7 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.10.1",
+  version: "2026.09.10.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -348,6 +348,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -487,9 +492,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -498,6 +509,7 @@ export const model = {
           `/serverless/analytics`,
           "time_series",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -553,7 +565,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>([]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -609,7 +621,9 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/serverless/apps/${args.owner}/${args.name}/queue`,
+          `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/queue`,
         );
 
         const handle = await context.writeResource(
@@ -648,7 +662,9 @@ export const model = {
         await falApi(
           apiToken,
           "DELETE",
-          `/serverless/apps/${args.owner}/${args.name}/queue`,
+          `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/queue`,
         );
 
         context.logger.info("Deleted resource {id}", { id: args.name });
@@ -699,7 +715,7 @@ export const model = {
         const params = new URLSearchParams();
         const excludeKeys = new Set<string>(["owner", "name"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) params.append(k, String(item));
           } else {
@@ -708,8 +724,12 @@ export const model = {
         }
         const qs = params.toString();
         const url = qs
-          ? `/serverless/apps/${args.owner}/${args.name}/runners/history?${qs}`
-          : `/serverless/apps/${args.owner}/${args.name}/runners/history`;
+          ? `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/runners/history?${qs}`
+          : `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/runners/history`;
 
         const result = await falApi<Record<string, unknown>>(
           apiToken,
@@ -830,17 +850,26 @@ export const model = {
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
         >(
           apiToken,
-          `/serverless/apps/${args.owner}/${args.name}/events`,
+          `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/events`,
           "events",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -900,17 +929,26 @@ export const model = {
           "cursor",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
         >(
           apiToken,
-          `/serverless/apps/${args.owner}/${args.name}/revisions`,
+          `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
+            encodeURIComponent(String(args.name))
+          }/revisions`,
           "revisions",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -992,7 +1030,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/serverless/files/list/${args.dir}`,
+          `/serverless/files/list/${encodeURIComponent(String(args.dir))}`,
         );
 
         const handle = await context.writeResource(
@@ -1035,7 +1073,7 @@ export const model = {
         const result = await falApi<Record<string, unknown>>(
           apiToken,
           "POST",
-          `/serverless/files/file/url/${args.file}`,
+          `/serverless/files/file/url/${encodeURIComponent(String(args.file))}`,
           body,
         );
 
@@ -1123,7 +1161,7 @@ export const model = {
           "request_id",
         ]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || !queryKeys.has(k)) continue;
+          if (v === undefined || v === null || !queryKeys.has(k)) continue;
           if (Array.isArray(v)) {
             for (const item of v) {
               queryParts.push(`${k}=${encodeURIComponent(String(item))}`);
@@ -1206,9 +1244,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -1217,6 +1261,7 @@ export const model = {
           `/serverless/requests/by-endpoint`,
           "items",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
@@ -1304,9 +1349,15 @@ export const model = {
         const params: Record<string, string | string[]> = {};
         const excludeKeys = new Set<string>(["limit", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
-          if (v === undefined || excludeKeys.has(k)) continue;
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
           params[k] = Array.isArray(v) ? v.map(String) : String(v);
         }
+        const requestedLimit = args.limit !== undefined
+          ? Number(args.limit)
+          : undefined;
+        const requestedCursor = typeof args.cursor === "string"
+          ? args.cursor
+          : undefined;
 
         const { results, truncated } = await falApiPaginated<
           Record<string, unknown>
@@ -1315,6 +1366,7 @@ export const model = {
           `/serverless/usage`,
           "time_series",
           params,
+          { limit: requestedLimit, cursor: requestedCursor },
         );
 
         if (truncated) {
