@@ -337,7 +337,7 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.10.2",
+  version: "2026.09.10.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -353,6 +353,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.3",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

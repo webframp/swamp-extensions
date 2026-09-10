@@ -742,13 +742,31 @@ ${indent}    }\n`;
  * instead of echoing the id at the top level, so a top-level-only search
  * misses it.
  */
+/**
+ * A field only qualifies as a stable identifier if the response schema
+ * guarantees it's always present and never null — required-but-nullable or
+ * optional fields (e.g. fal.ai's `asset.asset_id: ["string", "null"]`, which
+ * is null while an upload is still processing) can legitimately be absent,
+ * and falling through to the "created" fallback for those calls collides
+ * every such response onto one instance.
+ */
+function isRequiredNonNullable(schema: SchemaObject, key: string): boolean {
+  if (!(schema.required ?? []).includes(key)) return false;
+  const prop = schema.properties![key];
+  if (prop.nullable) return false;
+  if (Array.isArray(prop.type) && prop.type.includes("null")) return false;
+  return true;
+}
+
 function findIdAccessor(
   schema: SchemaObject | undefined,
   depth = 0,
 ): string[] | undefined {
   if (!schema?.properties || depth > 1) return undefined;
-  if ("id" in schema.properties) return ["id"];
-  const idLike = Object.keys(schema.properties).find((k) => /_id$/.test(k));
+  if (isRequiredNonNullable(schema, "id")) return ["id"];
+  const idLike = Object.keys(schema.properties).find((k) =>
+    /_id$/.test(k) && isRequiredNonNullable(schema, k)
+  );
   if (idLike) return [idLike];
   if (depth === 0) {
     for (const [key, prop] of Object.entries(schema.properties)) {
@@ -772,7 +790,7 @@ function findNameAccessor(
   depth = 0,
 ): string[] | undefined {
   if (!schema?.properties || depth > 1) return undefined;
-  if ("name" in schema.properties) return ["name"];
+  if (isRequiredNonNullable(schema, "name")) return ["name"];
   if (depth === 0) {
     for (const [key, prop] of Object.entries(schema.properties)) {
       if (prop.properties) {

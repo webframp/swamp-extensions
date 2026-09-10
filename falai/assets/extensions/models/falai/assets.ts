@@ -538,7 +538,7 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.10.2",
+  version: "2026.09.10.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -554,6 +554,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.3",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -2059,7 +2064,7 @@ export const model = {
           String(
             ((result as Record<string, unknown>)["asset"] as
               | Record<string, unknown>
-              | undefined)?.["asset_id"] ?? "created",
+              | undefined)?.["vector_id"] ?? "created",
           ),
         );
         const handle = await context.writeResource("upload_asset", id, result);
