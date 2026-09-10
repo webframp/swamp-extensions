@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 import { z } from "npm:zod@4.4.3";
 const repo = z.string().regex(/^[\w.-]+\/[\w.-]+$/);
+const idempotencyKey = z.string().min(1).regex(
+  /^[A-Za-z0-9._:-]+$/,
+  "must contain only alphanumerics, dot, underscore, colon, or hyphen",
+);
 type Ctx = {
   readResource: (name: string) => Promise<Record<string, unknown> | null>;
   writeResource: (
@@ -10,6 +14,12 @@ type Ctx = {
   ) => Promise<{ name: string }>;
 };
 const key = (repo: string) => encodeURIComponent(repo);
+const REDACTED_FLAGS = new Set(["--body", "--title"]);
+function redactArgs(args: string[]): string[] {
+  return args.map((arg, index) =>
+    index > 0 && REDACTED_FLAGS.has(args[index - 1]) ? "[redacted]" : arg
+  );
+}
 async function gh(args: string[]): Promise<unknown> {
   const out = await new Deno.Command("gh", {
     args,
@@ -18,7 +28,9 @@ async function gh(args: string[]): Promise<unknown> {
   }).output();
   if (!out.success) {
     throw new Error(
-      `gh ${args.join(" ")} failed: ${new TextDecoder().decode(out.stderr)}`,
+      `gh ${redactArgs(args).join(" ")} failed: ${
+        new TextDecoder().decode(out.stderr)
+      }`,
     );
   }
   const value = new TextDecoder().decode(out.stdout).trim();
@@ -113,7 +125,7 @@ export const extension = {
         repo,
         title: z.string().min(1),
         body: z.string(),
-        idempotencyKey: z.string().min(1),
+        idempotencyKey,
       }).strict(),
       execute: async (
         args: {
@@ -168,7 +180,7 @@ export const extension = {
         repo,
         number: z.number().int().positive(),
         body: z.string().min(1),
-        idempotencyKey: z.string().min(1),
+        idempotencyKey,
       }).strict(),
       execute: async (
         args: {
@@ -212,7 +224,7 @@ export const extension = {
       arguments: z.object({
         repo,
         number: z.number().int().positive(),
-        idempotencyKey: z.string().min(1),
+        idempotencyKey,
       }).strict(),
       execute: async (
         args: { repo: string; number: number; idempotencyKey: string },
@@ -279,7 +291,7 @@ export const extension = {
         repo,
         runId: z.number().int().positive(),
         failedOnly: z.boolean().default(false),
-        idempotencyKey: z.string().min(1),
+        idempotencyKey,
       }).strict(),
       execute: async (
         args: {

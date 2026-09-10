@@ -97,6 +97,16 @@ Deno.test("get_lab_issue_context strips an http:// prefix from a misconfigured h
   }
 });
 
+Deno.test("post_ripple rejects an idempotency key that would close its HTML comment marker early", () => {
+  assertEquals(
+    model.methods.post_ripple.arguments.safeParse({
+      issueNumber: 12,
+      body: "Linked issue",
+      idempotencyKey: "ripple-12--><script>evil</script>",
+    }).success,
+    false,
+  );
+});
 Deno.test("post_ripple sends the exact idempotency marker and records comment ID", async () => {
   const originalFetch = globalThis.fetch;
   let requestBody = "";

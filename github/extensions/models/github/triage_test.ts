@@ -123,6 +123,66 @@ Deno.test("create_issue throws when gh's output does not contain a parseable iss
   }
 });
 
+Deno.test("create_issue rejects an idempotency key that would close its HTML comment marker early", () => {
+  assertEquals(
+    extension.methods[0].create_issue.arguments.safeParse({
+      repo: "webframp/swamp-extensions",
+      title: "Example",
+      body: "Body",
+      idempotencyKey: "create-1--><script>evil</script>",
+    }).success,
+    false,
+  );
+});
+Deno.test("create_issue redacts --body and --title from a gh failure message", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const originalCommand = Deno.Command;
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class MockCommand {
+    constructor(_command: string, _options: unknown) {}
+    output() {
+      return Promise.resolve({
+        success: false,
+        stdout: new Uint8Array(),
+        stderr: new TextEncoder().encode("permission denied"),
+      });
+    }
+  };
+  try {
+    await assertRejects(
+      () =>
+        extension.methods[0].create_issue.execute(
+          {
+            repo: "webframp/swamp-extensions",
+            title: "Sensitive title",
+            body: "Sensitive body contents",
+            idempotencyKey: "create-fail-1",
+          },
+          context as never,
+        ),
+      Error,
+      "[redacted]",
+    );
+    let message = "";
+    try {
+      await extension.methods[0].create_issue.execute(
+        {
+          repo: "webframp/swamp-extensions",
+          title: "Sensitive title",
+          body: "Sensitive body contents",
+          idempotencyKey: "create-fail-2",
+        },
+        context as never,
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    assertEquals(message.includes("Sensitive"), false);
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = originalCommand;
+  }
+});
 Deno.test("get_issue_context uses collision-resistant resource names across repos", async () => {
   const { context, getWrittenResources } = createModelTestContext({
     globalArgs: {},

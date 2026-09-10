@@ -44,7 +44,7 @@ function changedLines(diff: string): Set<number> {
     if (line.startsWith("+") && !line.startsWith("+++")) {
       lines.add(current);
       current++;
-    } else if (!line.startsWith("-")) current++;
+    } else if (!line.startsWith("-") && !line.startsWith("\\")) current++;
   }
   return lines;
 }

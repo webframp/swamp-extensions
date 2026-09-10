@@ -112,6 +112,66 @@ Deno.test("post_inline_review validates changed lines and records discussions", 
   }
 });
 
+Deno.test("post_inline_review accepts a changed line following a no-newline-at-eof marker", async () => {
+  const originalFetch = globalThis.fetch;
+  let discussionBody: Record<string, unknown> | undefined;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const path = new URL(String(input)).pathname;
+    if (path.endsWith("/versions")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{
+            base_commit_sha: "base",
+            start_commit_sha: "start",
+            head_commit_sha: "expected-head",
+          }]),
+          { status: 200 },
+        ),
+      );
+    }
+    discussionBody = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({ id: "discussion-1", notes: [{ id: 10 }] }),
+        { status: 201 },
+      ),
+    );
+  };
+  const noEofResources = {
+    [`mrDiff-${encodeURIComponent(project)}-${iid}`]: {
+      project,
+      iid,
+      state: "opened",
+      diffs: [{
+        newPath: "src/example.ts",
+        diff: [
+          "@@ -1,2 +1,3 @@",
+          " unchanged",
+          "-last line",
+          "\\ No newline at end of file",
+          "+last line",
+          "+new line",
+        ].join("\n"),
+      }],
+    },
+  };
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: noEofResources,
+  });
+  try {
+    await extension.methods[0].post_inline_review.execute({
+      project,
+      iid,
+      expectedHeadSha: "expected-head",
+      action: "comment",
+      comments: [{ path: "src/example.ts", newLine: 2, body: "Review note" }],
+    }, context as never);
+    assertEquals(discussionBody?.body, "Review note");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 Deno.test("post_inline_review does not repost a discussion already recorded from a prior attempt", async () => {
   const originalFetch = globalThis.fetch;
   let discussionPosts = 0;

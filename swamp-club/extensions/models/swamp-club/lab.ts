@@ -5,6 +5,10 @@ const GlobalArgs = z.object({
   apiKey: z.string().min(1).meta({ sensitive: true }),
   maxComments: z.number().int().min(1).max(100).default(50),
 }).strict();
+const idempotencyKey = z.string().min(1).regex(
+  /^[A-Za-z0-9._:-]+$/,
+  "must contain only alphanumerics, dot, underscore, colon, or hyphen",
+);
 const Issue = z.object({
   number: z.number(),
   type: z.string(),
@@ -131,7 +135,7 @@ export const model = {
       arguments: z.object({
         issueNumber: z.number().int().positive(),
         body: z.string().min(1).max(20000),
-        idempotencyKey: z.string().min(1),
+        idempotencyKey,
       }).strict(),
       execute: async (
         { issueNumber, body, idempotencyKey }: {
