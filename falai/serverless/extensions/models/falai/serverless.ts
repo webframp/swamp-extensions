@@ -337,12 +337,17 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.09.2",
+  version: "2026.09.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -609,7 +614,9 @@ export const model = {
 
         const handle = await context.writeResource(
           "app_queue_info",
-          sanitizeInstanceName(String(args.name)),
+          sanitizeInstanceName(
+            [String(args.owner), String(args.name)].join("_"),
+          ),
           result,
         );
         context.logger.info("Fetched app_queue_info", {});

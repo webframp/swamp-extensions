@@ -105,12 +105,17 @@ const CreateComputeInstanceSchema = z.object({
 /** fal.ai Compute — dedicated GPU compute instances */
 export const model = {
   type: "@webframp/falai/compute",
-  version: "2026.09.09.2",
+  version: "2026.09.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

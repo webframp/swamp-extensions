@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { falApi, falApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  falApi,
+  falApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/assets";
 
@@ -533,12 +538,17 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.09.2",
+  version: "2026.09.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -889,7 +899,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["collection"] as
+              | Record<string, unknown>
+              | undefined)?.["id"] ?? "created",
+          ),
         );
         const handle = await context.writeResource(
           "asset_collection",
@@ -1201,7 +1215,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["collection"] as
+              | Record<string, unknown>
+              | undefined)?.["id"] ?? "created",
+          ),
         );
         const handle = await context.writeResource(
           "move_asset_collection",
@@ -1352,9 +1370,10 @@ export const model = {
           body,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
-        );
+        // No id- or name-shaped field anywhere in this response —
+        // derive a deterministic, collision-resistant instance name
+        // from the request instead of colliding every call onto "created".
+        const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));
         const handle = await context.writeResource(
           "add_asset_to_collection",
           id,
@@ -1519,7 +1538,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["character"] as
+              | Record<string, unknown>
+              | undefined)?.["id"] ?? "created",
+          ),
         );
         const handle = await context.writeResource(
           "asset_character",
@@ -1808,7 +1831,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["tag"] as
+              | Record<string, unknown>
+              | undefined)?.["id"] ?? "created",
+          ),
         );
         const handle = await context.writeResource("asset_tag", id, result);
         context.logger.info("Created asset_tag {id}", { id });
@@ -1984,7 +2011,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["asset"] as
+              | Record<string, unknown>
+              | undefined)?.["asset_id"] ?? "created",
+          ),
         );
         const handle = await context.writeResource("upload_asset", id, result);
         context.logger.info("Created upload_asset {id}", { id });
@@ -2115,9 +2146,10 @@ export const model = {
           args,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
-        );
+        // No id- or name-shaped field anywhere in this response —
+        // derive a deterministic, collision-resistant instance name
+        // from the request instead of colliding every call onto "created".
+        const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));
         const handle = await context.writeResource(
           "favorite_asset",
           id,
@@ -2163,9 +2195,10 @@ export const model = {
           args,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
-        );
+        // No id- or name-shaped field anywhere in this response —
+        // derive a deterministic, collision-resistant instance name
+        // from the request instead of colliding every call onto "created".
+        const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));
         const handle = await context.writeResource(
           "unfavorite_asset",
           id,
@@ -2281,9 +2314,10 @@ export const model = {
           body,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
-        );
+        // No id- or name-shaped field anywhere in this response —
+        // derive a deterministic, collision-resistant instance name
+        // from the request instead of colliding every call onto "created".
+        const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));
         const handle = await context.writeResource(
           "assign_asset_tag",
           id,

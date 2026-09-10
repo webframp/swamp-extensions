@@ -71,12 +71,17 @@ const CreateWorkflowSchema = z.object({
 /** fal.ai Workflows — workflow definitions */
 export const model = {
   type: "@webframp/falai/workflows",
-  version: "2026.09.09.2",
+  version: "2026.09.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -215,7 +220,11 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
+          String(
+            ((result as Record<string, unknown>)["workflow"] as
+              | Record<string, unknown>
+              | undefined)?.["name"] ?? "created",
+          ),
         );
         const handle = await context.writeResource("workflow", id, result);
         context.logger.info("Created workflow {id}", { id });
@@ -252,7 +261,9 @@ export const model = {
 
         const handle = await context.writeResource(
           "workflow",
-          sanitizeInstanceName(String(args.workflow_name)),
+          sanitizeInstanceName(
+            [String(args.username), String(args.workflow_name)].join("_"),
+          ),
           result,
         );
         context.logger.info("Fetched workflow", {});

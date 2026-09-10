@@ -202,10 +202,11 @@ Deno.test({
           "/compute/instances",
           "instances",
         );
-        // Stops on page 1 because there's no cursor to advance with, even
-        // though the page came back exactly at the requested limit.
+        // Stops on page 1 because there's no cursor to advance with. The
+        // page came back exactly at the requested limit, so more results
+        // may exist that this call can't reach — truncated must say so.
         assertEquals(result.results.length, 100);
-        assertEquals(result.truncated, false);
+        assertEquals(result.truncated, true);
       } finally {
         globalThis.fetch = originalFetch;
         await server.shutdown();

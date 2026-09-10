@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { falApi, sanitizeInstanceName } from "./_lib/api.ts";
+import { falApi, sanitizeInstanceName, shortHash } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/storage";
 
@@ -80,12 +80,17 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.09.09.2",
+  version: "2026.09.10.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
     {
       toVersion: "2026.09.09.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -303,9 +308,10 @@ export const model = {
           body,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as Record<string, unknown>)["id"] ?? "created"),
-        );
+        // No id- or name-shaped field anywhere in this response —
+        // derive a deterministic, collision-resistant instance name
+        // from the request instead of colliding every call onto "created".
+        const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));
         const handle = await context.writeResource(
           "sign_storage_file_url",
           id,

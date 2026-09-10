@@ -16,6 +16,7 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
+import type { ParameterObject, SchemaObject } from "./schema_fetcher.ts";
 import { schemaToZod } from "./type_mapper.ts";
 import { SENSITIVE_RESPONSE_FIELDS, ZOD_VERSION } from "../config.ts";
 
@@ -209,6 +210,10 @@ export function generateModelSource(
   if (usesFalApiPaginated) apiImports.push("falApiPaginated");
   const usesSanitize = methods.some(methodEmitsSanitize);
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
+  const usesShortHash = methods.some(
+    (m) => m.type === "create" && resolveIdAccessor(m) === undefined,
+  );
+  if (usesShortHash) apiImports.push("shortHash");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -608,12 +613,10 @@ function generateGetBody(
   indent: string,
 ): string {
   const resourceName = method.name.replace(/^get_/, "");
-  const idParam = method.operation.pathParams[
-    method.operation.pathParams.length - 1
-  ];
-  const instanceExpr = idParam
-    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+  const instanceExpr = buildPathParamInstanceExpr(
+    method.operation.pathParams,
+    '"latest"',
+  );
   const { queryBuild, pathSuffix } = buildQueryString(method, indent);
 
   return `${queryBuild}
@@ -626,6 +629,30 @@ ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Fetched ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/**
+ * Build the resource instance-name expression from a method's path
+ * parameters. fal.ai paths are frequently scoped by more than one segment
+ * (e.g. `/serverless/apps/{owner}/{name}/queue`) — using only the last path
+ * param drops the scoping segment and collides two different owners' same-
+ * named resources onto one instance. Every path param is joined into the
+ * instance name to keep it collision-resistant.
+ */
+function buildPathParamInstanceExpr(
+  pathParams: ParameterObject[],
+  fallback: string,
+): string {
+  if (pathParams.length === 0) return fallback;
+  if (pathParams.length === 1) {
+    return `sanitizeInstanceName(String(args.${
+      sanitizeFieldName(pathParams[0].name)
+    }))`;
+  }
+  const parts = pathParams
+    .map((p) => `String(args.${sanitizeFieldName(p.name)})`)
+    .join(", ");
+  return `sanitizeInstanceName([${parts}].join("_"))`;
 }
 
 /**
@@ -702,18 +729,78 @@ ${indent}    }\n`;
 }
 
 /**
- * Resolve the response field that identifies a newly created resource, from
- * the operation's documented response schema — falling back to "id" when the
- * schema is unavailable or carries no id-shaped property. fal.ai operations
- * don't all echo back a bare "id" (e.g. createApiKey returns "key_id"), so a
- * hardcoded ".id" silently collapses every created instance onto one slot.
+ * Search a response schema's properties for an id-shaped field, one level
+ * deep. fal.ai frequently wraps a create response in a single named object
+ * (e.g. `{ collection: { id, ... } }`, `{ asset: { asset_id, ... } }`)
+ * instead of echoing the id at the top level, so a top-level-only search
+ * misses it.
  */
-function resolveIdFieldName(method: ClassifiedMethod): string {
-  const props = method.operation.responseSchema?.properties;
-  if (!props) return "id";
-  if ("id" in props) return "id";
-  const idLike = Object.keys(props).find((k) => /_id$/.test(k));
-  return idLike ?? "id";
+function findIdAccessor(
+  schema: SchemaObject | undefined,
+  depth = 0,
+): string[] | undefined {
+  if (!schema?.properties || depth > 1) return undefined;
+  if ("id" in schema.properties) return ["id"];
+  const idLike = Object.keys(schema.properties).find((k) => /_id$/.test(k));
+  if (idLike) return [idLike];
+  if (depth === 0) {
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (prop.properties) {
+        const nested = findIdAccessor(prop, depth + 1);
+        if (nested) return [key, ...nested];
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Fallback search for a "name" field when no id-shaped field exists
+ * anywhere in the response — some fal.ai resources are addressed by name
+ * rather than id (e.g. `createWorkflow` returns `{ workflow: { name, ... } }`
+ * with no id field at all).
+ */
+function findNameAccessor(
+  schema: SchemaObject | undefined,
+  depth = 0,
+): string[] | undefined {
+  if (!schema?.properties || depth > 1) return undefined;
+  if ("name" in schema.properties) return ["name"];
+  if (depth === 0) {
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (prop.properties) {
+        const nested = findNameAccessor(prop, depth + 1);
+        if (nested) return [key, ...nested];
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve how to read a newly created resource's identifier out of its
+ * response body — as a property-access path, searching id-shaped fields
+ * first (top level, then one level of wrapping), then name-shaped fields.
+ * Returns undefined when the response carries no discoverable identifier at
+ * all (e.g. `{ success: true }`, `{ signed_url: "..." }`), in which case the
+ * caller must derive the instance name from the request instead.
+ */
+function resolveIdAccessor(method: ClassifiedMethod): string[] | undefined {
+  const schema = method.operation.responseSchema;
+  return findIdAccessor(schema) ?? findNameAccessor(schema);
+}
+
+/** Build the TS expression that reads an accessor path off `result`. */
+function buildAccessorExpr(accessor: string[]): string {
+  let expr = `(result as Record<string, unknown>)["${accessor[0]}"]`;
+  for (const key of accessor.slice(1, -1)) {
+    expr = `(${expr} as Record<string, unknown> | undefined)?.["${key}"]`;
+  }
+  if (accessor.length > 1) {
+    const last = accessor[accessor.length - 1];
+    expr = `(${expr} as Record<string, unknown> | undefined)?.["${last}"]`;
+  }
+  return expr;
 }
 
 /** Generate create method body */
@@ -727,7 +814,15 @@ function generateCreateBody(
     method,
     indent,
   );
-  const idField = resolveIdFieldName(method);
+  const accessor = resolveIdAccessor(method);
+  const idStatement = accessor
+    ? `${indent}    const id = sanitizeInstanceName(String(${
+      buildAccessorExpr(accessor)
+    } ?? "created"));`
+    : `${indent}    // No id- or name-shaped field anywhere in this response —
+${indent}    // derive a deterministic, collision-resistant instance name
+${indent}    // from the request instead of colliding every call onto "created".
+${indent}    const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));`;
   const sensitiveFields = SENSITIVE_RESPONSE_FIELDS[method.operation.operationId];
 
   const redactBlock = sensitiveFields?.length
@@ -752,7 +847,7 @@ ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      ${bodySetup ? "body" : "args"},
 ${indent}    );
 ${redactBlock}${indent}
-${indent}    const id = sanitizeInstanceName(String((result as Record<string, unknown>)["${idField}"] ?? "created"));
+${idStatement}
 ${indent}    const handle = await context.writeResource("${resourceName}", id, ${storedVar});
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
@@ -766,12 +861,10 @@ function generateUpdateBody(
 ): string {
   const resourceName = method.name.replace(/^update_/, "");
   const httpMethod = method.operation.httpMethod.toUpperCase();
-  const idParam = method.operation.pathParams[
-    method.operation.pathParams.length - 1
-  ];
-  const instanceExpr = idParam
-    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"updated"';
+  const instanceExpr = buildPathParamInstanceExpr(
+    method.operation.pathParams,
+    '"updated"',
+  );
   const { queryBuild, pathSuffix, bodySetup } = buildParamAndBodySetup(
     method,
     indent,

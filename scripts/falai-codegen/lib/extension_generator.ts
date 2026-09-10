@@ -175,7 +175,7 @@ const FAL_API_BASE = "https://api.fal.ai/v1";
  * error when neither is set.
  */
 function resolveToken(apiToken?: string): string {
-  const token = apiToken || Deno.env.get("FAL_KEY");
+  const token = apiToken ?? Deno.env.get("FAL_KEY");
   if (!token) {
     throw new Error(
       "fal.ai API key not set. Provide the apiToken global argument " +
@@ -210,6 +210,24 @@ export function sanitizeInstanceName(name: string): string {
     .replace(/[/\\\\]/g, "_")
     .replace(/\\.\\./g, "_")
     .replace(/\\0/g, "");
+}
+
+/**
+ * Deterministic short hash (SHA-1, first 16 hex chars) for building a
+ * collision-resistant resource instance name when a create response carries
+ * no id- or name-shaped field to key off of (e.g. \`{ success: true }\`,
+ * \`{ signed_url: "..." }\`) — hashing the request instead of falling back to
+ * a fixed "created" slot keeps distinct calls from overwriting each other.
+ */
+export async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
 }
 
 const MAX_RETRIES = 3;
@@ -385,9 +403,13 @@ export async function falApiPaginated<T>(
         truncated = true;
         break;
       }
-      // Without an explicit cursor, further pagination cannot proceed —
-      // stop rather than re-fetch the same page forever.
-      if (!nextCursor) break;
+      // Without an explicit cursor, further pagination cannot proceed. A
+      // full page with nothing to continue with means more data may exist
+      // that this call cannot reach.
+      if (!nextCursor) {
+        truncated = true;
+        break;
+      }
       cursor = nextCursor;
     }
 
