@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/falai/serverless"
-version: "2026.09.10.3"
+version: "2026.09.10.4"
 description: "fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

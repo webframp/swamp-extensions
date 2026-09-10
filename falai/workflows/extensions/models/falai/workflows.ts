@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.4.3";
-import { falApi, falApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  falApi,
+  falApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/workflows";
 
@@ -71,7 +76,7 @@ const CreateWorkflowSchema = z.object({
 /** fal.ai Workflows — workflow definitions */
 export const model = {
   type: "@webframp/falai/workflows",
-  version: "2026.09.10.3",
+  version: "2026.09.10.4",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -92,6 +97,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.3",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.4",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -281,7 +291,12 @@ export const model = {
         const handle = await context.writeResource(
           "workflow",
           sanitizeInstanceName(
-            [String(args.username), String(args.workflow_name)].join("_"),
+            await shortHash(
+              JSON.stringify([
+                String(args.username),
+                String(args.workflow_name),
+              ]),
+            ),
           ),
           result,
         );

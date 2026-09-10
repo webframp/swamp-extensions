@@ -1,15 +1,16 @@
-## 2026.09.10.3
+## 2026.09.10.4
 
 **Fixed:**
 
-- `create_*` methods now only trust an id/name field discovered in the response
-  schema when that field is both required and non-nullable. `upload_asset`'s
-  `asset.asset_id` is documented as nullable while an upload is still
-  processing; treating it as a stable id meant every such response collided onto
-  the fixed "created" instance slot. Affected create methods now correctly fall
-  back to a deterministic hash of the request (or pick a sibling
-  required/non-nullable id field, e.g. `vector_id`, when one exists) instead of
-  colliding.
+- Resource instance names for get/update methods with two or more path
+  parameters (e.g. `get_app_queue_info(owner, name)`,
+  `get_workflow(username,
+  workflow_name)`) were built by joining raw values
+  with `"_"`. Two distinct owner/name pairs that split differently around an
+  underscore (e.g. `"john"`/`"doe_app"` and `"john_doe"`/`"app"`) produced the
+  identical instance name and collided. Multi-param instance names are now
+  derived from a hash of the JSON-encoded parameter tuple, which delimits each
+  part unambiguously.
 
 **Upgrade note:** No schema changes. All fixes are internal to method execution;
 existing stored resources are unaffected.

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/falai/compute"
-version: "2026.09.10.3"
+version: "2026.09.10.4"
 description: "fal.ai Compute — dedicated GPU compute instances"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

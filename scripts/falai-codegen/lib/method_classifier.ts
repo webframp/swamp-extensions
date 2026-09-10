@@ -211,7 +211,10 @@ export function generateModelSource(
   const usesSanitize = methods.some(methodEmitsSanitize);
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
   const usesShortHash = methods.some(
-    (m) => m.type === "create" && resolveIdAccessor(m) === undefined,
+    (m) =>
+      (m.type === "create" && resolveIdAccessor(m) === undefined) ||
+      ((m.type === "get" || m.type === "update") &&
+        m.operation.pathParams.length > 1),
   );
   if (usesShortHash) apiImports.push("shortHash");
   if (apiImports.length > 0) {
@@ -656,10 +659,15 @@ function buildPathParamInstanceExpr(
       sanitizeFieldName(pathParams[0].name)
     }))`;
   }
+  // A bare delimiter join isn't actually collision-resistant when a
+  // component can itself contain the delimiter (e.g. two owner/name pairs
+  // "john"/"doe_app" and "john_doe"/"app" would both join to
+  // "john_doe_app"). JSON.stringify unambiguously delimits each part (via
+  // quoting/escaping), so hashing that instead of a raw join avoids it.
   const parts = pathParams
     .map((p) => `String(args.${sanitizeFieldName(p.name)})`)
     .join(", ");
-  return `sanitizeInstanceName([${parts}].join("_"))`;
+  return `sanitizeInstanceName(await shortHash(JSON.stringify([${parts}])))`;
 }
 
 /**

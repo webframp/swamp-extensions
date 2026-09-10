@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/falai/account"
-version: "2026.09.10.3"
+version: "2026.09.10.4"
 description: "fal.ai Account — billing, focus reports, model access controls, and account metadata"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

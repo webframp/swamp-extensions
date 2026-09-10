@@ -68,7 +68,7 @@ const CreateApiKeySchema = z.object({
 /** fal.ai API Keys — key management */
 export const model = {
   type: "@webframp/falai/keys",
-  version: "2026.09.10.3",
+  version: "2026.09.10.4",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -89,6 +89,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.10.3",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.10.4",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
