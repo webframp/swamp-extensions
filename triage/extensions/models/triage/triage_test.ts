@@ -93,7 +93,7 @@ async function persistedAction(
     actions: [{
       id: "close-issue",
       type: "github.close_issue" as const,
-      target: { repo: "webframp/swamp-extensions", number: 1 },
+      target: { repository: "webframp/swamp-extensions", iid: 1 },
       payload: {
         repo: "webframp/swamp-extensions",
         number: 1,
@@ -118,6 +118,126 @@ Deno.test("parse_target enforces configured allowlists", async () => {
       }, context as never),
     Error,
     "not authorized",
+  );
+});
+Deno.test("parse_target accepts a GitLab issue URL without a /-/ separator", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  await model.methods.parse_target.execute({
+    url: "https://git.bethelservice.org/group/project/issues/123",
+  }, context as never);
+  const written = [...resources.values()].find((r) => r.provider === "gitlab");
+  assertEquals(written?.kind, "issue");
+  assertEquals(written?.project, "group/project");
+  assertEquals(written?.iid, 123);
+});
+
+Deno.test("parse_target accepts a GitLab merge request URL without a /-/ separator", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  await model.methods.parse_target.execute({
+    url: "https://git.bethelservice.org/group/project/merge_requests/45",
+  }, context as never);
+  const written = [...resources.values()].find((r) => r.provider === "gitlab");
+  assertEquals(written?.kind, "merge_request");
+  assertEquals(written?.project, "group/project");
+  assertEquals(written?.iid, 45);
+});
+
+Deno.test("parse_target rejects a bare issues/N URL on a host not in the configured GitLab allowlist", async () => {
+  const context = testContext();
+  await assertRejects(
+    () =>
+      model.methods.parse_target.execute({
+        url: "https://ghe.example.com/group/project/issues/123",
+      }, context as never),
+    Error,
+    "Unsupported triage URL",
+  );
+});
+
+Deno.test("build_action_bundle rejects a two-node dependency cycle", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-cycle";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "github",
+      kind: "issue",
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/issues/9",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 9,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "issue" as const,
+    classification: "bug" as const,
+    priority: "low" as const,
+    disposition: "close" as const,
+    confidence: "high" as const,
+    summary: "Safe to close",
+    evidence: [{ contextId: "body", claim: "No reproduction details" }],
+    questions: [],
+    recommendedNextAction: "Close the duplicate",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const bundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-cycle",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [
+      {
+        id: "action-a",
+        type: "github.close_issue" as const,
+        target: { repository: "webframp/swamp-extensions", iid: 9 },
+        payload: {
+          repo: "webframp/swamp-extensions",
+          number: 9,
+          idempotencyKey: "a",
+        },
+        dependsOn: ["action-b"],
+        idempotencyKey: "a",
+        verify: {},
+      },
+      {
+        id: "action-b",
+        type: "github.close_issue" as const,
+        target: { repository: "webframp/swamp-extensions", iid: 9 },
+        payload: {
+          repo: "webframp/swamp-extensions",
+          number: 9,
+          idempotencyKey: "b",
+        },
+        dependsOn: ["action-a"],
+        idempotencyKey: "b",
+        verify: {},
+      },
+    ],
+  };
+  await assertRejects(
+    () =>
+      model.methods.build_action_bundle.execute(
+        { bundle },
+        context as never,
+      ),
+    Error,
+    "without cycles",
   );
 });
 Deno.test("approval requires Sean", () => {
@@ -182,6 +302,213 @@ Deno.test("authorization releases only the persisted approved action payload", a
     number: 1,
     idempotencyKey: "close-issue-1",
   });
+});
+Deno.test("authorization rejects an action whose target does not match the assessed source", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-mismatch";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "github",
+      kind: "issue",
+      canonicalUrl: "https://github.com/webframp/swamp-extensions/issues/1",
+      host: "github.com",
+      repository: "webframp/swamp-extensions",
+      iid: 1,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "issue" as const,
+    classification: "bug" as const,
+    priority: "low" as const,
+    disposition: "close" as const,
+    confidence: "high" as const,
+    summary: "Safe to close",
+    evidence: [{ contextId: "body", claim: "No reproduction details" }],
+    questions: [],
+    recommendedNextAction: "Close the duplicate",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-mismatch",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "close-issue",
+      type: "github.close_issue" as const,
+      target: { repository: "webframp/some-other-repo", iid: 1 },
+      payload: {
+        repo: "webframp/some-other-repo",
+        number: 1,
+        idempotencyKey: "close-issue-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "close-issue-1",
+      verify: { state: "closed" },
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["close-issue"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await assertRejects(
+    () =>
+      model.methods.authorize_github_action.execute({
+        bundleHash,
+        actionId: "close-issue",
+      }, context as never),
+    Error,
+    "target does not match the assessed source target",
+  );
+});
+Deno.test("authorization rejects a new-target action outside the configured allowlist", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-reroute";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "gitlab",
+      kind: "merge_request",
+      canonicalUrl:
+        "https://git.bethelservice.org/group/project/-/merge_requests/1",
+      host: "git.bethelservice.org",
+      project: "group/project",
+      iid: 1,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  const assessment = {
+    schemaVersion: 1 as const,
+    contextHash: sourceRevision,
+    targetKind: "change" as const,
+    classification: "security" as const,
+    priority: "high" as const,
+    disposition: "review" as const,
+    confidence: "high" as const,
+    summary: "Escalate",
+    evidence: [{ contextId: "body", claim: "Needs a public tracking issue" }],
+    questions: [],
+    recommendedNextAction: "Open a tracking issue",
+    securitySignal: "none" as const,
+  };
+  const assessmentHash = await hash(assessment);
+  resources.set(assessmentHash, assessment);
+  const unsealedBundle = {
+    schemaVersion: 1 as const,
+    id: "bundle-reroute",
+    sourceRevision,
+    assessmentHash,
+    voiceProfile: { dataVersion: "1", contentHash: "voice-1" },
+    actions: [{
+      id: "create-issue",
+      type: "github.create_issue" as const,
+      target: { repository: "not-in-the-allowlist/repo" },
+      payload: {
+        repo: "not-in-the-allowlist/repo",
+        title: "Example",
+        body: "Example",
+        idempotencyKey: "create-1",
+      },
+      dependsOn: [],
+      idempotencyKey: "create-1",
+      verify: {},
+    }],
+  };
+  const bundleHash = await hash(unsealedBundle);
+  resources.set(bundleHash, { ...unsealedBundle, bundleHash });
+  await model.methods.bind_approval.execute({
+    binding: {
+      bundleHash,
+      assessmentHash,
+      sourceRevision,
+      approvedActionIds: ["create-issue"],
+      actor: "Sean",
+    },
+  }, context as never);
+  await assertRejects(
+    () =>
+      model.methods.authorize_github_action.execute({
+        bundleHash,
+        actionId: "create-issue",
+      }, context as never),
+    Error,
+    "target is not authorized",
+  );
+});
+Deno.test("record_assessment rejects a security-signaled reroute_to_github disposition", async () => {
+  const resources = new Map<string, Record<string, unknown>>();
+  const context = testContext(resources);
+  const sourceRevision = "source-security";
+  resources.set(sourceRevision, {
+    schemaVersion: 1,
+    target: {
+      provider: "gitlab",
+      kind: "issue",
+      canonicalUrl: "https://git.bethelservice.org/group/project/-/issues/1",
+      host: "git.bethelservice.org",
+      project: "group/project",
+      iid: 1,
+    },
+    fetchedAt: "2026-09-08T00:00:00.000Z",
+    sourceRevision,
+    title: "Example",
+    body: { contextId: "body", text: "Example", truncated: false },
+    state: "open",
+    labels: [],
+    conversation: [],
+    truncation: [],
+  });
+  await assertRejects(
+    () =>
+      model.methods.record_assessment.execute({
+        assessment: {
+          schemaVersion: 1,
+          contextHash: sourceRevision,
+          targetKind: "issue",
+          classification: "security",
+          priority: "high",
+          disposition: "reroute_to_github",
+          confidence: "high",
+          summary: "Possible vulnerability",
+          evidence: [{ contextId: "body", claim: "Looks exploitable" }],
+          questions: [],
+          recommendedNextAction: "Open a tracking issue",
+          securitySignal: "confirmed",
+        },
+      }, context as never),
+    Error,
+    "publicly-visible content",
+  );
 });
 Deno.test("record_context accepts a context whose sourceRevision matches its canonical content hash", async () => {
   const resources = new Map<string, Record<string, unknown>>();

@@ -364,6 +364,41 @@ export const model = {
       lifetime: "10m" as const,
       garbageCollection: 10,
     },
+    triageIssue: {
+      description: "Exact GitHub issue context for triage",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        context: z.unknown(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "30m" as const,
+      garbageCollection: 10,
+    },
+    triagePullRequest: {
+      description: "Exact GitHub PR context for triage",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        context: z.unknown(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    triageAction: {
+      description: "GitHub triage action evidence",
+      schema: z.object({
+        repo: repoArg(),
+        action: z.string(),
+        target: z.number(),
+        idempotencyKey: z.string(),
+        result: z.unknown(),
+        recordedAt: z.string(),
+      }),
+      lifetime: "30d" as const,
+      garbageCollection: 20,
+    },
   },
 
   methods: {

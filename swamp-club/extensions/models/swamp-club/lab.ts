@@ -20,6 +20,7 @@ const Issue = z.object({
 }).strict();
 type Context = {
   globalArgs: z.infer<typeof GlobalArgs>;
+  readResource: (name: string) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     name: string,
@@ -140,6 +141,10 @@ export const model = {
         },
         context: Context,
       ) => {
+        const resourceName = `${issueNumber}-${idempotencyKey}`;
+        if (await context.readResource(resourceName)) {
+          return { dataHandles: [{ name: resourceName }] };
+        }
         const marked = `${body}\n\n<!-- triage:${idempotencyKey} -->`;
         const response = await request(
           context,
@@ -152,7 +157,7 @@ export const model = {
         }
         const handle = await context.writeResource(
           "ripple",
-          `${issueNumber}-${idempotencyKey}`,
+          resourceName,
           {
             issueNumber,
             commentId: data.comment.id,

@@ -133,3 +133,32 @@ Deno.test("post_ripple sends the exact idempotency marker and records comment ID
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("post_ripple does not post twice for the same idempotency key", async () => {
+  const originalFetch = globalThis.fetch;
+  let callCount = 0;
+  globalThis.fetch = () => {
+    callCount++;
+    return Promise.resolve(
+      new Response(JSON.stringify({ comment: { id: "comment-9" } }), {
+        status: 201,
+      }),
+    );
+  };
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs,
+  });
+  try {
+    const args = {
+      issueNumber: 12,
+      body: "Linked issue",
+      idempotencyKey: "ripple-12",
+    };
+    await model.methods.post_ripple.execute(args, context as never);
+    await model.methods.post_ripple.execute(args, context as never);
+    assertEquals(callCount, 1);
+    assertEquals(getWrittenResources().length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

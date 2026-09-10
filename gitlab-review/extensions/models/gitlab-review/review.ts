@@ -423,6 +423,26 @@ export const model = {
       lifetime: "30d" as const,
       garbageCollection: 20,
     },
+    inlineReview: {
+      description: "SHA-bound batch inline review evidence",
+      schema: z.object({
+        project: z.string(),
+        iid: z.number(),
+        expectedHeadSha: z.string(),
+        action: z.enum(["comment", "request_changes"]),
+        discussions: z.array(
+          z.object({
+            discussionId: z.string(),
+            noteId: z.number(),
+            path: z.string(),
+            newLine: z.number(),
+          }),
+        ),
+        postedAt: z.string(),
+      }).strict(),
+      lifetime: "30d" as const,
+      garbageCollection: 20,
+    },
   },
   methods: {
     get_mr_diff: {

@@ -2,12 +2,14 @@
 import { z } from "npm:zod@4.4.3";
 const repo = z.string().regex(/^[\w.-]+\/[\w.-]+$/);
 type Ctx = {
+  readResource: (name: string) => Promise<Record<string, unknown> | null>;
   writeResource: (
     spec: string,
     name: string,
     data: unknown,
   ) => Promise<{ name: string }>;
 };
+const key = (repo: string) => encodeURIComponent(repo);
 async function gh(args: string[]): Promise<unknown> {
   const out = await new Deno.Command("gh", {
     args,
@@ -31,44 +33,7 @@ const issueFields =
 /** GitHub triage augmentation for exact context and approval-gated actions. */
 export const extension = {
   type: "@webframp/github",
-  resources: {
-    triageIssue: {
-      description: "Exact GitHub issue context for triage",
-      schema: z.object({
-        repo,
-        number: z.number(),
-        context: z.unknown(),
-        fetchedAt: z.string(),
-      }),
-      lifetime: "30m" as const,
-      garbageCollection: 10,
-    },
-    triagePullRequest: {
-      description: "Exact GitHub PR context for triage",
-      schema: z.object({
-        repo,
-        number: z.number(),
-        context: z.unknown(),
-        fetchedAt: z.string(),
-      }),
-      lifetime: "15m" as const,
-      garbageCollection: 10,
-    },
-    triageAction: {
-      description: "GitHub triage action evidence",
-      schema: z.object({
-        repo,
-        action: z.string(),
-        target: z.number(),
-        idempotencyKey: z.string(),
-        result: z.unknown(),
-        recordedAt: z.string(),
-      }),
-      lifetime: "30d" as const,
-      garbageCollection: 20,
-    },
-  },
-  methods: {
+  methods: [{
     get_issue_context: {
       description: "Retrieve one issue with bounded recent comments.",
       arguments: z.object({
@@ -94,7 +59,7 @@ export const extension = {
         }
         const handle = await context.writeResource(
           "triageIssue",
-          `${args.repo.replace("/", "-")}-${args.number}`,
+          `${key(args.repo)}-${args.number}`,
           {
             repo: args.repo,
             number: args.number,
@@ -130,7 +95,7 @@ export const extension = {
         }
         const handle = await context.writeResource(
           "triagePullRequest",
-          `${args.repo.replace("/", "-")}-${args.number}`,
+          `${key(args.repo)}-${args.number}`,
           {
             repo: args.repo,
             number: args.number,
@@ -159,6 +124,10 @@ export const extension = {
         },
         context: Ctx,
       ) => {
+        const resourceName = `${key(args.repo)}-create-${args.idempotencyKey}`;
+        if (await context.readResource(resourceName)) {
+          return { dataHandles: [{ name: resourceName }] };
+        }
         const marker = `<!-- triage:${args.idempotencyKey} -->`;
         const result = await gh([
           "issue",
@@ -180,7 +149,7 @@ export const extension = {
         }
         const handle = await context.writeResource(
           "triageAction",
-          `${args.repo.replace("/", "-")}-create-${args.idempotencyKey}`,
+          resourceName,
           {
             repo: args.repo,
             action: "create_issue",
@@ -210,6 +179,10 @@ export const extension = {
         },
         context: Ctx,
       ) => {
+        const resourceName = `${key(args.repo)}-comment-${args.idempotencyKey}`;
+        if (await context.readResource(resourceName)) {
+          return { dataHandles: [{ name: resourceName }] };
+        }
         const result = await gh([
           "issue",
           "comment",
@@ -221,7 +194,7 @@ export const extension = {
         ]);
         const handle = await context.writeResource(
           "triageAction",
-          `${args.repo.replace("/", "-")}-comment-${args.idempotencyKey}`,
+          resourceName,
           {
             repo: args.repo,
             action: "add_issue_comment",
@@ -245,6 +218,10 @@ export const extension = {
         args: { repo: string; number: number; idempotencyKey: string },
         context: Ctx,
       ) => {
+        const resourceName = `${key(args.repo)}-close-${args.idempotencyKey}`;
+        if (await context.readResource(resourceName)) {
+          return { dataHandles: [{ name: resourceName }] };
+        }
         const result = await gh([
           "issue",
           "close",
@@ -254,7 +231,7 @@ export const extension = {
         ]);
         const handle = await context.writeResource(
           "triageAction",
-          `${args.repo.replace("/", "-")}-close-${args.idempotencyKey}`,
+          resourceName,
           {
             repo: args.repo,
             action: "close_issue",
@@ -283,7 +260,7 @@ export const extension = {
         ]);
         const handle = await context.writeResource(
           "triageAction",
-          `${args.repo.replace("/", "-")}-run-${args.runId}`,
+          `${key(args.repo)}-run-${args.runId}`,
           {
             repo: args.repo,
             action: "get_workflow_run",
@@ -313,6 +290,10 @@ export const extension = {
         },
         context: Ctx,
       ) => {
+        const resourceName = `${key(args.repo)}-retry-${args.idempotencyKey}`;
+        if (await context.readResource(resourceName)) {
+          return { dataHandles: [{ name: resourceName }] };
+        }
         const result = await gh([
           "run",
           "rerun",
@@ -323,7 +304,7 @@ export const extension = {
         ]);
         const handle = await context.writeResource(
           "triageAction",
-          `${args.repo.replace("/", "-")}-retry-${args.idempotencyKey}`,
+          resourceName,
           {
             repo: args.repo,
             action: "retry_workflow_run",
@@ -336,5 +317,5 @@ export const extension = {
         return { dataHandles: [handle] };
       },
     },
-  },
+  }],
 };

@@ -174,6 +174,11 @@ type Context = {
   logger: { info: (message: string, props: Record<string, unknown>) => void };
 };
 
+// Object.entries enumerates own properties set to `undefined` (e.g. the
+// `{...payload, sourceRevision: undefined}` spread used to compute a
+// canonical hash excluding a field). Those keys serialize as the literal
+// text "undefined", not an absent key — internally consistent since every
+// caller uses this same function to both produce and verify hashes.
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
   if (value && typeof value === "object") {
@@ -202,7 +207,7 @@ async function requireResource<T extends z.ZodType>(
   return schema.parse(resource);
 }
 function allowed(
-  target: z.infer<typeof TargetSchema>,
+  target: { provider: Provider; host: string; repository?: string },
   config: z.infer<typeof GlobalArgsSchema>,
 ): boolean {
   if (target.provider === "github") {
@@ -218,7 +223,10 @@ function allowed(
   }
   return config.allowedTargets.swampClub.hosts.includes(target.host);
 }
-function parseUrl(rawUrl: string): z.infer<typeof TargetSchema> {
+function parseUrl(
+  rawUrl: string,
+  allowedGitlabHosts: string[],
+): z.infer<typeof TargetSchema> {
   const url = new URL(rawUrl);
   url.hash = "";
   url.search = "";
@@ -261,12 +269,84 @@ function parseUrl(rawUrl: string): z.infer<typeof TargetSchema> {
       iid: Number(parts[marker + 2]),
     };
   }
+  const [kindSegment, iidSegment] = parts.slice(-2);
+  if (
+    allowedGitlabHosts.includes(url.hostname) &&
+    parts.length >= 3 &&
+    (kindSegment === "issues" || kindSegment === "merge_requests") &&
+    /^\d+$/.test(iidSegment ?? "")
+  ) {
+    return {
+      provider: "gitlab",
+      kind: kindSegment === "issues" ? "issue" : "merge_request",
+      canonicalUrl: url.toString(),
+      host: url.hostname,
+      project: parts.slice(0, -2).join("/"),
+      iid: Number(iidSegment),
+    };
+  }
   throw new Error(`Unsupported triage URL: ${rawUrl}`);
+}
+function hasDependencyCycle(
+  actions: Array<{ id: string; dependsOn: string[] }>,
+): boolean {
+  const byId = new Map(actions.map((action) => [action.id, action]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  function visit(id: string): boolean {
+    if (visited.has(id)) return false;
+    if (visiting.has(id)) return true;
+    visiting.add(id);
+    for (const dependency of byId.get(id)?.dependsOn ?? []) {
+      if (visit(dependency)) return true;
+    }
+    visiting.delete(id);
+    visited.add(id);
+    return false;
+  }
+  return actions.some((action) => visit(action.id));
 }
 function actionProvider(action: Action): Provider {
   if (action.type.startsWith("github.")) return "github";
   if (action.type.startsWith("gitlab.")) return "gitlab";
   return "swamp_club";
+}
+const SAME_SOURCE_ACTION_TYPES = new Set<Action["type"]>([
+  "github.add_issue_comment",
+  "github.close_issue",
+  "github.retry_workflow_run",
+  "gitlab.post_review",
+  "gitlab.post_inline_review",
+]);
+function targetMatchesSource(
+  action: Action,
+  source: z.infer<typeof ContextSchema>,
+): boolean {
+  const target = action.target as Record<string, unknown>;
+  const provider = actionProvider(action);
+  if (provider === "github") {
+    return target.repository === source.target.repository &&
+      target.iid === source.target.iid;
+  }
+  if (provider === "gitlab") {
+    return target.project === source.target.project &&
+      target.iid === source.target.iid;
+  }
+  return target.host === source.target.host &&
+    target.iid === source.target.iid;
+}
+function actionTargetAllowed(
+  action: Action,
+  config: z.infer<typeof GlobalArgsSchema>,
+): boolean {
+  const target = action.target as Record<string, unknown>;
+  const provider = actionProvider(action);
+  if (provider === "github") {
+    return typeof target.repository === "string" &&
+      allowed({ provider, host: "", repository: target.repository }, config);
+  }
+  return typeof target.host === "string" &&
+    allowed({ provider, host: target.host }, config);
 }
 function actionMethod(action: Action): string {
   return action.type.slice(action.type.indexOf(".") + 1);
@@ -352,6 +432,17 @@ async function authorizeAction(
   if (actionProvider(action) !== provider) {
     throw new Error(`Action ${actionId} is not a ${provider} action`);
   }
+  if (SAME_SOURCE_ACTION_TYPES.has(action.type)) {
+    if (!targetMatchesSource(action, source)) {
+      throw new Error(
+        `Action ${actionId} target does not match the assessed source target`,
+      );
+    }
+  } else if (!actionTargetAllowed(action, context.globalArgs)) {
+    throw new Error(
+      `Action ${actionId} target is not authorized by this triage instance`,
+    );
+  }
   const authorized = {
     bundleHash,
     actionId,
@@ -425,7 +516,10 @@ export const model = {
       description: "Parse, canonicalize, and authorize a supported triage URL.",
       arguments: z.object({ url: z.url() }).strict(),
       execute: async ({ url }: { url: string }, context: Context) => {
-        const target = parseUrl(url);
+        const target = parseUrl(
+          url,
+          context.globalArgs.allowedTargets.gitlab.hosts,
+        );
         if (!allowed(target, context.globalArgs)) {
           throw new Error(
             `Target is not authorized by this triage instance: ${target.canonicalUrl}`,
@@ -502,10 +596,11 @@ export const model = {
         }
         if (
           assessment.securitySignal !== "none" &&
-          assessment.disposition === "needs_author_feedback"
+          (assessment.disposition === "needs_author_feedback" ||
+            assessment.disposition === "reroute_to_github")
         ) {
           throw new Error(
-            "Security-signaled assessment cannot propose a public feedback message",
+            "Security-signaled assessment cannot propose publicly-visible content",
           );
         }
         const assessmentHash = await hash(assessment);
@@ -548,13 +643,12 @@ export const model = {
         if (
           ids.size !== bundle.actions.length ||
           bundle.actions.some((action) =>
-            action.dependsOn.some((dependency) =>
-              !ids.has(dependency) || dependency === action.id
-            )
-          )
+            action.dependsOn.some((dependency) => !ids.has(dependency))
+          ) ||
+          hasDependencyCycle(bundle.actions)
         ) {
           throw new Error(
-            "Action dependencies must reference distinct actions in the bundle",
+            "Action dependencies must reference distinct actions in the bundle without cycles",
           );
         }
         const bundleHash = await hash(bundle);

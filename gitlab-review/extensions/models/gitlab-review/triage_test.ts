@@ -33,7 +33,7 @@ Deno.test("post_inline_review rejects stale MR heads", async () => {
   try {
     await assertRejects(
       () =>
-        extension.methods.post_inline_review.execute({
+        extension.methods[0].post_inline_review.execute({
           project,
           iid,
           expectedHeadSha: "expected-head",
@@ -85,7 +85,7 @@ Deno.test("post_inline_review validates changed lines and records discussions", 
     storedResources,
   });
   try {
-    await extension.methods.post_inline_review.execute({
+    await extension.methods[0].post_inline_review.execute({
       project,
       iid,
       expectedHeadSha: "expected-head",
@@ -163,7 +163,7 @@ Deno.test("post_inline_review does not repost a discussion already recorded from
     storedResources: priorAttempt,
   });
   try {
-    await extension.methods.post_inline_review.execute({
+    await extension.methods[0].post_inline_review.execute({
       project,
       iid,
       expectedHeadSha: "expected-head",
