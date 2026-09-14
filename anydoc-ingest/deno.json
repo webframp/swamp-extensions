@@ -7,7 +7,7 @@
     "lint": "deno lint extensions/models/",
     "fmt": "deno fmt extensions/models/",
     "fmt:check": "deno fmt --check extensions/models/",
-    "test": "deno test --allow-env --allow-read --allow-write=/tmp extensions/models/"
+    "test": "deno test --allow-env --allow-read --allow-write extensions/models/"
   },
   "fmt": {
     "exclude": [

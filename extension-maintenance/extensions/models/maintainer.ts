@@ -613,6 +613,180 @@ async function findDirectSpecifiers(
   return results;
 }
 
+/**
+ * Extract versioned npm/jsr specifiers used by real import/export statements.
+ *
+ * `findDirectSpecifiers` intentionally scans every occurrence so audit can
+ * flag generated configuration too. Lockfile validation has a narrower job:
+ * only executable module dependencies need to be locked. A small lexer keeps
+ * comments and template-literal fixtures from being mistaken for imports.
+ */
+function extractImportedSpecifiers(content: string): Set<string> {
+  const specifiers = new Set<string>();
+  const isIdentifierChar = (char: string | undefined) =>
+    char !== undefined && /[A-Za-z0-9_$]/.test(char);
+
+  const skipTrivia = (start: number): number => {
+    let index = start;
+    while (index < content.length) {
+      if (/\s/.test(content[index]!)) {
+        index++;
+      } else if (content.startsWith("//", index)) {
+        const newline = content.indexOf("\n", index + 2);
+        index = newline === -1 ? content.length : newline + 1;
+      } else if (content.startsWith("/*", index)) {
+        const end = content.indexOf("*/", index + 2);
+        index = end === -1 ? content.length : end + 2;
+      } else {
+        break;
+      }
+    }
+    return index;
+  };
+
+  const readQuoted = (start: number): [string | null, number] => {
+    const quote = content[start]!;
+    let index = start + 1;
+    while (index < content.length) {
+      if (content[index] === "\\") {
+        index += 2;
+      } else if (content[index] === quote) {
+        const value = content.slice(start + 1, index);
+        return [value, index + 1];
+      } else {
+        index++;
+      }
+    }
+    return [null, content.length];
+  };
+
+  const skipTemplate = (start: number): number => {
+    let index = start + 1;
+    while (index < content.length) {
+      if (content[index] === "\\") index += 2;
+      else if (content[index] === "`") return index + 1;
+      else index++;
+    }
+    return content.length;
+  };
+
+  const collectSpecifier = (start: number): void => {
+    const index = skipTrivia(start);
+    if (content[index] === '"' || content[index] === "'") {
+      const [specifier] = readQuoted(index);
+      if (specifier?.startsWith("npm:") || specifier?.startsWith("jsr:")) {
+        specifiers.add(specifier);
+      }
+      return;
+    }
+
+    // Dynamic import("specifier") is also a runtime dependency.
+    if (content[index] === "(") {
+      const dynamicIndex = skipTrivia(index + 1);
+      if (content[dynamicIndex] === '"' || content[dynamicIndex] === "'") {
+        const [specifier] = readQuoted(dynamicIndex);
+        if (specifier?.startsWith("npm:") || specifier?.startsWith("jsr:")) {
+          specifiers.add(specifier);
+        }
+      }
+      return;
+    }
+
+    // Named imports and re-exports carry their specifier after `from`.
+    for (let cursor = index; cursor < content.length; cursor++) {
+      if (content[cursor] === '"' || content[cursor] === "'") {
+        const [, next] = readQuoted(cursor);
+        cursor = next - 1;
+        continue;
+      }
+      if (
+        content.startsWith("from", cursor) &&
+        !isIdentifierChar(content[cursor - 1]) &&
+        !isIdentifierChar(content[cursor + 4])
+      ) {
+        const specifierIndex = skipTrivia(cursor + 4);
+        if (
+          content[specifierIndex] === '"' || content[specifierIndex] === "'"
+        ) {
+          const [specifier] = readQuoted(specifierIndex);
+          if (
+            specifier?.startsWith("npm:") ||
+            specifier?.startsWith("jsr:")
+          ) {
+            specifiers.add(specifier);
+          }
+        }
+        return;
+      }
+      if (content[cursor] === ";") return;
+    }
+  };
+
+  for (let index = 0; index < content.length; index++) {
+    if (content.startsWith("//", index)) {
+      const newline = content.indexOf("\n", index + 2);
+      index = newline === -1 ? content.length : newline;
+      continue;
+    }
+    if (content.startsWith("/*", index)) {
+      const end = content.indexOf("*/", index + 2);
+      index = end === -1 ? content.length : end + 1;
+      continue;
+    }
+    if (content[index] === '"' || content[index] === "'") {
+      const [, next] = readQuoted(index);
+      index = next - 1;
+      continue;
+    }
+    if (content[index] === "`") {
+      index = skipTemplate(index) - 1;
+      continue;
+    }
+    for (const keyword of ["import", "export"]) {
+      if (
+        content.startsWith(keyword, index) &&
+        !isIdentifierChar(content[index - 1]) &&
+        !isIdentifierChar(content[index + keyword.length])
+      ) {
+        collectSpecifier(index + keyword.length);
+        index += keyword.length - 1;
+        break;
+      }
+    }
+  }
+  return specifiers;
+}
+
+async function findImportedSpecifiers(extDir: string): Promise<Set<string>> {
+  const specifiers = new Set<string>();
+  const findResult = await run([
+    "find",
+    extDir,
+    "-name",
+    "*.ts",
+    "-not",
+    "-path",
+    "*/.swamp/*",
+  ]);
+  if (!findResult.success) return specifiers;
+
+  for (const file of findResult.stdout.trim().split("\n")) {
+    if (!file) continue;
+    try {
+      for (
+        const specifier of extractImportedSpecifiers(
+          await Deno.readTextFile(file),
+        )
+      ) {
+        specifiers.add(specifier);
+      }
+    } catch {
+      // Ignore unreadable source files; the normal Deno checks will report them.
+    }
+  }
+  return specifiers;
+}
+
 /** Read manifest dependency pins. */
 async function readManifestDeps(
   extDir: string,
@@ -858,6 +1032,17 @@ async function readSourceVersions(
  * array. A version bump on such a file requires APPENDING a new entry whose
  * `toVersion` equals the new version — never relabelling the existing final
  * entry, which would corrupt the migration ledger (see appendUpgradeEntry). */
+function hasUpgradeArray(content: string): boolean {
+  // The maintenance source contains comments and regexes describing
+  // `upgrades: [`; neither is a model migration ledger. Remove comments and
+  // require the property to begin an object member before treating it as one.
+  const withoutComments = content.replace(
+    /\/\*[\s\S]*?\*\/|\/\/[^\n]*/g,
+    "",
+  );
+  return /(?:^|[,\{]\s*)upgrades:\s*\[/.test(withoutComments);
+}
+
 async function findUpgradeArrayFiles(extDir: string): Promise<string[]> {
   const out: string[] = [];
   const findResult = await run([
@@ -878,7 +1063,7 @@ async function findUpgradeArrayFiles(extDir: string): Promise<string[]> {
     } catch {
       continue;
     }
-    if (/upgrades:\s*\[/.test(content)) out.push(file);
+    if (hasUpgradeArray(content)) out.push(file);
   }
   return out;
 }
@@ -1018,7 +1203,11 @@ async function checkUpgradeChain(
     } catch {
       continue;
     }
-    if (!content.includes("upgrades") || !content.includes("toVersion")) {
+    // Restrict this to actual model upgrade arrays. The maintenance model
+    // itself documents and generates `toVersion` fields, but is not an
+    // upgraded model; treating those template strings as an upgrade chain
+    // produces a false failure.
+    if (!hasUpgradeArray(content)) {
       continue;
     }
     const versionMatch = content.match(
@@ -1104,10 +1293,10 @@ async function checkLockfileCompleteness(
     return null; // No lockfile — nothing to check
   }
 
-  const specifiers = await findDirectSpecifiers(extDir);
+  const specifiers = await findImportedSpecifiers(extDir);
   const missing: string[] = [];
 
-  for (const { specifier } of specifiers) {
+  for (const specifier of specifiers) {
     // Check if this exact specifier appears in the lockfile
     if (!lockContent.includes(`"${specifier}"`)) {
       // Also check without quotes (some lock formats vary)
@@ -1682,9 +1871,15 @@ export const model = {
           .boolean()
           .default(false)
           .describe("If true, report what would change without writing"),
+        npm_package_prefixes: z
+          .array(z.string().min(1))
+          .default([])
+          .describe(
+            "Only apply npm dependency changes whose package name equals or starts with one of these prefixes. Selected extensions still receive the required version, upgrade-chain, release-note, and lockfile updates; all other dependency and manifest-pin changes are left untouched.",
+          ),
       }),
       execute: async (
-        args: { dry_run?: boolean },
+        args: { dry_run?: boolean; npm_package_prefixes?: string[] },
         context: {
           globalArgs: GlobalArgs;
           writeResource: (
@@ -1711,7 +1906,7 @@ export const model = {
           throw new Error("No plan found. Run plan-bump first.");
         }
 
-        const entries = (plan as {
+        const planEntries = (plan as {
           entries: Array<{
             name: string;
             dir: string;
@@ -1726,6 +1921,80 @@ export const model = {
             >;
           }>;
         }).entries;
+
+        const npmPackagePrefixes = args.npm_package_prefixes ?? [];
+        const entries = npmPackagePrefixes.length === 0
+          ? planEntries
+          : planEntries.flatMap((entry) => {
+            const selectedNpmChanges = entry.changes.filter((change) => {
+              if (change.category !== "npm") return false;
+              const at = change.find.lastIndexOf("@");
+              const packageName = at > 0
+                ? change.find.slice(0, at)
+                : change.find;
+              return npmPackagePrefixes.some(
+                (prefix) =>
+                  packageName === prefix || packageName.startsWith(prefix),
+              );
+            });
+            if (selectedNpmChanges.length === 0) return [];
+
+            // A selected shipped dependency change still needs a release version,
+            // source/manifest version alignment, a no-op upgrade-chain entry, and
+            // a lock refresh. Deliberately exclude every unrelated dependency and
+            // manifest pin from the broader plan.
+            const bookkeepingChanges = entry.changes.filter((change) =>
+              change.category === "manifest-version" ||
+              change.category === "source-version" ||
+              change.category === "test-assertion"
+            );
+
+            const noteGroups = new Map<
+              string,
+              Array<{ name: string; current: string; latest: string }>
+            >();
+            for (const change of selectedNpmChanges) {
+              const fromAt = change.find.lastIndexOf("@");
+              const toAt = change.replace.lastIndexOf("@");
+              const packageName = fromAt > 0
+                ? change.find.slice(0, fromAt)
+                : change.find;
+              const base = packageName.startsWith("@")
+                ? packageName.split("/").slice(0, -1).join("/") || packageName
+                : packageName;
+              const versions = noteGroups.get(base) ?? [];
+              versions.push({
+                name: packageName,
+                current: fromAt > 0 ? change.find.slice(fromAt + 1) : "",
+                latest: toAt > 0 ? change.replace.slice(toAt + 1) : "",
+              });
+              noteGroups.set(base, versions);
+            }
+            const noteLines = [...noteGroups.entries()].map(
+              ([base, versions]) => {
+                const first = versions[0];
+                return versions.length === 1
+                  ? `**Changed:** Bump ${first.name} ${first.current} → ${first.latest}`
+                  : `**Changed:** Bump ${base}/* ${first.current} → ${first.latest} (${versions.length} packages)`;
+              },
+            );
+
+            return [{
+              ...entry,
+              changes: [...selectedNpmChanges, ...bookkeepingChanges],
+              releaseNotes: `## ${entry.nextVersion}\n\n${
+                noteLines.join("\n\n")
+              }\n`,
+            }];
+          });
+
+        if (npmPackagePrefixes.length > 0) {
+          context.logger.info(
+            `Applying npm package prefixes: ${
+              npmPackagePrefixes.join(", ")
+            } (${entries.length} matching extensions)`,
+          );
+        }
 
         let filesModified = 0;
         let filesMatched = 0;

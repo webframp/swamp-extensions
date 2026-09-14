@@ -180,6 +180,84 @@ Deno.test("apply-bump creates RELEASE_NOTES.md when missing", async () => {
   await cleanup();
 });
 
+Deno.test("apply-bump scopes npm updates by package prefix while preserving release bookkeeping", async () => {
+  const { root, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  dependency: "npm:@aws-sdk/client-s3@3.1126.0",
+  otherDependency: "npm:zod@4.4.3",
+  upgrades: [
+    { toVersion: "2026.01.01.1", upgradeAttributes: (old: Record<string, unknown>) => old },
+  ],
+};\n`,
+  });
+  const plan = {
+    plannedAt: "2026-09-14T00:00:00Z",
+    totalEntries: 1,
+    entries: [{
+      name: "@test/ext",
+      dir: "test-ext",
+      currentVersion: "2026.01.01.1",
+      nextVersion: "2026.09.14.1",
+      changes: [
+        {
+          file: "extensions/**/*.ts",
+          find: "@aws-sdk/client-s3@3.1126.0",
+          replace: "@aws-sdk/client-s3@3.1131.0",
+          category: "npm",
+        },
+        {
+          file: "extensions/**/*.ts",
+          find: "zod@4.4.3",
+          replace: "zod@4.6.4",
+          category: "npm",
+        },
+        {
+          file: "manifest.yaml",
+          find: 'version: "2026.01.01.1"',
+          replace: 'version: "2026.09.14.1"',
+          category: "manifest-version",
+        },
+        {
+          file: "extensions/**/*.ts",
+          find: 'version: "2026.01.01.1"',
+          replace: 'version: "2026.09.14.1"',
+          category: "source-version",
+        },
+      ],
+      upgradeInserts: [{
+        file: "extensions/models/mod.ts",
+        toVersion: "2026.09.14.1",
+        description: "No schema changes — dependency maintenance bump",
+      }],
+      releaseNotes:
+        "## 2026.09.14.1\n\n**Changed:** Bump @aws-sdk/client-s3 3.1126.0 → 3.1131.0\n\n**Changed:** Bump zod 4.4.3 → 4.6.4\n",
+    }],
+    skipped: [],
+  };
+
+  const { context } = mockContext(root, plan);
+  await model.methods["apply-bump"].execute(
+    { npm_package_prefixes: ["@aws-sdk/"] },
+    context,
+  );
+
+  const source = await Deno.readTextFile(
+    `${root}/test-ext/extensions/models/mod.ts`,
+  );
+  const manifest = await Deno.readTextFile(`${root}/test-ext/manifest.yaml`);
+  const notes = await Deno.readTextFile(`${root}/test-ext/RELEASE_NOTES.md`);
+  assertStringIncludes(source, "@aws-sdk/client-s3@3.1131.0");
+  assertStringIncludes(source, "zod@4.4.3");
+  assertStringIncludes(source, 'version: "2026.09.14.1"');
+  assertStringIncludes(source, 'toVersion: "2026.09.14.1"');
+  assertStringIncludes(manifest, 'version: "2026.09.14.1"');
+  assertStringIncludes(notes, "@aws-sdk/client-s3 3.1126.0 → 3.1131.0");
+  assertEquals(notes.includes("zod 4.4.3 → 4.6.4"), false);
+
+  await cleanup();
+});
+
 Deno.test("apply-bump includes test files in glob replacements", async () => {
   const { root, cleanup } = await createFixture({
     sourceContent: `import { foo } from "npm:some-pkg@1.0.0";\n`,
