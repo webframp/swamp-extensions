@@ -23,7 +23,7 @@ export const API_BASE = "https://api.snyk.io/rest";
 export const OUTPUT_BASE = "../../snyk";
 
 /** Zod version to use in generated code */
-export const ZOD_VERSION = "4.4.3";
+export const ZOD_VERSION = "4.6.5";
 
 /** swamp-testing version */
 export const SWAMP_TESTING_VERSION = "0.20260604.20";

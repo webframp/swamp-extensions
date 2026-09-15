@@ -41,7 +41,7 @@ export const OUTPUT_BASE = "../../griptape";
 export const GRIPTAPE_API_BASE = "https://cloud.griptape.ai";
 
 /** Zod version to use in generated code. Must match the repo-wide pin. */
-export const ZOD_VERSION = "4.4.3";
+export const ZOD_VERSION = "4.6.5";
 
 /** swamp-testing version for generated test files. */
 export const SWAMP_TESTING_VERSION = "0.20260604.20";
