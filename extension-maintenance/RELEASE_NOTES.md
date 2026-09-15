@@ -1,3 +1,7 @@
+## 2026.09.15.1
+
+**Changed:** Bump zod 4.4.3 → 4.6.5
+
 ## 2026.08.28.3
 
 **Added:** The `audit` method now detects two more classes of repo-wide drift.

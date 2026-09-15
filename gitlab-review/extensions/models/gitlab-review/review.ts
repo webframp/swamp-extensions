@@ -7,7 +7,7 @@
  * @module
  */
 // deno-lint-ignore-file no-explicit-any
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/gitlab-review";
 
@@ -323,7 +323,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.09.08.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -395,6 +395,11 @@ export const model = {
       toVersion: "2026.09.08.1",
       description:
         "Additive: SHA-bound inline review resource and posting method",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const Comment = z.object({
   path: z.string().min(1),

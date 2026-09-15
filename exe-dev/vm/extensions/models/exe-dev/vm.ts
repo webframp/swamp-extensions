@@ -26,7 +26,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/exe-dev/vm";
 
@@ -682,7 +682,7 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
  */
 export const model = {
   type: "@webframp/exe-dev/vm",
-  version: "2026.08.28.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {

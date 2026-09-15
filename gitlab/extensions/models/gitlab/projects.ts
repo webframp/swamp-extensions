@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/gitlab";
 
@@ -1868,7 +1868,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.08.2",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1982,6 +1982,11 @@ export const model = {
         "Added the get_file method (fileContent resource; no globalArguments " +
         "change). Fetches a file's raw content at a ref from a pasted GitLab " +
         "blob URL, for impact review of a specific config/policy file.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

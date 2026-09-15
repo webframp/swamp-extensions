@@ -22,7 +22,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import {
   DEFAULT_WEIGHTS,
   type Event,
@@ -442,8 +442,12 @@ type MethodContext = {
 /** Scoring model — cross-boundary + force-multiplier scoring, tier classification. */
 export const model = {
   type: "@webframp/devops-measurement/scoring",
-  version: "2026.09.01.1",
-  upgrades: [],
+  version: "2026.09.15.1",
+  upgrades: [{
+    toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   globalArguments: GlobalArgsSchema,
 
   resources: {

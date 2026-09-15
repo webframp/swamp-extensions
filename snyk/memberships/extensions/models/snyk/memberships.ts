@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/memberships";
@@ -97,7 +97,7 @@ const CreateOrgMembershipSchema = z.object({
 /** Snyk Memberships — group and org member management */
 export const model = {
   type: "@webframp/snyk/memberships",
-  version: "2026.09.08.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -138,6 +138,11 @@ export const model = {
     {
       toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

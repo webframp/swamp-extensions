@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import {
   griptapeApi,
   griptapeApiPaginated,
@@ -129,10 +129,13 @@ const CreateAssetSchema = z.looseObject({
 /** Griptape Cloud Buckets — asset buckets and their stored assets */
 export const model = {
   type: "@webframp/griptape/buckets",
-  version: "2026.08.29.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
-
-  upgrades: [],
+  upgrades: [{
+    toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
 
   resources: {
     "buckets": {

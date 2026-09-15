@@ -13,7 +13,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/ai-usage";
 
@@ -478,7 +478,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.09.04.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -534,6 +534,11 @@ export const model = {
       toVersion: "2026.09.04.1",
       description:
         "Dependency bump: refreshed @webframp/gcp, @webframp/azure, @webframp/anthropic, and @webframp/aws pins; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

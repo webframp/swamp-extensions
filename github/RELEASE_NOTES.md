@@ -1,3 +1,7 @@
+## 2026.09.15.1
+
+**Changed:** Bump zod 4.4.3 → 4.6.5
+
 ## 2026.09.08.1
 
 **Added:** Bounded triage context collection and explicit issue, comment, close, and workflow-run actions for approval-gated orchestration.

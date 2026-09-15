@@ -27,7 +27,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import { type Event, EventSchema, isCrossBoundary } from "./_lib/event.ts";
 
 const EXTENSION_NAME = "@webframp/devops-measurement";
@@ -404,8 +404,12 @@ type MethodContext = {
 /** Interaction graph model — HELPED edges, in-degree centrality, hubs/bridges. */
 export const model = {
   type: "@webframp/devops-measurement/interaction-graph",
-  version: "2026.09.01.1",
-  upgrades: [],
+  version: "2026.09.15.1",
+  upgrades: [{
+    toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   globalArguments: GlobalArgsSchema,
 
   resources: {

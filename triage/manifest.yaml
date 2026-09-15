@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/triage"
-version: "2026.09.08.1"
+version: "2026.09.15.1"
 description: "Cross-provider, approval-gated triage policy, workflows, prompts, and factory definition."
 repository: "https://github.com/webframp/swamp-extensions"
 models:

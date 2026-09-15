@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 const repo = z.string().regex(/^[\w.-]+\/[\w.-]+$/);
 const idempotencyKey = z.string().min(1).regex(
   /^[A-Za-z0-9._:-]+$/,

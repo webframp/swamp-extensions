@@ -1,3 +1,7 @@
+## 2026.09.15.1
+
+**Changed:** Bump zod 4.4.3 → 4.6.5
+
 ## 2026.08.28.1
 
 **Changed:** Normalized the extension license to Apache-2.0 and corrected the

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const text = z.string().trim().min(1);
 const ProviderSchema = z.enum(["github", "gitlab", "swamp_club"]);
@@ -503,11 +503,15 @@ async function authorizeAction(
 /** Deterministic cross-provider triage policy model. */
 export const model = {
   type: "@webframp/triage",
-  version: "2026.09.08.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.09.08.1",
     description: "Initial triage policy model",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {

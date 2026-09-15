@@ -8,7 +8,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/aurora-datastore-bootstrap";
 
@@ -504,7 +504,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/aurora-datastore-bootstrap/provisioner",
-  version: "2026.08.28.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

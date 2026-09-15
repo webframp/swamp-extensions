@@ -33,7 +33,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import {
   canonicalActor,
   type Event,
@@ -209,8 +209,12 @@ type MethodContext = {
 /** Redmine collector model — translates issue journals into events. */
 export const model = {
   type: "@webframp/devops-measurement/collect-redmine",
-  version: "2026.09.01.1",
-  upgrades: [],
+  version: "2026.09.15.1",
+  upgrades: [{
+    toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
   globalArguments: GlobalArgsSchema,
 
   resources: {

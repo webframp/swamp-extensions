@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import { ddApi, sanitizeInstanceName } from "./_lib/api.ts";
 
 // =============================================================================
@@ -55,7 +55,7 @@ const GetSloStatusSchema = z.object({
 /** Datadog SLOs — service level objective definitions, status, and history */
 export const model = {
   type: "@webframp/datadog/slos",
-  version: "2026.08.28.2",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -86,6 +86,11 @@ export const model = {
     {
       toVersion: "2026.08.28.2",
       description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

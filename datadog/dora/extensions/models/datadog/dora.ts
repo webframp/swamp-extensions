@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import { ddApi, ddApiPostPaginated, sanitizeInstanceName } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/datadog/dora";
@@ -129,7 +129,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.09.08.1",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -170,6 +170,11 @@ export const model = {
     {
       toVersion: "2026.09.08.1",
       description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

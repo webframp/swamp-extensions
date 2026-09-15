@@ -12,7 +12,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 
 const EXTENSION_NAME = "@webframp/extension-maintenance";
 
@@ -487,14 +487,14 @@ async function checkLockfileSync(extDir: string): Promise<{
 
   for (const [_alias, specifier] of Object.entries(imports)) {
     if (!specifier) continue;
-    // Extract the version from specifiers like "npm:zod@4.4.3" or
+    // Extract the version from specifiers like "npm:zod@4.6.5" or
     // "jsr:@systeminit/swamp-testing@0.20260604.20"
     const versionMatch = specifier.match(/@([\d][^"]*)$/);
     if (!versionMatch) continue;
     const jsonVersion = versionMatch[1]!;
 
     // Look for this specifier in the lock's specifiers section.
-    // The lock records lines like: "npm:zod@4.4.3": "4.4.3" or
+    // The lock records lines like: "npm:zod@4.6.5": "4.6.5" or
     // "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20"
     // Also check workspace.dependencies for the bare specifier.
     const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1332,7 +1332,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.08.28.3",
+  version: "2026.09.15.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
