@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 import {
   DescribeDBInstancesCommand,
   RDSClient,
@@ -627,7 +627,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.09.14.1",
+  version: "2026.09.15.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -716,6 +716,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.14.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
