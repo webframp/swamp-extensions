@@ -1,3 +1,7 @@
+## 2026.09.17.1
+
+**Changed:** Bump @aws-sdk/* 3.1131.0 → 3.1133.0 (6 packages)
+
 ## 2026.09.15.1
 
 **Changed:** Bump zod 4.4.3 → 4.6.5

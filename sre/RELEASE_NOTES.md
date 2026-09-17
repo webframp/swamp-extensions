@@ -1,3 +1,9 @@
+## 2026.09.17.1
+
+**Changed:** Bump @webframp/network 2026.08.28.1 → 2026.09.15.1
+
+**Changed:** Bump @webframp/system 2026.08.28.1 → 2026.09.15.1
+
 ## 2026.09.04.1
 
 **Changed:** Bump @webframp/network 2026.08.26.2 → 2026.08.28.1

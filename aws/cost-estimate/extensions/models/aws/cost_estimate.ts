@@ -14,8 +14,8 @@ import { z } from "npm:zod@4.6.5";
 import {
   GetProductsCommand,
   PricingClient,
-} from "npm:@aws-sdk/client-pricing@3.1131.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1131.0";
+} from "npm:@aws-sdk/client-pricing@3.1133.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1133.0";
 
 const EXTENSION_NAME = "@webframp/aws/cost-estimate";
 
@@ -265,7 +265,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
@@ -358,6 +358,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

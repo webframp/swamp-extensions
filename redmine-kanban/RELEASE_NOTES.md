@@ -1,3 +1,7 @@
+## 2026.09.17.1
+
+**Changed:** Bump @webframp/redmine 2026.08.28.1 → 2026.09.15.1
+
 ## 2026.09.04.1
 
 **Changed:** Bump @webframp/redmine 2026.08.26.3 → 2026.08.28.1

@@ -15,12 +15,12 @@ import {
   DescribeComplianceByConfigRuleCommand,
   DescribeConfigRulesCommand,
   GetComplianceDetailsByConfigRuleCommand,
-} from "npm:@aws-sdk/client-config-service@3.1131.0";
+} from "npm:@aws-sdk/client-config-service@3.1133.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1131.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1131.0";
+} from "npm:@aws-sdk/client-sts@3.1133.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1133.0";
 
 const EXTENSION_NAME = "@webframp/aws/config-compliance";
 
@@ -167,7 +167,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -241,6 +241,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

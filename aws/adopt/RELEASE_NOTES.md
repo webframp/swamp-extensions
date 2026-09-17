@@ -1,3 +1,13 @@
+## 2026.09.17.1
+
+**Changed:** Bump @aws-sdk/* 3.1131.0 → 3.1133.0 (5 packages)
+
+**Changed:** Bump @swamp/aws/ec2 2026.09.03.1 → 2026.09.17.1
+
+**Changed:** Bump @swamp/aws/rds 2026.09.02.1 → 2026.09.17.1
+
+**Changed:** Bump @swamp/aws/secretsmanager 2026.09.03.1 → 2026.09.17.1
+
 ## 2026.09.15.1
 
 **Changed:** Bump zod 4.4.3 → 4.6.5
