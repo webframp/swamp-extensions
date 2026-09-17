@@ -112,9 +112,11 @@ const MonitorConfigPoliciesItemSchema = z.object({
   type: z.enum(["monitor-config-policy"]).optional().default(
     "monitor-config-policy",
   ).describe("Monitor configuration policy resource type."),
-  policy: z.unknown().optional().describe("Configuration for the policy."),
-  policy_type: z.enum(["tag"]).optional().default("tag").describe(
-    "The monitor configuration policy type.",
+  policy: z.union([z.unknown(), z.unknown()]).optional().describe(
+    "Configuration for the policy.",
+  ),
+  policy_type: z.enum(["tag", "downtime"]).optional().default("tag").describe(
+    "The monitor configuration policy type. `tag` enforces required tags on monitors. `downtime` sets ...",
   ),
 }).passthrough();
 
@@ -135,9 +137,11 @@ const CreateMonitorConfigPolicySchema = z.object({
   type: z.enum(["monitor-config-policy"]).optional().default(
     "monitor-config-policy",
   ).describe("Monitor configuration policy resource type."),
-  policy: z.unknown().optional().describe("Configuration for the policy."),
-  policy_type: z.enum(["tag"]).optional().default("tag").describe(
-    "The monitor configuration policy type.",
+  policy: z.union([z.unknown(), z.unknown()]).optional().describe(
+    "Configuration for the policy.",
+  ),
+  policy_type: z.enum(["tag", "downtime"]).optional().default("tag").describe(
+    "The monitor configuration policy type. `tag` enforces required tags on monitors. `downtime` sets ...",
   ),
 }).passthrough();
 
@@ -148,7 +152,7 @@ const CreateMonitorConfigPolicySchema = z.object({
 /** Datadog Monitors — monitor definitions, muting, status, and downtime management */
 export const model = {
   type: "@webframp/datadog/monitors",
-  version: "2026.09.15.1",
+  version: "2026.09.15.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -189,6 +193,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

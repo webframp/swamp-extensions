@@ -47,6 +47,33 @@ const CreateOnCallEscalationPolicySchema = z.object({
   teams_id: z.string().optional().describe("Related teams ID"),
 }).passthrough();
 
+const OnCallSchedulesItemSchema = z.object({
+  id: z.string().describe("The schedule's unique identifier."),
+  type: z.enum(["schedules"]).optional().default("schedules").describe(
+    "Schedules resource type.",
+  ),
+  name: z.string().optional().describe("A short name for the schedule."),
+  tags: z.array(z.string()).optional().describe(
+    "A list of tags associated with the schedule.",
+  ),
+  time_zone: z.string().optional().describe(
+    "The time zone in which this schedule operates.",
+  ),
+  teams_id: z.string().optional().describe("Related teams ID"),
+}).passthrough();
+
+const ListOnCallSchedulesSchema = z.object({
+  items: z.array(OnCallSchedulesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const CreateOnCallScheduleSchema = z.object({
   id: z.string().describe("The schedule's unique identifier."),
   type: z.enum(["schedules"]).optional().default("schedules").describe(
@@ -192,7 +219,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.09.15.1",
+  version: "2026.09.15.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -240,6 +267,11 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.15.2",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -248,6 +280,12 @@ export const model = {
       schema: CreateOnCallEscalationPolicySchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    "on_call_schedules": {
+      description: "List On-Call schedules",
+      schema: ListOnCallSchedulesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
     "on_call_schedule": {
       description: "Create On-Call schedule",
@@ -526,6 +564,83 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
+      },
+    },
+    list_on_call_schedules: {
+      description: "List On-Call schedules",
+      arguments: z.object({
+        filter_query: z.string().optional().describe(
+          "Search query to filter schedules. Supports free-text search on schedule name ...",
+        ),
+        include: z.string().optional().describe(
+          "Comma-separated list of included relationships to be returned. Allowed value:...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_query": "filter[query]",
+        };
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const paramKey = paramNameMap[k] ?? k;
+            params[paramKey] = String(v);
+          }
+        }
+
+        const { results, truncated } = await ddApiPaginated(
+          apiKey,
+          appKey,
+          site,
+          `/api/v2/on-call/schedules`,
+          {
+            "style": "page_number",
+            "limitParam": "page[size]",
+            "limitDefault": 50,
+            "pageParam": "page[number]",
+          },
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "on_call_schedules",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} on_call_schedules", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
       },
     },
     create_on_call_schedule: {

@@ -37,8 +37,11 @@ const SecurityMonitoringSignalsItemSchema = z.object({
   type: z.enum(["signal"]).optional().default("signal").describe(
     "The type of event.",
   ),
+  attributes: z.record(z.string(), z.unknown()).optional().describe(
+    "A JSON object of attributes in the security signal, returned when listing or searching signals.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
-    "A JSON object of attributes in the security signal.",
+    "A JSON object of attributes in the security signal, returned when retrieving a single signal.",
   ),
   message: z.string().optional().describe(
     "The message in the security signal defined by the rule that generated the signal.",
@@ -86,8 +89,11 @@ const SearchSecurityMonitoringSignalsItemSchema = z.object({
   type: z.enum(["signal"]).optional().default("signal").describe(
     "The type of event.",
   ),
+  attributes: z.record(z.string(), z.unknown()).optional().describe(
+    "A JSON object of attributes in the security signal, returned when listing or searching signals.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
-    "A JSON object of attributes in the security signal.",
+    "A JSON object of attributes in the security signal, returned when retrieving a single signal.",
   ),
   message: z.string().optional().describe(
     "The message in the security signal defined by the rule that generated the signal.",
@@ -117,8 +123,11 @@ const GetSecurityMonitoringSignalSchema = z.object({
   type: z.enum(["signal"]).optional().default("signal").describe(
     "The type of event.",
   ),
+  attributes: z.record(z.string(), z.unknown()).optional().describe(
+    "A JSON object of attributes in the security signal, returned when listing or searching signals.",
+  ),
   custom: z.record(z.string(), z.unknown()).optional().describe(
-    "A JSON object of attributes in the security signal.",
+    "A JSON object of attributes in the security signal, returned when retrieving a single signal.",
   ),
   message: z.string().optional().describe(
     "The message in the security signal defined by the rule that generated the signal.",
@@ -410,7 +419,7 @@ const EditSecurityMonitoringSignalSchema = z.object({
 /** Datadog Security Signals — signal search, triage, and archiving */
 export const model = {
   type: "@webframp/datadog/security-signals",
-  version: "2026.09.15.1",
+  version: "2026.09.15.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -451,6 +460,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.15.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,8 +1,4 @@
-## 2026.09.15.1
+## 2026.09.15.2
 
-**Changed:** Bump zod 4.4.3 → 4.6.5
-
-## 2026.09.08.1
-
-**Added:** Initial code-generated release of @webframp/datadog/on-call with 21
-methods covering the Datadog on call API surface.
+**Added:** `list_on_call_schedules` method and `on_call_schedules` resource,
+bringing the extension to 22 methods covering the Datadog on call API surface.

@@ -37,6 +37,7 @@ Deno.test("on-call model: has expected methods", () => {
   assertExists(model.methods.get_on_call_escalation_policy);
   assertExists(model.methods.update_on_call_escalation_policy);
   assertExists(model.methods.delete_on_call_escalation_policy);
+  assertExists(model.methods.list_on_call_schedules);
   assertExists(model.methods.create_on_call_schedule);
   assertExists(model.methods.get_on_call_schedule);
   assertExists(model.methods.update_on_call_schedule);
@@ -59,6 +60,7 @@ Deno.test("on-call model: has expected methods", () => {
 Deno.test("on-call model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["on_call_escalation_policy"]);
+  assertExists(model.resources["on_call_schedules"]);
   assertExists(model.resources["on_call_schedule"]);
   assertExists(model.resources["schedule_on_call_responders"]);
   assertExists(model.resources["team_on_call_users"]);
@@ -486,6 +488,80 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "user_notification_channels");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "on-call model: list_on_call_schedules fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/on-call/schedules": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "name": "Primary On-Call",
+              "tags": [],
+              "time_zone": "America/New_York",
+              "teams_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_on_call_schedules.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/on-call/schedules");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "on_call_schedules");
       const data = resources[0].data as {
         items: unknown[];
         truncated: boolean;

@@ -159,6 +159,17 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "attributes": {
+                "workflow": {
+                  "first_seen": "2020-06-23T14:46:01.000Z",
+                  "last_seen": "2020-06-23T14:46:49.000Z",
+                  "rule": {
+                    "id": "0f5-e0c-805",
+                    "name": "Brute Force Attack Grouped By User",
+                    "version": 12,
+                  },
+                },
+              },
               "custom": {
                 "workflow": {
                   "first_seen": "2020-06-23T14:46:01.000Z",
@@ -314,6 +325,17 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "attributes": {
+                "workflow": {
+                  "first_seen": "2020-06-23T14:46:01.000Z",
+                  "last_seen": "2020-06-23T14:46:49.000Z",
+                  "rule": {
+                    "id": "0f5-e0c-805",
+                    "name": "Brute Force Attack Grouped By User",
+                    "version": 12,
+                  },
+                },
+              },
               "custom": {
                 "workflow": {
                   "first_seen": "2020-06-23T14:46:01.000Z",
@@ -402,6 +424,17 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "attributes": {
+                "workflow": {
+                  "first_seen": "2020-06-23T14:46:01.000Z",
+                  "last_seen": "2020-06-23T14:46:49.000Z",
+                  "rule": {
+                    "id": "0f5-e0c-805",
+                    "name": "Brute Force Attack Grouped By User",
+                    "version": 12,
+                  },
+                },
+              },
               "custom": {
                 "workflow": {
                   "first_seen": "2020-06-23T14:46:01.000Z",

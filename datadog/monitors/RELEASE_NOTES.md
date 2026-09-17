@@ -1,8 +1,4 @@
-## 2026.09.15.1
+## 2026.09.15.2
 
-**Changed:** Bump zod 4.4.3 → 4.6.5
-
-## 2026.09.08.1
-
-**Added:** Initial code-generated release of @webframp/datadog/monitors with 10
-methods covering the Datadog monitors API surface.
+**Added:** `downtime` as a valid `policy_type` for monitor configuration
+policies, alongside the existing `tag` type.
