@@ -25,22 +25,22 @@ const GlobalArgsSchema = z.object({
 
 const GetApiShieldApiDiscoveryRetrieveDiscoveredOperationsOnAZoneAsOpenapiSchema =
   z.object({
-    schemas: z.array(z.unknown()),
-    timestamp: z.unknown(),
+    schemas: z.array(z.unknown()).optional(),
+    timestamp: z.unknown().optional(),
   }).passthrough();
 
 const ApiShieldApiDiscoveryRetrieveDiscoveredOperationsOnAZoneItemSchema = z
   .object({
     features: z.unknown().optional(),
-    id: z.unknown(),
-    last_updated: z.unknown(),
-    origin: z.array(z.unknown()).describe(
+    id: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    origin: z.array(z.unknown()).optional().describe(
       "API discovery engine(s) that discovered this operation",
     ),
-    state: z.unknown(),
-    endpoint: z.unknown(),
-    host: z.unknown(),
-    method: z.unknown(),
+    state: z.unknown().optional(),
+    endpoint: z.unknown().optional(),
+    host: z.unknown().optional(),
+    method: z.unknown().optional(),
   }).passthrough();
 
 const ListApiShieldApiDiscoveryRetrieveDiscoveredOperationsOnAZoneSchema = z
@@ -63,15 +63,15 @@ const PatchDiscoveredOperationsSchema = z.record(z.string(), z.unknown());
 const ApiShieldApiDiscoveryRetrieveDiscoveredOperationByIdItemSchema = z.object(
   {
     features: z.unknown().optional(),
-    id: z.unknown(),
-    last_updated: z.unknown(),
-    origin: z.array(z.unknown()).describe(
+    id: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    origin: z.array(z.unknown()).optional().describe(
       "API discovery engine(s) that discovered this operation",
     ),
-    state: z.unknown(),
-    endpoint: z.unknown(),
-    host: z.unknown(),
-    method: z.unknown(),
+    state: z.unknown().optional(),
+    endpoint: z.unknown().optional(),
+    host: z.unknown().optional(),
+    method: z.unknown().optional(),
   },
 ).passthrough();
 
@@ -96,17 +96,17 @@ const PatchDiscoveredOperationSchema = z.object({
 }).passthrough();
 
 const CreateApiShieldExpressionTemplatesFallthroughSchema = z.object({
-  expression: z.string().describe("WAF Expression for fallthrough"),
-  title: z.string().describe("Title for the expression"),
+  expression: z.string().optional().describe("WAF Expression for fallthrough"),
+  title: z.string().optional().describe("Title for the expression"),
 }).passthrough();
 
 const GetLabelsItemSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
   mapped_resources: z.unknown().optional(),
 }).passthrough();
 
@@ -123,81 +123,81 @@ const GetLabelsSchema = z.object({
 });
 
 const GetManagedLabelSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
   mapped_resources: z.unknown().optional(),
 }).passthrough();
 
 const UpdateApiShieldLabelsReplaceOperationsAttachedToManagedLabelSchema = z
   .object({
-    created_at: z.unknown(),
-    description: z.unknown(),
-    last_updated: z.unknown(),
-    metadata: z.unknown(),
-    name: z.unknown(),
-    source: z.unknown(),
+    created_at: z.unknown().optional(),
+    description: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    name: z.unknown().optional(),
+    source: z.unknown().optional(),
     mapped_resources: z.unknown().optional(),
   }).passthrough();
 
 const CreateUserLabelsSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
 }).passthrough();
 
 const GetUserLabelSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
   mapped_resources: z.unknown().optional(),
 }).passthrough();
 
 const PutUserLabelSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
 }).passthrough();
 
 const PatchUserLabelSchema = z.object({
-  created_at: z.unknown(),
-  description: z.unknown(),
-  last_updated: z.unknown(),
-  metadata: z.unknown(),
-  name: z.unknown(),
-  source: z.unknown(),
+  created_at: z.unknown().optional(),
+  description: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+  name: z.unknown().optional(),
+  source: z.unknown().optional(),
 }).passthrough();
 
 const UpdateApiShieldLabelsReplaceOperationsAttachedToUserLabelSchema = z
   .object({
-    created_at: z.unknown(),
-    description: z.unknown(),
-    last_updated: z.unknown(),
-    metadata: z.unknown(),
-    name: z.unknown(),
-    source: z.unknown(),
+    created_at: z.unknown().optional(),
+    description: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    metadata: z.unknown().optional(),
+    name: z.unknown().optional(),
+    source: z.unknown().optional(),
     mapped_resources: z.unknown().optional(),
   }).passthrough();
 
 const ApiShieldEndpointManagementRetrieveInformationAboutAllOperationsOnAZoneItemSchema =
   z.object({
-    endpoint: z.unknown(),
-    host: z.unknown(),
-    method: z.unknown(),
-    last_updated: z.unknown(),
-    operation_id: z.unknown(),
+    endpoint: z.unknown().optional(),
+    host: z.unknown().optional(),
+    method: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    operation_id: z.unknown().optional(),
     features: z.unknown().optional(),
   }).passthrough();
 
@@ -217,68 +217,68 @@ const ListApiShieldEndpointManagementRetrieveInformationAboutAllOperationsOnAZon
   });
 
 const ApiShieldEndpointManagementAddOperationsToAZoneSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   features: z.unknown().optional(),
 }).passthrough();
 
 const CreateApiShieldEndpointManagementAddOperationToAZoneSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   features: z.unknown().optional(),
   schemas: z.unknown().optional(),
 }).passthrough();
 
 const CreateApiShieldOperationsBulkPostLabelsToOperationsSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   labels: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const PutLabelsToOperationsSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   labels: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const GetApiShieldEndpointManagementRetrieveInformationAboutAnOperationSchema =
   z.object({
-    endpoint: z.unknown(),
-    host: z.unknown(),
-    method: z.unknown(),
-    last_updated: z.unknown(),
-    operation_id: z.unknown(),
+    endpoint: z.unknown().optional(),
+    host: z.unknown().optional(),
+    method: z.unknown().optional(),
+    last_updated: z.unknown().optional(),
+    operation_id: z.unknown().optional(),
     features: z.unknown().optional(),
     schemas: z.unknown().optional(),
   }).passthrough();
 
 const CreateApiShieldOperationsPostLabelsToOperationSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   labels: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const PutLabelsToOperationSchema = z.object({
-  endpoint: z.unknown(),
-  host: z.unknown(),
-  method: z.unknown(),
-  last_updated: z.unknown(),
-  operation_id: z.unknown(),
+  endpoint: z.unknown().optional(),
+  host: z.unknown().optional(),
+  method: z.unknown().optional(),
+  last_updated: z.unknown().optional(),
+  operation_id: z.unknown().optional(),
   labels: z.array(z.unknown()).optional(),
 }).passthrough();
 
@@ -295,7 +295,7 @@ const GetApiShieldEndpointManagementRetrieveOperationsAndFeaturesAsOpenApiSchema
 /** Cloudflare API Shield — schema validation, endpoint discovery, sequence rules */
 export const model = {
   type: "@webframp/cloudflare/api-shield",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -336,6 +336,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -881,7 +886,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "api_shield_expression_templates_fallthrough",
@@ -1479,7 +1484,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "api_shield_endpoint_management_add_operation_to_a_zone",
@@ -1531,7 +1536,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "api_shield_operations_bulk_post_labels_to_operations",
@@ -1741,7 +1746,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "api_shield_operations_post_labels_to_operation",

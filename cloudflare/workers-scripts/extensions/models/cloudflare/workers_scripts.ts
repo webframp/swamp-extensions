@@ -78,14 +78,14 @@ const ListWorkersSchema = z.object({
 });
 
 const WorkerScriptSearchWorkersItemSchema = z.object({
-  created_on: z.unknown(),
+  created_on: z.unknown().optional(),
   environment_is_default: z.boolean().optional().describe(
     "Whether the environment is the default environment.",
   ),
   environment_name: z.string().optional().describe("Name of the environment."),
-  id: z.unknown(),
-  modified_on: z.unknown(),
-  script_name: z.unknown(),
+  id: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  script_name: z.unknown().optional(),
   service_name: z.string().optional().describe("Name of the service."),
 }).passthrough();
 
@@ -111,7 +111,7 @@ const CreateAssetsUploadSessionSchema = z.object({
 }).passthrough();
 
 const ListDeploymentsSchema = z.object({
-  deployments: z.array(z.unknown()),
+  deployments: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const CreateDeploymentSchema = z.object({
@@ -120,18 +120,18 @@ const CreateDeploymentSchema = z.object({
     "workers/triggered_by": z.string().optional(),
   }).optional(),
   author_email: z.string().optional(),
-  created_on: z.string(),
-  id: z.string(),
-  source: z.string(),
-  strategy: z.enum(["percentage"]),
+  created_on: z.string().optional(),
+  id: z.string().optional(),
+  source: z.string().optional(),
+  strategy: z.enum(["percentage"]).optional(),
   versions: z.array(z.object({
-    percentage: z.number().min(0.01).max(100),
-    version_id: z.string(),
-  })),
+    percentage: z.number().min(0.01).max(100).optional(),
+    version_id: z.string().optional(),
+  })).optional(),
 }).passthrough();
 
 const GetCronTriggersSchema = z.object({
-  schedules: z.array(z.unknown()),
+  schedules: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const GetSettingsSchema = z.object({
@@ -154,17 +154,17 @@ const PatchSettingsSchema = z.object({
 
 const ScriptSecretsItemSchema = z.union([
   z.object({
-    name: z.unknown(),
-    text: z.string(),
-    type: z.enum(["secret_text"]),
+    name: z.unknown().optional(),
+    text: z.string().optional(),
+    type: z.enum(["secret_text"]).optional(),
   }),
   z.object({
-    algorithm: z.object({}),
-    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    algorithm: z.object({}).optional(),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]).optional(),
     key_base64: z.string().optional(),
     key_jwk: z.object({}).optional(),
-    name: z.unknown(),
-    type: z.enum(["secret_key"]),
+    name: z.unknown().optional(),
+    type: z.enum(["secret_key"]).optional(),
     usages: z.array(
       z.enum([
         "encrypt",
@@ -176,7 +176,7 @@ const ScriptSecretsItemSchema = z.union([
         "wrapKey",
         "unwrapKey",
       ]),
-    ),
+    ).optional(),
   }),
 ]);
 
@@ -194,17 +194,17 @@ const ListScriptSecretsSchema = z.object({
 
 const PutScriptSecretSchema = z.union([
   z.object({
-    name: z.unknown(),
-    text: z.string(),
-    type: z.enum(["secret_text"]),
+    name: z.unknown().optional(),
+    text: z.string().optional(),
+    type: z.enum(["secret_text"]).optional(),
   }),
   z.object({
-    algorithm: z.object({}),
-    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    algorithm: z.object({}).optional(),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]).optional(),
     key_base64: z.string().optional(),
     key_jwk: z.object({}).optional(),
-    name: z.unknown(),
-    type: z.enum(["secret_key"]),
+    name: z.unknown().optional(),
+    type: z.enum(["secret_key"]).optional(),
     usages: z.array(
       z.enum([
         "encrypt",
@@ -216,7 +216,7 @@ const PutScriptSecretSchema = z.union([
         "wrapKey",
         "unwrapKey",
       ]),
-    ),
+    ).optional(),
   }),
 ]);
 
@@ -224,17 +224,17 @@ const PatchScriptSecretsBulkSchema = z.record(z.string(), z.unknown());
 
 const GetScriptSecretSchema = z.union([
   z.object({
-    name: z.unknown(),
-    text: z.string(),
-    type: z.enum(["secret_text"]),
+    name: z.unknown().optional(),
+    text: z.string().optional(),
+    type: z.enum(["secret_text"]).optional(),
   }),
   z.object({
-    algorithm: z.object({}),
-    format: z.enum(["raw", "pkcs8", "spki", "jwk"]),
+    algorithm: z.object({}).optional(),
+    format: z.enum(["raw", "pkcs8", "spki", "jwk"]).optional(),
     key_base64: z.string().optional(),
     key_jwk: z.object({}).optional(),
-    name: z.unknown(),
-    type: z.enum(["secret_key"]),
+    name: z.unknown().optional(),
+    type: z.enum(["secret_key"]).optional(),
     usages: z.array(
       z.enum([
         "encrypt",
@@ -246,38 +246,38 @@ const GetScriptSecretSchema = z.union([
         "wrapKey",
         "unwrapKey",
       ]),
-    ),
+    ).optional(),
   }),
 ]);
 
 const GetSubdomainSchema = z.object({
-  enabled: z.boolean().default(false).describe(
+  enabled: z.boolean().optional().default(false).describe(
     "Whether the Worker is available on the workers.dev subdomain.",
   ),
-  previews_enabled: z.boolean().describe(
+  previews_enabled: z.boolean().optional().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
 }).passthrough();
 
 const CreateWorkerScriptPostSubdomainSchema = z.object({
-  enabled: z.boolean().default(false).describe(
+  enabled: z.boolean().optional().default(false).describe(
     "Whether the Worker is available on the workers.dev subdomain.",
   ),
-  previews_enabled: z.boolean().describe(
+  previews_enabled: z.boolean().optional().describe(
     "Whether the Worker's Preview URLs are available on the workers.dev subdomain.",
   ),
 }).passthrough();
 
 const ListTailsSchema = z.object({
-  expires_at: z.string(),
-  id: z.unknown(),
-  url: z.string(),
+  expires_at: z.string().optional(),
+  id: z.unknown().optional(),
+  url: z.string().optional(),
 }).passthrough();
 
 const WorkerTailLogsStartTailSchema = z.object({
-  expires_at: z.string(),
-  id: z.unknown(),
-  url: z.string(),
+  expires_at: z.string().optional(),
+  id: z.unknown().optional(),
+  url: z.string().optional(),
 }).passthrough();
 
 const GetWorkerScriptFetchUsageModelSchema = z.object({
@@ -338,7 +338,7 @@ const GetVersionDetailSchema = z.object({
       migration_tag: z.string().optional(),
       usage_model: z.enum(["bundled", "unbound", "standard"]).optional(),
     }).optional(),
-  }),
+  }).optional(),
 }).passthrough();
 
 // =============================================================================
@@ -348,7 +348,7 @@ const GetVersionDetailSchema = z.object({
 /** Cloudflare Workers Scripts — upload, deploy, bindings, routes, cron triggers */
 export const model = {
   type: "@webframp/cloudflare/workers-scripts",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -384,6 +384,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -712,7 +717,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "assets_upload_session",
@@ -816,7 +821,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("deployment", id, result);
         context.logger.info("Created deployment {id}", { id });
@@ -1378,7 +1383,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "worker_script_post_subdomain",

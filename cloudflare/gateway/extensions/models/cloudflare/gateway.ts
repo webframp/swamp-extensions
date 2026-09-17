@@ -272,12 +272,12 @@ const PatchZeroTrustAccountConfigurationSchema = z.object({
 }).passthrough();
 
 const DnsDestinationIpsItemSchema = z.object({
-  backup_ip: z.string(),
-  id: z.string(),
-  pair_type: z.enum(["shared", "dedicated", "byoip"]).describe(
+  backup_ip: z.string().optional(),
+  id: z.string().optional(),
+  pair_type: z.enum(["shared", "dedicated", "byoip"]).optional().describe(
     "Specify whether the pair shared across multiple accounts (shared) or available exclusively to thi...",
   ),
-  primary_ip: z.string(),
+  primary_ip: z.string().optional(),
 }).passthrough();
 
 const ListDnsDestinationIpsSchema = z.object({
@@ -296,14 +296,14 @@ const GetEgressCidrPairsItemSchema = z.object({
   geolocation: z.object({
     city: z.string().optional(),
     country: z.string().optional(),
-  }).describe("Specify the geographic location of this CIDR pair."),
-  ipv4: z.string().describe(
+  }).optional().describe("Specify the geographic location of this CIDR pair."),
+  ipv4: z.string().optional().describe(
     "Specify the IPv4 address of this egress CIDR pair.",
   ),
-  ipv4_colo_name: z.string().describe(
+  ipv4_colo_name: z.string().optional().describe(
     "Specify the colocation from which this IPv4 address egresses.",
   ),
-  ipv6_cidr: z.string().describe(
+  ipv6_cidr: z.string().optional().describe(
     "Specify the IPv6 network address of this egress CIDR pair.",
   ),
 }).passthrough();
@@ -537,17 +537,17 @@ const ProxyEndpointsItemSchema = z.union([
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    ips: z.unknown(),
+    ips: z.unknown().optional(),
     kind: z.enum(["ip"]).optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    kind: z.enum(["identity"]),
-    name: z.unknown(),
+    kind: z.enum(["identity"]).optional(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
@@ -569,17 +569,17 @@ const CreateProxyEndpointSchema = z.union([
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    ips: z.unknown(),
+    ips: z.unknown().optional(),
     kind: z.enum(["ip"]).optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    kind: z.enum(["identity"]),
-    name: z.unknown(),
+    kind: z.enum(["identity"]).optional(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
@@ -589,41 +589,41 @@ const GetZeroTrustGatewayProxyEndpointsProxyEndpointDetailsSchema = z.union([
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    ips: z.unknown(),
+    ips: z.unknown().optional(),
     kind: z.enum(["ip"]).optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
   z.object({
     created_at: z.unknown().optional(),
     id: z.unknown().optional(),
-    kind: z.enum(["identity"]),
-    name: z.unknown(),
+    kind: z.enum(["identity"]).optional(),
+    name: z.unknown().optional(),
     subdomain: z.unknown().optional(),
     updated_at: z.unknown().optional(),
   }),
 ]);
 
 const ZeroTrustGatewayRulesItemSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
@@ -642,72 +642,72 @@ const ListZeroTrustGatewayRulesSchema = z.object({
 });
 
 const CreateZeroTrustGatewayRuleSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
 }).passthrough();
 
 const PatchMultipleZeroTrustGatewayRulesSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
 }).passthrough();
 
 const ZeroTrustGatewayRulesTenantItemSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
@@ -726,48 +726,48 @@ const ListZeroTrustGatewayRulesTenantSchema = z.object({
 });
 
 const GetZeroTrustGatewayRulesZeroTrustGatewayRuleDetailsSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
 }).passthrough();
 
 const PatchZeroTrustGatewayRuleSchema = z.object({
-  action: z.unknown(),
+  action: z.unknown().optional(),
   created_at: z.unknown().optional(),
   deleted_at: z.unknown().optional(),
   description: z.unknown().optional(),
   device_posture: z.unknown().optional(),
-  enabled: z.unknown(),
+  enabled: z.unknown().optional(),
   expiration: z.unknown().optional(),
-  filters: z.unknown(),
+  filters: z.unknown().optional(),
   id: z.unknown().optional(),
   identity: z.unknown().optional(),
-  name: z.unknown(),
-  precedence: z.unknown(),
+  name: z.unknown().optional(),
+  precedence: z.unknown().optional(),
   read_only: z.unknown().optional(),
   rule_settings: z.unknown().optional(),
   schedule: z.unknown().optional(),
   sharable: z.unknown().optional(),
   source_account: z.unknown().optional(),
-  traffic: z.unknown(),
+  traffic: z.unknown().optional(),
   updated_at: z.unknown().optional(),
   version: z.unknown().optional(),
   warning_status: z.unknown().optional(),
@@ -775,24 +775,24 @@ const PatchZeroTrustGatewayRuleSchema = z.object({
 
 const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
   {
-    action: z.unknown(),
+    action: z.unknown().optional(),
     created_at: z.unknown().optional(),
     deleted_at: z.unknown().optional(),
     description: z.unknown().optional(),
     device_posture: z.unknown().optional(),
-    enabled: z.unknown(),
+    enabled: z.unknown().optional(),
     expiration: z.unknown().optional(),
-    filters: z.unknown(),
+    filters: z.unknown().optional(),
     id: z.unknown().optional(),
     identity: z.unknown().optional(),
-    name: z.unknown(),
-    precedence: z.unknown(),
+    name: z.unknown().optional(),
+    precedence: z.unknown().optional(),
     read_only: z.unknown().optional(),
     rule_settings: z.unknown().optional(),
     schedule: z.unknown().optional(),
     sharable: z.unknown().optional(),
     source_account: z.unknown().optional(),
-    traffic: z.unknown(),
+    traffic: z.unknown().optional(),
     updated_at: z.unknown().optional(),
     version: z.unknown().optional(),
     warning_status: z.unknown().optional(),
@@ -806,7 +806,7 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
 /** Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints */
 export const model = {
   type: "@webframp/cloudflare/gateway",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -847,6 +847,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1528,7 +1533,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "zero_trust_certificate",
@@ -2190,7 +2195,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "zero_trust_gateway_location",
@@ -2539,7 +2544,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("pacfile", id, result);
         context.logger.info("Created pacfile {id}", { id });
@@ -2706,7 +2711,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "proxy_endpoint",
@@ -2933,7 +2938,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "zero_trust_gateway_rule",

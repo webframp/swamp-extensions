@@ -24,19 +24,19 @@ const GlobalArgsSchema = z.object({
 });
 
 const ListItemSchema = z.object({
-  bot_fight_mode: z.unknown(),
-  clearance_level: z.unknown(),
-  created_on: z.unknown(),
+  bot_fight_mode: z.unknown().optional(),
+  clearance_level: z.unknown().optional(),
+  created_on: z.unknown().optional(),
   deployed_via: z.unknown().optional(),
-  domains: z.unknown(),
-  ephemeral_id: z.unknown(),
+  domains: z.unknown().optional(),
+  ephemeral_id: z.unknown().optional(),
   last_modified_via: z.unknown().optional(),
-  mode: z.unknown(),
-  modified_on: z.unknown(),
-  name: z.unknown(),
-  offlabel: z.unknown(),
-  region: z.unknown(),
-  sitekey: z.unknown(),
+  mode: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  name: z.unknown().optional(),
+  offlabel: z.unknown().optional(),
+  region: z.unknown().optional(),
+  sitekey: z.unknown().optional(),
 }).passthrough();
 
 const ListSchema = z.object({
@@ -52,71 +52,71 @@ const ListSchema = z.object({
 });
 
 const GetCreateSchema = z.object({
-  bot_fight_mode: z.unknown(),
-  clearance_level: z.unknown(),
-  created_on: z.unknown(),
+  bot_fight_mode: z.unknown().optional(),
+  clearance_level: z.unknown().optional(),
+  created_on: z.unknown().optional(),
   deployed_via: z.unknown().optional(),
-  domains: z.unknown(),
-  ephemeral_id: z.unknown(),
+  domains: z.unknown().optional(),
+  ephemeral_id: z.unknown().optional(),
   last_modified_via: z.unknown().optional(),
-  mode: z.unknown(),
-  modified_on: z.unknown(),
-  name: z.unknown(),
-  offlabel: z.unknown(),
-  region: z.unknown(),
-  secret: z.unknown(),
-  sitekey: z.unknown(),
+  mode: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  name: z.unknown().optional(),
+  offlabel: z.unknown().optional(),
+  region: z.unknown().optional(),
+  secret: z.unknown().optional(),
+  sitekey: z.unknown().optional(),
 }).passthrough();
 
 const GetGetSchema = z.object({
-  bot_fight_mode: z.unknown(),
-  clearance_level: z.unknown(),
-  created_on: z.unknown(),
+  bot_fight_mode: z.unknown().optional(),
+  clearance_level: z.unknown().optional(),
+  created_on: z.unknown().optional(),
   deployed_via: z.unknown().optional(),
-  domains: z.unknown(),
-  ephemeral_id: z.unknown(),
+  domains: z.unknown().optional(),
+  ephemeral_id: z.unknown().optional(),
   last_modified_via: z.unknown().optional(),
-  mode: z.unknown(),
-  modified_on: z.unknown(),
-  name: z.unknown(),
-  offlabel: z.unknown(),
-  region: z.unknown(),
-  secret: z.unknown(),
-  sitekey: z.unknown(),
+  mode: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  name: z.unknown().optional(),
+  offlabel: z.unknown().optional(),
+  region: z.unknown().optional(),
+  secret: z.unknown().optional(),
+  sitekey: z.unknown().optional(),
 }).passthrough();
 
 const GetUpdateSchema = z.object({
-  bot_fight_mode: z.unknown(),
-  clearance_level: z.unknown(),
-  created_on: z.unknown(),
+  bot_fight_mode: z.unknown().optional(),
+  clearance_level: z.unknown().optional(),
+  created_on: z.unknown().optional(),
   deployed_via: z.unknown().optional(),
-  domains: z.unknown(),
-  ephemeral_id: z.unknown(),
+  domains: z.unknown().optional(),
+  ephemeral_id: z.unknown().optional(),
   last_modified_via: z.unknown().optional(),
-  mode: z.unknown(),
-  modified_on: z.unknown(),
-  name: z.unknown(),
-  offlabel: z.unknown(),
-  region: z.unknown(),
-  secret: z.unknown(),
-  sitekey: z.unknown(),
+  mode: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  name: z.unknown().optional(),
+  offlabel: z.unknown().optional(),
+  region: z.unknown().optional(),
+  secret: z.unknown().optional(),
+  sitekey: z.unknown().optional(),
 }).passthrough();
 
 const GetRotateSecretSchema = z.object({
-  bot_fight_mode: z.unknown(),
-  clearance_level: z.unknown(),
-  created_on: z.unknown(),
+  bot_fight_mode: z.unknown().optional(),
+  clearance_level: z.unknown().optional(),
+  created_on: z.unknown().optional(),
   deployed_via: z.unknown().optional(),
-  domains: z.unknown(),
-  ephemeral_id: z.unknown(),
+  domains: z.unknown().optional(),
+  ephemeral_id: z.unknown().optional(),
   last_modified_via: z.unknown().optional(),
-  mode: z.unknown(),
-  modified_on: z.unknown(),
-  name: z.unknown(),
-  offlabel: z.unknown(),
-  region: z.unknown(),
-  secret: z.unknown(),
-  sitekey: z.unknown(),
+  mode: z.unknown().optional(),
+  modified_on: z.unknown().optional(),
+  name: z.unknown().optional(),
+  offlabel: z.unknown().optional(),
+  region: z.unknown().optional(),
+  secret: z.unknown().optional(),
+  sitekey: z.unknown().optional(),
 }).passthrough();
 
 // =============================================================================
@@ -126,7 +126,7 @@ const GetRotateSecretSchema = z.object({
 /** Cloudflare Turnstile — CAPTCHA-free challenges, site widgets */
 export const model = {
   type: "@webframp/cloudflare/turnstile",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -167,6 +167,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -336,7 +341,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("get_create", id, result);
         context.logger.info("Created get_create {id}", { id });
@@ -496,7 +501,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "get_rotate_secret",

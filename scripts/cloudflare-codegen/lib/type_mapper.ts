@@ -21,11 +21,26 @@ export interface TypeMapperOptions {
   indent?: number;
   /** Maximum depth before collapsing to z.unknown() */
   maxDepth?: number;
+  /**
+   * Ignore the OpenAPI `required` array and mark every object field
+   * `.optional()` (or `.nullable().optional()`), at every depth.
+   *
+   * Response schemas validate data that may have been persisted to a
+   * datastore resource under an earlier model version. The upgrade chain for
+   * additive changes is the identity transform — it does not backfill new
+   * keys — so a field the live API newly marks required can still be absent
+   * from an old stored resource. Without this, Zod throws "Required" the
+   * first time such a resource is read back. Request/argument schemas
+   * describe a fresh call, not stored data, so they keep the spec's
+   * required-ness as-is.
+   */
+  lenient?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   indent: 2,
   maxDepth: 8,
+  lenient: false,
 };
 
 /**
@@ -180,7 +195,9 @@ function objectToZod(
     return "z.object({})";
   }
 
-  const required = new Set(schema.required ?? []);
+  const required = opts.lenient
+    ? new Set<string>()
+    : new Set(schema.required ?? []);
   const indent = " ".repeat(opts.indent * (depth + 1));
   const closingIndent = " ".repeat(opts.indent * depth);
 

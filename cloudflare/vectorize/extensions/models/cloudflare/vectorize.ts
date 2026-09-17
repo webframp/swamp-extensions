@@ -86,20 +86,22 @@ const VectorizeInsertVectorSchema = z.object({
 }).passthrough();
 
 const ListVectorsSchema = z.object({
-  count: z.number().int().describe(
+  count: z.number().int().optional().describe(
     "Number of vectors returned in this response",
   ),
   cursorExpirationTimestamp: z.string().nullable().optional().describe(
     "When the cursor expires as an ISO8601 string",
   ),
-  isTruncated: z.boolean().describe(
+  isTruncated: z.boolean().optional().describe(
     "Whether there are more vectors available beyond this response",
   ),
   nextCursor: z.string().nullable().optional().describe(
     "Cursor for the next page of results",
   ),
-  totalCount: z.number().int().describe("Total number of vectors in the index"),
-  vectors: z.array(z.unknown()).describe("Array of vector items"),
+  totalCount: z.number().int().optional().describe(
+    "Total number of vectors in the index",
+  ),
+  vectors: z.array(z.unknown()).optional().describe("Array of vector items"),
 }).passthrough();
 
 const CreateMetadataIndexSchema = z.object({
@@ -141,7 +143,7 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -182,6 +184,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -353,7 +360,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "vectorize_index",
@@ -468,7 +475,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "delete_vectors_by_id",
@@ -517,7 +524,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "get_vectors_by_id",
@@ -686,7 +693,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "metadata_index",
@@ -735,7 +742,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "delete_metadata_index",
@@ -831,7 +838,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "vectorize_query_vector",

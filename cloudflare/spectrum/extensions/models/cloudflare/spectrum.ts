@@ -24,11 +24,13 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetCurrentAggregatedAnalyticsItemSchema = z.object({
-  appID: z.unknown(),
-  bytesEgress: z.number().describe("Number of bytes sent."),
-  bytesIngress: z.number().describe("Number of bytes received."),
-  connections: z.number().describe("Number of connections."),
-  durationAvg: z.number().describe("Average duration of connections."),
+  appID: z.unknown().optional(),
+  bytesEgress: z.number().optional().describe("Number of bytes sent."),
+  bytesIngress: z.number().optional().describe("Number of bytes received."),
+  connections: z.number().optional().describe("Number of connections."),
+  durationAvg: z.number().optional().describe(
+    "Average duration of connections.",
+  ),
 }).passthrough();
 
 const GetCurrentAggregatedAnalyticsSchema = z.object({
@@ -44,37 +46,41 @@ const GetCurrentAggregatedAnalyticsSchema = z.object({
 });
 
 const GetAnalyticsByTimeSchema = z.object({
-  data: z.array(z.unknown()).describe(
+  data: z.array(z.unknown()).optional().describe(
     "List of columns returned by the analytics query.",
   ),
-  data_lag: z.number().min(0).describe(
+  data_lag: z.number().min(0).optional().describe(
     "Number of seconds between current time and last processed event, i.e. how many seconds of data co...",
   ),
-  max: z.unknown(),
-  min: z.unknown(),
-  query: z.unknown(),
-  rows: z.number().min(0).describe("Total number of rows in the result."),
+  max: z.unknown().optional(),
+  min: z.unknown().optional(),
+  query: z.unknown().optional(),
+  rows: z.number().min(0).optional().describe(
+    "Total number of rows in the result.",
+  ),
   time_intervals: z.array(z.array(z.unknown())).optional().describe(
     "List of time interval buckets: [start, end].",
   ),
-  totals: z.unknown(),
+  totals: z.unknown().optional(),
 }).passthrough();
 
 const GetAnalyticsSummarySchema = z.object({
-  data: z.array(z.unknown()).describe(
+  data: z.array(z.unknown()).optional().describe(
     "List of columns returned by the analytics query.",
   ),
-  data_lag: z.number().min(0).describe(
+  data_lag: z.number().min(0).optional().describe(
     "Number of seconds between current time and last processed event, i.e. how many seconds of data co...",
   ),
-  max: z.unknown(),
-  min: z.unknown(),
-  query: z.unknown(),
-  rows: z.number().min(0).describe("Total number of rows in the result."),
+  max: z.unknown().optional(),
+  min: z.unknown().optional(),
+  query: z.unknown().optional(),
+  rows: z.number().min(0).optional().describe(
+    "Total number of rows in the result.",
+  ),
   time_intervals: z.array(z.array(z.unknown())).optional().describe(
     "List of time interval buckets: [start, end].",
   ),
-  totals: z.unknown(),
+  totals: z.unknown().optional(),
 }).passthrough();
 
 const ListSpectrumApplicationsSchema = z.union([
@@ -84,86 +90,86 @@ const ListSpectrumApplicationsSchema = z.union([
 
 const CreateSpectrumApplicationUsingANameForTheOriginSchema = z.union([
   z.object({
-    created_on: z.unknown(),
-    id: z.unknown(),
-    modified_on: z.unknown(),
+    created_on: z.unknown().optional(),
+    id: z.unknown().optional(),
+    modified_on: z.unknown().optional(),
     argo_smart_routing: z.unknown().optional(),
-    dns: z.unknown(),
+    dns: z.unknown().optional(),
     edge_ips: z.unknown().optional(),
     ip_firewall: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
     origin_dns: z.unknown().optional(),
     origin_port: z.unknown().optional(),
-    protocol: z.unknown(),
+    protocol: z.unknown().optional(),
     proxy_protocol: z.unknown().optional(),
     tls: z.unknown().optional(),
-    traffic_type: z.unknown(),
+    traffic_type: z.unknown().optional(),
     virtual_network_id: z.unknown().optional(),
   }),
   z.object({
-    created_on: z.unknown(),
-    id: z.unknown(),
-    modified_on: z.unknown(),
-    dns: z.unknown(),
+    created_on: z.unknown().optional(),
+    id: z.unknown().optional(),
+    modified_on: z.unknown().optional(),
+    dns: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
-    protocol: z.unknown(),
+    protocol: z.unknown().optional(),
   }),
 ]);
 
 const GetSpectrumApplicationConfigurationSchema = z.union([
   z.object({
-    created_on: z.unknown(),
-    id: z.unknown(),
-    modified_on: z.unknown(),
+    created_on: z.unknown().optional(),
+    id: z.unknown().optional(),
+    modified_on: z.unknown().optional(),
     argo_smart_routing: z.unknown().optional(),
-    dns: z.unknown(),
+    dns: z.unknown().optional(),
     edge_ips: z.unknown().optional(),
     ip_firewall: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
     origin_dns: z.unknown().optional(),
     origin_port: z.unknown().optional(),
-    protocol: z.unknown(),
+    protocol: z.unknown().optional(),
     proxy_protocol: z.unknown().optional(),
     tls: z.unknown().optional(),
-    traffic_type: z.unknown(),
+    traffic_type: z.unknown().optional(),
     virtual_network_id: z.unknown().optional(),
   }),
   z.object({
-    created_on: z.unknown(),
-    id: z.unknown(),
-    modified_on: z.unknown(),
-    dns: z.unknown(),
+    created_on: z.unknown().optional(),
+    id: z.unknown().optional(),
+    modified_on: z.unknown().optional(),
+    dns: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
-    protocol: z.unknown(),
+    protocol: z.unknown().optional(),
   }),
 ]);
 
 const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
   .union([
     z.object({
-      created_on: z.unknown(),
-      id: z.unknown(),
-      modified_on: z.unknown(),
+      created_on: z.unknown().optional(),
+      id: z.unknown().optional(),
+      modified_on: z.unknown().optional(),
       argo_smart_routing: z.unknown().optional(),
-      dns: z.unknown(),
+      dns: z.unknown().optional(),
       edge_ips: z.unknown().optional(),
       ip_firewall: z.unknown().optional(),
       origin_direct: z.unknown().optional(),
       origin_dns: z.unknown().optional(),
       origin_port: z.unknown().optional(),
-      protocol: z.unknown(),
+      protocol: z.unknown().optional(),
       proxy_protocol: z.unknown().optional(),
       tls: z.unknown().optional(),
-      traffic_type: z.unknown(),
+      traffic_type: z.unknown().optional(),
       virtual_network_id: z.unknown().optional(),
     }),
     z.object({
-      created_on: z.unknown(),
-      id: z.unknown(),
-      modified_on: z.unknown(),
-      dns: z.unknown(),
+      created_on: z.unknown().optional(),
+      id: z.unknown().optional(),
+      modified_on: z.unknown().optional(),
+      dns: z.unknown().optional(),
       origin_direct: z.unknown().optional(),
-      protocol: z.unknown(),
+      protocol: z.unknown().optional(),
     }),
   ]);
 
@@ -174,7 +180,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -215,6 +221,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

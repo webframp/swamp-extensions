@@ -25,12 +25,12 @@ const GlobalArgsSchema = z.object({
 
 const CertificatesItemSchema = z.object({
   certificate: z.unknown().optional(),
-  csr: z.unknown(),
+  csr: z.unknown().optional(),
   expires_on: z.unknown().optional(),
-  hostnames: z.unknown(),
+  hostnames: z.unknown().optional(),
   id: z.unknown().optional(),
-  request_type: z.unknown(),
-  requested_validity: z.unknown(),
+  request_type: z.unknown().optional(),
+  requested_validity: z.unknown().optional(),
 }).passthrough();
 
 const ListCertificatesSchema = z.object({
@@ -47,12 +47,12 @@ const ListCertificatesSchema = z.object({
 
 const CreateCertificateSchema = z.object({
   certificate: z.unknown().optional(),
-  csr: z.unknown(),
+  csr: z.unknown().optional(),
   expires_on: z.unknown().optional(),
-  hostnames: z.unknown(),
+  hostnames: z.unknown().optional(),
   id: z.unknown().optional(),
-  request_type: z.unknown(),
-  requested_validity: z.unknown(),
+  request_type: z.unknown().optional(),
+  requested_validity: z.unknown().optional(),
 }).passthrough();
 
 const SslConfigurationsItemSchema = z.object({
@@ -61,7 +61,7 @@ const SslConfigurationsItemSchema = z.object({
   expires_on: z.unknown().optional(),
   geo_restrictions: z.unknown().optional(),
   hosts: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   issuer: z.unknown().optional(),
   keyless_server: z.unknown().optional(),
   modified_on: z.unknown().optional(),
@@ -70,7 +70,7 @@ const SslConfigurationsItemSchema = z.object({
   signature: z.unknown().optional(),
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  zone_id: z.unknown(),
+  zone_id: z.unknown().optional(),
 }).passthrough();
 
 const ListSslConfigurationsSchema = z.object({
@@ -91,7 +91,7 @@ const CreateSslConfigurationSchema = z.object({
   expires_on: z.unknown().optional(),
   geo_restrictions: z.unknown().optional(),
   hosts: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   issuer: z.unknown().optional(),
   keyless_server: z.unknown().optional(),
   modified_on: z.unknown().optional(),
@@ -100,7 +100,7 @@ const CreateSslConfigurationSchema = z.object({
   signature: z.unknown().optional(),
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  zone_id: z.unknown(),
+  zone_id: z.unknown().optional(),
 }).passthrough();
 
 const UpdateCustomSslForAZoneRePrioritizeSslCertificatesSchema = z.object({
@@ -109,7 +109,7 @@ const UpdateCustomSslForAZoneRePrioritizeSslCertificatesSchema = z.object({
   expires_on: z.unknown().optional(),
   geo_restrictions: z.unknown().optional(),
   hosts: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   issuer: z.unknown().optional(),
   keyless_server: z.unknown().optional(),
   modified_on: z.unknown().optional(),
@@ -118,7 +118,7 @@ const UpdateCustomSslForAZoneRePrioritizeSslCertificatesSchema = z.object({
   signature: z.unknown().optional(),
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  zone_id: z.unknown(),
+  zone_id: z.unknown().optional(),
 }).passthrough();
 
 const GetCustomSslForAZoneSslConfigurationDetailsSchema = z.object({
@@ -127,7 +127,7 @@ const GetCustomSslForAZoneSslConfigurationDetailsSchema = z.object({
   expires_on: z.unknown().optional(),
   geo_restrictions: z.unknown().optional(),
   hosts: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   issuer: z.unknown().optional(),
   keyless_server: z.unknown().optional(),
   modified_on: z.unknown().optional(),
@@ -136,7 +136,7 @@ const GetCustomSslForAZoneSslConfigurationDetailsSchema = z.object({
   signature: z.unknown().optional(),
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  zone_id: z.unknown(),
+  zone_id: z.unknown().optional(),
 }).passthrough();
 
 const UpdateCustomSslForAZoneEditSslConfigurationSchema = z.object({
@@ -145,7 +145,7 @@ const UpdateCustomSslForAZoneEditSslConfigurationSchema = z.object({
   expires_on: z.unknown().optional(),
   geo_restrictions: z.unknown().optional(),
   hosts: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   issuer: z.unknown().optional(),
   keyless_server: z.unknown().optional(),
   modified_on: z.unknown().optional(),
@@ -154,7 +154,7 @@ const UpdateCustomSslForAZoneEditSslConfigurationSchema = z.object({
   signature: z.unknown().optional(),
   status: z.unknown().optional(),
   uploaded_on: z.unknown().optional(),
-  zone_id: z.unknown(),
+  zone_id: z.unknown().optional(),
 }).passthrough();
 
 const CreateAnalyzeCertificateAnalyzeCertificateSchema = z.object({})
@@ -162,18 +162,18 @@ const CreateAnalyzeCertificateAnalyzeCertificateSchema = z.object({})
 
 const CertificatePacksItemSchema = z.object({
   certificate_authority: z.unknown().optional(),
-  certificates: z.array(z.unknown()).describe(
+  certificates: z.array(z.unknown()).optional().describe(
     "Array of certificates in this pack.",
   ),
   cloudflare_branding: z.unknown().optional(),
   dcv_delegation_records: z.array(z.unknown()).optional().describe(
     "DCV Delegation records for domain validation.",
   ),
-  hosts: z.unknown(),
-  id: z.unknown(),
+  hosts: z.unknown().optional(),
+  id: z.unknown().optional(),
   primary_certificate: z.unknown().optional(),
-  status: z.unknown(),
-  type: z.unknown(),
+  status: z.unknown().optional(),
+  type: z.unknown().optional(),
   validation_errors: z.array(z.object({
     message: z.string().optional(),
   })).optional().describe(
@@ -201,18 +201,18 @@ const ListCertificatePacksSchema = z.object({
 const CreateCertificatePacksOrderAdvancedCertificateManagerCertificatePackSchema =
   z.object({
     certificate_authority: z.unknown().optional(),
-    certificates: z.array(z.unknown()).describe(
+    certificates: z.array(z.unknown()).optional().describe(
       "Array of certificates in this pack.",
     ),
     cloudflare_branding: z.unknown().optional(),
     dcv_delegation_records: z.array(z.unknown()).optional().describe(
       "DCV Delegation records for domain validation.",
     ),
-    hosts: z.unknown(),
-    id: z.unknown(),
+    hosts: z.unknown().optional(),
+    id: z.unknown().optional(),
     primary_certificate: z.unknown().optional(),
-    status: z.unknown(),
-    type: z.unknown(),
+    status: z.unknown().optional(),
+    type: z.unknown().optional(),
     validation_errors: z.array(z.object({
       message: z.string().optional(),
     })).optional().describe(
@@ -231,18 +231,18 @@ const GetCertificatePackQuotasSchema = z.object({
 
 const GetCertificatePackSchema = z.object({
   certificate_authority: z.unknown().optional(),
-  certificates: z.array(z.unknown()).describe(
+  certificates: z.array(z.unknown()).optional().describe(
     "Array of certificates in this pack.",
   ),
   cloudflare_branding: z.unknown().optional(),
   dcv_delegation_records: z.array(z.unknown()).optional().describe(
     "DCV Delegation records for domain validation.",
   ),
-  hosts: z.unknown(),
-  id: z.unknown(),
+  hosts: z.unknown().optional(),
+  id: z.unknown().optional(),
   primary_certificate: z.unknown().optional(),
-  status: z.unknown(),
-  type: z.unknown(),
+  status: z.unknown().optional(),
+  type: z.unknown().optional(),
   validation_errors: z.array(z.object({
     message: z.string().optional(),
   })).optional().describe(
@@ -258,18 +258,18 @@ const GetCertificatePackSchema = z.object({
 const UpdateCertificatePacksRestartValidationForAdvancedCertificateManagerCertificatePackSchema =
   z.object({
     certificate_authority: z.unknown().optional(),
-    certificates: z.array(z.unknown()).describe(
+    certificates: z.array(z.unknown()).optional().describe(
       "Array of certificates in this pack.",
     ),
     cloudflare_branding: z.unknown().optional(),
     dcv_delegation_records: z.array(z.unknown()).optional().describe(
       "DCV Delegation records for domain validation.",
     ),
-    hosts: z.unknown(),
-    id: z.unknown(),
+    hosts: z.unknown().optional(),
+    id: z.unknown().optional(),
     primary_certificate: z.unknown().optional(),
-    status: z.unknown(),
-    type: z.unknown(),
+    status: z.unknown().optional(),
+    type: z.unknown().optional(),
     validation_errors: z.array(z.object({
       message: z.string().optional(),
     })).optional().describe(
@@ -295,7 +295,7 @@ const UpdateUniversalSslSettingsForAZoneEditUniversalSslSettingsSchema = z
 const SslVerificationSslVerificationDetailsItemSchema = z.object({
   brand_check: z.unknown().optional(),
   cert_pack_uuid: z.unknown().optional(),
-  certificate_status: z.unknown(),
+  certificate_status: z.unknown().optional(),
   signature: z.unknown().optional(),
   validation_method: z.unknown().optional(),
   verification_info: z.unknown().optional(),
@@ -328,7 +328,7 @@ const UpdateSslVerificationEditSslCertificatePackValidationMethodSchema = z
 /** Cloudflare SSL/TLS — certificate packs, custom certificates, certificate authority */
 export const model = {
   type: "@webframp/cloudflare/ssl-certificates",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -369,6 +369,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -577,7 +582,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("certificate", id, result);
         context.logger.info("Created certificate {id}", { id });
@@ -759,7 +764,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ssl_configuration",
@@ -971,7 +976,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "analyze_certificate_analyze_certificate",
@@ -1085,7 +1090,7 @@ export const model = {
           );
 
           const id = sanitizeInstanceName(
-            (result as { id?: string }).id ?? "created",
+            String((result as { id?: unknown }).id ?? "created"),
           );
           const handle = await context.writeResource(
             "certificate_packs_order_advanced_certificate_manager_certificate_pack",

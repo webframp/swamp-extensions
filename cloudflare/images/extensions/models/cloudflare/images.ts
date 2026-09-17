@@ -46,9 +46,9 @@ const GetCloudflareImagesVariantsVariantDetailsSchema = z.object({
 }).passthrough();
 
 const GetCloudflareImagesVariantsVariantDetailsFlatSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().optional(),
   neverRequireSignedURLs: z.unknown().optional(),
-  options: z.unknown(),
+  options: z.unknown().optional(),
 }).passthrough();
 
 const GetCloudflareImagesImageDetailsSchema = z.object({
@@ -178,7 +178,7 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -214,6 +214,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -555,7 +560,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("a_variant", id, result);
         context.logger.info("Created a_variant {id}", { id });
@@ -952,7 +957,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("migration", id, result);
         context.logger.info("Created migration {id}", { id });
@@ -1269,7 +1274,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("source", id, result);
         context.logger.info("Created source {id}", { id });
@@ -1319,7 +1324,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "cloudflare_images_sourcingkit_precheck_source_connectivity",

@@ -186,15 +186,17 @@ export function generateModelSource(
   lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
 
   // Only import the API helpers that are actually used
-  const usesCfApi = methods.some((m) =>
-    m.type !== "list" || m.operation.usesCursorPagination
-  );
+  const usesCfApi = methods.some((m) => m.type !== "list");
   const usesCfApiPaginated = methods.some((m) =>
     m.type === "list" && !m.operation.usesCursorPagination
+  );
+  const usesCfApiPaginatedCursor = methods.some((m) =>
+    m.type === "list" && m.operation.usesCursorPagination
   );
   const apiImports: string[] = [];
   if (usesCfApi) apiImports.push("cfApi");
   if (usesCfApiPaginated) apiImports.push("cfApiPaginated");
+  if (usesCfApiPaginatedCursor) apiImports.push("cfApiPaginatedCursor");
   // sanitizeInstanceName is emitted only by bodies that build an instance name
   // from an API-influenced value: every `create`, and any `get`/`update`
   // targeting a resource by a path id. `list` ("main") and `action` ("latest")
@@ -347,7 +349,9 @@ function generateResponseSchemas(
       // For list methods, generate both item schema and list wrapper
       const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
         "ItemSchema";
-      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const itemZod = withPassthrough(
+        schemaToZod(schema, { indent: 2, lenient: true }, 1),
+      );
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -366,7 +370,9 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const zodStr = withPassthrough(
+        schemaToZod(schema, { indent: 2, lenient: true }, 1),
+      );
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
@@ -620,30 +626,37 @@ function generateListBody(
   const pathParamNames = method.operation.pathParams
     .map((p) => sanitizeFieldName(p.name));
 
-  // Cursor-based endpoints: single fetch, pass all query params directly
+  // Cursor-based endpoints: follow result_info.cursor across pages so the
+  // caller sees the full result set (or an honest truncated: true) instead
+  // of only page one.
   if (method.operation.usesCursorPagination) {
-    const excludeNames = [...pathParamNames];
+    const excludeNames = [...pathParamNames, "cursor"];
     return `${indent}    const startMs = Date.now();
 ${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
 ${indent}    }
-${indent}    const qs = new URLSearchParams(params).toString();
-${indent}    const url = qs ? \`${apiPath}?\${qs}\` : \`${apiPath}\`;
 ${indent}
-${indent}    const result = await cfApi<Record<string, unknown>>(apiToken, "GET", url);
-${indent}    const items = (result as { result?: unknown[] })?.result ?? (Array.isArray(result) ? result : [result]);
+${indent}    const { results, truncated } = await cfApiPaginatedCursor<Record<string, unknown>>(
+${indent}      apiToken,
+${indent}      \`${apiPath}\`,
+${indent}      params,
+${indent}    );
+${indent}
+${indent}    if (truncated) {
+${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
+${indent}    }
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", "main", {
-${indent}      items,
-${indent}      truncated: false,
+${indent}      items: results,
+${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
 ${indent}      durationMs: Date.now() - startMs,
 ${indent}      collectedBy: EXTENSION_NAME,
 ${indent}    });
 ${indent}
-${indent}    context.logger.info("Found {count} ${resourceName}", { count: (items as unknown[]).length });
+${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });
 ${indent}    return { dataHandles: [handle] };`;
   }
 

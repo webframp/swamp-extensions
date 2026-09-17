@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  cfApiPaginatedCursor,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/workers-ai";
 
@@ -24,147 +29,149 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetCreditBalanceSchema = z.object({
-  balance: z.number(),
+  balance: z.number().optional(),
   first_topup_success: z.boolean().optional(),
-  has_default_payment_method: z.boolean(),
+  has_default_payment_method: z.boolean().optional(),
   payment_method: z.object({
     brand: z.string().optional(),
     last4: z.string().optional(),
-  }).nullable(),
+  }).nullable().optional(),
   topup_config: z.object({
-    amount: z.number().nullable(),
-    disabledReason: z.string().nullable(),
-    error: z.string().nullable(),
-    lastFailedAt: z.number().nullable(),
-    threshold: z.number().nullable(),
-  }),
+    amount: z.number().nullable().optional(),
+    disabledReason: z.string().nullable().optional(),
+    error: z.string().nullable().optional(),
+    lastFailedAt: z.number().nullable().optional(),
+    threshold: z.number().nullable().optional(),
+  }).optional(),
 }).passthrough();
 
 const GetInvoiceHistorySchema = z.object({
   invoices: z.array(z.object({
-    amount_due: z.number(),
-    amount_paid: z.number(),
-    amount_remaining: z.number(),
+    amount_due: z.number().optional(),
+    amount_paid: z.number().optional(),
+    amount_remaining: z.number().optional(),
     attempt_count: z.number().optional(),
     attempted: z.boolean().optional(),
     auto_advance: z.boolean().nullable().optional(),
     created: z.number().optional(),
     created_by: z.string().optional(),
-    currency: z.string(),
+    currency: z.string().optional(),
     description: z.string().nullable().optional(),
     id: z.string().nullable().optional(),
     invoice_origin: z.string().optional(),
     invoice_pdf: z.string().nullable().optional(),
     status: z.string().nullable().optional(),
-  })),
+  })).optional(),
   pagination: z.object({
-    has_more: z.boolean(),
-    page: z.number(),
-    per_page: z.number(),
-    total_count: z.number(),
-  }),
+    has_more: z.boolean().optional(),
+    page: z.number().optional(),
+    per_page: z.number().optional(),
+    total_count: z.number().optional(),
+  }).optional(),
 }).passthrough();
 
 const GetInvoicePreviewSchema = z.object({
-  amount_due: z.number(),
-  amount_paid: z.number(),
-  amount_remaining: z.number(),
-  currency: z.string(),
-  id: z.string(),
+  amount_due: z.number().optional(),
+  amount_paid: z.number().optional(),
+  amount_remaining: z.number().optional(),
+  currency: z.string().optional(),
+  id: z.string().optional(),
   invoice_lines: z.array(z.object({
-    amount: z.number(),
-    currency: z.string(),
-    description: z.string().nullable(),
+    amount: z.number().optional(),
+    currency: z.string().optional(),
+    description: z.string().nullable().optional(),
     period: z.object({
-      end: z.number(),
-      start: z.number(),
-    }),
+      end: z.number().optional(),
+      start: z.number().optional(),
+    }).optional(),
     pretax_credit_amounts: z.array(z.object({
-      amount: z.number(),
+      amount: z.number().optional(),
       credit_balance_transaction: z.string().nullable().optional(),
       discount: z.string().nullable().optional(),
-      type: z.string(),
+      type: z.string().optional(),
     })).optional(),
     pricing: z.object({
-      unit_amount_decimal: z.string().nullable(),
-    }),
-    quantity: z.number(),
-  })),
-  period_end: z.number(),
-  period_start: z.number(),
-  status: z.enum(["draft", "open", "paid", "uncollectible", "void"]),
+      unit_amount_decimal: z.string().nullable().optional(),
+    }).optional(),
+    quantity: z.number().optional(),
+  })).optional(),
+  period_end: z.number().optional(),
+  period_start: z.number().optional(),
+  status: z.enum(["draft", "open", "paid", "uncollectible", "void"]).optional(),
 }).passthrough();
 
 const GetSpendingLimitSchema = z.object({
   config: z.object({
-    amount: z.number().nullable(),
-    duration: z.string().nullable(),
-    strategy: z.string().nullable(),
-  }),
-  enabled: z.boolean(),
+    amount: z.number().nullable().optional(),
+    duration: z.string().nullable().optional(),
+    strategy: z.string().nullable().optional(),
+  }).optional(),
+  enabled: z.boolean().optional(),
 }).passthrough();
 
 const CreateTopupSchema = z.object({
   brand: z.string().optional().describe("Card brand (visa, mastercard, etc.)."),
-  client_secret: z.string().nullable().describe(
+  client_secret: z.string().nullable().optional().describe(
     "Stripe PaymentIntent client secret.",
   ),
   last4: z.string().optional().describe("Last 4 digits of card."),
-  onboarding: z.boolean().describe("Whether the user was already onboarded."),
-  payment_intent_id: z.string().describe("Stripe invoice ID."),
+  onboarding: z.boolean().optional().describe(
+    "Whether the user was already onboarded.",
+  ),
+  payment_intent_id: z.string().optional().describe("Stripe invoice ID."),
 }).passthrough();
 
 const GetTopupConfigSchema = z.object({
-  amount: z.number().nullable(),
-  disabledReason: z.string().nullable(),
-  error: z.string().nullable(),
-  lastFailedAt: z.number().nullable(),
-  threshold: z.number().nullable(),
+  amount: z.number().nullable().optional(),
+  disabledReason: z.string().nullable().optional(),
+  error: z.string().nullable().optional(),
+  lastFailedAt: z.number().nullable().optional(),
+  threshold: z.number().nullable().optional(),
 }).passthrough();
 
 const CreateAigBillingSetTopupConfigSchema = z.object({
-  amount: z.number(),
-  threshold: z.number(),
+  amount: z.number().optional(),
+  threshold: z.number().optional(),
 }).passthrough();
 
 const GetTopupLimitsSchema = z.object({
-  currency: z.string().describe("ISO 4217 currency code."),
-  max_cents: z.number().int(),
-  min_cents: z.number().int().describe(
+  currency: z.string().optional().describe("ISO 4217 currency code."),
+  max_cents: z.number().int().optional(),
+  min_cents: z.number().int().optional().describe(
     "Minimum allowed top-up amount in cents.",
   ),
 }).passthrough();
 
 const CreateAigBillingCheckTopupStatusSchema = z.object({
-  payment_intent_id: z.string(),
-  status: z.enum(["completed", "pending"]),
+  payment_intent_id: z.string().optional(),
+  status: z.enum(["completed", "pending"]).optional(),
 }).passthrough();
 
 const GetUsageHistorySchema = z.object({
   history: z.array(z.object({
-    aggregated_value: z.number(),
-    end_time: z.number(),
-    id: z.string(),
-    start_time: z.number(),
-  })),
+    aggregated_value: z.number().optional(),
+    end_time: z.number().optional(),
+    id: z.string().optional(),
+    start_time: z.number().optional(),
+  })).optional(),
 }).passthrough();
 
 const AccountProviderItemSchema = z.object({
-  base_url: z.string(),
+  base_url: z.string().optional(),
   beta: z.boolean().optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   curl_example: z.string().optional(),
   description: z.string().optional(),
   enable: z.boolean().optional(),
   headers: z.string().max(8192).optional(),
-  id: z.string(),
+  id: z.string().optional(),
   js_example: z.string().optional(),
   link: z.string().optional(),
   logo: z.string().optional(),
-  modified_at: z.string(),
-  name: z.string(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
   position: z.number().int().optional(),
-  slug: z.string(),
+  slug: z.string().optional(),
 }).passthrough();
 
 const ListAccountProviderSchema = z.object({
@@ -180,19 +187,19 @@ const ListAccountProviderSchema = z.object({
 });
 
 const AccountProviderCostItemSchema = z.object({
-  account_provider_id: z.string(),
+  account_provider_id: z.string().optional(),
   changed_by: z.string().optional().default("manual"),
   cost_in: z.number().optional(),
   cost_out: z.number().optional(),
   cost_type: z.string().optional().default("tokens"),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   enable: z.boolean().optional(),
-  id: z.string(),
-  model: z.string(),
+  id: z.string().optional(),
+  model: z.string().optional(),
   model_rule: z.enum(["equals", "starts-with", "contains"]).optional().default(
     "equals",
   ),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   token_pricing: z.string().optional(),
   weight: z.number().int().optional(),
 }).passthrough();
@@ -210,50 +217,50 @@ const ListAccountProviderCostSchema = z.object({
 });
 
 const GetAigConfigFetchAccountProviderCostSchema = z.object({
-  account_provider_id: z.string(),
+  account_provider_id: z.string().optional(),
   changed_by: z.string().optional().default("manual"),
   cost_in: z.number().optional(),
   cost_out: z.number().optional(),
   cost_type: z.string().optional().default("tokens"),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   enable: z.boolean().optional(),
-  id: z.string(),
-  model: z.string(),
+  id: z.string().optional(),
+  model: z.string().optional(),
   model_rule: z.enum(["equals", "starts-with", "contains"]).optional().default(
     "equals",
   ),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   token_pricing: z.string().optional(),
   weight: z.number().int().optional(),
 }).passthrough();
 
 const GetAigConfigFetchAccountProviderSchema = z.object({
-  base_url: z.string(),
+  base_url: z.string().optional(),
   beta: z.boolean().optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   curl_example: z.string().optional(),
   description: z.string().optional(),
   enable: z.boolean().optional(),
   headers: z.string().max(8192).optional(),
-  id: z.string(),
+  id: z.string().optional(),
   js_example: z.string().optional(),
   link: z.string().optional(),
   logo: z.string().optional(),
-  modified_at: z.string(),
-  name: z.string(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
   position: z.number().int().optional(),
-  slug: z.string(),
+  slug: z.string().optional(),
 }).passthrough();
 
 const EvaluatorsItemSchema = z.object({
-  created_at: z.string(),
-  description: z.string(),
-  enable: z.boolean(),
-  id: z.string(),
-  mandatory: z.boolean(),
-  modified_at: z.string(),
-  name: z.string(),
-  type: z.string(),
+  created_at: z.string().optional(),
+  description: z.string().optional(),
+  enable: z.boolean().optional(),
+  id: z.string().optional(),
+  mandatory: z.boolean().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  type: z.string().optional(),
 }).passthrough();
 
 const ListEvaluatorsSchema = z.object({
@@ -270,25 +277,25 @@ const ListEvaluatorsSchema = z.object({
 
 const GatewayItemSchema = z.object({
   authentication: z.boolean().optional(),
-  cache_invalidate_on_update: z.boolean(),
-  cache_ttl: z.number().int().min(0).nullable(),
-  collect_logs: z.boolean(),
-  created_at: z.string(),
+  cache_invalidate_on_update: z.boolean().optional(),
+  cache_ttl: z.number().int().min(0).nullable().optional(),
+  collect_logs: z.boolean().optional(),
+  created_at: z.string().optional(),
   dlp: z.union([
     z.object({
-      action: z.enum(["BLOCK", "FLAG"]),
-      enabled: z.boolean(),
-      profiles: z.array(z.string()),
+      action: z.enum(["BLOCK", "FLAG"]).optional(),
+      enabled: z.boolean().optional(),
+      profiles: z.array(z.string()).optional(),
     }),
     z.object({
-      enabled: z.boolean(),
+      enabled: z.boolean().optional(),
       policies: z.array(z.object({
-        action: z.enum(["FLAG", "BLOCK"]),
-        check: z.array(z.enum(["REQUEST", "RESPONSE"])),
-        enabled: z.boolean(),
-        id: z.string(),
-        profiles: z.array(z.string()),
-      })),
+        action: z.enum(["FLAG", "BLOCK"]).optional(),
+        check: z.array(z.enum(["REQUEST", "RESPONSE"])).optional(),
+        enabled: z.boolean().optional(),
+        id: z.string().optional(),
+        profiles: z.array(z.string()).optional(),
+      })).optional(),
     }),
   ]).optional(),
   guardrails: z.object({
@@ -307,7 +314,7 @@ const GatewayItemSchema = z.object({
       S7: z.enum(["FLAG", "BLOCK"]).optional(),
       S8: z.enum(["FLAG", "BLOCK"]).optional(),
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
-    }),
+    }).optional(),
     response: z.object({
       P1: z.enum(["FLAG", "BLOCK"]).optional(),
       S1: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -323,11 +330,11 @@ const GatewayItemSchema = z.object({
       S7: z.enum(["FLAG", "BLOCK"]).optional(),
       S8: z.enum(["FLAG", "BLOCK"]).optional(),
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
-    }),
+    }).optional(),
   }).nullable().optional(),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
+  ).optional().describe("gateway id"),
   is_default: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
@@ -335,15 +342,15 @@ const GatewayItemSchema = z.object({
     .nullable().optional(),
   logpush: z.boolean().optional(),
   logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
     content_type: z.enum(["json", "protobuf"]).optional().default("json"),
-    headers: z.record(z.string(), z.string().max(4096)),
-    url: z.string().max(2048),
+    headers: z.record(z.string(), z.string().max(4096)).optional(),
+    url: z.string().max(2048).optional(),
   })).nullable().optional(),
-  rate_limiting_interval: z.number().int().min(0).nullable(),
-  rate_limiting_limit: z.number().int().min(0).nullable(),
+  rate_limiting_interval: z.number().int().min(0).nullable().optional(),
+  rate_limiting_limit: z.number().int().min(0).nullable().optional(),
   rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable().optional(),
   retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
     .optional().describe("Backoff strategy for retry delays"),
@@ -358,38 +365,38 @@ const GatewayItemSchema = z.object({
       enabled: z.boolean().optional().default(true),
       id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
         .default("49a87635"),
-      limit: z.number().min(0),
-      limitType: z.enum(["cost"]),
+      limit: z.number().min(0).optional(),
+      limitType: z.enum(["cost"]).optional(),
       metadata: z.record(
         z.string(),
         z.union([
           z.object({
-            mode: z.enum(["partition"]),
+            mode: z.enum(["partition"]).optional(),
           }),
           z.object({
-            mode: z.enum(["filter"]),
-            values: z.array(z.unknown()),
+            mode: z.enum(["filter"]).optional(),
+            values: z.array(z.unknown()).optional(),
           }),
         ]),
       ).optional(),
       model: z.object({
-        mode: z.enum(["filter"]),
-        values: z.array(z.string()),
+        mode: z.enum(["filter"]).optional(),
+        values: z.array(z.string()).optional(),
       }).optional(),
       provider: z.object({
-        mode: z.enum(["filter"]),
-        values: z.array(z.string()),
+        mode: z.enum(["filter"]).optional(),
+        values: z.array(z.string()).optional(),
       }).optional(),
       technique: z.enum(["fixed", "sliding"]).optional().default("sliding"),
-      window: z.number().int().min(0),
+      window: z.number().int().min(0).optional(),
     })).optional().default([]),
   }).nullable().optional(),
   store_id: z.string().nullable().optional(),
   stripe: z.object({
-    authorization: z.string(),
+    authorization: z.string().optional(),
     usage_events: z.array(z.object({
-      payload: z.string(),
-    })),
+      payload: z.string().optional(),
+    })).optional(),
   }).nullable().optional(),
   workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
     .describe(
@@ -411,8 +418,8 @@ const ListGatewaySchema = z.object({
 });
 
 const DatasetItemSchema = z.object({
-  created_at: z.string(),
-  enable: z.boolean(),
+  created_at: z.string().optional(),
+  enable: z.boolean().optional(),
   filters: z.array(z.object({
     key: z.enum([
       "created_at",
@@ -428,16 +435,16 @@ const DatasetItemSchema = z.object({
       "tokens_out",
       "duration",
       "feedback",
-    ]),
-    operator: z.enum(["eq", "contains", "lt", "gt"]),
-    value: z.array(z.union([z.string(), z.number(), z.boolean()])),
-  })),
+    ]).optional(),
+    operator: z.enum(["eq", "contains", "lt", "gt"]).optional(),
+    value: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ).optional().describe("gateway id"),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
 }).passthrough();
 
 const ListDatasetSchema = z.object({
@@ -453,8 +460,8 @@ const ListDatasetSchema = z.object({
 });
 
 const GetAigConfigFetchDatasetSchema = z.object({
-  created_at: z.string(),
-  enable: z.boolean(),
+  created_at: z.string().optional(),
+  enable: z.boolean().optional(),
   filters: z.array(z.object({
     key: z.enum([
       "created_at",
@@ -470,25 +477,25 @@ const GetAigConfigFetchDatasetSchema = z.object({
       "tokens_out",
       "duration",
       "feedback",
-    ]),
-    operator: z.enum(["eq", "contains", "lt", "gt"]),
-    value: z.array(z.union([z.string(), z.number(), z.boolean()])),
-  })),
+    ]).optional(),
+    operator: z.enum(["eq", "contains", "lt", "gt"]).optional(),
+    value: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ).optional().describe("gateway id"),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
 }).passthrough();
 
 const EvaluationsItemSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   datasets: z.array(z.object({
-    account_id: z.string(),
-    account_tag: z.string(),
-    created_at: z.string(),
-    enable: z.boolean(),
+    account_id: z.string().optional(),
+    account_tag: z.string().optional(),
+    created_at: z.string().optional(),
+    enable: z.boolean().optional(),
     filters: z.array(z.object({
       key: z.enum([
         "created_at",
@@ -504,36 +511,36 @@ const EvaluationsItemSchema = z.object({
         "tokens_out",
         "duration",
         "feedback",
-      ]),
-      operator: z.enum(["eq", "contains", "lt", "gt"]),
-      value: z.array(z.union([z.string(), z.number(), z.boolean()])),
-    })),
+      ]).optional(),
+      operator: z.enum(["eq", "contains", "lt", "gt"]).optional(),
+      value: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+    })).optional(),
     gateway_id: z.string().min(1).max(64).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
-    id: z.string(),
-    modified_at: z.string(),
-    name: z.string(),
-  })),
+    ).optional(),
+    id: z.string().optional(),
+    modified_at: z.string().optional(),
+    name: z.string().optional(),
+  })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
-  processed: z.boolean(),
+  ).optional().describe("gateway id"),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  processed: z.boolean().optional(),
   results: z.array(z.object({
-    created_at: z.string(),
-    evaluation_id: z.string(),
-    evaluation_type_id: z.string(),
-    id: z.string(),
-    modified_at: z.string(),
-    result: z.string(),
-    status: z.number(),
-    status_description: z.string(),
-    total_logs: z.number(),
-  })),
-  total_logs: z.number(),
+    created_at: z.string().optional(),
+    evaluation_id: z.string().optional(),
+    evaluation_type_id: z.string().optional(),
+    id: z.string().optional(),
+    modified_at: z.string().optional(),
+    result: z.string().optional(),
+    status: z.number().optional(),
+    status_description: z.string().optional(),
+    total_logs: z.number().optional(),
+  })).optional(),
+  total_logs: z.number().optional(),
 }).passthrough();
 
 const ListEvaluationsSchema = z.object({
@@ -549,12 +556,12 @@ const ListEvaluationsSchema = z.object({
 });
 
 const GetAigConfigFetchEvaluationsSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   datasets: z.array(z.object({
-    account_id: z.string(),
-    account_tag: z.string(),
-    created_at: z.string(),
-    enable: z.boolean(),
+    account_id: z.string().optional(),
+    account_tag: z.string().optional(),
+    created_at: z.string().optional(),
+    enable: z.boolean().optional(),
     filters: z.array(z.object({
       key: z.enum([
         "created_at",
@@ -570,58 +577,58 @@ const GetAigConfigFetchEvaluationsSchema = z.object({
         "tokens_out",
         "duration",
         "feedback",
-      ]),
-      operator: z.enum(["eq", "contains", "lt", "gt"]),
-      value: z.array(z.union([z.string(), z.number(), z.boolean()])),
-    })),
+      ]).optional(),
+      operator: z.enum(["eq", "contains", "lt", "gt"]).optional(),
+      value: z.array(z.union([z.string(), z.number(), z.boolean()])).optional(),
+    })).optional(),
     gateway_id: z.string().min(1).max(64).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
-    id: z.string(),
-    modified_at: z.string(),
-    name: z.string(),
-  })),
+    ).optional(),
+    id: z.string().optional(),
+    modified_at: z.string().optional(),
+    name: z.string().optional(),
+  })).optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
-  processed: z.boolean(),
+  ).optional().describe("gateway id"),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  processed: z.boolean().optional(),
   results: z.array(z.object({
-    created_at: z.string(),
-    evaluation_id: z.string(),
-    evaluation_type_id: z.string(),
-    id: z.string(),
-    modified_at: z.string(),
-    result: z.string(),
-    status: z.number(),
-    status_description: z.string(),
-    total_logs: z.number(),
-  })),
-  total_logs: z.number(),
+    created_at: z.string().optional(),
+    evaluation_id: z.string().optional(),
+    evaluation_type_id: z.string().optional(),
+    id: z.string().optional(),
+    modified_at: z.string().optional(),
+    result: z.string().optional(),
+    status: z.number().optional(),
+    status_description: z.string().optional(),
+    total_logs: z.number().optional(),
+  })).optional(),
+  total_logs: z.number().optional(),
 }).passthrough();
 
 const GatewayLogsItemSchema = z.object({
-  cached: z.boolean(),
+  cached: z.boolean().optional(),
   cost: z.number().optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   custom_cost: z.boolean().optional(),
-  duration: z.number().int(),
-  id: z.string(),
+  duration: z.number().int().optional(),
+  id: z.string().optional(),
   metadata: z.string().optional(),
-  model: z.string(),
+  model: z.string().optional(),
   model_type: z.string().optional(),
-  path: z.string(),
-  provider: z.string(),
+  path: z.string().optional(),
+  provider: z.string().optional(),
   request_content_type: z.string().optional(),
   request_type: z.string().optional(),
   response_content_type: z.string().optional(),
   status_code: z.number().int().optional(),
   step: z.number().int().optional(),
-  success: z.boolean(),
-  tokens_in: z.number().int().nullable(),
-  tokens_out: z.number().int().nullable(),
+  success: z.boolean().optional(),
+  tokens_in: z.number().int().nullable().optional(),
+  tokens_out: z.number().int().nullable().optional(),
 }).passthrough();
 
 const ListGatewayLogsSchema = z.object({
@@ -637,17 +644,17 @@ const ListGatewayLogsSchema = z.object({
 });
 
 const GetGatewayLogDetailSchema = z.object({
-  cached: z.boolean(),
+  cached: z.boolean().optional(),
   cost: z.number().optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   custom_cost: z.boolean().optional(),
-  duration: z.number().int(),
-  id: z.string(),
+  duration: z.number().int().optional(),
+  id: z.string().optional(),
   metadata: z.string().optional(),
-  model: z.string(),
+  model: z.string().optional(),
   model_type: z.string().optional(),
-  path: z.string(),
-  provider: z.string(),
+  path: z.string().optional(),
+  provider: z.string().optional(),
   request_content_type: z.string().optional(),
   request_head: z.string().optional(),
   request_head_complete: z.boolean().optional(),
@@ -659,9 +666,9 @@ const GetGatewayLogDetailSchema = z.object({
   response_size: z.number().int().optional(),
   status_code: z.number().int().optional(),
   step: z.number().int().optional(),
-  success: z.boolean(),
-  tokens_in: z.number().int().nullable(),
-  tokens_out: z.number().int().nullable(),
+  success: z.boolean().optional(),
+  tokens_in: z.number().int().nullable().optional(),
+  tokens_out: z.number().int().nullable().optional(),
 }).passthrough();
 
 const PatchGatewayLogSchema = z.object({}).passthrough();
@@ -671,18 +678,18 @@ const GetGatewayLogRequestSchema = z.object({}).passthrough();
 const GetGatewayLogResponseSchema = z.object({}).passthrough();
 
 const ProvidersItemSchema = z.object({
-  alias: z.string(),
-  default_config: z.boolean(),
+  alias: z.string().optional(),
+  default_config: z.boolean().optional(),
   gateway_id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
-  id: z.string(),
-  modified_at: z.string(),
-  provider_slug: z.string(),
+  ).optional().describe("gateway id"),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  provider_slug: z.string().optional(),
   rate_limit: z.number().optional(),
   rate_limit_period: z.number().optional().default(60),
-  secret_id: z.string(),
-  secret_preview: z.string(),
+  secret_id: z.string().optional(),
+  secret_preview: z.string().optional(),
 }).passthrough();
 
 const ListProvidersSchema = z.object({
@@ -699,625 +706,625 @@ const ListProvidersSchema = z.object({
 
 const ListGatewayDynamicRoutesSchema = z.object({
   data: z.object({
-    order_by: z.string(),
-    order_by_direction: z.string(),
-    page: z.number(),
-    per_page: z.number(),
+    order_by: z.string().optional(),
+    order_by_direction: z.string().optional(),
+    page: z.number().optional(),
+    per_page: z.number().optional(),
     routes: z.array(z.object({
-      account_tag: z.string(),
-      created_at: z.string(),
+      account_tag: z.string().optional(),
+      created_at: z.string().optional(),
       deployment: z.object({
-        created_at: z.string(),
-        deployment_id: z.string(),
-        version_id: z.string(),
-      }),
+        created_at: z.string().optional(),
+        deployment_id: z.string().optional(),
+        version_id: z.string().optional(),
+      }).optional(),
       elements: z.array(z.union([
         z.object({
-          id: z.string(),
+          id: z.string().optional(),
           outputs: z.object({
-            next: z.unknown(),
-          }),
-          type: z.enum(["start"]),
+            next: z.unknown().optional(),
+          }).optional(),
+          type: z.enum(["start"]).optional(),
         }),
         z.object({
-          id: z.string(),
+          id: z.string().optional(),
           outputs: z.object({
-            false: z.unknown(),
-            true: z.unknown(),
-          }),
+            false: z.unknown().optional(),
+            true: z.unknown().optional(),
+          }).optional(),
           properties: z.object({
             conditions: z.unknown().optional(),
-          }),
-          type: z.enum(["conditional"]),
+          }).optional(),
+          type: z.enum(["conditional"]).optional(),
         }),
         z.object({
-          id: z.string(),
-          outputs: z.record(z.string(), z.unknown()),
-          type: z.enum(["percentage"]),
+          id: z.string().optional(),
+          outputs: z.record(z.string(), z.unknown()).optional(),
+          type: z.enum(["percentage"]).optional(),
         }),
         z.object({
-          id: z.string(),
+          id: z.string().optional(),
           outputs: z.object({
-            fallback: z.unknown(),
-            success: z.unknown(),
-          }),
+            fallback: z.unknown().optional(),
+            success: z.unknown().optional(),
+          }).optional(),
           properties: z.object({
-            key: z.unknown(),
-            limit: z.unknown(),
-            limitType: z.unknown(),
-            window: z.unknown(),
-          }),
-          type: z.enum(["rate"]),
+            key: z.unknown().optional(),
+            limit: z.unknown().optional(),
+            limitType: z.unknown().optional(),
+            window: z.unknown().optional(),
+          }).optional(),
+          type: z.enum(["rate"]).optional(),
         }),
         z.object({
-          id: z.string(),
+          id: z.string().optional(),
           outputs: z.object({
-            fallback: z.unknown(),
-            success: z.unknown(),
-          }),
+            fallback: z.unknown().optional(),
+            success: z.unknown().optional(),
+          }).optional(),
           properties: z.object({
-            model: z.unknown(),
-            provider: z.unknown(),
-            retries: z.unknown(),
-            timeout: z.unknown(),
-          }),
-          type: z.enum(["model"]),
+            model: z.unknown().optional(),
+            provider: z.unknown().optional(),
+            retries: z.unknown().optional(),
+            timeout: z.unknown().optional(),
+          }).optional(),
+          type: z.enum(["model"]).optional(),
         }),
         z.object({
-          id: z.string(),
-          outputs: z.record(z.string(), z.unknown()),
-          type: z.enum(["end"]),
+          id: z.string().optional(),
+          outputs: z.record(z.string(), z.unknown()).optional(),
+          type: z.enum(["end"]).optional(),
         }),
-      ])),
-      gateway_id: z.string(),
-      id: z.string(),
-      modified_at: z.string(),
-      name: z.string(),
+      ])).optional(),
+      gateway_id: z.string().optional(),
+      id: z.string().optional(),
+      modified_at: z.string().optional(),
+      name: z.string().optional(),
       version: z.object({
-        active: z.enum(["true", "false"]),
-        created_at: z.string(),
-        data: z.string(),
+        active: z.enum(["true", "false"]).optional(),
+        created_at: z.string().optional(),
+        data: z.string().optional(),
         is_valid: z.boolean().optional(),
-        version_id: z.string(),
-      }),
-    })),
-  }),
-  success: z.boolean(),
+        version_id: z.string().optional(),
+      }).optional(),
+    })).optional(),
+  }).optional(),
+  success: z.boolean().optional(),
 }).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   deployment: z.object({
-    created_at: z.string(),
-    deployment_id: z.string(),
-    version_id: z.string(),
-  }),
+    created_at: z.string().optional(),
+    deployment_id: z.string().optional(),
+    version_id: z.string().optional(),
+  }).optional(),
   elements: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         next: z.object({
-          elementId: z.string(),
-        }),
-      }),
-      type: z.enum(["start"]),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      type: z.enum(["start"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         false: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         true: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
         conditions: z.object({}).optional(),
-      }),
-      type: z.enum(["conditional"]),
+      }).optional(),
+      type: z.enum(["conditional"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["percentage"]),
+      ).optional(),
+      type: z.enum(["percentage"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        key: z.string(),
-        limit: z.number(),
-        limitType: z.enum(["count", "cost"]),
-        window: z.number(),
-      }),
-      type: z.enum(["rate"]),
+        key: z.string().optional(),
+        limit: z.number().optional(),
+        limitType: z.enum(["count", "cost"]).optional(),
+        window: z.number().optional(),
+      }).optional(),
+      type: z.enum(["rate"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        model: z.string(),
-        provider: z.string(),
-        retries: z.number(),
-        timeout: z.number(),
-      }),
-      type: z.enum(["model"]),
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        retries: z.number().optional(),
+        timeout: z.number().optional(),
+      }).optional(),
+      type: z.enum(["model"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["end"]),
+      ).optional(),
+      type: z.enum(["end"]).optional(),
     }),
-  ])),
-  gateway_id: z.string(),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ])).optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
   version: z.object({
-    active: z.enum(["true", "false"]),
-    created_at: z.string(),
-    data: z.string(),
+    active: z.enum(["true", "false"]).optional(),
+    created_at: z.string().optional(),
+    data: z.string().optional(),
     is_valid: z.boolean().optional(),
-    version_id: z.string(),
-  }),
+    version_id: z.string().optional(),
+  }).optional(),
 }).passthrough();
 
 const GetGatewayDynamicRouteSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   deployment: z.object({
-    created_at: z.string(),
-    deployment_id: z.string(),
-    version_id: z.string(),
-  }),
+    created_at: z.string().optional(),
+    deployment_id: z.string().optional(),
+    version_id: z.string().optional(),
+  }).optional(),
   elements: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         next: z.object({
-          elementId: z.string(),
-        }),
-      }),
-      type: z.enum(["start"]),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      type: z.enum(["start"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         false: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         true: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
         conditions: z.object({}).optional(),
-      }),
-      type: z.enum(["conditional"]),
+      }).optional(),
+      type: z.enum(["conditional"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["percentage"]),
+      ).optional(),
+      type: z.enum(["percentage"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        key: z.string(),
-        limit: z.number(),
-        limitType: z.enum(["count", "cost"]),
-        window: z.number(),
-      }),
-      type: z.enum(["rate"]),
+        key: z.string().optional(),
+        limit: z.number().optional(),
+        limitType: z.enum(["count", "cost"]).optional(),
+        window: z.number().optional(),
+      }).optional(),
+      type: z.enum(["rate"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        model: z.string(),
-        provider: z.string(),
-        retries: z.number(),
-        timeout: z.number(),
-      }),
-      type: z.enum(["model"]),
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        retries: z.number().optional(),
+        timeout: z.number().optional(),
+      }).optional(),
+      type: z.enum(["model"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["end"]),
+      ).optional(),
+      type: z.enum(["end"]).optional(),
     }),
-  ])),
-  gateway_id: z.string(),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ])).optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
   version: z.object({
-    active: z.enum(["true", "false"]),
-    created_at: z.string(),
-    data: z.string(),
+    active: z.enum(["true", "false"]).optional(),
+    created_at: z.string().optional(),
+    data: z.string().optional(),
     is_valid: z.boolean().optional(),
-    version_id: z.string(),
-  }),
+    version_id: z.string().optional(),
+  }).optional(),
 }).passthrough();
 
 const ListGatewayDynamicRouteDeploymentsSchema = z.object({
   data: z.object({
     deployments: z.array(z.object({
-      created_at: z.string(),
-      deployment_id: z.string(),
-      version_id: z.string(),
-    })),
-    order_by: z.string(),
-    order_by_direction: z.string(),
-    page: z.number(),
-    per_page: z.number(),
-  }),
-  success: z.boolean(),
+      created_at: z.string().optional(),
+      deployment_id: z.string().optional(),
+      version_id: z.string().optional(),
+    })).optional(),
+    order_by: z.string().optional(),
+    order_by_direction: z.string().optional(),
+    page: z.number().optional(),
+    per_page: z.number().optional(),
+  }).optional(),
+  success: z.boolean().optional(),
 }).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteDeploymentSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   elements: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         next: z.object({
-          elementId: z.string(),
-        }),
-      }),
-      type: z.enum(["start"]),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      type: z.enum(["start"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         false: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         true: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
         conditions: z.object({}).optional(),
-      }),
-      type: z.enum(["conditional"]),
+      }).optional(),
+      type: z.enum(["conditional"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["percentage"]),
+      ).optional(),
+      type: z.enum(["percentage"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        key: z.string(),
-        limit: z.number(),
-        limitType: z.enum(["count", "cost"]),
-        window: z.number(),
-      }),
-      type: z.enum(["rate"]),
+        key: z.string().optional(),
+        limit: z.number().optional(),
+        limitType: z.enum(["count", "cost"]).optional(),
+        window: z.number().optional(),
+      }).optional(),
+      type: z.enum(["rate"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        model: z.string(),
-        provider: z.string(),
-        retries: z.number(),
-        timeout: z.number(),
-      }),
-      type: z.enum(["model"]),
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        retries: z.number().optional(),
+        timeout: z.number().optional(),
+      }).optional(),
+      type: z.enum(["model"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["end"]),
+      ).optional(),
+      type: z.enum(["end"]).optional(),
     }),
-  ])),
-  gateway_id: z.string(),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ])).optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
 }).passthrough();
 
 const ListGatewayDynamicRouteVersionsSchema = z.object({
   data: z.object({
-    order_by: z.string(),
-    order_by_direction: z.string(),
-    page: z.number(),
-    per_page: z.number(),
+    order_by: z.string().optional(),
+    order_by_direction: z.string().optional(),
+    page: z.number().optional(),
+    per_page: z.number().optional(),
     versions: z.array(z.object({
-      active: z.enum(["true", "false"]),
-      created_at: z.string(),
-      data: z.string(),
+      active: z.enum(["true", "false"]).optional(),
+      created_at: z.string().optional(),
+      data: z.string().optional(),
       is_valid: z.boolean().optional(),
-      version_id: z.string(),
-    })),
-  }),
-  success: z.boolean(),
+      version_id: z.string().optional(),
+    })).optional(),
+  }).optional(),
+  success: z.boolean().optional(),
 }).passthrough();
 
 const CreateAigConfigPostGatewayDynamicRouteVersionSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   elements: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         next: z.object({
-          elementId: z.string(),
-        }),
-      }),
-      type: z.enum(["start"]),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      type: z.enum(["start"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         false: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         true: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
         conditions: z.object({}).optional(),
-      }),
-      type: z.enum(["conditional"]),
+      }).optional(),
+      type: z.enum(["conditional"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["percentage"]),
+      ).optional(),
+      type: z.enum(["percentage"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        key: z.string(),
-        limit: z.number(),
-        limitType: z.enum(["count", "cost"]),
-        window: z.number(),
-      }),
-      type: z.enum(["rate"]),
+        key: z.string().optional(),
+        limit: z.number().optional(),
+        limitType: z.enum(["count", "cost"]).optional(),
+        window: z.number().optional(),
+      }).optional(),
+      type: z.enum(["rate"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        model: z.string(),
-        provider: z.string(),
-        retries: z.number(),
-        timeout: z.number(),
-      }),
-      type: z.enum(["model"]),
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        retries: z.number().optional(),
+        timeout: z.number().optional(),
+      }).optional(),
+      type: z.enum(["model"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["end"]),
+      ).optional(),
+      type: z.enum(["end"]).optional(),
     }),
-  ])),
-  gateway_id: z.string(),
-  id: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  ])).optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
 }).passthrough();
 
 const GetGatewayDynamicRouteVersionSchema = z.object({
-  active: z.enum(["true", "false"]),
-  created_at: z.string(),
-  data: z.string(),
+  active: z.enum(["true", "false"]).optional(),
+  created_at: z.string().optional(),
+  data: z.string().optional(),
   elements: z.array(z.union([
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         next: z.object({
-          elementId: z.string(),
-        }),
-      }),
-      type: z.enum(["start"]),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
+      type: z.enum(["start"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         false: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         true: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
         conditions: z.object({}).optional(),
-      }),
-      type: z.enum(["conditional"]),
+      }).optional(),
+      type: z.enum(["conditional"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["percentage"]),
+      ).optional(),
+      type: z.enum(["percentage"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        key: z.string(),
-        limit: z.number(),
-        limitType: z.enum(["count", "cost"]),
-        window: z.number(),
-      }),
-      type: z.enum(["rate"]),
+        key: z.string().optional(),
+        limit: z.number().optional(),
+        limitType: z.enum(["count", "cost"]).optional(),
+        window: z.number().optional(),
+      }).optional(),
+      type: z.enum(["rate"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.object({
         fallback: z.object({
-          elementId: z.string(),
-        }),
+          elementId: z.string().optional(),
+        }).optional(),
         success: z.object({
-          elementId: z.string(),
-        }),
-      }),
+          elementId: z.string().optional(),
+        }).optional(),
+      }).optional(),
       properties: z.object({
-        model: z.string(),
-        provider: z.string(),
-        retries: z.number(),
-        timeout: z.number(),
-      }),
-      type: z.enum(["model"]),
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        retries: z.number().optional(),
+        timeout: z.number().optional(),
+      }).optional(),
+      type: z.enum(["model"]).optional(),
     }),
     z.object({
-      id: z.string(),
+      id: z.string().optional(),
       outputs: z.record(
         z.string(),
         z.object({
-          elementId: z.string(),
+          elementId: z.string().optional(),
         }),
-      ),
-      type: z.enum(["end"]),
+      ).optional(),
+      type: z.enum(["end"]).optional(),
     }),
-  ])),
-  gateway_id: z.string(),
-  id: z.string(),
+  ])).optional(),
+  gateway_id: z.string().optional(),
+  id: z.string().optional(),
   is_valid: z.boolean().optional(),
-  modified_at: z.string(),
-  name: z.string(),
-  version_id: z.string(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  version_id: z.string().optional(),
 }).passthrough();
 
 const GetGatewayUrlSchema = z.string();
 
 const GetAigConfigFetchGatewaySchema = z.object({
   authentication: z.boolean().optional(),
-  cache_invalidate_on_update: z.boolean(),
-  cache_ttl: z.number().int().min(0).nullable(),
-  collect_logs: z.boolean(),
-  created_at: z.string(),
+  cache_invalidate_on_update: z.boolean().optional(),
+  cache_ttl: z.number().int().min(0).nullable().optional(),
+  collect_logs: z.boolean().optional(),
+  created_at: z.string().optional(),
   dlp: z.union([
     z.object({
-      action: z.enum(["BLOCK", "FLAG"]),
-      enabled: z.boolean(),
-      profiles: z.array(z.string()),
+      action: z.enum(["BLOCK", "FLAG"]).optional(),
+      enabled: z.boolean().optional(),
+      profiles: z.array(z.string()).optional(),
     }),
     z.object({
-      enabled: z.boolean(),
+      enabled: z.boolean().optional(),
       policies: z.array(z.object({
-        action: z.enum(["FLAG", "BLOCK"]),
-        check: z.array(z.enum(["REQUEST", "RESPONSE"])),
-        enabled: z.boolean(),
-        id: z.string(),
-        profiles: z.array(z.string()),
-      })),
+        action: z.enum(["FLAG", "BLOCK"]).optional(),
+        check: z.array(z.enum(["REQUEST", "RESPONSE"])).optional(),
+        enabled: z.boolean().optional(),
+        id: z.string().optional(),
+        profiles: z.array(z.string()).optional(),
+      })).optional(),
     }),
   ]).optional(),
   guardrails: z.object({
@@ -1336,7 +1343,7 @@ const GetAigConfigFetchGatewaySchema = z.object({
       S7: z.enum(["FLAG", "BLOCK"]).optional(),
       S8: z.enum(["FLAG", "BLOCK"]).optional(),
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
-    }),
+    }).optional(),
     response: z.object({
       P1: z.enum(["FLAG", "BLOCK"]).optional(),
       S1: z.enum(["FLAG", "BLOCK"]).optional(),
@@ -1352,11 +1359,11 @@ const GetAigConfigFetchGatewaySchema = z.object({
       S7: z.enum(["FLAG", "BLOCK"]).optional(),
       S8: z.enum(["FLAG", "BLOCK"]).optional(),
       S9: z.enum(["FLAG", "BLOCK"]).optional(),
-    }),
+    }).optional(),
   }).nullable().optional(),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("gateway id"),
+  ).optional().describe("gateway id"),
   is_default: z.boolean().optional(),
   log_management: z.number().int().min(10000).max(10000000).nullable()
     .optional(),
@@ -1364,15 +1371,15 @@ const GetAigConfigFetchGatewaySchema = z.object({
     .nullable().optional(),
   logpush: z.boolean().optional(),
   logpush_public_key: z.string().min(16).max(1024).nullable().optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   otel: z.array(z.object({
     authorization: z.string().max(256).optional(),
     content_type: z.enum(["json", "protobuf"]).optional().default("json"),
-    headers: z.record(z.string(), z.string().max(4096)),
-    url: z.string().max(2048),
+    headers: z.record(z.string(), z.string().max(4096)).optional(),
+    url: z.string().max(2048).optional(),
   })).nullable().optional(),
-  rate_limiting_interval: z.number().int().min(0).nullable(),
-  rate_limiting_limit: z.number().int().min(0).nullable(),
+  rate_limiting_interval: z.number().int().min(0).nullable().optional(),
+  rate_limiting_limit: z.number().int().min(0).nullable().optional(),
   rate_limiting_technique: z.enum(["fixed", "sliding"]).nullable().optional(),
   retry_backoff: z.enum(["constant", "linear", "exponential"]).nullable()
     .optional().describe("Backoff strategy for retry delays"),
@@ -1387,38 +1394,38 @@ const GetAigConfigFetchGatewaySchema = z.object({
       enabled: z.boolean().optional().default(true),
       id: z.string().min(1).regex(new RegExp("^[a-zA-Z0-9_-]+$")).optional()
         .default("422c671d"),
-      limit: z.number().min(0),
-      limitType: z.enum(["cost"]),
+      limit: z.number().min(0).optional(),
+      limitType: z.enum(["cost"]).optional(),
       metadata: z.record(
         z.string(),
         z.union([
           z.object({
-            mode: z.enum(["partition"]),
+            mode: z.enum(["partition"]).optional(),
           }),
           z.object({
-            mode: z.enum(["filter"]),
-            values: z.array(z.unknown()),
+            mode: z.enum(["filter"]).optional(),
+            values: z.array(z.unknown()).optional(),
           }),
         ]),
       ).optional(),
       model: z.object({
-        mode: z.enum(["filter"]),
-        values: z.array(z.string()),
+        mode: z.enum(["filter"]).optional(),
+        values: z.array(z.string()).optional(),
       }).optional(),
       provider: z.object({
-        mode: z.enum(["filter"]),
-        values: z.array(z.string()),
+        mode: z.enum(["filter"]).optional(),
+        values: z.array(z.string()).optional(),
       }).optional(),
       technique: z.enum(["fixed", "sliding"]).optional().default("sliding"),
-      window: z.number().int().min(0),
+      window: z.number().int().min(0).optional(),
     })).optional().default([]),
   }).nullable().optional(),
   store_id: z.string().nullable().optional(),
   stripe: z.object({
-    authorization: z.string(),
+    authorization: z.string().optional(),
     usage_events: z.array(z.object({
-      payload: z.string(),
-    })),
+      payload: z.string().optional(),
+    })).optional(),
   }).nullable().optional(),
   workers_ai_billing_mode: z.enum(["postpaid"]).optional().default("postpaid")
     .describe(
@@ -1485,11 +1492,11 @@ const InstancesItemSchema = z.object({
   ),
   chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]),
-    field_name: z.string().min(1).max(64),
+    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
+    field_name: z.string().min(1).max(64).optional(),
   })).optional(),
   embedding_model: z.union([
     z.literal("@cf/qwen/qwen3-embedding-0.6b"),
@@ -1513,12 +1520,12 @@ const InstancesItemSchema = z.object({
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe(
+  ).optional().describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
-    keyword: z.boolean(),
-    vector: z.boolean(),
+    keyword: z.boolean().optional(),
+    vector: z.boolean().optional(),
   }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
@@ -1533,7 +1540,7 @@ const InstancesItemSchema = z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
   namespace: z.string().regex(
     new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
@@ -1571,7 +1578,7 @@ const InstancesItemSchema = z.object({
   retrieval_options: z.object({
     boost_by: z.array(z.object({
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64),
+      field: z.string().min(1).max(64).optional(),
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
@@ -1623,8 +1630,8 @@ const InstancesItemSchema = z.object({
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
-          path: z.string().min(1).max(200),
-          selector: z.string().min(1).max(200),
+          path: z.string().min(1).max(200).optional(),
+          selector: z.string().min(1).max(200).optional(),
         })).optional(),
         include_headers: z.record(
           z.string(),
@@ -1725,11 +1732,11 @@ const CreateInstanceSchema = z.object({
   ),
   chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]),
-    field_name: z.string().min(1).max(64),
+    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
+    field_name: z.string().min(1).max(64).optional(),
   })).optional(),
   embedding_model: z.union([
     z.literal("@cf/qwen/qwen3-embedding-0.6b"),
@@ -1753,12 +1760,12 @@ const CreateInstanceSchema = z.object({
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe(
+  ).optional().describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
-    keyword: z.boolean(),
-    vector: z.boolean(),
+    keyword: z.boolean().optional(),
+    vector: z.boolean().optional(),
   }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
@@ -1773,7 +1780,7 @@ const CreateInstanceSchema = z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
   namespace: z.string().regex(
     new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
@@ -1811,7 +1818,7 @@ const CreateInstanceSchema = z.object({
   retrieval_options: z.object({
     boost_by: z.array(z.object({
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64),
+      field: z.string().min(1).max(64).optional(),
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
@@ -1863,8 +1870,8 @@ const CreateInstanceSchema = z.object({
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
-          path: z.string().min(1).max(200),
-          selector: z.string().min(1).max(200),
+          path: z.string().min(1).max(200).optional(),
+          selector: z.string().min(1).max(200).optional(),
         })).optional(),
         include_headers: z.record(
           z.string(),
@@ -1953,11 +1960,11 @@ const GetAiSearchFetchInstanceSchema = z.object({
   ),
   chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]),
-    field_name: z.string().min(1).max(64),
+    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
+    field_name: z.string().min(1).max(64).optional(),
   })).optional(),
   embedding_model: z.union([
     z.literal("@cf/qwen/qwen3-embedding-0.6b"),
@@ -1981,12 +1988,12 @@ const GetAiSearchFetchInstanceSchema = z.object({
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe(
+  ).optional().describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
-    keyword: z.boolean(),
-    vector: z.boolean(),
+    keyword: z.boolean().optional(),
+    vector: z.boolean().optional(),
   }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
@@ -2001,7 +2008,7 @@ const GetAiSearchFetchInstanceSchema = z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
   namespace: z.string().regex(
     new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
@@ -2039,7 +2046,7 @@ const GetAiSearchFetchInstanceSchema = z.object({
   retrieval_options: z.object({
     boost_by: z.array(z.object({
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64),
+      field: z.string().min(1).max(64).optional(),
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
@@ -2091,8 +2098,8 @@ const GetAiSearchFetchInstanceSchema = z.object({
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
-          path: z.string().min(1).max(200),
-          selector: z.string().min(1).max(200),
+          path: z.string().min(1).max(200).optional(),
+          selector: z.string().min(1).max(200).optional(),
         })).optional(),
         include_headers: z.record(
           z.string(),
@@ -2131,27 +2138,28 @@ const CreateAiSearchInstanceChatCompletionSchema = z.object({
         z.string(),
         z.array(z.union([
           z.object({
-            text: z.unknown(),
-            type: z.unknown(),
+            text: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
           z.object({
-            image_url: z.unknown(),
-            type: z.unknown(),
+            image_url: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
         ])),
         z.unknown().nullable(),
-      ]),
-      role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-    }),
-  })),
+      ]).optional(),
+      role: z.enum(["system", "developer", "user", "assistant", "tool"])
+        .optional(),
+    }).optional(),
+  })).optional(),
   chunks: z.array(z.object({
-    id: z.string(),
+    id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2160,9 +2168,9 @@ const CreateAiSearchInstanceChatCompletionSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
@@ -2172,9 +2180,9 @@ const JobsItemSchema = z.object({
   description: z.string().optional(),
   end_reason: z.string().optional(),
   ended_at: z.string().optional(),
-  id: z.string(),
+  id: z.string().optional(),
   last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]),
+  source: z.enum(["user", "schedule"]).optional(),
   started_at: z.string().optional(),
 }).passthrough();
 
@@ -2194,9 +2202,9 @@ const CreateJobSchema = z.object({
   description: z.string().optional(),
   end_reason: z.string().optional(),
   ended_at: z.string().optional(),
-  id: z.string(),
+  id: z.string().optional(),
   last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]),
+  source: z.enum(["user", "schedule"]).optional(),
   started_at: z.string().optional(),
 }).passthrough();
 
@@ -2204,17 +2212,17 @@ const UpdateAiSearchInstanceChangeJobStatusSchema = z.object({
   description: z.string().optional(),
   end_reason: z.string().optional(),
   ended_at: z.string().optional(),
-  id: z.string(),
+  id: z.string().optional(),
   last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]),
+  source: z.enum(["user", "schedule"]).optional(),
   started_at: z.string().optional(),
 }).passthrough();
 
 const JobLogsItemSchema = z.object({
-  created_at: z.number(),
-  id: z.number().int(),
-  message: z.string(),
-  message_type: z.number().int(),
+  created_at: z.number().optional(),
+  id: z.number().int().optional(),
+  message: z.string().optional(),
+  message_type: z.number().int().optional(),
 }).passthrough();
 
 const ListJobLogsSchema = z.object({
@@ -2231,13 +2239,13 @@ const ListJobLogsSchema = z.object({
 
 const CreateAiSearchInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
-    id: z.string(),
+    id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2246,10 +2254,10 @@ const CreateAiSearchInstanceSearchSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
-  query_kind: z.enum(["text", "image", "multimodal"]),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
+  query_kind: z.enum(["text", "image", "multimodal"]).optional(),
   search_query: z.string().optional(),
 }).passthrough();
 
@@ -2260,13 +2268,13 @@ const GetAiSearchStatsSchema = z.object({
   ),
   engine: z.object({
     r2: z.object({
-      metadataSizeBytes: z.number().int(),
-      objectCount: z.number().int(),
-      payloadSizeBytes: z.number().int(),
+      metadataSizeBytes: z.number().int().optional(),
+      objectCount: z.number().int().optional(),
+      payloadSizeBytes: z.number().int().optional(),
     }).optional(),
     vectorize: z.object({
-      dimensions: z.number().int(),
-      vectorsCount: z.number().int(),
+      dimensions: z.number().int().optional(),
+      vectorsCount: z.number().int().optional(),
     }).optional(),
   }).optional().describe(
     "Engine-specific metadata. Present only for managed (v3) instances.",
@@ -2282,11 +2290,12 @@ const GetAiSearchStatsSchema = z.object({
 }).passthrough();
 
 const NamespacesItemSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
 }).passthrough();
 
 const ListNamespacesSchema = z.object({
@@ -2302,19 +2311,21 @@ const ListNamespacesSchema = z.object({
 });
 
 const CreateNamespaceSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
 }).passthrough();
 
 const GetAiSearchFetchNamespaceSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().max(256).nullable().optional().describe(
     "Optional description for the namespace. Max 256 characters.",
   ),
-  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$")),
+  name: z.string().regex(new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"))
+    .optional(),
 }).passthrough();
 
 const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
@@ -2325,28 +2336,29 @@ const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
         z.string(),
         z.array(z.union([
           z.object({
-            text: z.unknown(),
-            type: z.unknown(),
+            text: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
           z.object({
-            image_url: z.unknown(),
-            type: z.unknown(),
+            image_url: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
         ])),
         z.unknown().nullable(),
-      ]),
-      role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-    }),
-  })),
+      ]).optional(),
+      role: z.enum(["system", "developer", "user", "assistant", "tool"])
+        .optional(),
+    }).optional(),
+  })).optional(),
   chunks: z.array(z.object({
-    id: z.string(),
-    instance_id: z.string(),
+    id: z.string().optional(),
+    instance_id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2355,12 +2367,12 @@ const CreateAiSearchNamespaceMultiInstanceChatCompletionSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
   errors: z.array(z.object({
-    instance_id: z.string(),
-    message: z.string(),
+    instance_id: z.string().optional(),
+    message: z.string().optional(),
   })).optional(),
   id: z.string().optional(),
   model: z.string().optional(),
@@ -2425,11 +2437,11 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   ),
   chunk_overlap: z.number().int().min(0).max(30).optional().default(10),
   chunk_size: z.number().int().min(64).optional(),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   custom_metadata: z.array(z.object({
-    data_type: z.enum(["text", "number", "boolean", "datetime"]),
-    field_name: z.string().min(1).max(64),
+    data_type: z.enum(["text", "number", "boolean", "datetime"]).optional(),
+    field_name: z.string().min(1).max(64).optional(),
   })).optional(),
   embedding_model: z.union([
     z.literal("@cf/qwen/qwen3-embedding-0.6b"),
@@ -2453,12 +2465,12 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   ),
   id: z.string().min(1).max(64).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe(
+  ).optional().describe(
     "AI Search instance ID. Lowercase alphanumeric, hyphens, and underscores.",
   ),
   index_method: z.object({
-    keyword: z.boolean(),
-    vector: z.boolean(),
+    keyword: z.boolean().optional(),
+    vector: z.boolean().optional(),
   }).optional().default({ "keyword": false, "vector": true }).describe(
     "Controls which storage backends are used during indexing. Defaults to vector-only.",
   ),
@@ -2473,7 +2485,7 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     created_from_aisearch_wizard: z.boolean().optional(),
     worker_domain: z.string().optional(),
   }).optional(),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
   namespace: z.string().regex(
     new RegExp("^[a-z0-9]([a-z0-9-]{0,26}[a-z0-9])?$"),
@@ -2511,7 +2523,7 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
   retrieval_options: z.object({
     boost_by: z.array(z.object({
       direction: z.enum(["asc", "desc", "exists", "not_exists"]).optional(),
-      field: z.string().min(1).max(64),
+      field: z.string().min(1).max(64).optional(),
     })).optional(),
     keyword_match_mode: z.enum(["and", "or"]).optional(),
   }).nullable().optional(),
@@ -2563,8 +2575,8 @@ const GetAiSearchNamespaceFetchInstanceSchema = z.object({
     web_crawler: z.object({
       parse_options: z.object({
         content_selector: z.array(z.object({
-          path: z.string().min(1).max(200),
-          selector: z.string().min(1).max(200),
+          path: z.string().min(1).max(200).optional(),
+          selector: z.string().min(1).max(200).optional(),
         })).optional(),
         include_headers: z.record(
           z.string(),
@@ -2605,27 +2617,28 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
         z.string(),
         z.array(z.union([
           z.object({
-            text: z.unknown(),
-            type: z.unknown(),
+            text: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
           z.object({
-            image_url: z.unknown(),
-            type: z.unknown(),
+            image_url: z.unknown().optional(),
+            type: z.unknown().optional(),
           }),
         ])),
         z.unknown().nullable(),
-      ]),
-      role: z.enum(["system", "developer", "user", "assistant", "tool"]),
-    }),
-  })),
+      ]).optional(),
+      role: z.enum(["system", "developer", "user", "assistant", "tool"])
+        .optional(),
+    }).optional(),
+  })).optional(),
   chunks: z.array(z.object({
-    id: z.string(),
+    id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2634,30 +2647,30 @@ const CreateAiSearchNamespaceInstanceChatCompletionSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
   id: z.string().optional(),
   model: z.string().optional(),
   object: z.string().optional(),
 }).passthrough();
 
 const ItemsItemSchema = z.object({
-  checksum: z.string(),
-  chunks_count: z.number().int().nullable(),
-  created_at: z.string(),
+  checksum: z.string().optional(),
+  chunks_count: z.number().int().nullable().optional(),
+  created_at: z.string().optional(),
   error: z.string().optional(),
-  file_size: z.number().nullable(),
-  id: z.string(),
-  key: z.string(),
-  last_seen_at: z.string(),
-  namespace: z.string(),
+  file_size: z.number().nullable().optional(),
+  id: z.string().optional(),
+  key: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
     z.literal("DELETE"),
     z.literal(null),
-  ]).nullable(),
-  source_id: z.string().nullable().describe(
+  ]).nullable().optional(),
+  source_id: z.string().nullable().optional().describe(
     'Identifies which data source this item belongs to. "builtin" for uploaded files, "{type}:{source}...',
   ),
   status: z.enum([
@@ -2667,7 +2680,7 @@ const ItemsItemSchema = z.object({
     "error",
     "skipped",
     "outdated",
-  ]),
+  ]).optional(),
 }).passthrough();
 
 const ListItemsSchema = z.object({
@@ -2683,21 +2696,21 @@ const ListItemsSchema = z.object({
 });
 
 const CreateOrUpdateItemSchema = z.object({
-  checksum: z.string(),
-  chunks_count: z.number().int().nullable(),
-  created_at: z.string(),
+  checksum: z.string().optional(),
+  chunks_count: z.number().int().nullable().optional(),
+  created_at: z.string().optional(),
   error: z.string().optional(),
-  file_size: z.number().nullable(),
-  id: z.string(),
-  key: z.string(),
-  last_seen_at: z.string(),
-  namespace: z.string(),
+  file_size: z.number().nullable().optional(),
+  id: z.string().optional(),
+  key: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
     z.literal("DELETE"),
     z.literal(null),
-  ]).nullable(),
-  source_id: z.string().nullable().describe(
+  ]).nullable().optional(),
+  source_id: z.string().nullable().optional().describe(
     'Identifies which data source this item belongs to. "builtin" for uploaded files, "{type}:{source}...',
   ),
   status: z.enum([
@@ -2707,25 +2720,25 @@ const CreateOrUpdateItemSchema = z.object({
     "error",
     "skipped",
     "outdated",
-  ]),
+  ]).optional(),
 }).passthrough();
 
 const GetItemSchema = z.object({
-  checksum: z.string(),
-  chunks_count: z.number().int().nullable(),
-  created_at: z.string(),
+  checksum: z.string().optional(),
+  chunks_count: z.number().int().nullable().optional(),
+  created_at: z.string().optional(),
   error: z.string().optional(),
-  file_size: z.number().nullable(),
-  id: z.string(),
-  key: z.string(),
-  last_seen_at: z.string(),
-  namespace: z.string(),
+  file_size: z.number().nullable().optional(),
+  id: z.string().optional(),
+  key: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
     z.literal("DELETE"),
     z.literal(null),
-  ]).nullable(),
-  source_id: z.string().nullable().describe(
+  ]).nullable().optional(),
+  source_id: z.string().nullable().optional().describe(
     'Identifies which data source this item belongs to. "builtin" for uploaded files, "{type}:{source}...',
   ),
   status: z.enum([
@@ -2735,25 +2748,25 @@ const GetItemSchema = z.object({
     "error",
     "skipped",
     "outdated",
-  ]),
+  ]).optional(),
 }).passthrough();
 
 const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
-  checksum: z.string(),
-  chunks_count: z.number().int().nullable(),
-  created_at: z.string(),
+  checksum: z.string().optional(),
+  chunks_count: z.number().int().nullable().optional(),
+  created_at: z.string().optional(),
   error: z.string().optional(),
-  file_size: z.number().nullable(),
-  id: z.string(),
-  key: z.string(),
-  last_seen_at: z.string(),
-  namespace: z.string(),
+  file_size: z.number().nullable().optional(),
+  id: z.string().optional(),
+  key: z.string().optional(),
+  last_seen_at: z.string().optional(),
+  namespace: z.string().optional(),
   next_action: z.union([
     z.literal("INDEX"),
     z.literal("DELETE"),
     z.literal(null),
-  ]).nullable(),
-  source_id: z.string().nullable().describe(
+  ]).nullable().optional(),
+  source_id: z.string().nullable().optional().describe(
     'Identifies which data source this item belongs to. "builtin" for uploaded files, "{type}:{source}...',
   ),
   status: z.enum([
@@ -2763,19 +2776,19 @@ const UpdateAiSearchNamespaceInstanceSyncItemSchema = z.object({
     "error",
     "skipped",
     "outdated",
-  ]),
+  ]).optional(),
 }).passthrough();
 
 const ItemChunksItemSchema = z.object({
   end_byte: z.number().optional(),
-  id: z.string(),
+  id: z.string().optional(),
   item: z.object({
-    key: z.string(),
+    key: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
     timestamp: z.number().optional(),
-  }),
+  }).optional(),
   start_byte: z.number().optional(),
-  text: z.string(),
+  text: z.string().optional(),
 }).passthrough();
 
 const ListItemChunksSchema = z.object({
@@ -2791,13 +2804,13 @@ const ListItemChunksSchema = z.object({
 });
 
 const AiSearchNamespaceInstanceLogsItemItemSchema = z.object({
-  action: z.string(),
-  chunkCount: z.number().int().nullable(),
-  errorType: z.string().nullable(),
-  fileKey: z.string(),
-  message: z.string().nullable(),
-  processingTimeMs: z.number().int().nullable(),
-  timestamp: z.string(),
+  action: z.string().optional(),
+  chunkCount: z.number().int().nullable().optional(),
+  errorType: z.string().nullable().optional(),
+  fileKey: z.string().optional(),
+  message: z.string().nullable().optional(),
+  processingTimeMs: z.number().int().nullable().optional(),
+  timestamp: z.string().optional(),
 }).passthrough();
 
 const ListAiSearchNamespaceInstanceLogsItemSchema = z.object({
@@ -2816,21 +2829,21 @@ const UpdateAiSearchNamespaceInstanceChangeJobStatusSchema = z.object({
   description: z.string().optional(),
   end_reason: z.string().optional(),
   ended_at: z.string().optional(),
-  id: z.string(),
+  id: z.string().optional(),
   last_seen_at: z.string().optional(),
-  source: z.enum(["user", "schedule"]),
+  source: z.enum(["user", "schedule"]).optional(),
   started_at: z.string().optional(),
 }).passthrough();
 
 const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
-    id: z.string(),
+    id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2839,10 +2852,10 @@ const CreateAiSearchNamespaceInstanceSearchSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
-  query_kind: z.enum(["text", "image", "multimodal"]),
+    text: z.string().optional(),
+    type: z.string().optional(),
+  })).optional(),
+  query_kind: z.enum(["text", "image", "multimodal"]).optional(),
   search_query: z.string().optional(),
 }).passthrough();
 
@@ -2853,13 +2866,13 @@ const GetAiSearchNamespaceStatsSchema = z.object({
   ),
   engine: z.object({
     r2: z.object({
-      metadataSizeBytes: z.number().int(),
-      objectCount: z.number().int(),
-      payloadSizeBytes: z.number().int(),
+      metadataSizeBytes: z.number().int().optional(),
+      objectCount: z.number().int().optional(),
+      payloadSizeBytes: z.number().int().optional(),
     }).optional(),
     vectorize: z.object({
-      dimensions: z.number().int(),
-      vectorsCount: z.number().int(),
+      dimensions: z.number().int().optional(),
+      vectorsCount: z.number().int().optional(),
     }).optional(),
   }).optional().describe(
     "Engine-specific metadata. Present only for managed (v3) instances.",
@@ -2876,14 +2889,14 @@ const GetAiSearchNamespaceStatsSchema = z.object({
 
 const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
   chunks: z.array(z.object({
-    id: z.string(),
-    instance_id: z.string(),
+    id: z.string().optional(),
+    instance_id: z.string().optional(),
     item: z.object({
-      key: z.string(),
+      key: z.string().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
       timestamp: z.number().optional(),
     }).optional(),
-    score: z.number().min(0).max(1),
+    score: z.number().min(0).max(1).optional(),
     scoring_details: z.object({
       fusion_method: z.enum(["rrf", "max"]).optional(),
       keyword_rank: z.number().optional(),
@@ -2892,27 +2905,27 @@ const CreateAiSearchNamespaceMultiInstanceSearchSchema = z.object({
       vector_rank: z.number().optional(),
       vector_score: z.number().min(0).max(1).optional(),
     }).optional(),
-    text: z.string(),
-    type: z.string(),
-  })),
-  errors: z.array(z.object({
-    instance_id: z.string(),
-    message: z.string(),
+    text: z.string().optional(),
+    type: z.string().optional(),
   })).optional(),
-  query_kind: z.enum(["text", "image", "multimodal"]),
+  errors: z.array(z.object({
+    instance_id: z.string().optional(),
+    message: z.string().optional(),
+  })).optional(),
+  query_kind: z.enum(["text", "image", "multimodal"]).optional(),
   search_query: z.string().optional(),
 }).passthrough();
 
 const TokensItemSchema = z.object({
-  cf_api_id: z.string(),
-  created_at: z.string(),
+  cf_api_id: z.string().optional(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   enabled: z.boolean().optional().default(true),
-  id: z.string(),
+  id: z.string().optional(),
   legacy: z.boolean().optional().default(true),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
-  name: z.string(),
+  name: z.string().optional(),
 }).passthrough();
 
 const ListTokensSchema = z.object({
@@ -2928,15 +2941,15 @@ const ListTokensSchema = z.object({
 });
 
 const GetAiSearchFetchTokensSchema = z.object({
-  cf_api_id: z.string(),
-  created_at: z.string(),
+  cf_api_id: z.string().optional(),
+  created_at: z.string().optional(),
   created_by: z.string().nullable().optional(),
   enabled: z.boolean().optional().default(true),
-  id: z.string(),
+  id: z.string().optional(),
   legacy: z.boolean().optional().default(true),
-  modified_at: z.string(),
+  modified_at: z.string().optional(),
   modified_by: z.string().nullable().optional(),
-  name: z.string(),
+  name: z.string().optional(),
 }).passthrough();
 
 const WorkersAiSearchAuthorItemSchema = z.object({}).passthrough();
@@ -2954,32 +2967,32 @@ const ListWorkersAiSearchAuthorSchema = z.object({
 });
 
 const ListFinetunesSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().optional(),
-  id: z.string(),
-  model: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
+  id: z.string().optional(),
+  model: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
 }).passthrough();
 
 const CreateFinetuneSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().optional(),
-  id: z.string(),
-  model: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
-  public: z.boolean(),
+  id: z.string().optional(),
+  model: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  public: z.boolean().optional(),
 }).passthrough();
 
 const PublicFinetunesItemSchema = z.object({
-  created_at: z.string(),
+  created_at: z.string().optional(),
   description: z.string().optional(),
-  id: z.string(),
-  model: z.string(),
-  modified_at: z.string(),
-  name: z.string(),
-  public: z.boolean(),
+  id: z.string().optional(),
+  model: z.string().optional(),
+  modified_at: z.string().optional(),
+  name: z.string().optional(),
+  public: z.boolean().optional(),
 }).passthrough();
 
 const ListPublicFinetunesSchema = z.object({
@@ -2996,26 +3009,26 @@ const ListPublicFinetunesSchema = z.object({
 
 const GetModelSchemaSchema = z.object({
   input: z.object({
-    additionalProperties: z.boolean(),
-    description: z.string(),
-    type: z.string(),
-  }),
+    additionalProperties: z.boolean().optional(),
+    description: z.string().optional(),
+    type: z.string().optional(),
+  }).optional(),
   output: z.object({
-    additionalProperties: z.boolean(),
-    description: z.string(),
-    type: z.string(),
-  }),
+    additionalProperties: z.boolean().optional(),
+    description: z.string().optional(),
+    type: z.string().optional(),
+  }).optional(),
 }).passthrough();
 
 const GetWorkersAiSearchModelSchema = z.union([
   z.object({
-    errors: z.array(z.object({})),
-    messages: z.array(z.string()),
-    result: z.array(z.object({})),
-    success: z.boolean(),
+    errors: z.array(z.object({})).optional(),
+    messages: z.array(z.string()).optional(),
+    result: z.array(z.object({})).optional(),
+    success: z.boolean().optional(),
   }),
   z.object({
-    data: z.array(z.object({})),
+    data: z.array(z.object({})).optional(),
   }),
 ]);
 
@@ -3302,7 +3315,7 @@ const WorkersAiPostRunModelSchema = z.union([
     shape: z.array(z.number()).optional(),
   }),
   z.object({
-    text: z.string(),
+    text: z.string().optional(),
     vtt: z.string().optional(),
     word_count: z.number().optional(),
     words: z.array(z.object({
@@ -3327,7 +3340,7 @@ const WorkersAiPostRunModelSchema = z.union([
   })),
   z.union([
     z.object({
-      response: z.string(),
+      response: z.string().optional(),
       tool_calls: z.array(z.object({
         arguments: z.object({}).optional(),
         name: z.string().optional(),
@@ -3373,8 +3386,8 @@ const ListWorkersAiSearchTaskSchema = z.object({
 });
 
 const GetToMarkdownSupportedItemSchema = z.object({
-  extension: z.string(),
-  mimeType: z.string(),
+  extension: z.string().optional(),
+  mimeType: z.string().optional(),
 }).passthrough();
 
 const GetToMarkdownSupportedSchema = z.object({
@@ -3396,7 +3409,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3432,6 +3445,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -4795,7 +4813,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("topup", id, result);
         context.logger.info("Created topup {id}", { id });
@@ -4871,7 +4889,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "aig_billing_set_topup_config",
@@ -4979,7 +4997,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "aig_billing_check_topup_status",
@@ -5136,7 +5154,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "account_provider",
@@ -5264,7 +5282,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "account_provider_cost",
@@ -5699,7 +5717,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("gateway", id, result);
         context.logger.info("Created gateway {id}", { id });
@@ -5821,7 +5839,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("dataset", id, result);
         context.logger.info("Created dataset {id}", { id });
@@ -6060,7 +6078,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("evaluations", id, result);
         context.logger.info("Created evaluations {id}", { id });
@@ -6544,7 +6562,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("providers", id, result);
         context.logger.info("Created providers {id}", { id });
@@ -6783,7 +6801,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route",
@@ -6986,7 +7004,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_deployment",
@@ -7154,7 +7172,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "aig_config_post_gateway_dynamic_route_version",
@@ -7790,7 +7808,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("instance", id, result);
         context.logger.info("Created instance {id}", { id });
@@ -8321,7 +8339,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_instance_chat_completion",
@@ -8430,7 +8448,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("job", id, result);
         context.logger.info("Created job {id}", { id });
@@ -8719,7 +8737,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_instance_search",
@@ -8863,7 +8881,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("namespace", id, result);
         context.logger.info("Created namespace {id}", { id });
@@ -9151,7 +9169,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_chat_completion",
@@ -9415,7 +9433,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_namespace_instance_chat_completion",
@@ -9789,29 +9807,32 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
         const startMs = Date.now();
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "item_id", "name"]);
+        const excludeKeys = new Set(["id", "item_id", "name", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
-        const qs = new URLSearchParams(params).toString();
-        const url = qs
-          ? `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs?${qs}`
-          : `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs`;
 
-        const result = await cfApi<Record<string, unknown>>(
+        const { results, truncated } = await cfApiPaginatedCursor<
+          Record<string, unknown>
+        >(
           apiToken,
-          "GET",
-          url,
+          `/accounts/${accountId}/ai-search/namespaces/${args.name}/instances/${args.id}/items/${args.item_id}/logs`,
+          params,
         );
-        const items = (result as { result?: unknown[] })?.result ??
-          (Array.isArray(result) ? result : [result]);
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
 
         const handle = await context.writeResource(
           "ai_search_namespace_instance_logs_item",
           "main",
           {
-            items,
-            truncated: false,
+            items: results,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -9820,7 +9841,7 @@ export const model = {
 
         context.logger.info(
           "Found {count} ai_search_namespace_instance_logs_item",
-          { count: (items as unknown[]).length },
+          { count: results.length },
         );
         return { dataHandles: [handle] };
       },
@@ -10013,7 +10034,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_namespace_instance_search",
@@ -10204,7 +10225,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "ai_search_namespace_multi_instance_search",
@@ -10310,7 +10331,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("tokens", id, result);
         context.logger.info("Created tokens {id}", { id });
@@ -10555,7 +10576,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("finetune", id, result);
         context.logger.info("Created finetune {id}", { id });
@@ -10748,7 +10769,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_generic",
@@ -10842,7 +10863,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b",
@@ -10940,7 +10961,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b",
@@ -11398,7 +11419,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_reranker_base",
@@ -11793,7 +11814,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_1_schnell",
@@ -11855,7 +11876,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_dev",
@@ -11917,7 +11938,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b",
@@ -11979,7 +12000,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b",
@@ -12070,7 +12091,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning",
@@ -12233,7 +12254,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_1",
@@ -12464,7 +12485,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_en",
@@ -12629,7 +12650,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_aura_2_es",
@@ -12747,7 +12768,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_flux",
@@ -12959,7 +12980,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepgram_nova_3",
@@ -13488,7 +13509,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_bart_large_cnn",
@@ -13552,7 +13573,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn",
@@ -13741,7 +13762,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_embeddinggemma_300m",
@@ -14243,7 +14264,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m",
@@ -14302,7 +14323,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8",
@@ -14362,7 +14383,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8",
@@ -14571,7 +14592,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_lucid_origin",
@@ -14650,7 +14671,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_leonardo_phoenix_1_0",
@@ -14741,7 +14762,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_lykon_dreamshaper_8_lcm",
@@ -16731,7 +16752,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_guard_3_8b",
@@ -17550,7 +17571,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_myshell_ai_melotts",
@@ -18476,7 +18497,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_whisper_large_v3_turbo",
@@ -18667,7 +18688,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_pfnet_plamo_embedding_1b",
@@ -19639,7 +19660,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b",
@@ -19861,7 +19882,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img",
@@ -19953,7 +19974,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting",
@@ -20045,7 +20066,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0",

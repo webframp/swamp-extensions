@@ -25,32 +25,36 @@ const GlobalArgsSchema = z.object({
 
 const GetProjectsItemSchema = z.object({
   build_config: z.unknown().optional(),
-  canonical_deployment: z.unknown(),
-  created_on: z.string().describe("When the project was created."),
+  canonical_deployment: z.unknown().optional(),
+  created_on: z.string().optional().describe("When the project was created."),
   deployment_configs: z.object({
-    preview: z.unknown(),
-    production: z.unknown(),
-  }).describe("Configs for deployments in a project."),
+    preview: z.unknown().optional(),
+    production: z.unknown().optional(),
+  }).optional().describe("Configs for deployments in a project."),
   domains: z.array(z.string()).optional().describe(
     "A list of associated custom domains for the project.",
   ),
-  framework: z.string().describe("Framework the project is using."),
-  framework_version: z.string().describe(
+  framework: z.string().optional().describe("Framework the project is using."),
+  framework_version: z.string().optional().describe(
     "Version of the framework the project is using.",
   ),
-  id: z.string().describe("ID of the project."),
-  latest_deployment: z.unknown(),
-  name: z.unknown(),
-  preview_script_name: z.string().describe("Name of the preview script."),
-  production_branch: z.string().describe(
+  id: z.string().optional().describe("ID of the project."),
+  latest_deployment: z.unknown().optional(),
+  name: z.unknown().optional(),
+  preview_script_name: z.string().optional().describe(
+    "Name of the preview script.",
+  ),
+  production_branch: z.string().optional().describe(
     "Production branch of the project. Used to identify production deployments.",
   ),
-  production_script_name: z.string().describe("Name of the production script."),
+  production_script_name: z.string().optional().describe(
+    "Name of the production script.",
+  ),
   source: z.unknown().optional(),
   subdomain: z.string().optional().describe(
     "The Cloudflare subdomain associated with the project.",
   ),
-  uses_functions: z.boolean().nullable().describe(
+  uses_functions: z.boolean().nullable().optional().describe(
     "Whether the project uses functions.",
   ),
 }).passthrough();
@@ -69,60 +73,74 @@ const GetProjectsSchema = z.object({
 
 const CreateProjectSchema = z.object({
   build_config: z.unknown().optional(),
-  canonical_deployment: z.unknown(),
-  created_on: z.string().describe("When the project was created."),
+  canonical_deployment: z.unknown().optional(),
+  created_on: z.string().optional().describe("When the project was created."),
   deployment_configs: z.object({
-    preview: z.unknown(),
-    production: z.unknown(),
-  }).describe("Configs for deployments in a project."),
+    preview: z.unknown().optional(),
+    production: z.unknown().optional(),
+  }).optional().describe("Configs for deployments in a project."),
   domains: z.array(z.string()).optional().describe(
     "A list of associated custom domains for the project.",
   ),
-  framework: z.string().describe("Framework the project is using."),
-  framework_version: z.string().describe(
+  framework: z.string().optional().describe("Framework the project is using."),
+  framework_version: z.string().optional().describe(
     "Version of the framework the project is using.",
   ),
-  id: z.string().describe("ID of the project."),
-  latest_deployment: z.unknown(),
-  name: z.unknown(),
-  preview_script_name: z.string().describe("Name of the preview script."),
-  production_branch: z.string().describe(
+  id: z.string().optional().describe("ID of the project."),
+  latest_deployment: z.unknown().optional(),
+  name: z.unknown().optional(),
+  preview_script_name: z.string().optional().describe(
+    "Name of the preview script.",
+  ),
+  production_branch: z.string().optional().describe(
     "Production branch of the project. Used to identify production deployments.",
   ),
-  production_script_name: z.string().describe("Name of the production script."),
+  production_script_name: z.string().optional().describe(
+    "Name of the production script.",
+  ),
   source: z.unknown().optional(),
   subdomain: z.string().optional().describe(
     "The Cloudflare subdomain associated with the project.",
   ),
-  uses_functions: z.boolean().nullable().describe(
+  uses_functions: z.boolean().nullable().optional().describe(
     "Whether the project uses functions.",
   ),
 }).passthrough();
 
 const GetDeploymentsItemSchema = z.object({
-  aliases: z.array(z.string()).nullable().describe(
+  aliases: z.array(z.string()).nullable().optional().describe(
     "A list of alias URLs pointing to this deployment.",
   ),
-  build_config: z.unknown(),
-  created_on: z.string().describe("When the deployment was created."),
+  build_config: z.unknown().optional(),
+  created_on: z.string().optional().describe(
+    "When the deployment was created.",
+  ),
   deployment_trigger: z.object({
     metadata: z.object({
-      branch: z.string(),
-      commit_dirty: z.boolean(),
-      commit_hash: z.string(),
-      commit_message: z.string(),
-    }),
-    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]),
-  }).describe("Info about what caused the deployment."),
-  env_vars: z.unknown(),
-  environment: z.enum(["preview", "production"]).describe("Type of deploy."),
-  id: z.string().describe("Id of the deployment."),
-  is_skipped: z.boolean().describe("If the deployment has been skipped."),
-  latest_stage: z.unknown(),
-  modified_on: z.string().describe("When the deployment was last modified."),
-  project_id: z.string().describe("Id of the project."),
-  project_name: z.unknown(),
-  short_id: z.string().describe("Short Id (8 character) of the deployment."),
+      branch: z.string().optional(),
+      commit_dirty: z.boolean().optional(),
+      commit_hash: z.string().optional(),
+      commit_message: z.string().optional(),
+    }).optional(),
+    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]).optional(),
+  }).optional().describe("Info about what caused the deployment."),
+  env_vars: z.unknown().optional(),
+  environment: z.enum(["preview", "production"]).optional().describe(
+    "Type of deploy.",
+  ),
+  id: z.string().optional().describe("Id of the deployment."),
+  is_skipped: z.boolean().optional().describe(
+    "If the deployment has been skipped.",
+  ),
+  latest_stage: z.unknown().optional(),
+  modified_on: z.string().optional().describe(
+    "When the deployment was last modified.",
+  ),
+  project_id: z.string().optional().describe("Id of the project."),
+  project_name: z.unknown().optional(),
+  short_id: z.string().optional().describe(
+    "Short Id (8 character) of the deployment.",
+  ),
   skip_reason: z.enum([
     "commit_message",
     "preview_deployments_disabled",
@@ -131,9 +149,9 @@ const GetDeploymentsItemSchema = z.object({
     "branch_config",
     "pages_to_workers_conversion",
   ]).nullable().optional().describe("Why the deployment was skipped."),
-  source: z.unknown(),
-  stages: z.array(z.unknown()).describe("List of past stages."),
-  url: z.string().describe("The live URL to view this deployment."),
+  source: z.unknown().optional(),
+  stages: z.array(z.unknown()).optional().describe("List of past stages."),
+  url: z.string().optional().describe("The live URL to view this deployment."),
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
@@ -152,29 +170,39 @@ const GetDeploymentsSchema = z.object({
 });
 
 const GetDeploymentInfoSchema = z.object({
-  aliases: z.array(z.string()).nullable().describe(
+  aliases: z.array(z.string()).nullable().optional().describe(
     "A list of alias URLs pointing to this deployment.",
   ),
-  build_config: z.unknown(),
-  created_on: z.string().describe("When the deployment was created."),
+  build_config: z.unknown().optional(),
+  created_on: z.string().optional().describe(
+    "When the deployment was created.",
+  ),
   deployment_trigger: z.object({
     metadata: z.object({
-      branch: z.string(),
-      commit_dirty: z.boolean(),
-      commit_hash: z.string(),
-      commit_message: z.string(),
-    }),
-    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]),
-  }).describe("Info about what caused the deployment."),
-  env_vars: z.unknown(),
-  environment: z.enum(["preview", "production"]).describe("Type of deploy."),
-  id: z.string().describe("Id of the deployment."),
-  is_skipped: z.boolean().describe("If the deployment has been skipped."),
-  latest_stage: z.unknown(),
-  modified_on: z.string().describe("When the deployment was last modified."),
-  project_id: z.string().describe("Id of the project."),
-  project_name: z.unknown(),
-  short_id: z.string().describe("Short Id (8 character) of the deployment."),
+      branch: z.string().optional(),
+      commit_dirty: z.boolean().optional(),
+      commit_hash: z.string().optional(),
+      commit_message: z.string().optional(),
+    }).optional(),
+    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]).optional(),
+  }).optional().describe("Info about what caused the deployment."),
+  env_vars: z.unknown().optional(),
+  environment: z.enum(["preview", "production"]).optional().describe(
+    "Type of deploy.",
+  ),
+  id: z.string().optional().describe("Id of the deployment."),
+  is_skipped: z.boolean().optional().describe(
+    "If the deployment has been skipped.",
+  ),
+  latest_stage: z.unknown().optional(),
+  modified_on: z.string().optional().describe(
+    "When the deployment was last modified.",
+  ),
+  project_id: z.string().optional().describe("Id of the project."),
+  project_name: z.unknown().optional(),
+  short_id: z.string().optional().describe(
+    "Short Id (8 character) of the deployment.",
+  ),
   skip_reason: z.enum([
     "commit_message",
     "preview_deployments_disabled",
@@ -183,9 +211,9 @@ const GetDeploymentInfoSchema = z.object({
     "branch_config",
     "pages_to_workers_conversion",
   ]).nullable().optional().describe("Why the deployment was skipped."),
-  source: z.unknown(),
-  stages: z.array(z.unknown()).describe("List of past stages."),
-  url: z.string().describe("The live URL to view this deployment."),
+  source: z.unknown().optional(),
+  stages: z.array(z.unknown()).optional().describe("List of past stages."),
+  url: z.string().optional().describe("The live URL to view this deployment."),
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
@@ -193,37 +221,47 @@ const GetDeploymentInfoSchema = z.object({
 
 const GetDeploymentLogsSchema = z.object({
   data: z.array(z.object({
-    line: z.string(),
-    ts: z.string(),
-  })),
-  includes_container_logs: z.boolean(),
-  total: z.number().int(),
+    line: z.string().optional(),
+    ts: z.string().optional(),
+  })).optional(),
+  includes_container_logs: z.boolean().optional(),
+  total: z.number().int().optional(),
 }).passthrough();
 
 const PagesDeploymentRetryDeploymentSchema = z.object({
-  aliases: z.array(z.string()).nullable().describe(
+  aliases: z.array(z.string()).nullable().optional().describe(
     "A list of alias URLs pointing to this deployment.",
   ),
-  build_config: z.unknown(),
-  created_on: z.string().describe("When the deployment was created."),
+  build_config: z.unknown().optional(),
+  created_on: z.string().optional().describe(
+    "When the deployment was created.",
+  ),
   deployment_trigger: z.object({
     metadata: z.object({
-      branch: z.string(),
-      commit_dirty: z.boolean(),
-      commit_hash: z.string(),
-      commit_message: z.string(),
-    }),
-    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]),
-  }).describe("Info about what caused the deployment."),
-  env_vars: z.unknown(),
-  environment: z.enum(["preview", "production"]).describe("Type of deploy."),
-  id: z.string().describe("Id of the deployment."),
-  is_skipped: z.boolean().describe("If the deployment has been skipped."),
-  latest_stage: z.unknown(),
-  modified_on: z.string().describe("When the deployment was last modified."),
-  project_id: z.string().describe("Id of the project."),
-  project_name: z.unknown(),
-  short_id: z.string().describe("Short Id (8 character) of the deployment."),
+      branch: z.string().optional(),
+      commit_dirty: z.boolean().optional(),
+      commit_hash: z.string().optional(),
+      commit_message: z.string().optional(),
+    }).optional(),
+    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]).optional(),
+  }).optional().describe("Info about what caused the deployment."),
+  env_vars: z.unknown().optional(),
+  environment: z.enum(["preview", "production"]).optional().describe(
+    "Type of deploy.",
+  ),
+  id: z.string().optional().describe("Id of the deployment."),
+  is_skipped: z.boolean().optional().describe(
+    "If the deployment has been skipped.",
+  ),
+  latest_stage: z.unknown().optional(),
+  modified_on: z.string().optional().describe(
+    "When the deployment was last modified.",
+  ),
+  project_id: z.string().optional().describe("Id of the project."),
+  project_name: z.unknown().optional(),
+  short_id: z.string().optional().describe(
+    "Short Id (8 character) of the deployment.",
+  ),
   skip_reason: z.enum([
     "commit_message",
     "preview_deployments_disabled",
@@ -232,38 +270,48 @@ const PagesDeploymentRetryDeploymentSchema = z.object({
     "branch_config",
     "pages_to_workers_conversion",
   ]).nullable().optional().describe("Why the deployment was skipped."),
-  source: z.unknown(),
-  stages: z.array(z.unknown()).describe("List of past stages."),
-  url: z.string().describe("The live URL to view this deployment."),
+  source: z.unknown().optional(),
+  stages: z.array(z.unknown()).optional().describe("List of past stages."),
+  url: z.string().optional().describe("The live URL to view this deployment."),
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
 }).passthrough();
 
 const PagesDeploymentRollbackDeploymentSchema = z.object({
-  aliases: z.array(z.string()).nullable().describe(
+  aliases: z.array(z.string()).nullable().optional().describe(
     "A list of alias URLs pointing to this deployment.",
   ),
-  build_config: z.unknown(),
-  created_on: z.string().describe("When the deployment was created."),
+  build_config: z.unknown().optional(),
+  created_on: z.string().optional().describe(
+    "When the deployment was created.",
+  ),
   deployment_trigger: z.object({
     metadata: z.object({
-      branch: z.string(),
-      commit_dirty: z.boolean(),
-      commit_hash: z.string(),
-      commit_message: z.string(),
-    }),
-    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]),
-  }).describe("Info about what caused the deployment."),
-  env_vars: z.unknown(),
-  environment: z.enum(["preview", "production"]).describe("Type of deploy."),
-  id: z.string().describe("Id of the deployment."),
-  is_skipped: z.boolean().describe("If the deployment has been skipped."),
-  latest_stage: z.unknown(),
-  modified_on: z.string().describe("When the deployment was last modified."),
-  project_id: z.string().describe("Id of the project."),
-  project_name: z.unknown(),
-  short_id: z.string().describe("Short Id (8 character) of the deployment."),
+      branch: z.string().optional(),
+      commit_dirty: z.boolean().optional(),
+      commit_hash: z.string().optional(),
+      commit_message: z.string().optional(),
+    }).optional(),
+    type: z.enum(["github:push", "ad_hoc", "deploy_hook"]).optional(),
+  }).optional().describe("Info about what caused the deployment."),
+  env_vars: z.unknown().optional(),
+  environment: z.enum(["preview", "production"]).optional().describe(
+    "Type of deploy.",
+  ),
+  id: z.string().optional().describe("Id of the deployment."),
+  is_skipped: z.boolean().optional().describe(
+    "If the deployment has been skipped.",
+  ),
+  latest_stage: z.unknown().optional(),
+  modified_on: z.string().optional().describe(
+    "When the deployment was last modified.",
+  ),
+  project_id: z.string().optional().describe("Id of the project."),
+  project_name: z.unknown().optional(),
+  short_id: z.string().optional().describe(
+    "Short Id (8 character) of the deployment.",
+  ),
   skip_reason: z.enum([
     "commit_message",
     "preview_deployments_disabled",
@@ -272,27 +320,27 @@ const PagesDeploymentRollbackDeploymentSchema = z.object({
     "branch_config",
     "pages_to_workers_conversion",
   ]).nullable().optional().describe("Why the deployment was skipped."),
-  source: z.unknown(),
-  stages: z.array(z.unknown()).describe("List of past stages."),
-  url: z.string().describe("The live URL to view this deployment."),
+  source: z.unknown().optional(),
+  stages: z.array(z.unknown()).optional().describe("List of past stages."),
+  url: z.string().optional().describe("The live URL to view this deployment."),
   uses_functions: z.boolean().nullable().optional().describe(
     "Whether the deployment uses functions.",
   ),
 }).passthrough();
 
 const CreateTailSchema = z.object({
-  id: z.string().describe("Identifier of the tail session."),
+  id: z.string().optional().describe("Identifier of the tail session."),
   url: z.string().optional().describe(
     "Optional WebSocket URL to connect to for receiving tail events, when returned by the tail service.",
   ),
 }).passthrough();
 
 const GetDomainsItemSchema = z.object({
-  certificate_authority: z.enum(["google", "lets_encrypt"]),
-  created_on: z.string(),
-  domain_id: z.string(),
-  id: z.string(),
-  name: z.unknown(),
+  certificate_authority: z.enum(["google", "lets_encrypt"]).optional(),
+  created_on: z.string().optional(),
+  domain_id: z.string().optional(),
+  id: z.string().optional(),
+  name: z.unknown().optional(),
   status: z.enum([
     "initializing",
     "pending",
@@ -300,25 +348,26 @@ const GetDomainsItemSchema = z.object({
     "deactivated",
     "blocked",
     "error",
-  ]),
+  ]).optional(),
   validation_data: z.object({
     error_message: z.string().optional(),
-    method: z.enum(["http", "txt"]),
+    method: z.enum(["http", "txt"]).optional(),
     status: z.enum([
       "initializing",
       "pending",
       "active",
       "deactivated",
       "error",
-    ]),
+    ]).optional(),
     txt_name: z.string().optional(),
     txt_value: z.string().optional(),
-  }),
+  }).optional(),
   verification_data: z.object({
     error_message: z.string().optional(),
-    status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
-  }),
-  zone_tag: z.string(),
+    status: z.enum(["pending", "active", "deactivated", "blocked", "error"])
+      .optional(),
+  }).optional(),
+  zone_tag: z.string().optional(),
 }).passthrough();
 
 const GetDomainsSchema = z.object({
@@ -334,11 +383,11 @@ const GetDomainsSchema = z.object({
 });
 
 const CreatePagesDomainsAddDomainSchema = z.object({
-  certificate_authority: z.enum(["google", "lets_encrypt"]),
-  created_on: z.string(),
-  domain_id: z.string(),
-  id: z.string(),
-  name: z.unknown(),
+  certificate_authority: z.enum(["google", "lets_encrypt"]).optional(),
+  created_on: z.string().optional(),
+  domain_id: z.string().optional(),
+  id: z.string().optional(),
+  name: z.unknown().optional(),
   status: z.enum([
     "initializing",
     "pending",
@@ -346,33 +395,34 @@ const CreatePagesDomainsAddDomainSchema = z.object({
     "deactivated",
     "blocked",
     "error",
-  ]),
+  ]).optional(),
   validation_data: z.object({
     error_message: z.string().optional(),
-    method: z.enum(["http", "txt"]),
+    method: z.enum(["http", "txt"]).optional(),
     status: z.enum([
       "initializing",
       "pending",
       "active",
       "deactivated",
       "error",
-    ]),
+    ]).optional(),
     txt_name: z.string().optional(),
     txt_value: z.string().optional(),
-  }),
+  }).optional(),
   verification_data: z.object({
     error_message: z.string().optional(),
-    status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
-  }),
-  zone_tag: z.string(),
+    status: z.enum(["pending", "active", "deactivated", "blocked", "error"])
+      .optional(),
+  }).optional(),
+  zone_tag: z.string().optional(),
 }).passthrough();
 
 const GetDomainSchema = z.object({
-  certificate_authority: z.enum(["google", "lets_encrypt"]),
-  created_on: z.string(),
-  domain_id: z.string(),
-  id: z.string(),
-  name: z.unknown(),
+  certificate_authority: z.enum(["google", "lets_encrypt"]).optional(),
+  created_on: z.string().optional(),
+  domain_id: z.string().optional(),
+  id: z.string().optional(),
+  name: z.unknown().optional(),
   status: z.enum([
     "initializing",
     "pending",
@@ -380,33 +430,34 @@ const GetDomainSchema = z.object({
     "deactivated",
     "blocked",
     "error",
-  ]),
+  ]).optional(),
   validation_data: z.object({
     error_message: z.string().optional(),
-    method: z.enum(["http", "txt"]),
+    method: z.enum(["http", "txt"]).optional(),
     status: z.enum([
       "initializing",
       "pending",
       "active",
       "deactivated",
       "error",
-    ]),
+    ]).optional(),
     txt_name: z.string().optional(),
     txt_value: z.string().optional(),
-  }),
+  }).optional(),
   verification_data: z.object({
     error_message: z.string().optional(),
-    status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
-  }),
-  zone_tag: z.string(),
+    status: z.enum(["pending", "active", "deactivated", "blocked", "error"])
+      .optional(),
+  }).optional(),
+  zone_tag: z.string().optional(),
 }).passthrough();
 
 const PatchDomainSchema = z.object({
-  certificate_authority: z.enum(["google", "lets_encrypt"]),
-  created_on: z.string(),
-  domain_id: z.string(),
-  id: z.string(),
-  name: z.unknown(),
+  certificate_authority: z.enum(["google", "lets_encrypt"]).optional(),
+  created_on: z.string().optional(),
+  domain_id: z.string().optional(),
+  id: z.string().optional(),
+  name: z.unknown().optional(),
   status: z.enum([
     "initializing",
     "pending",
@@ -414,63 +465,68 @@ const PatchDomainSchema = z.object({
     "deactivated",
     "blocked",
     "error",
-  ]),
+  ]).optional(),
   validation_data: z.object({
     error_message: z.string().optional(),
-    method: z.enum(["http", "txt"]),
+    method: z.enum(["http", "txt"]).optional(),
     status: z.enum([
       "initializing",
       "pending",
       "active",
       "deactivated",
       "error",
-    ]),
+    ]).optional(),
     txt_name: z.string().optional(),
     txt_value: z.string().optional(),
-  }),
+  }).optional(),
   verification_data: z.object({
     error_message: z.string().optional(),
-    status: z.enum(["pending", "active", "deactivated", "blocked", "error"]),
-  }),
-  zone_tag: z.string(),
+    status: z.enum(["pending", "active", "deactivated", "blocked", "error"])
+      .optional(),
+  }).optional(),
+  zone_tag: z.string().optional(),
 }).passthrough();
 
 const PagesPurgeBuildCacheSchema = z.object({}).passthrough().nullable();
 
 const CreatePagesProjectConnectProjectSourceSchema = z.object({
   build_config: z.unknown().optional(),
-  canonical_deployment: z.unknown(),
-  created_on: z.string().describe("When the project was created."),
+  canonical_deployment: z.unknown().optional(),
+  created_on: z.string().optional().describe("When the project was created."),
   deployment_configs: z.object({
-    preview: z.unknown(),
-    production: z.unknown(),
-  }).describe("Configs for deployments in a project."),
+    preview: z.unknown().optional(),
+    production: z.unknown().optional(),
+  }).optional().describe("Configs for deployments in a project."),
   domains: z.array(z.string()).optional().describe(
     "A list of associated custom domains for the project.",
   ),
-  framework: z.string().describe("Framework the project is using."),
-  framework_version: z.string().describe(
+  framework: z.string().optional().describe("Framework the project is using."),
+  framework_version: z.string().optional().describe(
     "Version of the framework the project is using.",
   ),
-  id: z.string().describe("ID of the project."),
-  latest_deployment: z.unknown(),
-  name: z.unknown(),
-  preview_script_name: z.string().describe("Name of the preview script."),
-  production_branch: z.string().describe(
+  id: z.string().optional().describe("ID of the project."),
+  latest_deployment: z.unknown().optional(),
+  name: z.unknown().optional(),
+  preview_script_name: z.string().optional().describe(
+    "Name of the preview script.",
+  ),
+  production_branch: z.string().optional().describe(
     "Production branch of the project. Used to identify production deployments.",
   ),
-  production_script_name: z.string().describe("Name of the production script."),
+  production_script_name: z.string().optional().describe(
+    "Name of the production script.",
+  ),
   source: z.unknown().optional(),
   subdomain: z.string().optional().describe(
     "The Cloudflare subdomain associated with the project.",
   ),
-  uses_functions: z.boolean().nullable().describe(
+  uses_functions: z.boolean().nullable().optional().describe(
     "Whether the project uses functions.",
   ),
 }).passthrough();
 
 const GetUploadTokenSchema = z.object({
-  jwt: z.string().describe(
+  jwt: z.string().optional().describe(
     "Short-lived JWT used to authenticate Pages Direct Upload asset operations.",
   ),
 }).passthrough();
@@ -482,7 +538,7 @@ const GetUploadTokenSchema = z.object({
 /** Cloudflare Pages — projects, deployments, domains, build configs */
 export const model = {
   type: "@webframp/cloudflare/pages",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -523,6 +579,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -743,7 +804,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("project", id, result);
         context.logger.info("Created project {id}", { id });
@@ -1182,7 +1243,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("tail", id, result);
         context.logger.info("Created tail {id}", { id });
@@ -1314,7 +1375,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "pages_domains_add_domain",
@@ -1526,7 +1587,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "pages_project_connect_project_source",

@@ -28,13 +28,13 @@ const HyperdriveItemSchema = z.object({
   created_on: z.string().optional().describe(
     "Defines the creation time of the Hyperdrive configuration.",
   ),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   modified_on: z.string().optional().describe(
     "Defines the last modified time of the Hyperdrive configuration.",
   ),
   mtls: z.unknown().optional(),
-  name: z.unknown(),
-  origin: z.union([z.unknown(), z.unknown(), z.unknown()]),
+  name: z.unknown().optional(),
+  origin: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
   origin_connection_limit: z.unknown().optional(),
 }).passthrough();
 
@@ -55,13 +55,13 @@ const PatchHyperdriveSchema = z.object({
   created_on: z.string().optional().describe(
     "Defines the creation time of the Hyperdrive configuration.",
   ),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   modified_on: z.string().optional().describe(
     "Defines the last modified time of the Hyperdrive configuration.",
   ),
   mtls: z.unknown().optional(),
-  name: z.unknown(),
-  origin: z.union([z.unknown(), z.unknown(), z.unknown()]),
+  name: z.unknown().optional(),
+  origin: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
   origin_connection_limit: z.unknown().optional(),
 }).passthrough();
 
@@ -72,7 +72,7 @@ const PatchHyperdriveSchema = z.object({
 /** Cloudflare Hyperdrive — database connection pooling configurations */
 export const model = {
   type: "@webframp/cloudflare/hyperdrive",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -108,6 +108,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -230,7 +235,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("hyperdrive", id, result);
         context.logger.info("Created hyperdrive {id}", { id });

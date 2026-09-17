@@ -34,18 +34,18 @@ const PortalsItemSchema = z.object({
     new RegExp(
       "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
     ),
-  ),
+  ).optional(),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("portal id"),
+  ).optional().describe("portal id"),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350),
+  name: z.string().max(350).optional(),
   secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
   ),
   servers: z.array(z.object({
-    auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
+    auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
     default_disabled: z.boolean().optional().default(false),
@@ -58,29 +58,29 @@ const PortalsItemSchema = z.object({
       retryable: z.boolean().optional(),
       status_code: z.number().optional(),
     }).optional(),
-    hostname: z.string(),
+    hostname: z.string().optional(),
     id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
+    ).optional(),
     is_shared_oauth_callback_enabled: z.boolean().optional().default(false),
     last_successful_sync: z.string().optional(),
     last_synced: z.string().optional(),
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
-    name: z.string().max(350),
+    name: z.string().max(350).optional(),
     on_behalf: z.boolean().optional().default(true),
-    prompts: z.array(z.record(z.string(), z.unknown())),
+    prompts: z.array(z.record(z.string(), z.unknown())).optional(),
     secure_web_gateway: z.boolean().optional().default(false),
     server_id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
+    ).optional(),
     status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
       "waiting",
     ),
-    tools: z.array(z.record(z.string(), z.unknown())),
+    tools: z.array(z.record(z.string(), z.unknown())).optional(),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
-      name: z.string(),
+      name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
       server_alias: z.string().optional(),
@@ -88,13 +88,13 @@ const PortalsItemSchema = z.object({
     })).optional(),
     updated_tools: z.array(z.object({
       enabled: z.boolean().optional(),
-      name: z.string(),
+      name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
     })).optional(),
-  })),
+  })).optional(),
 }).passthrough();
 
 const ListPortalsSchema = z.object({
@@ -120,18 +120,18 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
     new RegExp(
       "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9-]*[A-Za-z0-9])$",
     ),
-  ),
+  ).optional(),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("portal id"),
+  ).optional().describe("portal id"),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350),
+  name: z.string().max(350).optional(),
   secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound MCP traffic through Zero Trust Secure Web Gateway",
   ),
   servers: z.array(z.object({
-    auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
+    auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
     created_at: z.string().optional(),
     created_by: z.string().optional(),
     default_disabled: z.boolean().optional().default(false),
@@ -144,29 +144,29 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
       retryable: z.boolean().optional(),
       status_code: z.number().optional(),
     }).optional(),
-    hostname: z.string(),
+    hostname: z.string().optional(),
     id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
+    ).optional(),
     is_shared_oauth_callback_enabled: z.boolean().optional().default(false),
     last_successful_sync: z.string().optional(),
     last_synced: z.string().optional(),
     modified_at: z.string().optional(),
     modified_by: z.string().optional(),
-    name: z.string().max(350),
+    name: z.string().max(350).optional(),
     on_behalf: z.boolean().optional().default(true),
-    prompts: z.array(z.record(z.string(), z.unknown())),
+    prompts: z.array(z.record(z.string(), z.unknown())).optional(),
     secure_web_gateway: z.boolean().optional().default(false),
     server_id: z.string().min(1).max(32).regex(
       new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-    ),
+    ).optional(),
     status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
       "waiting",
     ),
-    tools: z.array(z.record(z.string(), z.unknown())),
+    tools: z.array(z.record(z.string(), z.unknown())).optional(),
     updated_prompts: z.array(z.object({
       enabled: z.boolean().optional(),
-      name: z.string(),
+      name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
       server_alias: z.string().optional(),
@@ -174,17 +174,17 @@ const GetMcpPortalsApiFetchGatewaysSchema = z.object({
     })).optional(),
     updated_tools: z.array(z.object({
       enabled: z.boolean().optional(),
-      name: z.string(),
+      name: z.string().optional(),
       portal_alias: z.string().optional(),
       portal_description: z.string().optional(),
       server_alias: z.string().optional(),
       server_description: z.string().optional(),
     })).optional(),
-  })),
+  })).optional(),
 }).passthrough();
 
 const ServersItemSchema = z.object({
-  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
+  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
   description: z.string().max(512).nullable().optional(),
@@ -196,10 +196,10 @@ const ServersItemSchema = z.object({
     retryable: z.boolean().optional(),
     status_code: z.number().optional(),
   }).optional(),
-  hostname: z.string(),
+  hostname: z.string().optional(),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("server id"),
+  ).optional().describe("server id"),
   is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
     .describe(
       "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
@@ -208,22 +208,22 @@ const ServersItemSchema = z.object({
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350),
-  prompts: z.array(z.record(z.string(), z.unknown())),
+  name: z.string().max(350).optional(),
+  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
   secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
   ),
   status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
     "waiting",
   ).describe("Current sync state of the server"),
-  tools: z.array(z.record(z.string(), z.unknown())),
+  tools: z.array(z.record(z.string(), z.unknown())).optional(),
   updated_prompts: z.array(z.object({
     alias: z.string().max(40).regex(
       new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
     ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
-    name: z.string(),
+    name: z.string().optional(),
   })).optional(),
   updated_tools: z.array(z.object({
     alias: z.string().max(40).regex(
@@ -231,7 +231,7 @@ const ServersItemSchema = z.object({
     ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
-    name: z.string(),
+    name: z.string().optional(),
   })).optional(),
 }).passthrough();
 
@@ -248,7 +248,7 @@ const ListServersSchema = z.object({
 });
 
 const GetMcpPortalsApiFetchServersSchema = z.object({
-  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
+  auth_type: z.enum(["oauth", "bearer", "unauthenticated"]).optional(),
   created_at: z.string().optional(),
   created_by: z.string().optional(),
   description: z.string().max(512).nullable().optional(),
@@ -260,10 +260,10 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     retryable: z.boolean().optional(),
     status_code: z.number().optional(),
   }).optional(),
-  hostname: z.string(),
+  hostname: z.string().optional(),
   id: z.string().min(1).max(32).regex(
     new RegExp("^[a-z0-9_]+(?:-[a-z0-9_]+)*$"),
-  ).describe("server id"),
+  ).optional().describe("server id"),
   is_shared_oauth_callback_enabled: z.boolean().optional().default(false)
     .describe(
       "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback endpoint as the red...",
@@ -272,22 +272,22 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
   last_synced: z.string().optional(),
   modified_at: z.string().optional(),
   modified_by: z.string().optional(),
-  name: z.string().max(350),
-  prompts: z.array(z.record(z.string(), z.unknown())),
+  name: z.string().max(350).optional(),
+  prompts: z.array(z.record(z.string(), z.unknown())).optional(),
   secure_web_gateway: z.boolean().optional().default(false).describe(
     "Route outbound traffic to this MCP server through Zero Trust Secure Web Gateway",
   ),
   status: z.enum(["waiting", "ready", "stale", "error"]).optional().default(
     "waiting",
   ).describe("Current sync state of the server"),
-  tools: z.array(z.record(z.string(), z.unknown())),
+  tools: z.array(z.record(z.string(), z.unknown())).optional(),
   updated_prompts: z.array(z.object({
     alias: z.string().max(40).regex(
       new RegExp("^[a-zA-Z0-9]+([_-][a-zA-Z0-9]+)*$"),
     ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
-    name: z.string(),
+    name: z.string().optional(),
   })).optional(),
   updated_tools: z.array(z.object({
     alias: z.string().max(40).regex(
@@ -295,7 +295,7 @@ const GetMcpPortalsApiFetchServersSchema = z.object({
     ).optional(),
     description: z.string().optional(),
     enabled: z.boolean().optional(),
-    name: z.string(),
+    name: z.string().optional(),
   })).optional(),
 }).passthrough();
 
@@ -328,7 +328,7 @@ const AccessApplicationsItemSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -346,7 +346,7 @@ const AccessApplicationsItemSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -383,7 +383,7 @@ const AccessApplicationsItemSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -401,7 +401,7 @@ const AccessApplicationsItemSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -421,7 +421,7 @@ const AccessApplicationsItemSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -439,7 +439,7 @@ const AccessApplicationsItemSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -456,7 +456,7 @@ const AccessApplicationsItemSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
     bg_color: z.unknown().optional(),
     footer_links: z.unknown().optional(),
@@ -478,7 +478,7 @@ const AccessApplicationsItemSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -494,7 +494,7 @@ const AccessApplicationsItemSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -510,7 +510,7 @@ const AccessApplicationsItemSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -553,7 +553,7 @@ const AccessApplicationsItemSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -571,7 +571,7 @@ const AccessApplicationsItemSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -597,7 +597,7 @@ const AccessApplicationsItemSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -623,7 +623,7 @@ const AccessApplicationsItemSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
 ]);
@@ -657,7 +657,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -675,7 +675,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -712,7 +712,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -730,7 +730,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -750,7 +750,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -768,7 +768,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -785,7 +785,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
     bg_color: z.unknown().optional(),
     footer_links: z.unknown().optional(),
@@ -807,7 +807,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -823,7 +823,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -839,7 +839,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -882,7 +882,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -900,7 +900,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -926,7 +926,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -952,7 +952,7 @@ const AccessApplicationsAddAnApplicationSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
 ]);
@@ -992,7 +992,7 @@ const GetAnAccessApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -1010,7 +1010,7 @@ const GetAnAccessApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -1047,7 +1047,7 @@ const GetAnAccessApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -1065,7 +1065,7 @@ const GetAnAccessApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -1085,7 +1085,7 @@ const GetAnAccessApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -1103,7 +1103,7 @@ const GetAnAccessApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -1120,7 +1120,7 @@ const GetAnAccessApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("App Launcher"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     app_launcher_logo_url: z.unknown().optional(),
     bg_color: z.unknown().optional(),
     footer_links: z.unknown().optional(),
@@ -1142,7 +1142,7 @@ const GetAnAccessApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Warp Login App"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -1158,7 +1158,7 @@ const GetAnAccessApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Clientless Web Isolation"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -1174,7 +1174,7 @@ const GetAnAccessApplicationSchema = z.union([
     domain: z.unknown().optional(),
     name: z.unknown().optional().default("Gateway Proxy"),
     session_duration: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -1217,7 +1217,7 @@ const GetAnAccessApplicationSchema = z.union([
     custom_non_identity_deny_url: z.unknown().optional(),
     custom_pages: z.unknown().optional(),
     destinations: z.unknown().optional(),
-    domain: z.unknown(),
+    domain: z.unknown().optional(),
     eager_redirect_cookie_setting: z.unknown().optional(),
     enable_binding_cookie: z.unknown().optional(),
     http_only_cookie_attribute: z.unknown().optional(),
@@ -1235,7 +1235,7 @@ const GetAnAccessApplicationSchema = z.union([
     session_duration: z.unknown().optional(),
     skip_interstitial: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     use_clientless_isolation_app_launcher_url: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
@@ -1261,7 +1261,7 @@ const GetAnAccessApplicationSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
   z.object({
@@ -1287,7 +1287,7 @@ const GetAnAccessApplicationSchema = z.union([
     scim_config: z.unknown().optional(),
     session_duration: z.unknown().optional(),
     tags: z.unknown().optional(),
-    type: z.unknown(),
+    type: z.unknown().optional(),
     policies: z.array(z.unknown()).optional(),
   }),
 ]);
@@ -1373,8 +1373,8 @@ const GetAccessApplicationsTestAccessPoliciesSchema = z.object({
 }).passthrough();
 
 const ListItemSchema = z.object({
-  aaguid: z.unknown(),
-  name: z.unknown(),
+  aaguid: z.unknown().optional(),
+  name: z.unknown().optional(),
 }).passthrough();
 
 const ListSchema = z.object({
@@ -1426,13 +1426,15 @@ const CreateAccessMtlsAuthenticationAddAnMtlsCertificateSchema = z.object({
 }).passthrough();
 
 const MtlsCertificatesHostnameSettingsItemSchema = z.object({
-  china_network: z.boolean().describe(
+  china_network: z.boolean().optional().describe(
     "Request client certificates for this hostname in China. Can only be set to true if this zone is c...",
   ),
-  client_certificate_forwarding: z.boolean().describe(
+  client_certificate_forwarding: z.boolean().optional().describe(
     "Client Certificate Forwarding is a feature that takes the client cert provided by the eyeball to ...",
   ),
-  hostname: z.string().describe("The hostname that these settings apply to."),
+  hostname: z.string().optional().describe(
+    "The hostname that these settings apply to.",
+  ),
 }).passthrough();
 
 const ListMtlsCertificatesHostnameSettingsSchema = z.object({
@@ -1462,8 +1464,8 @@ const GetAnMtlsCertificateSchema = z.object({
 const CustomPagesItemSchema = z.object({
   app_count: z.unknown().optional(),
   created_at: z.unknown().optional(),
-  name: z.unknown(),
-  type: z.unknown(),
+  name: z.unknown().optional(),
+  type: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
@@ -1483,8 +1485,8 @@ const ListCustomPagesSchema = z.object({
 const CreateACustomPageSchema = z.object({
   app_count: z.unknown().optional(),
   created_at: z.unknown().optional(),
-  name: z.unknown(),
-  type: z.unknown(),
+  name: z.unknown().optional(),
+  type: z.unknown().optional(),
   uid: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
@@ -1551,9 +1553,9 @@ const CreateAnAccessGroupSchema = z.object({
 
 const AccessIdentityProvidersItemSchema = z.union([
   z.object({
-    config: z.object({}),
+    config: z.object({}).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1582,12 +1584,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1616,12 +1618,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1650,12 +1652,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1684,12 +1686,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1718,12 +1720,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1752,12 +1754,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1786,12 +1788,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1820,12 +1822,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1854,12 +1856,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1888,12 +1890,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1922,7 +1924,7 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
@@ -1937,9 +1939,9 @@ const AccessIdentityProvidersItemSchema = z.union([
       issuer_url: z.string().optional(),
       sign_request: z.boolean().optional().default(false),
       sso_target_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -1968,12 +1970,12 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2002,14 +2004,14 @@ const AccessIdentityProvidersItemSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2022,15 +2024,15 @@ const AccessIdentityProvidersItemSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["onetimepin"]),
+    type: z.enum(["onetimepin"]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
       restrict_to_account_members: z.boolean().optional().default(false),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2043,7 +2045,7 @@ const AccessIdentityProvidersItemSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["cloudflare"]),
+    type: z.enum(["cloudflare"]).optional(),
   }),
 ]);
 
@@ -2061,9 +2063,9 @@ const ListAccessIdentityProvidersSchema = z.object({
 
 const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
   z.object({
-    config: z.object({}),
+    config: z.object({}).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2092,12 +2094,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2126,12 +2128,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2160,12 +2162,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2194,12 +2196,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2228,12 +2230,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2262,12 +2264,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2296,12 +2298,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2330,12 +2332,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2364,12 +2366,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2398,12 +2400,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2432,7 +2434,7 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
@@ -2447,9 +2449,9 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       issuer_url: z.string().optional(),
       sign_request: z.boolean().optional().default(false),
       sso_target_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2478,12 +2480,12 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2512,14 +2514,14 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2532,15 +2534,15 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["onetimepin"]),
+    type: z.enum(["onetimepin"]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
       restrict_to_account_members: z.boolean().optional().default(false),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2553,15 +2555,15 @@ const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["cloudflare"]),
+    type: z.enum(["cloudflare"]).optional(),
   }),
 ]);
 
 const GetAnAccessIdentityProviderSchema = z.union([
   z.object({
-    config: z.object({}),
+    config: z.object({}).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2590,12 +2592,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2624,12 +2626,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2658,12 +2660,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2692,12 +2694,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2726,12 +2728,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2760,12 +2762,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2794,12 +2796,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2828,12 +2830,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2862,12 +2864,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2896,12 +2898,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2930,7 +2932,7 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
@@ -2945,9 +2947,9 @@ const GetAnAccessIdentityProviderSchema = z.union([
       issuer_url: z.string().optional(),
       sign_request: z.boolean().optional().default(false),
       sso_target_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -2976,12 +2978,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
-    config: z.unknown(),
+    config: z.unknown().optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -3010,14 +3012,14 @@ const GetAnAccessIdentityProviderSchema = z.union([
       "pingone",
       "yandex",
       "cloudflare",
-    ]),
+    ]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -3030,15 +3032,15 @@ const GetAnAccessIdentityProviderSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["onetimepin"]),
+    type: z.enum(["onetimepin"]).optional(),
   }),
   z.object({
     config: z.object({
       redirect_url: z.string().optional(),
       restrict_to_account_members: z.boolean().optional().default(false),
-    }),
+    }).optional(),
     id: z.unknown().optional(),
-    name: z.unknown(),
+    name: z.unknown().optional(),
     read_only: z.boolean().optional(),
     saml_certificate_set: z.unknown().optional(),
     saml_certificate_set_id: z.string().optional(),
@@ -3051,12 +3053,12 @@ const GetAnAccessIdentityProviderSchema = z.union([
       secret: z.string().optional(),
       user_deprovision: z.boolean().optional().default(false),
     }).optional(),
-    type: z.enum(["cloudflare"]),
+    type: z.enum(["cloudflare"]).optional(),
   }),
 ]);
 
 const CreateSamlCertificateForIdentityProviderSchema = z.object({
-  created_at: z.string().describe(
+  created_at: z.string().optional().describe(
     "Timestamp when the certificate set was created",
   ),
   current_certificate: z.unknown().optional().describe(
@@ -3065,8 +3067,10 @@ const CreateSamlCertificateForIdentityProviderSchema = z.object({
   previous_certificate: z.object({}).nullable().optional().describe(
     "The previous certificate, maintained during rotation to ensure continuity. Null if no rotation ha...",
   ),
-  uid: z.string().describe("Unique identifier for the certificate set"),
-  updated_at: z.string().describe(
+  uid: z.string().optional().describe(
+    "Unique identifier for the certificate set",
+  ),
+  updated_at: z.string().optional().describe(
     "Timestamp when the certificate set was last updated (e.g., during rotation)",
   ),
 }).passthrough();
@@ -3130,15 +3134,19 @@ const ListScimUserResourcesSchema = z.object({
 });
 
 const CreateSchema = z.object({
-  created_at: z.unknown(),
-  id: z.unknown().describe("UID of the IdP federation grant."),
-  idp_id: z.string().describe("UID of the identity provider being federated."),
+  created_at: z.unknown().optional(),
+  id: z.unknown().optional().describe("UID of the IdP federation grant."),
+  idp_id: z.string().optional().describe(
+    "UID of the identity provider being federated.",
+  ),
 }).passthrough();
 
 const GetSchema = z.object({
-  created_at: z.unknown(),
-  id: z.unknown().describe("UID of the IdP federation grant."),
-  idp_id: z.string().describe("UID of the identity provider being federated."),
+  created_at: z.unknown().optional(),
+  id: z.unknown().optional().describe("UID of the IdP federation grant."),
+  idp_id: z.string().optional().describe(
+    "UID of the identity provider being federated.",
+  ),
 }).passthrough();
 
 const GetTheAccessKeyConfigurationSchema = z.object({
@@ -3329,15 +3337,21 @@ const GetAUserPageSchema = z.object({
 });
 
 const CertificateSetsItemSchema = z.object({
-  created_at: z.string().describe("When the certificate set was created"),
+  created_at: z.string().optional().describe(
+    "When the certificate set was created",
+  ),
   current_certificate: z.unknown().optional().describe(
     "The current active certificate",
   ),
   previous_certificate: z.object({}).nullable().optional().describe(
     "The previous certificate (maintained during rotation period). May be null when no rotation has oc...",
   ),
-  uid: z.string().describe("Unique identifier for the certificate set"),
-  updated_at: z.string().describe("When the certificate set was last updated"),
+  uid: z.string().optional().describe(
+    "Unique identifier for the certificate set",
+  ),
+  updated_at: z.string().optional().describe(
+    "When the certificate set was last updated",
+  ),
 }).passthrough();
 
 const ListCertificateSetsSchema = z.object({
@@ -3353,27 +3367,39 @@ const ListCertificateSetsSchema = z.object({
 });
 
 const GetCertificateSetSchema = z.object({
-  created_at: z.string().describe("When the certificate set was created"),
+  created_at: z.string().optional().describe(
+    "When the certificate set was created",
+  ),
   current_certificate: z.unknown().optional().describe(
     "The current active certificate",
   ),
   previous_certificate: z.object({}).nullable().optional().describe(
     "The previous certificate (maintained during rotation period). May be null when no rotation has oc...",
   ),
-  uid: z.string().describe("Unique identifier for the certificate set"),
-  updated_at: z.string().describe("When the certificate set was last updated"),
+  uid: z.string().optional().describe(
+    "Unique identifier for the certificate set",
+  ),
+  updated_at: z.string().optional().describe(
+    "When the certificate set was last updated",
+  ),
 }).passthrough();
 
 const AccessSamlCertificatesRotateCertificateSchema = z.object({
-  created_at: z.string().describe("When the certificate set was created"),
+  created_at: z.string().optional().describe(
+    "When the certificate set was created",
+  ),
   current_certificate: z.unknown().optional().describe(
     "The current active certificate",
   ),
   previous_certificate: z.object({}).nullable().optional().describe(
     "The previous certificate (maintained during rotation period). May be null when no rotation has oc...",
   ),
-  uid: z.string().describe("Unique identifier for the certificate set"),
-  updated_at: z.string().describe("When the certificate set was last updated"),
+  uid: z.string().optional().describe(
+    "Unique identifier for the certificate set",
+  ),
+  updated_at: z.string().optional().describe(
+    "When the certificate set was last updated",
+  ),
 }).passthrough();
 
 const UpdateAUserSeatSchema = z.object({
@@ -3443,7 +3469,7 @@ const TagsItemSchema = z.object({
     "The number of applications that have this tag",
   ),
   created_at: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -3464,7 +3490,7 @@ const CreateTagSchema = z.object({
     "The number of applications that have this tag",
   ),
   created_at: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -3473,7 +3499,7 @@ const GetATagSchema = z.object({
     "The number of applications that have this tag",
   ),
   created_at: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   updated_at: z.unknown().optional(),
 }).passthrough();
 
@@ -3634,7 +3660,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3675,6 +3701,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -4195,7 +4226,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("portals", id, result);
         context.logger.info("Created portals {id}", { id });
@@ -4460,7 +4491,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("servers", id, result);
         context.logger.info("Created servers {id}", { id });
@@ -5113,7 +5144,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "an_access_policy",
@@ -5553,7 +5584,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "access_mtls_authentication_add_an_mtls_certificate",
@@ -5871,7 +5902,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("a_custom_page", id, result);
         context.logger.info("Created a_custom_page {id}", { id });
@@ -6207,7 +6238,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "an_access_group",
@@ -6752,7 +6783,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
@@ -7195,7 +7226,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "your_zero_trust_organization",
@@ -7395,7 +7426,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "zero_trust_organization_revoke_all_access_tokens_for_a_user",
@@ -7504,7 +7535,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "an_access_reusable_policy",
@@ -7660,7 +7691,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "access_policy_tests",
@@ -8038,7 +8069,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "a_service_token",
@@ -8241,7 +8272,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "access_service_tokens_rotate_a_service_token",
@@ -8340,7 +8371,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("tag", id, result);
         context.logger.info("Created tag {id}", { id });
@@ -8549,7 +8580,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("user", id, result);
         context.logger.info("Created user {id}", { id });

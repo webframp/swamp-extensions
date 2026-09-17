@@ -24,32 +24,33 @@ const GlobalArgsSchema = z.object({
 });
 
 const CreateSandboxRegistrarDomainDiscoveryCheckSchema = z.object({
-  domains: z.array(z.unknown()).describe(
+  domains: z.array(z.unknown()).optional().describe(
     "Array of domain availability results. Domains on unsupported extensions are included with `regist...",
   ),
 }).passthrough();
 
 const GetSandboxRegistrarDomainDiscoverySearchSchema = z.object({
-  domains: z.array(z.unknown()).describe(
+  domains: z.array(z.unknown()).optional().describe(
     "Array of domain suggestions sorted by relevance. May be empty if no domains match the search crit...",
   ),
 }).passthrough();
 
 const ListItemSchema = z.object({
-  auto_renew: z.boolean().describe(
+  auto_renew: z.boolean().optional().describe(
     "Whether the domain will be automatically renewed before expiration.",
   ),
-  created_at: z.string().describe(
+  created_at: z.string().optional().describe(
     "When the domain was registered. Present when the registration resource exists.",
   ),
-  domain_name: z.unknown(),
-  expires_at: z.string().nullable().describe(
+  domain_name: z.unknown().optional(),
+  expires_at: z.string().nullable().optional().describe(
     "When the domain registration expires. Present when the registration is ready; may be null only wh...",
   ),
-  locked: z.boolean().describe("Whether the domain is locked for transfer."),
-  privacy_mode: z.union([z.literal(false), z.literal("redaction")]).describe(
-    "Current WHOIS privacy mode for the registration.",
+  locked: z.boolean().optional().describe(
+    "Whether the domain is locked for transfer.",
   ),
+  privacy_mode: z.union([z.literal(false), z.literal("redaction")]).optional()
+    .describe("Current WHOIS privacy mode for the registration."),
   status: z.enum([
     "active",
     "registration_pending",
@@ -57,7 +58,7 @@ const ListItemSchema = z.object({
     "suspended",
     "redemption_period",
     "pending_delete",
-  ]).describe(
+  ]).optional().describe(
     "Current registration status. - `active`: Domain is registered and operational - `registration_pen...",
   ),
 }).passthrough();
@@ -75,15 +76,15 @@ const ListSchema = z.object({
 });
 
 const CreateSchema = z.object({
-  completed: z.boolean().describe(
+  completed: z.boolean().optional().describe(
     "Whether the workflow has reached a terminal state. `true` when `state` is `succeeded` or `failed`...",
   ),
   context: z.record(z.string(), z.unknown()).optional().describe(
     "Workflow-specific data for this workflow. The workflow subject is identified by `context.domain_n...",
   ),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   error: z.unknown().nullable().optional(),
-  links: z.unknown(),
+  links: z.unknown().optional(),
   state: z.enum([
     "pending",
     "in_progress",
@@ -91,27 +92,28 @@ const CreateSchema = z.object({
     "blocked",
     "succeeded",
     "failed",
-  ]).describe(
+  ]).optional().describe(
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().optional(),
 }).passthrough();
 
 const GetSchema = z.object({
-  auto_renew: z.boolean().describe(
+  auto_renew: z.boolean().optional().describe(
     "Whether the domain will be automatically renewed before expiration.",
   ),
-  created_at: z.string().describe(
+  created_at: z.string().optional().describe(
     "When the domain was registered. Present when the registration resource exists.",
   ),
-  domain_name: z.unknown(),
-  expires_at: z.string().nullable().describe(
+  domain_name: z.unknown().optional(),
+  expires_at: z.string().nullable().optional().describe(
     "When the domain registration expires. Present when the registration is ready; may be null only wh...",
   ),
-  locked: z.boolean().describe("Whether the domain is locked for transfer."),
-  privacy_mode: z.union([z.literal(false), z.literal("redaction")]).describe(
-    "Current WHOIS privacy mode for the registration.",
+  locked: z.boolean().optional().describe(
+    "Whether the domain is locked for transfer.",
   ),
+  privacy_mode: z.union([z.literal(false), z.literal("redaction")]).optional()
+    .describe("Current WHOIS privacy mode for the registration."),
   status: z.enum([
     "active",
     "registration_pending",
@@ -119,21 +121,21 @@ const GetSchema = z.object({
     "suspended",
     "redemption_period",
     "pending_delete",
-  ]).describe(
+  ]).optional().describe(
     "Current registration status. - `active`: Domain is registered and operational - `registration_pen...",
   ),
 }).passthrough();
 
 const UpdateSchema = z.object({
-  completed: z.boolean().describe(
+  completed: z.boolean().optional().describe(
     "Whether the workflow has reached a terminal state. `true` when `state` is `succeeded` or `failed`...",
   ),
   context: z.record(z.string(), z.unknown()).optional().describe(
     "Workflow-specific data for this workflow. The workflow subject is identified by `context.domain_n...",
   ),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   error: z.unknown().nullable().optional(),
-  links: z.unknown(),
+  links: z.unknown().optional(),
   state: z.enum([
     "pending",
     "in_progress",
@@ -141,22 +143,22 @@ const UpdateSchema = z.object({
     "blocked",
     "succeeded",
     "failed",
-  ]).describe(
+  ]).optional().describe(
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().optional(),
 }).passthrough();
 
 const GetStatusSchema = z.object({
-  completed: z.boolean().describe(
+  completed: z.boolean().optional().describe(
     "Whether the workflow has reached a terminal state. `true` when `state` is `succeeded` or `failed`...",
   ),
   context: z.record(z.string(), z.unknown()).optional().describe(
     "Workflow-specific data for this workflow. The workflow subject is identified by `context.domain_n...",
   ),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   error: z.unknown().nullable().optional(),
-  links: z.unknown(),
+  links: z.unknown().optional(),
   state: z.enum([
     "pending",
     "in_progress",
@@ -164,22 +166,22 @@ const GetStatusSchema = z.object({
     "blocked",
     "succeeded",
     "failed",
-  ]).describe(
+  ]).optional().describe(
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().optional(),
 }).passthrough();
 
 const GetUpdateStatusSchema = z.object({
-  completed: z.boolean().describe(
+  completed: z.boolean().optional().describe(
     "Whether the workflow has reached a terminal state. `true` when `state` is `succeeded` or `failed`...",
   ),
   context: z.record(z.string(), z.unknown()).optional().describe(
     "Workflow-specific data for this workflow. The workflow subject is identified by `context.domain_n...",
   ),
-  created_at: z.string(),
+  created_at: z.string().optional(),
   error: z.unknown().nullable().optional(),
-  links: z.unknown(),
+  links: z.unknown().optional(),
   state: z.enum([
     "pending",
     "in_progress",
@@ -187,20 +189,20 @@ const GetUpdateStatusSchema = z.object({
     "blocked",
     "succeeded",
     "failed",
-  ]).describe(
+  ]).optional().describe(
     "Workflow lifecycle state. - `pending`: Workflow has been created but not yet started processing. ...",
   ),
-  updated_at: z.string(),
+  updated_at: z.string().optional(),
 }).passthrough();
 
 const CreateRegistrarDomainDiscoveryCheckSchema = z.object({
-  domains: z.array(z.unknown()).describe(
+  domains: z.array(z.unknown()).optional().describe(
     "Array of domain availability results. Domains on unsupported extensions are included with `regist...",
   ),
 }).passthrough();
 
 const GetRegistrarDomainDiscoverySearchSchema = z.object({
-  domains: z.array(z.unknown()).describe(
+  domains: z.array(z.unknown()).optional().describe(
     "Array of domain suggestions sorted by relevance. May be empty if no domains match the search crit...",
   ),
 }).passthrough();
@@ -212,7 +214,7 @@ const GetRegistrarDomainDiscoverySearchSchema = z.object({
 /** Cloudflare Registrar — domain registration, transfers, contacts */
 export const model = {
   type: "@webframp/cloudflare/registrar",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -253,6 +255,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -354,7 +361,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "sandbox_registrar_domain_discovery_check",
@@ -513,7 +520,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
@@ -704,7 +711,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "registrar_domain_discovery_check",

@@ -214,13 +214,13 @@ const CreateQueuesPullMessagesSchema = z.object({
 }).passthrough();
 
 const GetMetricsSchema = z.object({
-  backlog_bytes: z.number().describe(
+  backlog_bytes: z.number().optional().describe(
     "The size in bytes of unacknowledged messages in the queue.",
   ),
-  backlog_count: z.number().describe(
+  backlog_count: z.number().optional().describe(
     "The number of unacknowledged messages in the queue.",
   ),
-  oldest_message_timestamp_ms: z.number().describe(
+  oldest_message_timestamp_ms: z.number().optional().describe(
     "Unix timestamp in milliseconds of the oldest unacknowledged message in the queue. Returns 0 if un...",
   ),
 }).passthrough();
@@ -244,7 +244,7 @@ const CreateQueuesPurgeSchema = z.object({
 /** Cloudflare Queues — queue management, consumers, message operations */
 export const model = {
   type: "@webframp/cloudflare/queues",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -285,6 +285,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -466,7 +471,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
@@ -930,7 +935,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_push_message",
@@ -983,7 +988,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_ack_messages",
@@ -1033,7 +1038,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_push_messages",
@@ -1080,7 +1085,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_preview_messages",
@@ -1133,7 +1138,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_ack_preview_messages",
@@ -1181,7 +1186,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "queues_pull_messages",
@@ -1265,7 +1270,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("queues_purge", id, result);
         context.logger.info("Created queues_purge {id}", { id });

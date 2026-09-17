@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, cfApiPaginated } from "./_lib/api.ts";
+import { cfApiPaginated, cfApiPaginatedCursor } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/durable-objects";
 
@@ -69,7 +69,7 @@ const ListObjectsSchema = z.object({
 /** Cloudflare Durable Objects — namespaces, object management, alarms */
 export const model = {
   type: "@webframp/cloudflare/durable-objects",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -105,6 +105,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -206,34 +211,35 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
         const startMs = Date.now();
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id"]);
+        const excludeKeys = new Set(["id", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
-        const qs = new URLSearchParams(params).toString();
-        const url = qs
-          ? `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects?${qs}`
-          : `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`;
 
-        const result = await cfApi<Record<string, unknown>>(
+        const { results, truncated } = await cfApiPaginatedCursor<
+          Record<string, unknown>
+        >(
           apiToken,
-          "GET",
-          url,
+          `/accounts/${accountId}/workers/durable_objects/namespaces/${args.id}/objects`,
+          params,
         );
-        const items = (result as { result?: unknown[] })?.result ??
-          (Array.isArray(result) ? result : [result]);
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
 
         const handle = await context.writeResource("objects", "main", {
-          items,
-          truncated: false,
+          items: results,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
-        context.logger.info("Found {count} objects", {
-          count: (items as unknown[]).length,
-        });
+        context.logger.info("Found {count} objects", { count: results.length });
         return { dataHandles: [handle] };
       },
     },

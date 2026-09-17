@@ -98,11 +98,11 @@ const CreateACustomWaitingRoomPagePreviewSchema = z.object({
 }).passthrough();
 
 const GetZoneSettingsSchema = z.object({
-  search_engine_crawler_bypass: z.unknown(),
+  search_engine_crawler_bypass: z.unknown().optional(),
 }).passthrough();
 
 const PatchZoneSettingsSchema = z.object({
-  search_engine_crawler_bypass: z.unknown(),
+  search_engine_crawler_bypass: z.unknown().optional(),
 }).passthrough();
 
 const GetWaitingRoomWaitingRoomDetailsSchema = z.object({
@@ -345,7 +345,7 @@ const GetWaitingRoomStatusSchema = z.object({
 /** Cloudflare Waiting Room — traffic queuing, rules, events, analytics */
 export const model = {
   type: "@webframp/cloudflare/waiting-room",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -386,6 +386,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -601,7 +606,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("waiting_room", id, result);
         context.logger.info("Created waiting_room {id}", { id });
@@ -639,7 +644,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "a_custom_waiting_room_page_preview",
@@ -1063,7 +1068,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("event", id, result);
         context.logger.info("Created event {id}", { id });
@@ -1396,7 +1401,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "waiting_room_rule",

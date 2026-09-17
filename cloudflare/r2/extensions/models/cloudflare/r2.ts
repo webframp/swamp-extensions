@@ -8,7 +8,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginatedCursor,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/r2";
 
@@ -24,36 +28,44 @@ const GlobalArgsSchema = z.object({
 });
 
 const ListCatalogsSchema = z.object({
-  warehouses: z.array(z.unknown()).describe("Lists catalogs in the account."),
+  warehouses: z.array(z.unknown()).optional().describe(
+    "Lists catalogs in the account.",
+  ),
 }).passthrough();
 
 const GetCatalogDetailsSchema = z.object({
-  bucket: z.string().describe("Specifies the associated R2 bucket name."),
+  bucket: z.string().optional().describe(
+    "Specifies the associated R2 bucket name.",
+  ),
   credential_status: z.string().nullable().optional().describe(
     "Shows the credential configuration status.",
   ),
-  id: z.string().describe("Use this to uniquely identify the catalog."),
+  id: z.string().optional().describe(
+    "Use this to uniquely identify the catalog.",
+  ),
   maintenance_config: z.object({}).nullable().optional().describe(
     "Configures maintenance for the catalog.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "Specifies the catalog name (generated from account and bucket name).",
   ),
-  status: z.unknown(),
+  status: z.unknown().optional(),
 }).passthrough();
 
 const CreateStoreCredentialsSchema = z.object({}).passthrough().nullable();
 
 const EnableCatalogSchema = z.object({
-  id: z.string().describe(
+  id: z.string().optional().describe(
     "Use this to uniquely identify the activated catalog.",
   ),
-  name: z.string().describe("Specifies the name of the activated catalog."),
+  name: z.string().optional().describe(
+    "Specifies the name of the activated catalog.",
+  ),
 }).passthrough();
 
 const GetMaintenanceConfigSchema = z.object({
-  credential_status: z.unknown(),
-  maintenance_config: z.unknown(),
+  credential_status: z.unknown().optional(),
+  maintenance_config: z.unknown().optional(),
 }).passthrough();
 
 const ListNamespacesSchema = z.object({
@@ -63,7 +75,9 @@ const ListNamespacesSchema = z.object({
   namespace_uuids: z.array(z.string()).nullable().optional().describe(
     "Contains UUIDs for each namespace when return_uuids is true. The order corresponds to the namespa...",
   ),
-  namespaces: z.array(z.unknown()).describe("Lists namespaces in the catalog."),
+  namespaces: z.array(z.unknown()).optional().describe(
+    "Lists namespaces in the catalog.",
+  ),
   next_page_token: z.string().nullable().optional().describe(
     "Use this opaque token to fetch the next page of results. A null or absent value indicates the las...",
   ),
@@ -73,7 +87,9 @@ const ListTablesSchema = z.object({
   details: z.array(z.unknown()).nullable().optional().describe(
     "Contains detailed metadata for each table when return_details is true. Each object includes ident...",
   ),
-  identifiers: z.array(z.unknown()).describe("Lists tables in the namespace."),
+  identifiers: z.array(z.unknown()).optional().describe(
+    "Lists tables in the namespace.",
+  ),
   next_page_token: z.string().nullable().optional().describe(
     "Use this opaque token to fetch the next page of results. A null or absent value indicates the las...",
   ),
@@ -83,24 +99,24 @@ const ListTablesSchema = z.object({
 }).passthrough();
 
 const GetTableSchema = z.object({
-  identifier: z.unknown(),
-  metadata: z.unknown(),
+  identifier: z.unknown().optional(),
+  metadata: z.unknown().optional(),
   metadata_location: z.string().optional().describe(
     "Specifies the S3-compatible URI to the current Iceberg metadata file in R2. Omitted for staged ta...",
   ),
-  returned_snapshots: z.number().int().min(0).describe(
+  returned_snapshots: z.number().int().min(0).optional().describe(
     "Describes the number of snapshots that appear in `metadata.snapshots`. Caps the list at 10 (the m...",
   ),
-  table_uuid: z.string().describe(
+  table_uuid: z.string().optional().describe(
     "Contains the Iceberg table UUID, stable across renames.",
   ),
-  total_snapshots: z.number().int().min(0).describe(
+  total_snapshots: z.number().int().min(0).optional().describe(
     "Indicates the total number of snapshots stored for the table, before pruning.",
   ),
 }).passthrough();
 
 const GetTableMaintenanceConfigSchema = z.object({
-  maintenance_config: z.unknown(),
+  maintenance_config: z.unknown().optional(),
 }).passthrough();
 
 const ListBucketsSchema = z.object({
@@ -132,8 +148,8 @@ const PutBucketCorsPolicySchema = z.object({}).passthrough();
 const ListCustomDomainsSchema = z.object({
   domains: z.array(z.object({
     ciphers: z.array(z.string()).optional(),
-    domain: z.string(),
-    enabled: z.boolean(),
+    domain: z.string().optional(),
+    enabled: z.boolean().optional(),
     minTLS: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional(),
     status: z.object({
       ownership: z.enum([
@@ -143,7 +159,7 @@ const ListCustomDomainsSchema = z.object({
         "blocked",
         "error",
         "unknown",
-      ]),
+      ]).optional(),
       ssl: z.enum([
         "initializing",
         "pending",
@@ -151,33 +167,37 @@ const ListCustomDomainsSchema = z.object({
         "deactivated",
         "error",
         "unknown",
-      ]),
-    }),
+      ]).optional(),
+    }).optional(),
     zoneId: z.string().optional(),
     zoneName: z.string().optional(),
-  })),
+  })).optional(),
 }).passthrough();
 
 const CreateR2AddCustomDomainSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
     "An allowlist of ciphers for TLS termination. These ciphers must be in the BoringSSL format.",
   ),
-  domain: z.string().describe("Domain name of the affected custom domain."),
-  enabled: z.boolean().describe(
+  domain: z.string().optional().describe(
+    "Domain name of the affected custom domain.",
+  ),
+  enabled: z.boolean().optional().describe(
     "Whether this bucket is publicly accessible at the specified custom domain.",
   ),
   minTLS: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional().describe(
     "Minimum TLS Version the custom domain will accept for incoming connections. If not set, defaults ...",
   ),
-  zoneId: z.string().describe("Zone ID of the custom domain."),
+  zoneId: z.string().optional().describe("Zone ID of the custom domain."),
 }).passthrough();
 
 const GetCustomDomainSettingsSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
     "An allowlist of ciphers for TLS termination. These ciphers must be in the BoringSSL format.",
   ),
-  domain: z.string().describe("Domain name of the custom domain to be added."),
-  enabled: z.boolean().describe(
+  domain: z.string().optional().describe(
+    "Domain name of the custom domain to be added.",
+  ),
+  enabled: z.boolean().optional().describe(
     "Whether this bucket is publicly accessible at the specified custom domain.",
   ),
   minTLS: z.enum(["1.0", "1.1", "1.2", "1.3"]).optional().describe(
@@ -191,7 +211,7 @@ const GetCustomDomainSettingsSchema = z.object({
       "blocked",
       "error",
       "unknown",
-    ]),
+    ]).optional(),
     ssl: z.enum([
       "initializing",
       "pending",
@@ -199,8 +219,8 @@ const GetCustomDomainSettingsSchema = z.object({
       "deactivated",
       "error",
       "unknown",
-    ]),
-  }),
+    ]).optional(),
+  }).optional(),
   zoneId: z.string().optional().describe(
     "Zone ID of the custom domain resides in.",
   ),
@@ -213,7 +233,9 @@ const UpdateR2EditCustomDomainSettingsSchema = z.object({
   ciphers: z.array(z.string()).optional().describe(
     "An allowlist of ciphers for TLS termination. These ciphers must be in the BoringSSL format.",
   ),
-  domain: z.string().describe("Domain name of the affected custom domain."),
+  domain: z.string().optional().describe(
+    "Domain name of the affected custom domain.",
+  ),
   enabled: z.boolean().optional().describe(
     "Whether this bucket is publicly accessible at the specified custom domain.",
   ),
@@ -223,17 +245,21 @@ const UpdateR2EditCustomDomainSettingsSchema = z.object({
 }).passthrough();
 
 const GetBucketPublicPolicySchema = z.object({
-  bucketId: z.string().max(32).describe("Bucket ID."),
-  domain: z.string().describe("Domain name of the bucket's r2.dev domain."),
-  enabled: z.boolean().describe(
+  bucketId: z.string().max(32).optional().describe("Bucket ID."),
+  domain: z.string().optional().describe(
+    "Domain name of the bucket's r2.dev domain.",
+  ),
+  enabled: z.boolean().optional().describe(
     "Whether this bucket is publicly accessible at the r2.dev domain.",
   ),
 }).passthrough();
 
 const PutBucketPublicPolicySchema = z.object({
-  bucketId: z.string().max(32).describe("Bucket ID."),
-  domain: z.string().describe("Domain name of the bucket's r2.dev domain."),
-  enabled: z.boolean().describe(
+  bucketId: z.string().max(32).optional().describe("Bucket ID."),
+  domain: z.string().optional().describe(
+    "Domain name of the bucket's r2.dev domain.",
+  ),
+  enabled: z.boolean().optional().describe(
     "Whether this bucket is publicly accessible at the r2.dev domain.",
   ),
 }).passthrough();
@@ -341,7 +367,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -377,6 +403,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -683,7 +714,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "store_credentials",
@@ -842,7 +873,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "update_maintenance_config",
@@ -1074,7 +1105,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "update_table_maintenance_config",
@@ -1160,7 +1191,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("bucket", id, result);
         context.logger.info("Created bucket {id}", { id });
@@ -1467,7 +1498,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "r2_add_custom_domain",
@@ -1949,34 +1980,35 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
         const startMs = Date.now();
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["bucket_name"]);
+        const excludeKeys = new Set(["bucket_name", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
-        const qs = new URLSearchParams(params).toString();
-        const url = qs
-          ? `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects?${qs}`
-          : `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects`;
 
-        const result = await cfApi<Record<string, unknown>>(
+        const { results, truncated } = await cfApiPaginatedCursor<
+          Record<string, unknown>
+        >(
           apiToken,
-          "GET",
-          url,
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/objects`,
+          params,
         );
-        const items = (result as { result?: unknown[] })?.result ??
-          (Array.isArray(result) ? result : [result]);
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
 
         const handle = await context.writeResource("objects", "main", {
-          items,
-          truncated: false,
+          items: results,
+          truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
         });
 
-        context.logger.info("Found {count} objects", {
-          count: (items as unknown[]).length,
-        });
+        context.logger.info("Found {count} objects", { count: results.length });
         return { dataHandles: [handle] };
       },
     },
@@ -2285,7 +2317,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "temp_access_credentials",

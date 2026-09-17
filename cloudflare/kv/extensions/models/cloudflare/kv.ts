@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  cfApiPaginatedCursor,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/kv";
 
@@ -24,11 +29,11 @@ const GlobalArgsSchema = z.object({
 });
 
 const NamespacesItemSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().optional(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().optional(),
 }).passthrough();
 
 const ListNamespacesSchema = z.object({
@@ -44,19 +49,19 @@ const ListNamespacesSchema = z.object({
 });
 
 const CreateANamespaceSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().optional(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().optional(),
 }).passthrough();
 
 const UpdateWorkersKvNamespaceRenameANamespaceSchema = z.object({
-  id: z.unknown(),
+  id: z.unknown().optional(),
   supports_url_encoding: z.boolean().optional().describe(
     'True if keys written on the URL will be URL-decoded before storing. For example, if set to "true"...',
   ),
-  title: z.unknown(),
+  title: z.unknown().optional(),
 }).passthrough();
 
 const UpdateWorkersKvNamespaceWriteMultipleKeyValuePairsSchema = z.object({
@@ -94,8 +99,8 @@ const GetMultipleKeyValuePairsSchema = z.union([
       z.string(),
       z.object({
         expiration: z.unknown().optional(),
-        metadata: z.unknown(),
-        value: z.unknown(),
+        metadata: z.unknown().optional(),
+        value: z.unknown().optional(),
       }).nullable(),
     ).optional(),
   }),
@@ -106,7 +111,7 @@ const ANamespaceSKeysItemSchema = z.object({
     "The time, measured in number of seconds since the UNIX epoch, at which the key will expire. This ...",
   ),
   metadata: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
 }).passthrough();
 
 const ListANamespaceSKeysSchema = z.object({
@@ -131,7 +136,7 @@ const GetWorkersKvNamespaceReadTheMetadataForAKeySchema = z.object({})
 /** Cloudflare Workers KV — namespaces, keys, values, bulk operations */
 export const model = {
   type: "@webframp/cloudflare/kv",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -167,6 +172,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -313,7 +323,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("a_namespace", id, result);
         context.logger.info("Created a_namespace {id}", { id });
@@ -567,7 +577,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "get_multiple_key_value_pairs",
@@ -605,29 +615,32 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
         const startMs = Date.now();
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["namespace_id"]);
+        const excludeKeys = new Set(["namespace_id", "cursor"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }
-        const qs = new URLSearchParams(params).toString();
-        const url = qs
-          ? `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys?${qs}`
-          : `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys`;
 
-        const result = await cfApi<Record<string, unknown>>(
+        const { results, truncated } = await cfApiPaginatedCursor<
+          Record<string, unknown>
+        >(
           apiToken,
-          "GET",
-          url,
+          `/accounts/${accountId}/storage/kv/namespaces/${args.namespace_id}/keys`,
+          params,
         );
-        const items = (result as { result?: unknown[] })?.result ??
-          (Array.isArray(result) ? result : [result]);
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
 
         const handle = await context.writeResource(
           "a_namespace_s_keys",
           "main",
           {
-            items,
-            truncated: false,
+            items: results,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -635,7 +648,7 @@ export const model = {
         );
 
         context.logger.info("Found {count} a_namespace_s_keys", {
-          count: (items as unknown[]).length,
+          count: results.length,
         });
         return { dataHandles: [handle] };
       },

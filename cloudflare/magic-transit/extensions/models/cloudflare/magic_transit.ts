@@ -24,29 +24,31 @@ const GlobalArgsSchema = z.object({
 });
 
 const ListdnsprotectionrulesforaccountItemSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the DNS Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the DNS Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the DNS Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for DNS Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the DNS Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the DNS Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  profile_sensitivity: z.string().describe(
+  profile_sensitivity: z.string().optional().describe(
     "The profile sensitivity. Recommended setting is 'low'. Must be one of 'low', 'medium', 'high', or...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
@@ -64,104 +66,112 @@ const ListdnsprotectionrulesforaccountSchema = z.object({
 });
 
 const CreatednsprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the DNS Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the DNS Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the DNS Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for DNS Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the DNS Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the DNS Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  profile_sensitivity: z.string().describe(
+  profile_sensitivity: z.string().optional().describe(
     "The profile sensitivity. Recommended setting is 'low'. Must be one of 'low', 'medium', 'high', or...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const GetdnsprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the DNS Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the DNS Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the DNS Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for DNS Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the DNS Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the DNS Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  profile_sensitivity: z.string().describe(
+  profile_sensitivity: z.string().optional().describe(
     "The profile sensitivity. Recommended setting is 'low'. Must be one of 'low', 'medium', 'high', or...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const UpdatednsprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the DNS Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the DNS Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the DNS Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for DNS Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the DNS Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the DNS Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  profile_sensitivity: z.string().describe(
+  profile_sensitivity: z.string().optional().describe(
     "The profile sensitivity. Recommended setting is 'low'. Must be one of 'low', 'medium', 'high', or...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the DNS Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const ListallowlistprefixesforaccountItemSchema = z.object({
-  comment: z.string().describe(
+  comment: z.string().optional().describe(
     "An optional comment describing the allowlist prefix.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the allowlist prefix.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether to enable the allowlist prefix into effect. Defaults to false.",
   ),
-  id: z.string().describe("The unique ID of the allowlist prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the allowlist prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the allowlist prefix.",
   ),
-  prefix: z.string().describe("The allowlist prefix in CIDR format."),
+  prefix: z.string().optional().describe(
+    "The allowlist prefix in CIDR format.",
+  ),
 }).passthrough();
 
 const ListallowlistprefixesforaccountSchema = z.object({
@@ -177,67 +187,75 @@ const ListallowlistprefixesforaccountSchema = z.object({
 });
 
 const CreateallowlistedprefixSchema = z.object({
-  comment: z.string().describe(
+  comment: z.string().optional().describe(
     "An optional comment describing the allowlist prefix.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the allowlist prefix.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether to enable the allowlist prefix into effect. Defaults to false.",
   ),
-  id: z.string().describe("The unique ID of the allowlist prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the allowlist prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the allowlist prefix.",
   ),
-  prefix: z.string().describe("The allowlist prefix in CIDR format."),
+  prefix: z.string().optional().describe(
+    "The allowlist prefix in CIDR format.",
+  ),
 }).passthrough();
 
 const GetallowlistprefixSchema = z.object({
-  comment: z.string().describe(
+  comment: z.string().optional().describe(
     "An optional comment describing the allowlist prefix.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the allowlist prefix.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether to enable the allowlist prefix into effect. Defaults to false.",
   ),
-  id: z.string().describe("The unique ID of the allowlist prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the allowlist prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the allowlist prefix.",
   ),
-  prefix: z.string().describe("The allowlist prefix in CIDR format."),
+  prefix: z.string().optional().describe(
+    "The allowlist prefix in CIDR format.",
+  ),
 }).passthrough();
 
 const UpdateallowlistprefixSchema = z.object({
-  comment: z.string().describe(
+  comment: z.string().optional().describe(
     "An optional comment describing the allowlist prefix.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the allowlist prefix.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether to enable the allowlist prefix into effect. Defaults to false.",
   ),
-  id: z.string().describe("The unique ID of the allowlist prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the allowlist prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the allowlist prefix.",
   ),
-  prefix: z.string().describe("The allowlist prefix in CIDR format."),
+  prefix: z.string().optional().describe(
+    "The allowlist prefix in CIDR format.",
+  ),
 }).passthrough();
 
 const ListprefixesforaccountItemSchema = z.object({
-  comment: z.string().describe("A comment describing the prefix."),
-  created_on: z.string().describe("The creation timestamp of the prefix."),
-  excluded: z.boolean().describe(
+  comment: z.string().optional().describe("A comment describing the prefix."),
+  created_on: z.string().optional().describe(
+    "The creation timestamp of the prefix.",
+  ),
+  excluded: z.boolean().optional().describe(
     "Whether to exclude the prefix from protection.",
   ),
-  id: z.string().describe("The unique ID of the prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the prefix.",
   ),
-  prefix: z.string().describe("The prefix in CIDR format."),
+  prefix: z.string().optional().describe("The prefix in CIDR format."),
 }).passthrough();
 
 const ListprefixesforaccountSchema = z.object({
@@ -253,67 +271,75 @@ const ListprefixesforaccountSchema = z.object({
 });
 
 const CreateprefixSchema = z.object({
-  comment: z.string().describe("A comment describing the prefix."),
-  created_on: z.string().describe("The creation timestamp of the prefix."),
-  excluded: z.boolean().describe(
+  comment: z.string().optional().describe("A comment describing the prefix."),
+  created_on: z.string().optional().describe(
+    "The creation timestamp of the prefix.",
+  ),
+  excluded: z.boolean().optional().describe(
     "Whether to exclude the prefix from protection.",
   ),
-  id: z.string().describe("The unique ID of the prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the prefix.",
   ),
-  prefix: z.string().describe("The prefix in CIDR format."),
+  prefix: z.string().optional().describe("The prefix in CIDR format."),
 }).passthrough();
 
 const BulkcreateprefixesSchema = z.object({
-  comment: z.string().describe("A comment describing the prefix."),
-  created_on: z.string().describe("The creation timestamp of the prefix."),
-  excluded: z.boolean().describe(
+  comment: z.string().optional().describe("A comment describing the prefix."),
+  created_on: z.string().optional().describe(
+    "The creation timestamp of the prefix.",
+  ),
+  excluded: z.boolean().optional().describe(
     "Whether to exclude the prefix from protection.",
   ),
-  id: z.string().describe("The unique ID of the prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the prefix.",
   ),
-  prefix: z.string().describe("The prefix in CIDR format."),
+  prefix: z.string().optional().describe("The prefix in CIDR format."),
 }).passthrough();
 
 const GetprefixSchema = z.object({
-  comment: z.string().describe("A comment describing the prefix."),
-  created_on: z.string().describe("The creation timestamp of the prefix."),
-  excluded: z.boolean().describe(
+  comment: z.string().optional().describe("A comment describing the prefix."),
+  created_on: z.string().optional().describe(
+    "The creation timestamp of the prefix.",
+  ),
+  excluded: z.boolean().optional().describe(
     "Whether to exclude the prefix from protection.",
   ),
-  id: z.string().describe("The unique ID of the prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the prefix.",
   ),
-  prefix: z.string().describe("The prefix in CIDR format."),
+  prefix: z.string().optional().describe("The prefix in CIDR format."),
 }).passthrough();
 
 const UpdateprefixSchema = z.object({
-  comment: z.string().describe("A comment describing the prefix."),
-  created_on: z.string().describe("The creation timestamp of the prefix."),
-  excluded: z.boolean().describe(
+  comment: z.string().optional().describe("A comment describing the prefix."),
+  created_on: z.string().optional().describe(
+    "The creation timestamp of the prefix.",
+  ),
+  excluded: z.boolean().optional().describe(
     "Whether to exclude the prefix from protection.",
   ),
-  id: z.string().describe("The unique ID of the prefix."),
-  modified_on: z.string().describe(
+  id: z.string().optional().describe("The unique ID of the prefix."),
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the prefix.",
   ),
-  prefix: z.string().describe("The prefix in CIDR format."),
+  prefix: z.string().optional().describe("The prefix in CIDR format."),
 }).passthrough();
 
 const ListsynprotectionfiltersforaccountItemSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
@@ -331,71 +357,73 @@ const ListsynprotectionfiltersforaccountSchema = z.object({
 });
 
 const CreatesynprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const GetsynprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const UpdatesynprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const ListsynprotectionrulesforaccountItemSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the SYN Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the SYN Protection rule."),
-  mitigation_type: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the SYN Protection rule.",
+  ),
+  mitigation_type: z.string().optional().describe(
     "The type of mitigation for SYN Protection. Must be one of 'challenge' or 'retransmit'.",
   ),
-  mode: z.string().describe(
+  mode: z.string().optional().describe(
     "The mode for SYN Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the SYN Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the SYN Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
@@ -413,99 +441,105 @@ const ListsynprotectionrulesforaccountSchema = z.object({
 });
 
 const CreatesynprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the SYN Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the SYN Protection rule."),
-  mitigation_type: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the SYN Protection rule.",
+  ),
+  mitigation_type: z.string().optional().describe(
     "The type of mitigation for SYN Protection. Must be one of 'challenge' or 'retransmit'.",
   ),
-  mode: z.string().describe(
+  mode: z.string().optional().describe(
     "The mode for SYN Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the SYN Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the SYN Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const GetsynprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the SYN Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the SYN Protection rule."),
-  mitigation_type: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the SYN Protection rule.",
+  ),
+  mitigation_type: z.string().optional().describe(
     "The type of mitigation for SYN Protection. Must be one of 'challenge' or 'retransmit'.",
   ),
-  mode: z.string().describe(
+  mode: z.string().optional().describe(
     "The mode for SYN Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the SYN Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the SYN Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const UpdatesynprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the SYN Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the SYN Protection rule."),
-  mitigation_type: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the SYN Protection rule.",
+  ),
+  mitigation_type: z.string().optional().describe(
     "The type of mitigation for SYN Protection. Must be one of 'challenge' or 'retransmit'.",
   ),
-  mode: z.string().describe(
+  mode: z.string().optional().describe(
     "The mode for SYN Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the SYN Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the SYN Protection rule. Value is relative to the 'scope' setting. For 'global' scope...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the SYN Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const ListtcpflowprotectionfiltersforaccountItemSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
@@ -523,68 +557,70 @@ const ListtcpflowprotectionfiltersforaccountSchema = z.object({
 });
 
 const CreatetcpflowprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const GettcpflowprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const UpdatetcpflowprotectionfilterSchema = z.object({
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the expression filter.",
   ),
-  expression: z.string().describe("The filter expression."),
-  id: z.string().describe("The unique ID of the expression filter."),
-  mode: z.string().describe(
+  expression: z.string().optional().describe("The filter expression."),
+  id: z.string().optional().describe("The unique ID of the expression filter."),
+  mode: z.string().optional().describe(
     "The filter's mode. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the expression filter.",
   ),
 }).passthrough();
 
 const ListtcpflowprotectionrulesforaccountItemSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the TCP Flow Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the TCP Flow Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the TCP Flow Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for TCP Flow Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the TCP Flow Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the TCP Flow Protection rule. Value is relative to the 'scope' setting. For 'global' ...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
@@ -602,91 +638,97 @@ const ListtcpflowprotectionrulesforaccountSchema = z.object({
 });
 
 const CreatetcpflowprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the TCP Flow Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the TCP Flow Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the TCP Flow Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for TCP Flow Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the TCP Flow Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the TCP Flow Protection rule. Value is relative to the 'scope' setting. For 'global' ...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const GettcpflowprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the TCP Flow Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the TCP Flow Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the TCP Flow Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for TCP Flow Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the TCP Flow Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the TCP Flow Protection rule. Value is relative to the 'scope' setting. For 'global' ...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const UpdatetcpflowprotectionruleSchema = z.object({
-  burst_sensitivity: z.string().describe(
+  burst_sensitivity: z.string().optional().describe(
     "The burst sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  created_on: z.string().describe(
+  created_on: z.string().optional().describe(
     "The creation timestamp of the TCP Flow Protection rule.",
   ),
-  id: z.string().describe("The unique ID of the TCP Flow Protection rule."),
-  mode: z.string().describe(
+  id: z.string().optional().describe(
+    "The unique ID of the TCP Flow Protection rule.",
+  ),
+  mode: z.string().optional().describe(
     "The mode for TCP Flow Protection. Must be one of 'enabled', 'disabled', 'monitoring'.",
   ),
-  modified_on: z.string().describe(
+  modified_on: z.string().optional().describe(
     "The last modification timestamp of the TCP Flow Protection rule.",
   ),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "The name of the TCP Flow Protection rule. Value is relative to the 'scope' setting. For 'global' ...",
   ),
-  rate_sensitivity: z.string().describe(
+  rate_sensitivity: z.string().optional().describe(
     "The rate sensitivity. Must be one of 'low', 'medium', 'high'.",
   ),
-  scope: z.string().describe(
+  scope: z.string().optional().describe(
     "The scope for the TCP Flow Protection rule. Must be one of 'global', 'region', or 'datacenter'.",
   ),
 }).passthrough();
 
 const GetprotectionstatusSchema = z.object({
-  enabled: z.boolean(),
+  enabled: z.boolean().optional(),
 }).passthrough();
 
 const UpdateprotectionstatusSchema = z.object({
-  enabled: z.boolean(),
+  enabled: z.boolean().optional(),
 }).passthrough();
 
 const AppsItemSchema = z.union([
   z.object({
-    account_app_id: z.unknown(),
+    account_app_id: z.unknown().optional(),
     hostnames: z.unknown().optional(),
     ip_subnets: z.unknown().optional(),
     name: z.unknown().optional(),
@@ -696,7 +738,7 @@ const AppsItemSchema = z.union([
   z.object({
     hostnames: z.unknown().optional(),
     ip_subnets: z.unknown().optional(),
-    managed_app_id: z.unknown(),
+    managed_app_id: z.unknown().optional(),
     name: z.unknown().optional(),
     source_subnets: z.unknown().optional(),
     type: z.unknown().optional(),
@@ -716,7 +758,7 @@ const ListAppsSchema = z.object({
 });
 
 const CreateMagicAccountAppsAddAppSchema = z.object({
-  account_app_id: z.unknown(),
+  account_app_id: z.unknown().optional(),
   hostnames: z.unknown().optional(),
   ip_subnets: z.unknown().optional(),
   name: z.unknown().optional(),
@@ -725,7 +767,7 @@ const CreateMagicAccountAppsAddAppSchema = z.object({
 }).passthrough();
 
 const UpdateAppSchema = z.object({
-  account_app_id: z.unknown(),
+  account_app_id: z.unknown().optional(),
   hostnames: z.unknown().optional(),
   ip_subnets: z.unknown().optional(),
   name: z.unknown().optional(),
@@ -734,7 +776,7 @@ const UpdateAppSchema = z.object({
 }).passthrough();
 
 const PatchAppSchema = z.object({
-  account_app_id: z.unknown(),
+  account_app_id: z.unknown().optional(),
   hostnames: z.unknown().optional(),
   ip_subnets: z.unknown().optional(),
   name: z.unknown().optional(),
@@ -744,16 +786,16 @@ const PatchAppSchema = z.object({
 
 const FilterProfilesItemSchema = z.object({
   created_on: z.string().optional(),
-  description: z.string().max(1024).default("").describe(
+  description: z.string().max(1024).optional().default("").describe(
     "Description of the filter profile",
   ),
-  id: z.unknown(),
-  match_action: z.unknown(),
+  id: z.unknown().optional(),
+  match_action: z.unknown().optional(),
   modified_on: z.string().optional(),
-  name: z.string().min(1).max(255).describe(
+  name: z.string().min(1).max(255).optional().describe(
     "Friendly name for the filter profile",
   ),
-  targets: z.array(z.string()).describe(
+  targets: z.array(z.string()).optional().describe(
     "List of CIDR prefixes. Each entry may carry an optional suffix that specifies which prefix length...",
   ),
 }).passthrough();
@@ -772,26 +814,26 @@ const ListFilterProfilesSchema = z.object({
 
 const CreateFilterProfileSchema = z.object({
   created_on: z.string().optional(),
-  description: z.string().max(1024).default("").describe(
+  description: z.string().max(1024).optional().default("").describe(
     "Description of the filter profile",
   ),
-  id: z.unknown(),
-  match_action: z.unknown(),
+  id: z.unknown().optional(),
+  match_action: z.unknown().optional(),
   modified_on: z.string().optional(),
-  name: z.string().min(1).max(255).describe(
+  name: z.string().min(1).max(255).optional().describe(
     "Friendly name for the filter profile",
   ),
-  targets: z.array(z.string()).describe(
+  targets: z.array(z.string()).optional().describe(
     "List of CIDR prefixes. Each entry may carry an optional suffix that specifies which prefix length...",
   ),
 }).passthrough();
 
 const GetSettingsSchema = z.object({
-  cloudflare_asn: z.number().int().min(1).describe(
+  cloudflare_asn: z.number().int().min(1).optional().describe(
     "Route advertisements from Cloudflare to ramps in this account will use this ASN.",
   ),
   modified_on: z.string().optional(),
-  redistribute: z.unknown(),
+  redistribute: z.unknown().optional(),
 }).passthrough();
 
 const Cf1SitesItemSchema = z.object({
@@ -802,7 +844,7 @@ const Cf1SitesItemSchema = z.object({
   id: z.unknown().optional(),
   location: z.unknown().optional(),
   modified_on: z.string().optional(),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "A human-provided name describing the CF1 Site that should be unique within the account.",
   ),
 }).passthrough();
@@ -827,7 +869,7 @@ const GetCf1SiteSchema = z.object({
   id: z.unknown().optional(),
   location: z.unknown().optional(),
   modified_on: z.string().optional(),
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "A human-provided name describing the CF1 Site that should be unique within the account.",
   ),
 }).passthrough();
@@ -879,18 +921,18 @@ const UpdateInterconnectSchema = z.object({
 }).passthrough();
 
 const ListItemSchema = z.object({
-  description: z.string(),
-  destination_id: z.unknown(),
-  destination_type: z.unknown(),
+  description: z.string().optional(),
+  destination_id: z.unknown().optional(),
+  destination_type: z.unknown().optional(),
   errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   includes_discoveries_until: z.string().optional(),
   last_attempted_update_at: z.string().optional(),
   last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string(),
-  name: z.string(),
-  policy: z.string(),
-  update_mode: z.unknown(),
+  last_user_update_at: z.string().optional(),
+  name: z.string().optional(),
+  policy: z.string().optional(),
+  update_mode: z.unknown().optional(),
 }).passthrough();
 
 const ListSchema = z.object({
@@ -906,88 +948,88 @@ const ListSchema = z.object({
 });
 
 const CreateSchema = z.object({
-  description: z.string(),
-  destination_id: z.unknown(),
-  destination_type: z.unknown(),
+  description: z.string().optional(),
+  destination_id: z.unknown().optional(),
+  destination_type: z.unknown().optional(),
   errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   includes_discoveries_until: z.string().optional(),
   last_attempted_update_at: z.string().optional(),
   last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string(),
-  name: z.string(),
-  policy: z.string(),
-  update_mode: z.unknown(),
+  last_user_update_at: z.string().optional(),
+  name: z.string().optional(),
+  policy: z.string().optional(),
+  update_mode: z.unknown().optional(),
 }).passthrough();
 
 const GetCatalogSyncsReadSchema = z.object({
-  description: z.string(),
-  destination_id: z.unknown(),
-  destination_type: z.unknown(),
+  description: z.string().optional(),
+  destination_id: z.unknown().optional(),
+  destination_type: z.unknown().optional(),
   errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   includes_discoveries_until: z.string().optional(),
   last_attempted_update_at: z.string().optional(),
   last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string(),
-  name: z.string(),
-  policy: z.string(),
-  update_mode: z.unknown(),
+  last_user_update_at: z.string().optional(),
+  name: z.string().optional(),
+  policy: z.string().optional(),
+  update_mode: z.unknown().optional(),
 }).passthrough();
 
 const UpdateSchema = z.object({
-  description: z.string(),
-  destination_id: z.unknown(),
-  destination_type: z.unknown(),
+  description: z.string().optional(),
+  destination_id: z.unknown().optional(),
+  destination_type: z.unknown().optional(),
   errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   includes_discoveries_until: z.string().optional(),
   last_attempted_update_at: z.string().optional(),
   last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string(),
-  name: z.string(),
-  policy: z.string(),
-  update_mode: z.unknown(),
+  last_user_update_at: z.string().optional(),
+  name: z.string().optional(),
+  policy: z.string().optional(),
+  update_mode: z.unknown().optional(),
 }).passthrough();
 
 const PatchSchema = z.object({
-  description: z.string(),
-  destination_id: z.unknown(),
-  destination_type: z.unknown(),
+  description: z.string().optional(),
+  destination_id: z.unknown().optional(),
+  destination_type: z.unknown().optional(),
   errors: z.record(z.string(), z.unknown()).optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   includes_discoveries_until: z.string().optional(),
   last_attempted_update_at: z.string().optional(),
   last_successful_update_at: z.string().optional(),
-  last_user_update_at: z.string(),
-  name: z.string(),
-  policy: z.string(),
-  update_mode: z.unknown(),
+  last_user_update_at: z.string().optional(),
+  name: z.string().optional(),
+  policy: z.string().optional(),
+  update_mode: z.unknown().optional(),
 }).passthrough();
 
 const CatalogSyncsRefreshSchema = z.string();
 
 const GetOnrampsMwanAddrSpaceReadSchema = z.object({
-  prefixes: z.array(z.unknown()),
+  prefixes: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const GetOnrampsReadSchema = z.object({
   attached_hubs: z.array(z.unknown()).optional(),
   attached_vpcs: z.array(z.unknown()).optional(),
   cloud_asn: z.number().int().optional(),
-  cloud_type: z.unknown(),
+  cloud_type: z.unknown().optional(),
   description: z.string().optional(),
-  dynamic_routing: z.boolean(),
+  dynamic_routing: z.boolean().optional(),
   hub: z.unknown().optional(),
-  id: z.unknown(),
-  install_routes_in_cloud: z.boolean(),
-  install_routes_in_magic_wan: z.boolean(),
+  id: z.unknown().optional(),
+  install_routes_in_cloud: z.boolean().optional(),
+  install_routes_in_magic_wan: z.boolean().optional(),
   last_applied_at: z.string().optional(),
   last_exported_at: z.string().optional(),
   last_planned_at: z.string().optional(),
   manage_hub_to_hub_attachments: z.boolean().optional(),
   manage_vpc_to_hub_attachments: z.boolean().optional(),
-  name: z.string(),
+  name: z.string().optional(),
   planned_monthly_cost_estimate: z.unknown().optional(),
   planned_resources: z.array(z.unknown()).optional(),
   planned_resources_unavailable: z.boolean().optional(),
@@ -996,8 +1038,8 @@ const GetOnrampsReadSchema = z.object({
   post_apply_resources_unavailable: z.boolean().optional(),
   region: z.string().optional(),
   status: z.unknown().optional(),
-  type: z.unknown(),
-  updated_at: z.string(),
+  type: z.unknown().optional(),
+  updated_at: z.string().optional(),
   vpc: z.unknown().optional(),
   vpcs_by_id: z.record(z.string(), z.unknown()).optional(),
   vpcs_by_id_unavailable: z.array(z.unknown()).optional().describe(
@@ -1009,105 +1051,105 @@ const GetProvidersReadSchema = z.object({
   aws_arn: z.string().optional(),
   azure_subscription_id: z.string().optional(),
   azure_tenant_id: z.string().optional(),
-  cloud_type: z.unknown(),
+  cloud_type: z.unknown().optional(),
   description: z.string().optional(),
-  friendly_name: z.string(),
+  friendly_name: z.string().optional(),
   gcp_project_id: z.string().optional(),
   gcp_service_account_email: z.string().optional(),
-  id: z.unknown(),
-  last_updated: z.string(),
-  lifecycle_state: z.unknown(),
-  state: z.unknown(),
-  state_v2: z.unknown(),
+  id: z.unknown().optional(),
+  last_updated: z.string().optional(),
+  lifecycle_state: z.unknown().optional(),
+  state: z.unknown().optional(),
+  state_v2: z.unknown().optional(),
   status: z.unknown().optional(),
 }).passthrough();
 
 const GetProvidersInitialSetupSchema = z.union([
   z.object({
-    aws_trust_policy: z.string(),
-    item_type: z.string(),
+    aws_trust_policy: z.string().optional(),
+    item_type: z.string().optional(),
   }),
   z.object({
-    azure_consent_url: z.string(),
-    integration_identity_tag: z.string(),
-    item_type: z.string(),
-    tag_cli_command: z.string(),
+    azure_consent_url: z.string().optional(),
+    integration_identity_tag: z.string().optional(),
+    item_type: z.string().optional(),
+    tag_cli_command: z.string().optional(),
   }),
   z.object({
-    integration_identity_tag: z.string(),
-    item_type: z.string(),
-    tag_cli_command: z.string(),
+    integration_identity_tag: z.string().optional(),
+    item_type: z.string().optional(),
+    tag_cli_command: z.string().optional(),
   }),
 ]);
 
 const CreateResourcesCatalogPolicyPreviewSchema = z.string();
 
 const GetResourcesCatalogReadSchema = z.object({
-  account_id: z.unknown(),
-  cloud_type: z.unknown(),
-  config: z.record(z.string(), z.unknown()),
-  deployment_provider: z.unknown(),
-  id: z.unknown(),
-  managed: z.boolean(),
+  account_id: z.unknown().optional(),
+  cloud_type: z.unknown().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  deployment_provider: z.unknown().optional(),
+  id: z.unknown().optional(),
+  managed: z.boolean().optional(),
   managed_by: z.array(z.unknown()).optional(),
-  monthly_cost_estimate: z.unknown(),
-  name: z.string(),
-  native_id: z.string(),
-  observations: z.record(z.string(), z.unknown()),
-  provider_ids: z.array(z.unknown()),
-  provider_names_by_id: z.record(z.string(), z.string()),
-  region: z.string(),
-  resource_group: z.string(),
-  resource_type: z.unknown(),
-  sections: z.array(z.unknown()),
-  state: z.record(z.string(), z.unknown()),
-  tags: z.record(z.string(), z.string()),
-  updated_at: z.string(),
-  url: z.string(),
+  monthly_cost_estimate: z.unknown().optional(),
+  name: z.string().optional(),
+  native_id: z.string().optional(),
+  observations: z.record(z.string(), z.unknown()).optional(),
+  provider_ids: z.array(z.unknown()).optional(),
+  provider_names_by_id: z.record(z.string(), z.string()).optional(),
+  region: z.string().optional(),
+  resource_group: z.string().optional(),
+  resource_type: z.unknown().optional(),
+  sections: z.array(z.unknown()).optional(),
+  state: z.record(z.string(), z.unknown()).optional(),
+  tags: z.record(z.string(), z.string()).optional(),
+  updated_at: z.string().optional(),
+  url: z.string().optional(),
 }).passthrough();
 
 const GetSchema = z.object({
-  activated: z.boolean(),
+  activated: z.boolean().optional(),
   device: z.unknown().optional(),
-  id: z.unknown(),
-  interrupt_window_days_of_week: z.array(z.unknown()).describe(
+  id: z.unknown().optional(),
+  interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
     "Allowed days of the week for upgrades. Default is all days.",
   ),
-  interrupt_window_duration_hours: z.number().min(1).max(24),
-  interrupt_window_embargo_dates: z.array(z.unknown()).describe(
+  interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+  interrupt_window_embargo_dates: z.array(z.unknown()).optional().describe(
     "List of dates (YYYY-MM-DD) when upgrades are blocked.",
   ),
-  interrupt_window_hour_of_day: z.number(),
+  interrupt_window_hour_of_day: z.number().optional(),
   last_heartbeat: z.string().optional(),
   last_seen_version: z.string().optional(),
-  last_updated: z.string(),
+  last_updated: z.string().optional(),
   license_key: z.string().optional(),
-  notes: z.string(),
-  primary: z.boolean().default(true),
+  notes: z.string().optional(),
+  primary: z.boolean().optional().default(true),
   site_id: z.string().optional(),
-  timezone: z.string(),
+  timezone: z.string().optional(),
 }).passthrough();
 
 const UpdateMconnConnectorsEditSchema = z.object({
-  activated: z.boolean(),
+  activated: z.boolean().optional(),
   device: z.unknown().optional(),
-  id: z.unknown(),
-  interrupt_window_days_of_week: z.array(z.unknown()).describe(
+  id: z.unknown().optional(),
+  interrupt_window_days_of_week: z.array(z.unknown()).optional().describe(
     "Allowed days of the week for upgrades. Default is all days.",
   ),
-  interrupt_window_duration_hours: z.number().min(1).max(24),
-  interrupt_window_embargo_dates: z.array(z.unknown()).describe(
+  interrupt_window_duration_hours: z.number().min(1).max(24).optional(),
+  interrupt_window_embargo_dates: z.array(z.unknown()).optional().describe(
     "List of dates (YYYY-MM-DD) when upgrades are blocked.",
   ),
-  interrupt_window_hour_of_day: z.number(),
+  interrupt_window_hour_of_day: z.number().optional(),
   last_heartbeat: z.string().optional(),
   last_seen_version: z.string().optional(),
-  last_updated: z.string(),
+  last_updated: z.string().optional(),
   license_key: z.string().optional(),
-  notes: z.string(),
-  primary: z.boolean().default(true),
+  notes: z.string().optional(),
+  primary: z.boolean().optional().default(true),
   site_id: z.string().optional(),
-  timezone: z.string(),
+  timezone: z.string().optional(),
 }).passthrough();
 
 const ListGreTunnelsSchema = z.object({
@@ -1118,17 +1160,17 @@ const CreateGreTunnelsSchema = z.object({
   automatic_return_routing: z.unknown().optional(),
   bgp: z.unknown().optional(),
   bgp_status: z.unknown().optional(),
-  cloudflare_gre_endpoint: z.unknown(),
+  cloudflare_gre_endpoint: z.unknown().optional(),
   created_on: z.unknown().optional(),
-  customer_gre_endpoint: z.unknown(),
+  customer_gre_endpoint: z.unknown().optional(),
   description: z.unknown().optional(),
   health_check: z.unknown().optional(),
-  id: z.unknown(),
-  interface_address: z.unknown(),
+  id: z.unknown().optional(),
+  interface_address: z.unknown().optional(),
   interface_address6: z.unknown().optional(),
   modified_on: z.unknown().optional(),
   mtu: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   ttl: z.unknown().optional(),
 }).passthrough();
 
@@ -1155,17 +1197,17 @@ const CreateIpsecTunnelsSchema = z.object({
   automatic_return_routing: z.unknown().optional(),
   bgp: z.unknown().optional(),
   bgp_status: z.unknown().optional(),
-  cloudflare_endpoint: z.unknown(),
+  cloudflare_endpoint: z.unknown().optional(),
   created_on: z.unknown().optional(),
   custom_remote_identities: z.unknown().optional(),
   customer_endpoint: z.unknown().optional(),
   description: z.unknown().optional(),
   health_check: z.unknown().optional(),
-  id: z.unknown(),
-  interface_address: z.unknown(),
+  id: z.unknown().optional(),
+  interface_address: z.unknown().optional(),
   interface_address6: z.unknown().optional(),
   modified_on: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   psk_metadata: z.unknown().optional(),
   replay_protection: z.unknown().optional(),
 }).passthrough();
@@ -1217,11 +1259,11 @@ const ListRoutesSchema = z.object({
 const CreateRoutesSchema = z.object({
   created_on: z.unknown().optional(),
   description: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   modified_on: z.unknown().optional(),
-  nexthop: z.unknown(),
-  prefix: z.unknown(),
-  priority: z.unknown(),
+  nexthop: z.unknown().optional(),
+  prefix: z.unknown().optional(),
+  priority: z.unknown().optional(),
   scope: z.unknown().optional(),
   weight: z.unknown().optional(),
 }).passthrough();
@@ -1358,10 +1400,10 @@ const PatchAclSchema = z.object({
 
 const AppConfigsItemSchema = z.object({
   breakout: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
-  site_id: z.unknown(),
+  site_id: z.unknown().optional(),
 }).passthrough();
 
 const ListAppConfigsSchema = z.object({
@@ -1378,26 +1420,26 @@ const ListAppConfigsSchema = z.object({
 
 const CreateMagicSiteAppConfigsAddAppConfigSchema = z.object({
   breakout: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
-  site_id: z.unknown(),
+  site_id: z.unknown().optional(),
 }).passthrough();
 
 const UpdateAppConfigSchema = z.object({
   breakout: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
-  site_id: z.unknown(),
+  site_id: z.unknown().optional(),
 }).passthrough();
 
 const PatchAppConfigSchema = z.object({
   breakout: z.unknown().optional(),
-  id: z.unknown(),
+  id: z.unknown().optional(),
   preferred_wans: z.unknown().optional(),
   priority: z.unknown().optional(),
-  site_id: z.unknown(),
+  site_id: z.unknown().optional(),
 }).passthrough();
 
 const LansItemSchema = z.object({
@@ -1500,7 +1542,9 @@ const GetMagicSiteNetflowConfigDetailsSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
     "Timeout in seconds for active flows (defaults to 30).",
   ),
-  collector_ip: z.string().describe("IPv4 address of the NetFlow collector."),
+  collector_ip: z.string().optional().describe(
+    "IPv4 address of the NetFlow collector.",
+  ),
   collector_port: z.number().int().min(1).max(65535).optional().describe(
     "UDP port of the NetFlow collector (defaults to 2055).",
   ),
@@ -1516,7 +1560,9 @@ const CreateNetflowConfigSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
     "Timeout in seconds for active flows (defaults to 30).",
   ),
-  collector_ip: z.string().describe("IPv4 address of the NetFlow collector."),
+  collector_ip: z.string().optional().describe(
+    "IPv4 address of the NetFlow collector.",
+  ),
   collector_port: z.number().int().min(1).max(65535).optional().describe(
     "UDP port of the NetFlow collector (defaults to 2055).",
   ),
@@ -1532,7 +1578,9 @@ const PatchNetflowConfigSchema = z.object({
   active_timeout: z.number().int().min(1).max(5400).optional().describe(
     "Timeout in seconds for active flows (defaults to 30).",
   ),
-  collector_ip: z.string().describe("IPv4 address of the NetFlow collector."),
+  collector_ip: z.string().optional().describe(
+    "IPv4 address of the NetFlow collector.",
+  ),
   collector_port: z.number().int().min(1).max(65535).optional().describe(
     "UDP port of the NetFlow collector (defaults to 2055).",
   ),
@@ -1627,7 +1675,7 @@ const PatchWanSchema = z.object({
 /** Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec */
 export const model = {
   type: "@webframp/cloudflare/magic-transit",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1668,6 +1716,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2431,7 +2484,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "creatednsprotectionrule",
@@ -2706,7 +2759,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "createallowlistedprefix",
@@ -2971,7 +3024,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("createprefix", id, result);
         context.logger.info("Created createprefix {id}", { id });
@@ -3270,7 +3323,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "createsynprotectionfilter",
@@ -3544,7 +3597,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "createsynprotectionrule",
@@ -3818,7 +3871,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "createtcpflowprotectionfilter",
@@ -4092,7 +4145,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "createtcpflowprotectionrule",
@@ -4415,7 +4468,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "magic_account_apps_add_app",
@@ -4649,7 +4702,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "filter_profile",
@@ -5470,7 +5523,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
@@ -6007,7 +6060,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "resources_catalog_policy_preview",
@@ -6223,7 +6276,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("gre_tunnels", id, result);
         context.logger.info("Created gre_tunnels {id}", { id });
@@ -6463,7 +6516,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("ipsec_tunnels", id, result);
         context.logger.info("Created ipsec_tunnels {id}", { id });
@@ -6553,7 +6606,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "magic_ipsec_tunnels_set_pre_shared_keys_for_ipsec_tunnels",
@@ -6801,7 +6854,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "redundancy_group",
@@ -7001,7 +7054,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("routes", id, result);
         context.logger.info("Created routes {id}", { id });
@@ -7286,7 +7339,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("site", id, result);
         context.logger.info("Created site {id}", { id });
@@ -7551,7 +7604,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("acl", id, result);
         context.logger.info("Created acl {id}", { id });
@@ -7822,7 +7875,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "magic_site_app_configs_add_app_config",
@@ -8073,7 +8126,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("lan", id, result);
         context.logger.info("Created lan {id}", { id });
@@ -8347,7 +8400,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "netflow_config",
@@ -8599,7 +8652,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("wan", id, result);
         context.logger.info("Created wan {id}", { id });

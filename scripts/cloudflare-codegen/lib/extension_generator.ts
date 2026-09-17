@@ -205,6 +205,7 @@ export interface CloudflareResponse<T> {
     per_page: number;
     total_count: number;
     total_pages: number;
+    cursor?: string;
   };
 }
 
@@ -361,6 +362,67 @@ export async function cfApiPaginated<T>(
 
   if (page > MAX_PAGES) {
     truncated = true;
+  }
+
+  return { results: allResults, truncated, totalFetched: allResults.length };
+}
+
+/**
+ * Follow a Cloudflare cursor-paginated list endpoint's \`result_info.cursor\`
+ * across pages, up to MAX_PAGES, so callers see the full result set (or an
+ * honest \`truncated: true\`) instead of only the first page.
+ */
+export async function cfApiPaginatedCursor<T>(
+  apiToken: string,
+  path: string,
+  params?: Record<string, string>,
+): Promise<PaginatedResult<T>> {
+  const token = resolveToken(apiToken);
+  const allResults: T[] = [];
+  let cursor = params?.cursor;
+  let page = 0;
+  let truncated = false;
+
+  while (page < MAX_PAGES) {
+    const queryParams = new URLSearchParams({
+      ...params,
+      ...(cursor ? { cursor } : {}),
+    });
+
+    const url = \`\${CF_API_BASE}\${path}?\${queryParams}\`;
+    const response = await cfFetch(url, {
+      headers: {
+        "Authorization": \`Bearer \${token}\`,
+      },
+    });
+
+    if (response.status === 429) {
+      await response.text();
+      throw new Error(\`Cloudflare API rate limited after \${MAX_RETRIES} retries: GET \${path}\`);
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(\`Cloudflare API error: GET \${path} returned \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
+    }
+
+    const data = (await response.json()) as CloudflareResponse<T[]>;
+
+    if (!data.success) {
+      const errorMsg = (data.errors ?? []).map((e) => e.message).join("; ") || "Unknown error";
+      throw new Error(\`Cloudflare API error: GET \${path}: \${errorMsg}\`);
+    }
+
+    allResults.push(...(data.result ?? []));
+    page++;
+
+    const nextCursor = data.result_info?.cursor;
+    if (!nextCursor) break;
+    cursor = nextCursor;
+    if (page >= MAX_PAGES) {
+      truncated = true;
+      break;
+    }
   }
 
   return { results: allResults, truncated, totalFetched: allResults.length };

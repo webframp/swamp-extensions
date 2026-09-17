@@ -93,9 +93,13 @@ const MonitorGroupsItemSchema = z.object({
   created_on: z.string().optional().describe(
     "The timestamp of when the monitor group was created",
   ),
-  description: z.string().describe("A short description of the monitor group"),
-  id: z.unknown(),
-  members: z.array(z.unknown()).describe("List of monitors in this group"),
+  description: z.string().optional().describe(
+    "A short description of the monitor group",
+  ),
+  id: z.unknown().optional(),
+  members: z.array(z.unknown()).optional().describe(
+    "List of monitors in this group",
+  ),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
   ),
@@ -117,9 +121,13 @@ const CreateMonitorGroupSchema = z.object({
   created_on: z.string().optional().describe(
     "The timestamp of when the monitor group was created",
   ),
-  description: z.string().describe("A short description of the monitor group"),
-  id: z.unknown(),
-  members: z.array(z.unknown()).describe("List of monitors in this group"),
+  description: z.string().optional().describe(
+    "A short description of the monitor group",
+  ),
+  id: z.unknown().optional(),
+  members: z.array(z.unknown()).optional().describe(
+    "List of monitors in this group",
+  ),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
   ),
@@ -129,9 +137,13 @@ const GetAccountLoadBalancerMonitorGroupsMonitorGroupDetailsSchema = z.object({
   created_on: z.string().optional().describe(
     "The timestamp of when the monitor group was created",
   ),
-  description: z.string().describe("A short description of the monitor group"),
-  id: z.unknown(),
-  members: z.array(z.unknown()).describe("List of monitors in this group"),
+  description: z.string().optional().describe(
+    "A short description of the monitor group",
+  ),
+  id: z.unknown().optional(),
+  members: z.array(z.unknown()).optional().describe(
+    "List of monitors in this group",
+  ),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
   ),
@@ -141,9 +153,13 @@ const PatchMonitorGroupSchema = z.object({
   created_on: z.string().optional().describe(
     "The timestamp of when the monitor group was created",
   ),
-  description: z.string().describe("A short description of the monitor group"),
-  id: z.unknown(),
-  members: z.array(z.unknown()).describe("List of monitors in this group"),
+  description: z.string().optional().describe(
+    "A short description of the monitor group",
+  ),
+  id: z.unknown().optional(),
+  members: z.array(z.unknown()).optional().describe(
+    "List of monitors in this group",
+  ),
   modified_on: z.string().optional().describe(
     "The timestamp of when the monitor group was last updated",
   ),
@@ -469,20 +485,24 @@ const GetAccountLoadBalancerSearchSearchResourcesSchema = z.object({
 }).passthrough();
 
 const ListLoadBalancerUsageSchema = z.object({
-  load_balancers: z.number().int().describe(
+  load_balancers: z.number().int().optional().describe(
     "The number of configured load balancers.",
   ),
-  max_origins_per_pool: z.number().int().describe(
+  max_origins_per_pool: z.number().int().optional().describe(
     "The largest number of origins in any single pool.",
   ),
-  minimum_monitor_interval: z.number().int().describe(
+  minimum_monitor_interval: z.number().int().optional().describe(
     "The smallest monitor interval (in seconds) configured across all monitors.",
   ),
-  monitors: z.number().int().describe("The number of configured monitors."),
-  origins: z.number().int().describe(
+  monitors: z.number().int().optional().describe(
+    "The number of configured monitors.",
+  ),
+  origins: z.number().int().optional().describe(
     "The number of configured origins across all pools.",
   ),
-  pools: z.number().int().describe("The number of configured pools."),
+  pools: z.number().int().optional().describe(
+    "The number of configured pools.",
+  ),
 }).passthrough();
 
 const GetAccountLoadBalancersAccountLoadBalancerDetailsSchema = z.object({
@@ -666,7 +686,7 @@ const PatchLoadBalancerSchema = z.object({
 /** Cloudflare Load Balancing — pools, monitors, load balancers, steering policies */
 export const model = {
   type: "@webframp/cloudflare/load-balancing",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -707,6 +727,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1014,7 +1039,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "account_load_balancer",
@@ -1121,7 +1146,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("monitor_group", id, result);
         context.logger.info("Created monitor_group {id}", { id });
@@ -1469,7 +1494,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("monitor", id, result);
         context.logger.info("Created monitor {id}", { id });
@@ -1714,7 +1739,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "account_load_balancer_monitors_preview_monitor",
@@ -1885,7 +1910,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("pool", id, result);
         context.logger.info("Created pool {id}", { id });
@@ -2205,7 +2230,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "account_load_balancer_pools_preview_pool",
@@ -2763,7 +2788,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("load_balancer", id, result);
         context.logger.info("Created load_balancer {id}", { id });

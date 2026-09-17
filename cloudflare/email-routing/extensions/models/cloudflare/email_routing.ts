@@ -66,25 +66,25 @@ const UpdateConfigureDmarcReportsSchema = z.object({
 }).passthrough();
 
 const GetInspectSpfSchema = z.object({
-  components: z.array(z.unknown()).describe(
+  components: z.array(z.unknown()).optional().describe(
     "Parsed SPF components (mechanisms)",
   ),
-  domain: z.string().describe("Domain being inspected"),
+  domain: z.string().optional().describe("Domain being inspected"),
   errors: z.array(z.unknown()).optional().describe(
     "All errors encountered during inspection, collected from the entire tree. This includes errors fr...",
   ),
-  record: z.string().describe("Raw SPF record content"),
-  total_lookups: z.number().int().describe(
+  record: z.string().optional().describe("Raw SPF record content"),
+  total_lookups: z.number().int().optional().describe(
     "Total number of DNS lookups performed across all includes",
   ),
 }).passthrough();
 
 const GetEmailRoutingSettingsSchema = z.object({
   created: z.unknown().optional(),
-  enabled: z.unknown(),
-  id: z.unknown(),
+  enabled: z.unknown().optional(),
+  id: z.unknown().optional(),
   modified: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   skip_wizard: z.unknown().optional(),
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
@@ -93,10 +93,10 @@ const GetEmailRoutingSettingsSchema = z.object({
 
 const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
   created: z.unknown().optional(),
-  enabled: z.unknown(),
-  id: z.unknown(),
+  enabled: z.unknown().optional(),
+  id: z.unknown().optional(),
   modified: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   skip_wizard: z.unknown().optional(),
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
@@ -105,9 +105,9 @@ const UpdateEmailRoutingSettingsReplaceEmailRoutingSettingsSchema = z.object({
 
 const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
   z.object({
-    errors: z.unknown(),
-    messages: z.unknown(),
-    success: z.union([z.literal(true)]),
+    errors: z.unknown().optional(),
+    messages: z.unknown().optional(),
+    success: z.union([z.literal(true)]).optional(),
     result_info: z.object({
       count: z.number().optional(),
       page: z.number().optional(),
@@ -121,9 +121,9 @@ const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
     }).optional(),
   }),
   z.object({
-    errors: z.unknown(),
-    messages: z.unknown(),
-    success: z.union([z.literal(true)]),
+    errors: z.unknown().optional(),
+    messages: z.unknown().optional(),
+    success: z.union([z.literal(true)]).optional(),
     result_info: z.object({
       count: z.number().optional(),
       page: z.number().optional(),
@@ -137,10 +137,10 @@ const GetEmailRoutingSettingsEmailRoutingDnsSettingsSchema = z.union([
 
 const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
   created: z.unknown().optional(),
-  enabled: z.unknown(),
-  id: z.unknown(),
+  enabled: z.unknown().optional(),
+  id: z.unknown().optional(),
   modified: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   skip_wizard: z.unknown().optional(),
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
@@ -149,10 +149,10 @@ const CreateEmailRoutingSettingsEnableEmailRoutingDnsSchema = z.object({
 
 const UpdateEmailRoutingSettingsUnlockEmailRoutingDnsSchema = z.object({
   created: z.unknown().optional(),
-  enabled: z.unknown(),
-  id: z.unknown(),
+  enabled: z.unknown().optional(),
+  id: z.unknown().optional(),
   modified: z.unknown().optional(),
-  name: z.unknown(),
+  name: z.unknown().optional(),
   skip_wizard: z.unknown().optional(),
   status: z.unknown().optional(),
   support_subaddress: z.unknown().optional(),
@@ -204,11 +204,11 @@ const GetCatchAllRuleSchema = z.object({
 }).passthrough();
 
 const GetPubliclistsuppressionzoneroutingItemSchema = z.object({
-  created_at: z.string(),
-  email: z.string(),
-  expires_at: z.string().nullable(),
-  id: z.string(),
-  reason: z.string(),
+  created_at: z.string().optional(),
+  email: z.string().optional(),
+  expires_at: z.string().nullable().optional(),
+  id: z.string().optional(),
+  reason: z.string().optional(),
   zones: z.array(z.string()).optional().default([]),
 }).passthrough();
 
@@ -225,15 +225,15 @@ const GetPubliclistsuppressionzoneroutingSchema = z.object({
 });
 
 const CreatePostPublicnewsuppressionzoneroutingSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
 }).passthrough();
 
 const GetPublicgetsuppressionzoneroutingSchema = z.object({
-  created_at: z.string(),
-  email: z.string(),
-  expires_at: z.string().nullable(),
-  id: z.string(),
-  reason: z.string(),
+  created_at: z.string().optional(),
+  email: z.string().optional(),
+  expires_at: z.string().nullable().optional(),
+  id: z.string().optional(),
+  reason: z.string().optional(),
   zones: z.array(z.string()).optional().default([]),
 }).passthrough();
 
@@ -242,18 +242,18 @@ const SendingSubdomainsItemSchema = z.object({
   dkim_selector: z.string().optional().describe(
     "The DKIM selector used for email signing.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether Email Sending is enabled on this subdomain.",
   ),
   modified: z.unknown().optional(),
-  name: z.string().describe("The subdomain domain name."),
+  name: z.string().optional().describe("The subdomain domain name."),
   preview_enabled: z.boolean().optional().describe(
     "Whether sent messages from this subdomain can be previewed in the activity log.",
   ),
   return_path_domain: z.string().optional().describe(
     "The return-path domain used for bounce handling.",
   ),
-  tag: z.unknown(),
+  tag: z.unknown().optional(),
 }).passthrough();
 
 const ListSendingSubdomainsSchema = z.object({
@@ -273,18 +273,18 @@ const CreateSendingSubdomainSchema = z.object({
   dkim_selector: z.string().optional().describe(
     "The DKIM selector used for email signing.",
   ),
-  enabled: z.boolean().describe(
+  enabled: z.boolean().optional().describe(
     "Whether Email Sending is enabled on this subdomain.",
   ),
   modified: z.unknown().optional(),
-  name: z.string().describe("The subdomain domain name."),
+  name: z.string().optional().describe("The subdomain domain name."),
   preview_enabled: z.boolean().optional().describe(
     "Whether sent messages from this subdomain can be previewed in the activity log.",
   ),
   return_path_domain: z.string().optional().describe(
     "The return-path domain used for bounce handling.",
   ),
-  tag: z.unknown(),
+  tag: z.unknown().optional(),
 }).passthrough();
 
 const CreateEmailSendingSubdomainsPreviewSendingSubdomainSchema = z.object({
@@ -369,11 +369,11 @@ const GetSendingSubdomainDnsStatusSchema = z.object({
 }).passthrough();
 
 const GetPubliclistsuppressionzonesendingItemSchema = z.object({
-  created_at: z.string(),
-  email: z.string(),
-  expires_at: z.string().nullable(),
-  id: z.string(),
-  reason: z.string(),
+  created_at: z.string().optional(),
+  email: z.string().optional(),
+  expires_at: z.string().nullable().optional(),
+  id: z.string().optional(),
+  reason: z.string().optional(),
   zones: z.array(z.string()).optional().default([]),
 }).passthrough();
 
@@ -390,15 +390,15 @@ const GetPubliclistsuppressionzonesendingSchema = z.object({
 });
 
 const CreatePostPublicnewsuppressionzonesendingSchema = z.object({
-  id: z.string(),
+  id: z.string().optional(),
 }).passthrough();
 
 const GetPublicgetsuppressionzonesendingSchema = z.object({
-  created_at: z.string(),
-  email: z.string(),
-  expires_at: z.string().nullable(),
-  id: z.string(),
-  reason: z.string(),
+  created_at: z.string().optional(),
+  email: z.string().optional(),
+  expires_at: z.string().nullable().optional(),
+  id: z.string().optional(),
+  reason: z.string().optional(),
   zones: z.array(z.string()).optional().default([]),
 }).passthrough();
 
@@ -409,7 +409,7 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -450,6 +450,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -911,7 +916,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "email_routing_settings_enable_email_routing_dns",
@@ -1094,7 +1099,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource("routing_rule", id, result);
         context.logger.info("Created routing_rule {id}", { id });
@@ -1392,7 +1397,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonerouting",
@@ -1565,7 +1570,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "sending_subdomain",
@@ -1609,7 +1614,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "email_sending_subdomains_preview_sending_subdomain",
@@ -1965,7 +1970,7 @@ export const model = {
         );
 
         const id = sanitizeInstanceName(
-          (result as { id?: string }).id ?? "created",
+          String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
           "post_publicnewsuppressionzonesending",

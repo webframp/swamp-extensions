@@ -456,3 +456,40 @@ Deno.test("generateModelSource: nullable object schema gets passthrough before n
   assertEquals(src.includes(".passthrough().nullable()"), true);
   assertEquals(src.includes(".nullable().passthrough()"), false);
 });
+
+// ---------------------------------------------------------------------------
+// Cursor pagination: follow result_info.cursor instead of a single fetch.
+// ---------------------------------------------------------------------------
+
+Deno.test("generateModelSource: cursor-paginated list uses cfApiPaginatedCursor, not a hardcoded truncated: false", () => {
+  const op = makeOp({
+    httpMethod: "get",
+    path: "/accounts/{account_id}/storage/kv/namespaces/{namespace_id}/keys",
+    operationId: "workers-kv-namespace-list-keys",
+    summary: "List a namespace's keys",
+    isCollection: true,
+    usesCursorPagination: true,
+    pathParams: [
+      {
+        name: "namespace_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    queryParams: [
+      { name: "cursor", in: "query", schema: { type: "string" } },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+  });
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+
+  assertEquals(
+    src.includes("cfApiPaginatedCursor<Record<string, unknown>>"),
+    true,
+  );
+  assertEquals(src.includes("truncated: false,"), false);
+  assertEquals(src.includes("import { cfApiPaginatedCursor }"), true);
+});
