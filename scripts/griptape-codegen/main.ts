@@ -268,11 +268,10 @@ async function main() {
     const readme = generateReadme(config, methods);
 
     const notesPath = join(extDir, "RELEASE_NOTES.md");
-    const hasExistingNotes = await Deno.stat(notesPath).then(
-      () => true,
-      () => false,
+    const existingNotes = await Deno.readTextFile(notesPath).catch(() =>
+      undefined
     );
-    if (hasExistingNotes && !opts.notes) {
+    if (existingNotes !== undefined && !opts.notes) {
       console.error(
         `\n❌ ${config.name} already has RELEASE_NOTES.md, so this is not an ` +
           `initial release.\n   Pass --notes "<body>" or --notes-file <path> ` +
@@ -285,6 +284,7 @@ async function main() {
       version,
       methods.length,
       opts.notes,
+      existingNotes,
     );
     const swampYaml = generateSwampYaml(
       await Deno.readTextFile(join(extDir, ".swamp.yaml")).catch(() =>

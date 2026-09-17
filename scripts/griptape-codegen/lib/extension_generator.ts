@@ -124,21 +124,28 @@ Apache-2.0 — see [LICENSE.md](LICENSE.md).
 `;
 }
 
-/** Generate RELEASE_NOTES.md. */
+/**
+ * Generate RELEASE_NOTES.md, prepending the new entry above any existing
+ * history. `existing` is the current file contents, or undefined for a first
+ * release — overwriting it would silently erase the changelog on every
+ * regeneration.
+ */
 export function generateReleaseNotes(
   config: ServiceConfig,
   version: string,
   methodCount: number,
   body?: string,
+  existing?: string,
 ): string {
   const text = body ??
     `**Added:** Initial code-generated release of @webframp/griptape/${config.name} with ${methodCount} methods covering the Griptape Cloud ${
       config.name.replace(/-/g, " ")
     } API surface.`;
-  return `## ${version}
+  const entry = `## ${version}
 
 ${text.trimEnd()}
 `;
+  return existing ? `${entry}\n${existing.trimStart()}` : entry;
 }
 
 /**
