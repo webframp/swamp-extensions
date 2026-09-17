@@ -47,6 +47,11 @@ Deno.test("assets model: has expected methods", () => {
   assertExists(model.methods.delete_asset_character);
   assertExists(model.methods.favorite_asset_character);
   assertExists(model.methods.unfavorite_asset_character);
+  assertExists(model.methods.list_asset_entities);
+  assertExists(model.methods.create_asset_entity);
+  assertExists(model.methods.get_asset_entity);
+  assertExists(model.methods.update_asset_entity);
+  assertExists(model.methods.delete_asset_entity);
   assertExists(model.methods.list_asset_tags);
   assertExists(model.methods.create_asset_tag);
   assertExists(model.methods.set_asset_tags_for_asset);
@@ -77,6 +82,8 @@ Deno.test("assets model: has expected resources", () => {
   assertExists(model.resources["asset_character"]);
   assertExists(model.resources["favorite_asset_character"]);
   assertExists(model.resources["unfavorite_asset_character"]);
+  assertExists(model.resources["asset_entities"]);
+  assertExists(model.resources["asset_entity"]);
   assertExists(model.resources["asset_tags"]);
   assertExists(model.resources["asset_tag"]);
   assertExists(model.resources["set_asset_tags_for_asset"]);

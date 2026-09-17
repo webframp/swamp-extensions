@@ -41,6 +41,11 @@ variable (fal.ai's standard SDK env var).
 | `delete_asset_character`         | Delete asset character         |
 | `favorite_asset_character`       | Favorite asset character       |
 | `unfavorite_asset_character`     | Unfavorite asset character     |
+| `list_asset_entities`            | List asset entities            |
+| `create_asset_entity`            | Create asset entity            |
+| `get_asset_entity`               | Get asset entity               |
+| `update_asset_entity`            | Update asset entity            |
+| `delete_asset_entity`            | Delete asset entity            |
 | `list_asset_tags`                | List asset tags                |
 | `create_asset_tag`               | Create asset tag               |
 | `set_asset_tags_for_asset`       | Set tags for an asset          |

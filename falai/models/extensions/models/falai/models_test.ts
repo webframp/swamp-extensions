@@ -27,6 +27,7 @@ Deno.test("models model: has globalArguments with apiToken", () => {
 
 Deno.test("models model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.get_model_insights);
   assertExists(model.methods.get_models);
   assertExists(model.methods.get_pricing);
   assertExists(model.methods.estimate_pricing);
@@ -40,6 +41,7 @@ Deno.test("models model: has expected methods", () => {
 
 Deno.test("models model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["get_model_insights"]);
   assertExists(model.resources["get_models"]);
   assertExists(model.resources["get_pricing"]);
   assertExists(model.resources["estimate_pricing"]);
@@ -90,41 +92,26 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
-  name: "models model: get_models fetches and writes resource",
+  name: "models model: get_model_insights fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockBody = {
       "models": [{
         "endpoint_id": "test-value",
-        "metadata": {
-          "display_name": "test-value",
-          "category": "test-value",
-          "description": "test-value",
-          "status": "active",
-          "tags": ["test-value"],
-          "updated_at": "test-value",
-          "is_favorited": true,
-          "thumbnail_url": "test-value",
-          "thumbnail_animated_url": "test-value",
-          "model_url": "test-value",
-          "github_url": "test-value",
-          "license_type": "commercial",
-          "date": "test-value",
-          "group": { "key": "test-value", "label": "test-value" },
-          "highlighted": false,
-          "kind": "inference",
-          "training_endpoint_ids": ["test-value"],
-          "inference_endpoint_ids": ["test-value"],
-          "stream_url": "test-value",
-          "duration_estimate": 1,
-          "pinned": false,
-        },
-        "openapi": { "openapi": "test-value" },
-        "enterprise_status": "ready",
+        "display_name": "test-value",
+        "category": "test-value",
+        "relevance": 1,
+        "insights": [{
+          "kind": "test-value",
+          "body": "test-value",
+          "source": "test-value",
+          "task": { "name": "test-value", "category": "test-value" },
+          "rank": 1,
+        }],
       }],
     };
     const { url, server } = startMockFalServer({
-      "/models": { body: mockBody },
+      "/models/insights": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
 
@@ -147,7 +134,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_models.execute({}, context);
+      >).get_model_insights.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

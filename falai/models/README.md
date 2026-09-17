@@ -20,17 +20,18 @@ variable (fal.ai's standard SDK env var).
 
 ## Methods
 
-| Method                      | Description                  |
-| --------------------------- | ---------------------------- |
-| `get_models`                | Model search                 |
-| `get_pricing`               | Pricing                      |
-| `estimate_pricing`          | Estimate cost                |
-| `get_usage`                 | Usage                        |
-| `get_analytics`             | Analytics                    |
-| `get_billing_events`        | Billing Events               |
-| `delete_request_payloads`   | Delete request payloads      |
-| `list_requests_by_endpoint` | List requests by endpoint(s) |
-| `search_requests`           | Search Requests              |
+| Method                      | Description                                           |
+| --------------------------- | ----------------------------------------------------- |
+| `get_model_insights`        | Published model insights and weekly statistics (beta) |
+| `get_models`                | Model search                                          |
+| `get_pricing`               | Pricing                                               |
+| `estimate_pricing`          | Estimate cost                                         |
+| `get_usage`                 | Usage                                                 |
+| `get_analytics`             | Analytics                                             |
+| `get_billing_events`        | Billing Events                                        |
+| `delete_request_payloads`   | Delete request payloads                               |
+| `list_requests_by_endpoint` | List requests by endpoint(s)                          |
+| `search_requests`           | Search Requests                                       |
 
 ## Development
 

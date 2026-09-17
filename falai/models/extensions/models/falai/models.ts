@@ -22,6 +22,39 @@ const GlobalArgsSchema = z.object({
   ).optional(),
 });
 
+const GetModelInsightsItemSchema = z.object({
+  endpoint_id: z.string().describe("Public model endpoint identifier."),
+  display_name: z.string().describe("Current public model display name."),
+  category: z.string().describe(
+    "Catalog category used for within-category tier comparisons.",
+  ),
+  relevance: z.number().nullable().describe(
+    "Search relevance score, or null without a search match; not a quality score.",
+  ),
+  insights: z.array(z.object({
+    kind: z.string(),
+    body: z.string(),
+    source: z.string(),
+    task: z.object({
+      name: z.string(),
+      category: z.string().nullable(),
+    }).nullable(),
+    rank: z.number().nullable(),
+  })).describe("Published guidance for this model; may be empty."),
+}).passthrough();
+
+const GetModelInsightsSchema = z.object({
+  items: z.array(GetModelInsightsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const GetModelsItemSchema = z.object({
   endpoint_id: z.string().describe(
     "Stable identifier used to call the model (e.g., 'fal-ai/wan/v2.2-a14b/text-to-video', 'fal-ai/min...",
@@ -218,11 +251,17 @@ const GetBillingEventsItemSchema = z.object({
     "Endpoint identifier that was used (e.g., 'fal-ai/flux/dev')",
   ),
   timestamp: z.string().describe("Request timestamp in ISO8601 format"),
+  quantity: z.number().min(0).nullable().describe(
+    "Billable units consumed, in the unit named by `unit`. Same value as the deprecated `output_units`.",
+  ),
   output_units: z.number().min(0).nullable().describe(
-    "Custom billing units for this request",
+    "Deprecated: use quantity. Same value as quantity.",
+  ),
+  unit: z.string().nullable().describe(
+    "The billing unit these units are counted in (e.g. 'image', 'second', 'megapixel'). Null when the ...",
   ),
   unit_price: z.number().min(0).nullable().describe(
-    "Unit price for this request",
+    "Per-unit price this line is measured against: the list rate when a discount is reported in percen...",
   ),
   percent_discount: z.number().nullable().describe(
     "Discount percentage applied to this request (e.g., 10 = 10% discount)",
@@ -237,7 +276,7 @@ const GetBillingEventsItemSchema = z.object({
     "Amount charged after discounts in USD (cost_subtotal − cost_discount)",
   ),
   cost_estimate_nano_usd: z.number().min(0).describe(
-    "Amount charged after discounts in nano USD — the same charge as cost_total (1 USD = 1,000,000,000...",
+    "Amount charged after discounts in nano USD. The precision-preserving representation of cost_total...",
   ),
   auth_method: z.string().optional().describe(
     "Authentication method label (e.g., 'Key 1', 'API Key', 'User token'). Only populated when 'auth_m...",
@@ -341,7 +380,7 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -375,9 +414,20 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "get_model_insights": {
+      description: "Published model insights and weekly statistics (beta)",
+      schema: GetModelInsightsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
     "get_models": {
       description: "Model search",
       schema: GetModelsSchema,
@@ -429,6 +479,87 @@ export const model = {
   },
 
   methods: {
+    get_model_insights: {
+      description: "Published model insights and weekly statistics (beta)",
+      arguments: z.object({
+        endpoint_id: z.union([
+          z.string().min(3).max(200).regex(
+            new RegExp("^[a-zA-Z0-9_.-]+(?:\\/[a-zA-Z0-9_.-]+)+$"),
+          ),
+          z.array(
+            z.string().min(3).max(200).regex(
+              new RegExp("^[a-zA-Z0-9_.-]+(?:\\/[a-zA-Z0-9_.-]+)+$"),
+            ),
+          ),
+        ]).optional().describe(
+          "Model endpoint IDs to inspect. Repeat the parameter for multiple models; provide endpoint_id or q.",
+        ),
+        q: z.string().min(1).max(1000).optional().describe(
+          "Task description used to search published model guidance; provide q or endpoint_id.",
+        ),
+        limit: z.number().int().min(1).max(20).optional().describe(
+          "Maximum number of account-visible models to return.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+        const startMs = Date.now();
+        const params = new URLSearchParams();
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
+        }
+        const qs = params.toString();
+        const url = qs ? `/models/insights?${qs}` : `/models/insights`;
+
+        const result = await falApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          url,
+        );
+        const items =
+          ((result as Record<string, unknown>)["models"] ?? []) as unknown[];
+        // No cursor/offset in this response: a full page equal to the
+        // requested limit means more results may exist that we didn't fetch.
+        const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+        const truncated = limit !== undefined && items.length === limit;
+
+        const handle = await context.writeResource(
+          "get_model_insights",
+          "main",
+          {
+            items,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} get_model_insights", {
+          count: items.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
     get_models: {
       description: "Model search",
       arguments: z.object({

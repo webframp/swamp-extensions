@@ -22,7 +22,6 @@ variable (fal.ai's standard SDK env var).
 | Method                    | Description             |
 | ------------------------- | ----------------------- |
 | `list_compute_instances`  | List Compute Instances  |
-| `create_compute_instance` | Create Compute Instance |
 | `get_compute_instance`    | Get Compute Instance    |
 | `delete_compute_instance` | Delete Compute Instance |
 

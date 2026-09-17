@@ -28,7 +28,6 @@ Deno.test("compute model: has globalArguments with apiToken", () => {
 Deno.test("compute model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_compute_instances);
-  assertExists(model.methods.create_compute_instance);
   assertExists(model.methods.get_compute_instance);
   assertExists(model.methods.delete_compute_instance);
 });
@@ -118,59 +117,6 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).list_compute_instances.execute({}, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "compute model: create_compute_instance creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockBody = {
-      "id": "inst_abc123xyz",
-      "instance_type": "gpu_1x_h100_sxm5",
-      "region": "us-west",
-      "sector": "sector_1",
-      "ip": "203.0.113.42",
-      "status": "ready",
-      "creator_user_nickname": "developer",
-    };
-    const { url, server } = startMockFalServer({
-      "/compute/instances": { body: mockBody },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token" },
-        definition: {
-          id: "test-id",
-          name: "test-compute",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).create_compute_instance.execute({
-        "instance_type": "gpu_1x_h100_sxm5",
-        "ssh_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... user@host",
-        "sector": "sector_1",
-      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

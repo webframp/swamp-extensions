@@ -348,6 +348,52 @@ const UnfavoriteAssetCharacterSchema = z.object({
   }).describe("Asset character"),
 }).passthrough();
 
+const AssetEntitiesItemSchema = z.object({
+  id: z.string().describe("Smart entity ID"),
+  type: z.enum(["character", "prop", "environment", "style", "scene"]).describe(
+    "Smart entity type",
+  ),
+  name: z.string().min(1).max(255).describe("Entity display name"),
+  handle: z.string().describe(
+    "Resolved @mention handle, without the leading @",
+  ),
+  description: z.string().nullable().describe("Entity visual description"),
+  cover_image_url: z.string().nullable().describe("Entity cover image URL"),
+  reference_images: z.array(z.string()).describe(
+    "Defining reference image URLs",
+  ),
+  is_favorited: z.boolean().describe("Whether the entity is favorited"),
+  created_at: z.string().describe("Creation time in UTC"),
+  updated_at: z.string().describe("Last update time in UTC"),
+}).passthrough();
+
+const ListAssetEntitiesSchema = z.object({
+  items: z.array(AssetEntitiesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateAssetEntitySchema = z.object({
+  entity: z.object({
+    id: z.string(),
+    type: z.enum(["character", "prop", "environment", "style", "scene"]),
+    name: z.string().min(1).max(255),
+    handle: z.string(),
+    description: z.string().nullable(),
+    cover_image_url: z.string().nullable(),
+    reference_images: z.array(z.string()),
+    is_favorited: z.boolean(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  }).describe("Saved smart entity"),
+}).passthrough();
+
 const AssetTagsItemSchema = z.object({
   id: z.string().describe("Tag ID"),
   name: z.string().describe("Tag name"),
@@ -538,7 +584,7 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -570,6 +616,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -650,6 +701,18 @@ export const model = {
     "unfavorite_asset_character": {
       description: "Unfavorite asset character",
       schema: UnfavoriteAssetCharacterSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "asset_entities": {
+      description: "List asset entities",
+      schema: ListAssetEntitiesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "asset_entity": {
+      description: "Create asset entity",
+      schema: CreateAssetEntitySchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -1805,6 +1868,255 @@ export const model = {
         );
         context.logger.info("Executed unfavorite_asset_character", {});
         return { dataHandles: [handle] };
+      },
+    },
+    list_asset_entities: {
+      description: "List asset entities",
+      arguments: z.object({
+        limit: z.number().int().min(1).max(100).optional().describe(
+          "Maximum number of entities to return",
+        ),
+        offset: z.number().int().min(0).nullable().optional().describe(
+          "Number of entities to skip",
+        ),
+        types: z.array(
+          z.enum(["character", "prop", "environment", "style", "scene"]),
+        ).nullable().optional().describe(
+          "Entity types to include, comma-separated. Omit to list all types.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+        const startMs = Date.now();
+        const params = new URLSearchParams();
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v === undefined || v === null || excludeKeys.has(k)) continue;
+          if (Array.isArray(v)) {
+            for (const item of v) params.append(k, String(item));
+          } else {
+            params.append(k, String(v));
+          }
+        }
+        const qs = params.toString();
+        const url = qs ? `/assets/entities?${qs}` : `/assets/entities`;
+
+        const result = await falApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          url,
+        );
+        const items =
+          ((result as Record<string, unknown>)["entities"] ?? []) as unknown[];
+        // No cursor/offset in this response: a full page equal to the
+        // requested limit means more results may exist that we didn't fetch.
+        const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+        const truncated = limit !== undefined && items.length === limit;
+
+        const handle = await context.writeResource("asset_entities", "main", {
+          items,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} asset_entities", {
+          count: items.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_asset_entity: {
+      description: "Create asset entity",
+      arguments: z.object({
+        type: z.enum(["character", "prop", "environment", "style", "scene"])
+          .describe("Smart entity type"),
+        name: z.string().min(1).max(255).describe("Entity display name"),
+        handle: z.string().min(1).max(64).optional().describe(
+          "Optional @mention handle. Defaults from the name; must be unique across all e...",
+        ),
+        description: z.string().min(1).max(2000).nullable().optional().describe(
+          "Visual description. Required and non-empty for characters; optional for other...",
+        ),
+        reference_images: z.array(z.string().min(1)).describe(
+          "Defining reference images. Use saved asset IDs, request IDs, vector IDs, or f...",
+        ),
+        cover_image_url: z.string().nullable().optional().describe(
+          "Cover image URL. Must be one of the entity's reference images.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+
+        const result = await falApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/assets/entities`,
+          args,
+        );
+
+        const id = sanitizeInstanceName(
+          String(
+            ((result as Record<string, unknown>)["entity"] as
+              | Record<string, unknown>
+              | undefined)?.["id"] ?? "created",
+          ),
+        );
+        const handle = await context.writeResource("asset_entity", id, result);
+        context.logger.info("Created asset_entity {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_entity: {
+      description: "Get asset entity",
+      arguments: z.object({
+        entity_id: z.string().describe("Smart entity ID"),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+
+        const result = await falApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/assets/entities/${encodeURIComponent(String(args.entity_id))}`,
+        );
+
+        const handle = await context.writeResource(
+          "asset_entity",
+          sanitizeInstanceName(String(args.entity_id)),
+          result,
+        );
+        context.logger.info("Fetched asset_entity", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_asset_entity: {
+      description: "Update asset entity",
+      arguments: z.object({
+        entity_id: z.string().describe("Smart entity ID"),
+        name: z.string().min(1).max(255).optional().describe(
+          "Entity display name",
+        ),
+        handle: z.string().min(1).max(64).optional().describe(
+          "Replacement @mention handle. Character handles cannot be changed.",
+        ),
+        description: z.string().min(1).max(2000).nullable().optional().describe(
+          "Replacement visual description; null clears it for non-character entities.",
+        ),
+        reference_images: z.array(z.string().min(1)).optional().describe(
+          "Replace the defining references with these saved asset IDs, request IDs, vect...",
+        ),
+        cover_image_url: z.string().nullable().optional().describe(
+          "Replacement cover image URL from the entity's reference images; null clears t...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["entity_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await falApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/assets/entities/${encodeURIComponent(String(args.entity_id))}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "asset_entity",
+          sanitizeInstanceName(String(args.entity_id)),
+          result,
+        );
+        context.logger.info("Updated asset_entity", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_asset_entity: {
+      description: "Delete asset entity",
+      arguments: z.object({
+        entity_id: z.string().describe("Smart entity ID"),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken } = context.globalArgs;
+
+        await falApi(
+          apiToken,
+          "DELETE",
+          `/assets/entities/${encodeURIComponent(String(args.entity_id))}`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.entity_id });
+        return { dataHandles: [] };
       },
     },
     list_asset_tags: {

@@ -31,11 +31,17 @@ const GetOrganizationBillingEventsItemSchema = z.object({
     "Endpoint identifier that was used (e.g., 'fal-ai/flux/dev')",
   ),
   timestamp: z.string().describe("Request timestamp in ISO8601 format"),
+  quantity: z.number().min(0).nullable().describe(
+    "Billable units consumed, in the unit named by `unit`. Same value as the deprecated `output_units`.",
+  ),
   output_units: z.number().min(0).nullable().describe(
-    "Custom billing units for this request",
+    "Deprecated: use quantity. Same value as quantity.",
+  ),
+  unit: z.string().nullable().describe(
+    "The billing unit these units are counted in (e.g. 'image', 'second', 'megapixel'). Null when the ...",
   ),
   unit_price: z.number().min(0).nullable().describe(
-    "Unit price for this request",
+    "Per-unit price this line is measured against: the list rate when a discount is reported in percen...",
   ),
   percent_discount: z.number().nullable().describe(
     "Discount percentage applied to this request (e.g., 10 = 10% discount)",
@@ -50,7 +56,7 @@ const GetOrganizationBillingEventsItemSchema = z.object({
     "Amount charged after discounts in USD (cost_subtotal − cost_discount)",
   ),
   cost_estimate_nano_usd: z.number().min(0).describe(
-    "Amount charged after discounts in nano USD — the same charge as cost_total (1 USD = 1,000,000,000...",
+    "Amount charged after discounts in nano USD. The precision-preserving representation of cost_total...",
   ),
   auth_method: z.string().optional().describe(
     "Authentication method label resolved across the organization (e.g., 'my-key (owner: acme-ml-team)...",
@@ -110,6 +116,10 @@ const GetOrganizationUsageItemSchema = z.object({
     unit: z.string(),
     quantity: z.number().min(0),
     unit_price: z.number().min(0),
+    percent_discount: z.number().min(0).max(100).nullable(),
+    cost_subtotal: z.number().min(0),
+    cost_discount: z.number().min(0),
+    cost_total: z.number().min(0),
     cost: z.number().min(0),
     currency: z.string().min(3).max(3),
     auth_method: z.string().optional(),
@@ -140,7 +150,7 @@ const GetOrganizationUsageSchema = z.object({
 /** fal.ai Organization — teams, usage, billing events, focus reports */
 export const model = {
   type: "@webframp/falai/organization",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -172,6 +182,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
