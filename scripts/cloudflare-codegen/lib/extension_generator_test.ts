@@ -175,3 +175,212 @@ Deno.test("generateApiLib: sanitizeInstanceName strips path-traversal chars at r
     await Deno.remove(tmp);
   }
 });
+
+// ---------------------------------------------------------------------------
+// cfApiPaginatedCursor
+//
+// Materialize generateApiLib()'s output and import it (same pattern as
+// sanitizeInstanceName above), mocking globalThis.fetch so the real cursor-
+// following loop runs against controlled responses instead of string-matching
+// the generated source.
+// ---------------------------------------------------------------------------
+
+function cfBody(overrides: Record<string, unknown>): string {
+  return JSON.stringify({
+    success: true,
+    errors: [],
+    messages: [],
+    result: [],
+    ...overrides,
+  });
+}
+
+async function withCfApiPaginatedCursor(
+  fetchImpl: typeof fetch,
+  // deno-lint-ignore no-explicit-any
+  run: (fn: any) => Promise<void>,
+) {
+  const lib = generateApiLib();
+  const tmp = await Deno.makeTempFile({ suffix: ".ts" });
+  const originalFetch = globalThis.fetch;
+  try {
+    await Deno.writeTextFile(tmp, lib);
+    const mod = await import(`file://${tmp}`);
+    globalThis.fetch = fetchImpl;
+    await run(mod.cfApiPaginatedCursor);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await Deno.remove(tmp);
+  }
+}
+
+Deno.test("cfApiPaginatedCursor: single page with no result_info.cursor is not truncated", async () => {
+  await withCfApiPaginatedCursor(
+    (() =>
+      Promise.resolve(
+        new Response(
+          cfBody({
+            result: [{ id: 1 }],
+            result_info: {
+              page: 1,
+              per_page: 20,
+              total_count: 1,
+              total_pages: 1,
+            },
+          }),
+          { status: 200 },
+        ),
+      )) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      const { results, truncated } = await cfApiPaginatedCursor(
+        "test-token",
+        "/accounts/acct/storage/kv/namespaces/ns/keys",
+      );
+      assertEquals(results, [{ id: 1 }]);
+      assertEquals(truncated, false);
+    },
+  );
+});
+
+Deno.test("cfApiPaginatedCursor: threads result_info.cursor into the next request", async () => {
+  const requestedUrls: string[] = [];
+  await withCfApiPaginatedCursor(
+    ((url: string) => {
+      requestedUrls.push(url);
+      const body = url.includes("cursor=abc")
+        ? cfBody({
+          result: [{ id: 2 }],
+          result_info: { page: 2, per_page: 1, total_count: 2, total_pages: 2 },
+        })
+        : cfBody({
+          result: [{ id: 1 }],
+          result_info: {
+            page: 1,
+            per_page: 1,
+            total_count: 2,
+            total_pages: 2,
+            cursor: "abc",
+          },
+        });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    }) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      const { results, truncated } = await cfApiPaginatedCursor(
+        "test-token",
+        "/accounts/acct/storage/kv/namespaces/ns/keys",
+      );
+      assertEquals(results, [{ id: 1 }, { id: 2 }]);
+      assertEquals(truncated, false);
+      assertEquals(requestedUrls.length, 2);
+      assertEquals(requestedUrls[1].includes("cursor=abc"), true);
+    },
+  );
+});
+
+Deno.test("cfApiPaginatedCursor: a caller-supplied initial cursor is sent on the first request", async () => {
+  const requestedUrls: string[] = [];
+  await withCfApiPaginatedCursor(
+    ((url: string) => {
+      requestedUrls.push(url);
+      return Promise.resolve(
+        new Response(
+          cfBody({
+            result_info: {
+              page: 1,
+              per_page: 20,
+              total_count: 0,
+              total_pages: 1,
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    }) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      await cfApiPaginatedCursor("test-token", "/accounts/acct/r2/buckets", {
+        cursor: "resume-token",
+      });
+      assertEquals(requestedUrls[0].includes("cursor=resume-token"), true);
+    },
+  );
+});
+
+Deno.test("cfApiPaginatedCursor: marks truncated when MAX_PAGES is reached with a cursor still live", async () => {
+  let page = 0;
+  await withCfApiPaginatedCursor(
+    (() => {
+      page++;
+      return Promise.resolve(
+        new Response(
+          cfBody({
+            result: [{ id: page }],
+            result_info: {
+              page,
+              per_page: 1,
+              total_count: 999,
+              total_pages: 999,
+              cursor: `next-${page}`,
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    }) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      const { results, truncated } = await cfApiPaginatedCursor(
+        "test-token",
+        "/accounts/acct/storage/kv/namespaces/ns/keys",
+      );
+      assertEquals(truncated, true);
+      assertEquals(results.length, 20); // MAX_PAGES
+    },
+  );
+});
+
+Deno.test("cfApiPaginatedCursor: a response with no result_info at all is marked truncated, not silently complete", async () => {
+  await withCfApiPaginatedCursor(
+    (() =>
+      Promise.resolve(
+        new Response(cfBody({ result: [{ id: 1 }] }), { status: 200 }),
+      )) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      const { results, truncated } = await cfApiPaginatedCursor(
+        "test-token",
+        "/accounts/acct/storage/kv/namespaces/ns/keys",
+      );
+      assertEquals(results, [{ id: 1 }]);
+      assertEquals(truncated, true);
+    },
+  );
+});
+
+Deno.test("cfApiPaginatedCursor: a null result on an intermediate page does not throw", async () => {
+  await withCfApiPaginatedCursor(
+    ((url: string) => {
+      const body = url.includes("cursor=abc")
+        ? cfBody({
+          result: [{ id: 2 }],
+          result_info: { page: 2, per_page: 1, total_count: 2, total_pages: 2 },
+        })
+        : cfBody({
+          result: null,
+          result_info: {
+            page: 1,
+            per_page: 1,
+            total_count: 2,
+            total_pages: 2,
+            cursor: "abc",
+          },
+        });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    }) as typeof fetch,
+    async (cfApiPaginatedCursor) => {
+      const { results, truncated } = await cfApiPaginatedCursor(
+        "test-token",
+        "/accounts/acct/storage/kv/namespaces/ns/keys",
+      );
+      assertEquals(results, [{ id: 2 }]);
+      assertEquals(truncated, false);
+    },
+  );
+});

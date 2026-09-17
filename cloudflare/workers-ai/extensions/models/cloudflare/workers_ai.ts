@@ -3409,7 +3409,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3449,6 +3449,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -9807,7 +9812,7 @@ export const model = {
         const { apiToken, accountId } = context.globalArgs;
         const startMs = Date.now();
         const params: Record<string, string> = {};
-        const excludeKeys = new Set(["id", "item_id", "name", "cursor"]);
+        const excludeKeys = new Set(["id", "item_id", "name"]);
         for (const [k, v] of Object.entries(args)) {
           if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
         }

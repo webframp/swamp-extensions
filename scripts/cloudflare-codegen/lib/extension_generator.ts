@@ -388,8 +388,8 @@ export async function cfApiPaginatedCursor<T>(
       ...params,
       ...(cursor ? { cursor } : {}),
     });
-
-    const url = \`\${CF_API_BASE}\${path}?\${queryParams}\`;
+    const qs = queryParams.toString();
+    const url = qs ? \`\${CF_API_BASE}\${path}?\${qs}\` : \`\${CF_API_BASE}\${path}\`;
     const response = await cfFetch(url, {
       headers: {
         "Authorization": \`Bearer \${token}\`,
@@ -416,7 +416,14 @@ export async function cfApiPaginatedCursor<T>(
     allResults.push(...(data.result ?? []));
     page++;
 
-    const nextCursor = data.result_info?.cursor;
+    if (!data.result_info) {
+      // No pagination metadata at all: we cannot confirm this page is the
+      // full result set, so don't silently claim completeness.
+      truncated = true;
+      break;
+    }
+
+    const nextCursor = data.result_info.cursor;
     if (!nextCursor) break;
     cursor = nextCursor;
     if (page >= MAX_PAGES) {

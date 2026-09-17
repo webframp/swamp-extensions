@@ -628,9 +628,11 @@ function generateListBody(
 
   // Cursor-based endpoints: follow result_info.cursor across pages so the
   // caller sees the full result set (or an honest truncated: true) instead
-  // of only page one.
+  // of only page one. A caller-supplied cursor flows through as the
+  // starting point (cfApiPaginatedCursor reads it off params.cursor) so
+  // resuming from a prior truncated result still works.
   if (method.operation.usesCursorPagination) {
-    const excludeNames = [...pathParamNames, "cursor"];
+    const excludeNames = [...pathParamNames];
     return `${indent}    const startMs = Date.now();
 ${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});

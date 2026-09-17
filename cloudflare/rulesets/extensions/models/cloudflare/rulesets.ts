@@ -28,7 +28,7 @@ const GlobalArgsSchema = z.object({
 /** Cloudflare Rulesets — WAF custom rules, transform rules, managed rulesets */
 export const model = {
   type: "@webframp/cloudflare/rulesets",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -68,6 +68,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
