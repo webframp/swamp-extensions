@@ -1,0 +1,194 @@
+# swamp-extensions PR lifecycle factory: develop → local adversarial review →
+# push/open PR → watch CI → fix/re-review loop → merge.
+#
+# This is the source of truth for this repo's PR conventions (see
+# skills/pr-workflow.md and CLAUDE.md's "Development Workflow" section). It
+# does not run inside swamp-extensions itself — swamp-extensions ships
+# extension source only and has no local swamp repo state. Paste this file's
+# content into a `pr-factory` model instance's `globalArguments.stages` in a
+# working swamp repo (see skills/pr-workflow.md for the exact commands).
+#
+# The one structural rule this graph exists to enforce: `fix_ci` can only
+# transition back to `local_review`, never straight to `push`. A CI failure
+# always gets a fresh adversarial review before the next push — that is no
+# longer something to remember, it's an edge the engine doesn't have.
+#
+# Usage:
+#   swamp model create @swamp/software-factory pr-factory
+#   swamp model edit pr-factory   # paste this file's content under globalArguments
+#   swamp model method run pr-factory start --input workItem=<branch-name>
+stages:
+  - id: develop
+    initial: true
+    description: >-
+      Branch, implement the change, and commit. Ordinary agent judgment —
+      Conventional Commits, no --no-verify, no force operations without
+      explicit confirmation (see the repo's global safety rules).
+    work:
+      mode: interactive
+      skills: [pr-workflow]
+    artifacts:
+      - name: change-summary
+        schema:
+          type: object
+          required: [summary]
+          properties:
+            summary: { type: string, minLength: 1 }
+            filesChanged:
+              type: array
+              items: { type: string }
+    transitions:
+      - name: submit
+        to: local_review
+        gates:
+          - type: artifact-exists
+            config: { artifact: change-summary }
+
+  - id: local_review
+    description: >-
+      Run the same adversarial-review dimensions CI runs, against the local
+      diff, before anything gets pushed.
+    work:
+      mode: dispatch
+      skills: [pre-push-review]
+      systemPrompt: |
+        Run the exact adversarial-review prompt CI runs for this repo: read
+        it live from this repo's `.github/workflows/ci.yml`, the `prompt:`
+        key under the "Adversarial Code Review" job, rather than working from
+        a hardcoded copy — that prompt can change, and this stage must never
+        drift from what CI actually enforces.
+
+        Adapt only the diff source: use `git diff --staged` for uncommitted
+        work, or `git diff origin/main...HEAD` for a pushed-but-unmerged
+        branch, in place of `gh pr diff <number>` (there is no open PR yet on
+        the first pass through this stage).
+
+        Record your findings via `record_artifact` against this stage's
+        `local-review` artifact (kind: findings). Do NOT push, do NOT comment
+        on any PR, and do NOT ask a human for push confirmation — this
+        transition's gates own that decision, not you.
+    artifacts:
+      - name: local-review
+        kind: findings
+        reviews: change-summary
+    transitions:
+      - name: pass
+        to: push
+        gates:
+          - type: artifact-fresh
+            config: { artifact: local-review, recordedThisCycle: true }
+          - type: findings-clear
+            config: { artifact: local-review, blocking: [critical, high] }
+      - name: rework
+        to: develop
+
+  - id: push
+    description: Commit (if not already), push, and open or update the PR.
+    work:
+      mode: interactive
+      skills: [pr-workflow]
+    evidence:
+      - name: change-request
+        schema:
+          type: object
+          required: [repo, number, branch, url]
+          properties:
+            repo: { type: string, minLength: 1 }
+            number: { type: number }
+            branch: { type: string, minLength: 1 }
+            url: { type: string, minLength: 1 }
+    transitions:
+      - name: submit
+        to: ci_watch
+        gates:
+          - type: evidence-recorded
+            config: { name: change-request }
+
+  - id: ci_watch
+    description: >-
+      Zero-LLM: poll the PR's CI checks to completion via
+      @webframp/github.watch_pr_checks. CI is an external system swamp didn't
+      execute, so this gates on evidence-recorded, not workflow-succeeded.
+    work:
+      mode: method
+      method:
+        modelIdOrName: "@webframp/github"
+        methodName: watch_pr_checks
+        inputs:
+          repo: '${{ data.latest(self.name, "evidence-change-request").payload.repo }}'
+          number: '${{ data.latest(self.name, "evidence-change-request").payload.number }}'
+          timeoutSeconds: 1800
+          pollIntervalSeconds: 20
+      resultEvidence: ci-result
+    transitions:
+      - name: green
+        to: merge
+        gates:
+          - type: evidence-recorded
+            config: { name: ci-result, requireField: { status: succeeded } }
+      - name: red
+        to: fix_ci
+        gates:
+          - type: evidence-recorded
+            config: { name: ci-result, requireField: { status: failed } }
+
+  - id: fix_ci
+    description: >-
+      Read the CI failure and fix it. Records a new change-summary version
+      (schema declared under `develop`) describing the fix.
+    work:
+      mode: interactive
+      skills: [pr-workflow, systematic-debugging]
+    transitions:
+      - name: submit
+        to: local_review
+        gates:
+          - type: artifact-fresh
+            config: { artifact: change-summary, recordedThisCycle: true }
+
+  - id: merge
+    description: >-
+      Zero-LLM: post the approval comment (/shipit) and poll until merged via
+      @webframp/github.merge_pull_request.
+    work:
+      mode: method
+      method:
+        modelIdOrName: "@webframp/github"
+        methodName: merge_pull_request
+        inputs:
+          repo: '${{ data.latest(self.name, "evidence-change-request").payload.repo }}'
+          number: '${{ data.latest(self.name, "evidence-change-request").payload.number }}'
+          approvalComment: "/shipit"
+          timeoutSeconds: 600
+          pollIntervalSeconds: 15
+          # Ties idempotency to the ci-result evidence's own cycle number
+          # (envelope field, not `self.cycle` — unconfirmed as a binding) so a
+          # second genuine merge attempt after a `blocked` round-trip through
+          # fix_ci gets a fresh key instead of hitting the cached short-circuit
+          # from the first attempt.
+          idempotencyKey: '${{ self.workItem }}-merge-${{ data.latest(self.name, "evidence-ci-result").cycle }}'
+      resultEvidence: merge-result
+    transitions:
+      - name: done
+        to: done
+        gates:
+          - type: evidence-recorded
+            config: { name: merge-result, requireField: { status: succeeded } }
+      - name: blocked
+        to: fix_ci
+        gates:
+          - type: evidence-recorded
+            config: { name: merge-result, requireField: { status: failed } }
+
+  - id: done
+    terminal: true
+
+  - id: aborted
+    terminal: true
+
+globalTransitions:
+  - name: abort
+    to: aborted
+    gates:
+      - type: human-approval
+        config: { id: abort-confirmation }

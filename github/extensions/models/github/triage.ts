@@ -12,6 +12,9 @@ type Ctx = {
     name: string,
     data: unknown,
   ) => Promise<{ name: string }>;
+  logger: {
+    info: (msg: string, props: Record<string, unknown>) => void;
+  };
 };
 const key = (repo: string) => encodeURIComponent(repo);
 const REDACTED_FLAGS = new Set(["--body", "--title"]);
@@ -326,6 +329,182 @@ export const extension = {
             target: args.runId,
             idempotencyKey: args.idempotencyKey,
             result,
+            recordedAt: new Date().toISOString(),
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    watch_pr_checks: {
+      description:
+        "Poll a PR's status checks to completion; bounded by timeoutSeconds.",
+      arguments: z.object({
+        repo,
+        number: z.number().int().positive(),
+        timeoutSeconds: z.number().int().positive().max(3600).default(1800),
+        pollIntervalSeconds: z.number().int().min(1).max(60).default(15),
+      }).strict(),
+      execute: async (
+        args: {
+          repo: string;
+          number: number;
+          timeoutSeconds: number;
+          pollIntervalSeconds: number;
+        },
+        context: Ctx,
+      ) => {
+        const maxIterations = Math.ceil(
+          args.timeoutSeconds / args.pollIntervalSeconds,
+        );
+        type Check = { name: string; bucket: string; link: string };
+        let checks: Check[] = [];
+        let started = false;
+        let timedOut = true;
+        for (let iterations = 0; iterations < maxIterations; iterations++) {
+          try {
+            checks = await gh([
+              "pr",
+              "checks",
+              String(args.number),
+              "--repo",
+              args.repo,
+              "--json",
+              "name,state,bucket,link,workflow",
+            ]) as Check[];
+          } catch (err) {
+            context.logger.info(
+              "watch_pr_checks: transient gh failure on iteration {iteration}: {error}",
+              { iteration: iterations, error: String(err) },
+            );
+            checks = [];
+          }
+          // An empty list means checks haven't registered yet (e.g. right
+          // after opening the PR) — that's "not started", not "done".
+          if (checks.length > 0) {
+            started = true;
+            if (!checks.some((c) => c.bucket === "pending")) {
+              timedOut = false;
+              break;
+            }
+          }
+          if (iterations < maxIterations - 1) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, args.pollIntervalSeconds * 1000)
+            );
+          }
+        }
+        const status = !timedOut && started &&
+            checks.every((c) => c.bucket === "pass" || c.bucket === "skipping")
+          ? "succeeded"
+          : "failed";
+        const handle = await context.writeResource(
+          "triageAction",
+          `${key(args.repo)}-checks-${args.number}`,
+          {
+            repo: args.repo,
+            action: "watch_pr_checks",
+            target: args.number,
+            idempotencyKey: `watch-${args.number}`,
+            result: { status, runId: String(args.number), checks, timedOut },
+            recordedAt: new Date().toISOString(),
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+    merge_pull_request: {
+      description:
+        "Post an approved merge-request comment and poll until the PR merges.",
+      arguments: z.object({
+        repo,
+        number: z.number().int().positive(),
+        approvalComment: z.string().min(1).default("/shipit"),
+        timeoutSeconds: z.number().int().positive().max(3600).default(600),
+        pollIntervalSeconds: z.number().int().min(1).max(60).default(15),
+        idempotencyKey,
+      }).strict(),
+      execute: async (
+        args: {
+          repo: string;
+          number: number;
+          approvalComment: string;
+          timeoutSeconds: number;
+          pollIntervalSeconds: number;
+          idempotencyKey: string;
+        },
+        context: Ctx,
+      ) => {
+        const resourceName = `${key(args.repo)}-merge-${args.idempotencyKey}`;
+        const existing = await context.readResource(resourceName) as {
+          result?: { status?: string };
+        } | null;
+        const existingStatus = existing?.result?.status;
+        if (existingStatus === "succeeded" || existingStatus === "failed") {
+          return { dataHandles: [{ name: resourceName }] };
+        }
+        if (existingStatus !== "posted") {
+          // Record that the comment was posted *before* polling, so a retry
+          // after a crash or transient failure mid-poll doesn't re-post it.
+          await gh([
+            "pr",
+            "comment",
+            String(args.number),
+            "--repo",
+            args.repo,
+            "--body",
+            args.approvalComment,
+          ]);
+          await context.writeResource("triageAction", resourceName, {
+            repo: args.repo,
+            action: "merge_pull_request",
+            target: args.number,
+            idempotencyKey: args.idempotencyKey,
+            result: { status: "posted" },
+            recordedAt: new Date().toISOString(),
+          });
+        }
+        const maxIterations = Math.ceil(
+          args.timeoutSeconds / args.pollIntervalSeconds,
+        );
+        type PrView = { state: string; mergedAt: string | null };
+        let view: PrView = { state: "UNKNOWN", mergedAt: null };
+        for (let iterations = 0; iterations < maxIterations; iterations++) {
+          try {
+            view = await gh([
+              "pr",
+              "view",
+              String(args.number),
+              "--repo",
+              args.repo,
+              "--json",
+              "state,mergedAt",
+            ]) as PrView;
+          } catch (err) {
+            context.logger.info(
+              "merge_pull_request: transient gh failure on iteration {iteration}: {error}",
+              { iteration: iterations, error: String(err) },
+            );
+          }
+          if (view.state === "MERGED" || view.state === "CLOSED") {
+            break;
+          }
+          if (iterations < maxIterations - 1) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, args.pollIntervalSeconds * 1000)
+            );
+          }
+        }
+        const status = view.state === "MERGED" ? "succeeded" : "failed";
+        const timedOut = view.state !== "MERGED" && view.state !== "CLOSED";
+        const handle = await context.writeResource(
+          "triageAction",
+          resourceName,
+          {
+            repo: args.repo,
+            action: "merge_pull_request",
+            target: args.number,
+            idempotencyKey: args.idempotencyKey,
+            result: { status, runId: String(args.number), view, timedOut },
             recordedAt: new Date().toISOString(),
           },
         );
