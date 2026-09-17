@@ -23,10 +23,10 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetStorageFileAclItemSchema = z.object({
-  user: z.string().min(1).describe(
+  user: z.string().min(1).optional().describe(
     "User nickname or user ID the rule applies to",
   ),
-  decision: z.enum(["allow", "forbid", "hide"]).describe(
+  decision: z.enum(["allow", "forbid", "hide"]).optional().describe(
     "Access decision applied to this user",
   ),
 }).passthrough();
@@ -44,31 +44,31 @@ const GetStorageFileAclSchema = z.object({
 });
 
 const SetStorageFileAclSchema = z.object({
-  user: z.string().min(1).describe(
+  user: z.string().min(1).optional().describe(
     "User nickname or user ID the rule applies to",
   ),
-  decision: z.enum(["allow", "forbid", "hide"]).describe(
+  decision: z.enum(["allow", "forbid", "hide"]).optional().describe(
     "Access decision applied to this user",
   ),
 }).passthrough();
 
 const SignStorageFileUrlSchema = z.object({
-  signed_url: z.string().describe(
+  signed_url: z.string().optional().describe(
     "URL with an embedded signature granting temporary access",
   ),
 }).passthrough();
 
 const GetStorageSettingsSchema = z.object({
-  expiration_duration_seconds: z.number().int().nullable().describe(
+  expiration_duration_seconds: z.number().int().nullable().optional().describe(
     "Seconds after which newly uploaded files automatically expire, or null if auto-expiration is disa...",
   ),
   initial_acl: z.object({
-    default: z.enum(["allow", "forbid", "hide"]),
+    default: z.enum(["allow", "forbid", "hide"]).optional(),
     rules: z.array(z.object({
-      user: z.string().min(1),
-      decision: z.enum(["allow", "forbid", "hide"]),
-    })),
-  }).nullable().describe(
+      user: z.string().min(1).optional(),
+      decision: z.enum(["allow", "forbid", "hide"]).optional(),
+    })).optional(),
+  }).nullable().optional().describe(
     "Default ACL applied to newly uploaded files, or null if the system default (public) is used",
   ),
 }).passthrough();
@@ -80,7 +80,7 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -112,6 +112,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

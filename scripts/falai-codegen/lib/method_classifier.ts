@@ -339,7 +339,9 @@ function generateResponseSchemas(
     if (method.type === "list") {
       const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
         "ItemSchema";
-      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const itemZod = withPassthrough(
+        schemaToZod(schema, { indent: 2, lenient: true }, 1),
+      );
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -354,7 +356,9 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const zodStr = withPassthrough(
+        schemaToZod(schema, { indent: 2, lenient: true }, 1),
+      );
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
@@ -573,9 +577,13 @@ ${indent}    return { dataHandles: [handle] };`;
 
   // Unpaginated list (no limit/cursor params) — single fetch.
   const excludeNames = [...pathParamNames];
-  const hasLimit = method.operation.queryParams.some((p) =>
+  const limitParam = method.operation.queryParams.find((p) =>
     sanitizeFieldName(p.name) === "limit"
   );
+  const hasLimit = limitParam !== undefined;
+  const limitDefault = typeof limitParam?.schema?.default === "number"
+    ? limitParam.schema.default
+    : undefined;
   return `${indent}    const startMs = Date.now();
 ${indent}    const params = new URLSearchParams();
 ${indent}    const excludeKeys = new Set<string>(${
@@ -597,8 +605,11 @@ ${indent}    const items = ((result as Record<string, unknown>)["${resultsField}
 ${indent}${
     hasLimit
       ? `    // No cursor/offset in this response: a full page equal to the
-${indent}    // requested limit means more results may exist that we didn't fetch.
-${indent}    const limit = args.limit !== undefined ? Number(args.limit) : undefined;
+${indent}    // effective limit (explicit or the API's default) means more results
+${indent}    // may exist that we didn't fetch.
+${indent}    const limit = args.limit !== undefined
+${indent}      ? Number(args.limit)
+${indent}      : ${limitDefault !== undefined ? limitDefault : "undefined"};
 ${indent}    const truncated = limit !== undefined && items.length === limit;
 ${indent}`
       : `    const truncated = false;
@@ -856,7 +867,8 @@ function generateCreateBody(
 ${indent}    // derive a deterministic, collision-resistant instance name
 ${indent}    // from the request instead of colliding every call onto "created".
 ${indent}    const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));`;
-  const sensitiveFields = SENSITIVE_RESPONSE_FIELDS[method.operation.operationId];
+  const sensitiveFields =
+    SENSITIVE_RESPONSE_FIELDS[method.operation.operationId];
 
   const redactBlock = sensitiveFields?.length
     ? `\n${indent}    // ${

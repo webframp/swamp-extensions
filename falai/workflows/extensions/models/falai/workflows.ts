@@ -28,20 +28,26 @@ const GlobalArgsSchema = z.object({
 });
 
 const WorkflowsItemSchema = z.object({
-  name: z.string().describe(
+  name: z.string().optional().describe(
     "Unique workflow name/slug within the user's namespace",
   ),
-  title: z.string().describe("Human-readable workflow title"),
-  user_nickname: z.string().describe("Display name/username of the owner"),
-  created_at: z.string().describe("ISO8601 timestamp of workflow creation"),
+  title: z.string().optional().describe("Human-readable workflow title"),
+  user_nickname: z.string().optional().describe(
+    "Display name/username of the owner",
+  ),
+  created_at: z.string().optional().describe(
+    "ISO8601 timestamp of workflow creation",
+  ),
   thumbnail_url: z.string().optional().describe(
     "URL to the workflow thumbnail image",
   ),
   description: z.string().optional().describe(
     "Brief description of what the workflow does",
   ),
-  tags: z.array(z.string()).describe("Tags associated with the workflow"),
-  endpoint_ids: z.array(z.string()).describe(
+  tags: z.array(z.string()).optional().describe(
+    "Tags associated with the workflow",
+  ),
+  endpoint_ids: z.array(z.string()).optional().describe(
     "List of model endpoint IDs used in this workflow",
   ),
 }).passthrough();
@@ -60,13 +66,13 @@ const ListWorkflowsSchema = z.object({
 
 const CreateWorkflowSchema = z.object({
   workflow: z.object({
-    name: z.string(),
-    title: z.string(),
-    user_nickname: z.string(),
-    created_at: z.string(),
-    is_public: z.boolean(),
-    contents: z.record(z.string(), z.unknown()),
-  }).describe("The workflow details"),
+    name: z.string().optional(),
+    title: z.string().optional(),
+    user_nickname: z.string().optional(),
+    created_at: z.string().optional(),
+    is_public: z.boolean().optional(),
+    contents: z.record(z.string(), z.unknown()).optional(),
+  }).optional().describe("The workflow details"),
 }).passthrough();
 
 // =============================================================================
@@ -76,7 +82,7 @@ const CreateWorkflowSchema = z.object({
 /** fal.ai Workflows — workflow definitions */
 export const model = {
   type: "@webframp/falai/workflows",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -108,6 +114,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

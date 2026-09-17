@@ -23,12 +23,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const ApiKeysItemSchema = z.object({
-  key_id: z.string().describe("Unique identifier for the API key"),
-  alias: z.string().describe("User-provided friendly name for the key"),
-  scope: z.enum(["API"]).describe(
+  key_id: z.string().optional().describe("Unique identifier for the API key"),
+  alias: z.string().optional().describe(
+    "User-provided friendly name for the key",
+  ),
+  scope: z.enum(["API"]).optional().describe(
     "Scope of the API key. Only API scope keys can be managed via this API.",
   ),
-  created_at: z.string().describe("ISO8601 timestamp when the key was created"),
+  created_at: z.string().optional().describe(
+    "ISO8601 timestamp when the key was created",
+  ),
   creator_nickname: z.string().optional().describe(
     "Nickname of the user who created this key (when expanded)",
   ),
@@ -50,13 +54,13 @@ const ListApiKeysSchema = z.object({
 });
 
 const CreateApiKeySchema = z.object({
-  key_id: z.string().describe(
+  key_id: z.string().optional().describe(
     "Unique identifier for the newly created API key",
   ),
-  key_secret: z.string().describe(
+  key_secret: z.string().optional().describe(
     "Secret portion of the API key. IMPORTANT: This is only returned once at creation time and cannot ...",
   ),
-  key: z.string().describe(
+  key: z.string().optional().describe(
     "Full API key in the format 'key_id:key_secret'. Use this value directly for API authorization. IM...",
   ),
 }).passthrough();
@@ -68,7 +72,7 @@ const CreateApiKeySchema = z.object({
 /** fal.ai API Keys — key management */
 export const model = {
   type: "@webframp/falai/keys",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -100,6 +104,11 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

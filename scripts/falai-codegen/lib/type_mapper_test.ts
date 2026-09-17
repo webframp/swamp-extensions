@@ -152,6 +152,53 @@ Deno.test("type_mapper: record via additionalProperties", () => {
   assertEquals(schemaToZod(schema), "z.record(z.string(), z.string())");
 });
 
+Deno.test("type_mapper: lenient ignores required, marking every field optional", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      count: { type: "integer" },
+    },
+    required: ["name"],
+  };
+  assertEquals(
+    schemaToZod(schema, { lenient: true }),
+    "z.object({\n  name: z.string().optional(),\n  count: z.number().int().optional(),\n})",
+  );
+});
+
+Deno.test("type_mapper: lenient on a required+nullable field emits .nullable().optional()", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      quantity: { type: ["number", "null"] },
+    },
+    required: ["quantity"],
+  };
+  assertEquals(
+    schemaToZod(schema, { lenient: true }),
+    "z.object({\n  quantity: z.number().nullable().optional(),\n})",
+  );
+});
+
+Deno.test("type_mapper: lenient applies at nested depths too", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      inner: {
+        type: "object",
+        properties: { id: { type: "string" } },
+        required: ["id"],
+      },
+    },
+    required: ["inner"],
+  };
+  assertEquals(
+    schemaToZod(schema, { lenient: true }),
+    "z.object({\n  inner: z.object({\n    id: z.string().optional(),\n  }).optional(),\n})",
+  );
+});
+
 // ---------------------------------------------------------------------------
 // schemaVarName
 // ---------------------------------------------------------------------------

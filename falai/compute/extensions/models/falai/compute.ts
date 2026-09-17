@@ -23,10 +23,11 @@ const GlobalArgsSchema = z.object({
 });
 
 const ComputeInstancesItemSchema = z.object({
-  id: z.string().describe("Unique identifier for the compute instance"),
-  instance_type: z.enum(["gpu_8x_h100_sxm5", "gpu_1x_h100_sxm5"]).describe(
-    "Type of compute instance (GPU configuration)",
+  id: z.string().optional().describe(
+    "Unique identifier for the compute instance",
   ),
+  instance_type: z.enum(["gpu_8x_h100_sxm5", "gpu_1x_h100_sxm5"]).optional()
+    .describe("Type of compute instance (GPU configuration)"),
   region: z.enum([
     "us-west",
     "us-central",
@@ -34,7 +35,7 @@ const ComputeInstancesItemSchema = z.object({
     "eu-north",
     "eu-west",
     "other",
-  ]).describe("Geographical region where the instance is located"),
+  ]).optional().describe("Geographical region where the instance is located"),
   sector: z.enum(["sector_1", "sector_2", "sector_3"]).optional().describe(
     "Sector identifier for instance placement within the region (if applicable)",
   ),
@@ -48,7 +49,7 @@ const ComputeInstancesItemSchema = z.object({
     "provisioning",
     "stopped",
     "unknown",
-  ]).describe("Current operational status of the instance"),
+  ]).optional().describe("Current operational status of the instance"),
   creator_user_nickname: z.string().optional().describe(
     "Nickname of the user who created this instance",
   ),
@@ -67,10 +68,11 @@ const ListComputeInstancesSchema = z.object({
 });
 
 const GetComputeInstanceSchema = z.object({
-  id: z.string().describe("Unique identifier for the compute instance"),
-  instance_type: z.enum(["gpu_8x_h100_sxm5", "gpu_1x_h100_sxm5"]).describe(
-    "Type of compute instance (GPU configuration)",
+  id: z.string().optional().describe(
+    "Unique identifier for the compute instance",
   ),
+  instance_type: z.enum(["gpu_8x_h100_sxm5", "gpu_1x_h100_sxm5"]).optional()
+    .describe("Type of compute instance (GPU configuration)"),
   region: z.enum([
     "us-west",
     "us-central",
@@ -78,7 +80,7 @@ const GetComputeInstanceSchema = z.object({
     "eu-north",
     "eu-west",
     "other",
-  ]).describe("Geographical region where the instance is located"),
+  ]).optional().describe("Geographical region where the instance is located"),
   sector: z.enum(["sector_1", "sector_2", "sector_3"]).optional().describe(
     "Sector identifier for instance placement within the region (if applicable)",
   ),
@@ -92,7 +94,7 @@ const GetComputeInstanceSchema = z.object({
     "provisioning",
     "stopped",
     "unknown",
-  ]).describe("Current operational status of the instance"),
+  ]).optional().describe("Current operational status of the instance"),
   creator_user_nickname: z.string().optional().describe(
     "Nickname of the user who created this instance",
   ),
@@ -105,7 +107,7 @@ const GetComputeInstanceSchema = z.object({
 /** fal.ai Compute — dedicated GPU compute instances */
 export const model = {
   type: "@webframp/falai/compute",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -143,6 +145,11 @@ export const model = {
       toVersion: "2026.09.17.1",
       description:
         "BREAKING: fal.ai removed create_compute_instance (POST /compute/instances) upstream; the method no longer exists. Added get_compute_instance. No data migration applies — existing create_compute_instance resource data is retained as-is.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

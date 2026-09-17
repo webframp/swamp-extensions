@@ -28,11 +28,11 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetAnalyticsItemSchema = z.object({
-  bucket: z.string().describe(
+  bucket: z.string().optional().describe(
     "Time bucket timestamp in user's timezone with offset (ISO8601 datetime)",
   ),
   results: z.array(z.object({
-    endpoint_id: z.string(),
+    endpoint_id: z.string().optional(),
     request_count: z.number().int().min(0).optional(),
     success_count: z.number().int().min(0).optional(),
     user_error_count: z.number().int().min(0).optional(),
@@ -57,7 +57,7 @@ const GetAnalyticsItemSchema = z.object({
     p75_cold_boot_duration: z.number().min(0).optional(),
     p90_cold_boot_duration: z.number().min(0).optional(),
     total_billable_duration: z.number().min(0).optional(),
-  })).describe("Analytics records for this time bucket"),
+  })).optional().describe("Analytics records for this time bucket"),
 }).passthrough();
 
 const GetAnalyticsSchema = z.object({
@@ -73,25 +73,37 @@ const GetAnalyticsSchema = z.object({
 });
 
 const AppsItemSchema = z.object({
-  endpoint_id: z.string().describe(
+  endpoint_id: z.string().optional().describe(
     "Canonical endpoint identifier ('<owner>/<name>') accepted by the analytics, requests, logs, and q...",
   ),
-  name: z.string().describe("Application name (alias)"),
-  owner: z.string().describe("Nickname of the app owner"),
-  environment: z.string().describe("Environment the app is deployed in"),
-  machine_type: z.string().describe("Machine type the app runs on"),
-  auth_mode: z.enum(["private", "public", "shared"]).describe(
+  name: z.string().optional().describe("Application name (alias)"),
+  owner: z.string().optional().describe("Nickname of the app owner"),
+  environment: z.string().optional().describe(
+    "Environment the app is deployed in",
+  ),
+  machine_type: z.string().optional().describe("Machine type the app runs on"),
+  auth_mode: z.enum(["private", "public", "shared"]).optional().describe(
     "Endpoint authentication mode",
   ),
-  keep_alive: z.number().describe(
+  keep_alive: z.number().optional().describe(
     "Seconds a runner stays warm after its last request",
   ),
-  min_concurrency: z.number().describe("Minimum number of runners kept alive"),
-  max_concurrency: z.number().describe("Maximum number of concurrent runners"),
-  request_timeout: z.number().describe("Request timeout in seconds"),
-  startup_timeout: z.number().describe("Runner startup timeout in seconds"),
-  valid_regions: z.array(z.string()).describe("Regions the app may run in"),
-  updated_at: z.string().describe("Last update timestamp (UTC ISO8601)"),
+  min_concurrency: z.number().optional().describe(
+    "Minimum number of runners kept alive",
+  ),
+  max_concurrency: z.number().optional().describe(
+    "Maximum number of concurrent runners",
+  ),
+  request_timeout: z.number().optional().describe("Request timeout in seconds"),
+  startup_timeout: z.number().optional().describe(
+    "Runner startup timeout in seconds",
+  ),
+  valid_regions: z.array(z.string()).optional().describe(
+    "Regions the app may run in",
+  ),
+  updated_at: z.string().optional().describe(
+    "Last update timestamp (UTC ISO8601)",
+  ),
   endpoints: z.array(z.string()).optional().describe(
     "Registered route-level endpoint ids for this app (only present when expand=endpoints). Multi-rout...",
   ),
@@ -110,21 +122,25 @@ const ListAppsSchema = z.object({
 });
 
 const GetAppQueueInfoSchema = z.object({
-  queue_size: z.number().int().min(0).describe(
+  queue_size: z.number().int().min(0).optional().describe(
     "Current number of requests in the queue",
   ),
 }).passthrough();
 
 const GetRunnerHistoryItemSchema = z.object({
-  timestamp: z.string().describe("Bucket start timestamp (UTC ISO8601)"),
-  running: z.number().describe("Runners actively processing requests"),
-  idle: z.number().describe(
+  timestamp: z.string().optional().describe(
+    "Bucket start timestamp (UTC ISO8601)",
+  ),
+  running: z.number().optional().describe(
+    "Runners actively processing requests",
+  ),
+  idle: z.number().optional().describe(
     "Warm runners waiting for requests (billed but unused)",
   ),
-  pending: z.number().describe(
+  pending: z.number().optional().describe(
     "Runners waiting to be scheduled or starting up",
   ),
-  draining: z.number().describe(
+  draining: z.number().optional().describe(
     "Runners finishing in-flight work before shutting down",
   ),
 }).passthrough();
@@ -142,7 +158,7 @@ const GetRunnerHistorySchema = z.object({
 });
 
 const AppEventsItemSchema = z.object({
-  event_id: z.string().describe("Unique event identifier"),
+  event_id: z.string().optional().describe("Unique event identifier"),
   category: z.enum([
     "runner_started",
     "runner_failed",
@@ -161,8 +177,8 @@ const AppEventsItemSchema = z.object({
     "deployment_rolling_ended",
     "deployment_recreate_applied",
     "config_changed",
-  ]).describe("Event category"),
-  created_at: z.string().describe("Event timestamp (UTC ISO8601)"),
+  ]).optional().describe("Event category"),
+  created_at: z.string().optional().describe("Event timestamp (UTC ISO8601)"),
   payload: z.object({
     job_id: z.string().optional(),
     machine_type: z.string().optional(),
@@ -178,7 +194,7 @@ const AppEventsItemSchema = z.object({
       nickname: z.string().optional(),
       full_name: z.string().optional(),
     }).optional(),
-  }).describe(
+  }).optional().describe(
     "Event details; populated fields depend on the event category (runner_*, deployment_*, config_chan...",
   ),
 }).passthrough();
@@ -196,21 +212,24 @@ const ListAppEventsSchema = z.object({
 });
 
 const AppRevisionsItemSchema = z.object({
-  revision_id: z.string().describe("Unique revision identifier"),
-  created_at: z.string().describe("Revision creation timestamp (UTC ISO8601)"),
-  is_current: z.boolean().describe(
+  revision_id: z.string().optional().describe("Unique revision identifier"),
+  created_at: z.string().optional().describe(
+    "Revision creation timestamp (UTC ISO8601)",
+  ),
+  is_current: z.boolean().optional().describe(
     "Whether this revision is the one currently serving traffic",
   ),
-  message: z.string().nullable().describe(
+  message: z.string().nullable().optional().describe(
     "Freeform message attached to this revision at deploy time (fal deploy --message). Null when the d...",
   ),
-  annotations: z.record(z.string(), z.string()).nullable().describe(
+  annotations: z.record(z.string(), z.string()).nullable().optional().describe(
     "Custom key/value annotations attached to this revision at deploy time (fal deploy --annotation KE...",
   ),
-  status: z.enum(["deployed", "failed", "deploying"]).nullable().describe(
-    "Deployment status derived from recent deployment events. Null when no deployment events are avail...",
-  ),
-  deployed_by: z.string().nullable().describe(
+  status: z.enum(["deployed", "failed", "deploying"]).nullable().optional()
+    .describe(
+      "Deployment status derived from recent deployment events. Null when no deployment events are avail...",
+    ),
+  deployed_by: z.string().nullable().optional().describe(
     "Nickname or display name of the user who deployed this revision, when known from recent deploymen...",
   ),
 }).passthrough();
@@ -228,23 +247,23 @@ const ListAppRevisionsSchema = z.object({
 });
 
 const ListRootSchema = z.array(z.object({
-  path: z.string(),
-  name: z.string(),
-  created_time: z.string(),
-  updated_time: z.string(),
-  is_file: z.boolean(),
-  size: z.number(),
+  path: z.string().optional(),
+  name: z.string().optional(),
+  created_time: z.string().optional(),
+  updated_time: z.string().optional(),
+  is_file: z.boolean().optional(),
+  size: z.number().optional(),
   checksum_sha256: z.string().optional(),
   checksum_md5: z.string().optional(),
 }));
 
 const ListDirectorySchema = z.array(z.object({
-  path: z.string(),
-  name: z.string(),
-  created_time: z.string(),
-  updated_time: z.string(),
-  is_file: z.boolean(),
-  size: z.number(),
+  path: z.string().optional(),
+  name: z.string().optional(),
+  created_time: z.string().optional(),
+  updated_time: z.string().optional(),
+  is_file: z.boolean().optional(),
+  size: z.number().optional(),
   checksum_sha256: z.string().optional(),
   checksum_md5: z.string().optional(),
 }));
@@ -252,23 +271,29 @@ const ListDirectorySchema = z.array(z.object({
 const UploadFromUrlSchema = z.boolean();
 
 const ServerlessLogsHistorySchema = z.object({
-  timestamp: z.string().describe("ISO timestamp of the log line"),
-  level: z.string().describe("Log level"),
-  message: z.string().describe("Log message"),
-  app: z.string().describe("App identifier"),
-  revision: z.string().describe("Revision identifier"),
+  timestamp: z.string().optional().describe("ISO timestamp of the log line"),
+  level: z.string().optional().describe("Log level"),
+  message: z.string().optional().describe("Log message"),
+  app: z.string().optional().describe("App identifier"),
+  revision: z.string().optional().describe("Revision identifier"),
   labels: z.record(z.string(), z.string()).optional().describe(
     "Additional labels",
   ),
 }).passthrough();
 
 const RequestsByEndpointItemSchema = z.object({
-  request_id: z.string().describe("Unique identifier for the request"),
-  endpoint_id: z.string().describe(
+  request_id: z.string().optional().describe(
+    "Unique identifier for the request",
+  ),
+  endpoint_id: z.string().optional().describe(
     "Endpoint that was executed for this request",
   ),
-  started_at: z.string().describe("Time when request processing started"),
-  sent_at: z.string().describe("Time when request was sent to the backend"),
+  started_at: z.string().optional().describe(
+    "Time when request processing started",
+  ),
+  sent_at: z.string().optional().describe(
+    "Time when request was sent to the backend",
+  ),
   ended_at: z.string().nullable().optional().describe(
     "Time when request finished processing",
   ),
@@ -282,7 +307,7 @@ const RequestsByEndpointItemSchema = z.object({
   json_output: z.unknown().optional().describe(
     "Output payload for the request",
   ),
-  runner_id: z.string().nullable().describe(
+  runner_id: z.string().nullable().optional().describe(
     "Unique identifier for the runner execution instance. Null if no runner was assigned (e.g. the req...",
   ),
   billable_units: z.number().nullable().optional().describe(
@@ -303,25 +328,25 @@ const ListRequestsByEndpointSchema = z.object({
 });
 
 const GetUsageItemSchema = z.object({
-  bucket: z.string().describe(
+  bucket: z.string().optional().describe(
     "Time bucket timestamp in user's timezone with offset (ISO8601 datetime)",
   ),
   results: z.array(z.object({
-    app: z.string().nullable(),
-    environment: z.string().nullable(),
-    machine_type: z.string(),
-    unit: z.string(),
-    quantity: z.number().min(0),
-    unit_price: z.number().min(0),
-    net_unit_price: z.number().min(0),
-    percent_discount: z.number().min(0).max(100).nullable(),
-    cost_subtotal: z.number().min(0),
-    cost_discount: z.number().min(0),
-    cost_total: z.number().min(0),
-    cost: z.number().min(0),
-    currency: z.string().min(3).max(3),
-    is_surge: z.boolean(),
-  })).describe("Usage records for this time bucket"),
+    app: z.string().nullable().optional(),
+    environment: z.string().nullable().optional(),
+    machine_type: z.string().optional(),
+    unit: z.string().optional(),
+    quantity: z.number().min(0).optional(),
+    unit_price: z.number().min(0).optional(),
+    net_unit_price: z.number().min(0).optional(),
+    percent_discount: z.number().min(0).max(100).nullable().optional(),
+    cost_subtotal: z.number().min(0).optional(),
+    cost_discount: z.number().min(0).optional(),
+    cost_total: z.number().min(0).optional(),
+    cost: z.number().min(0).optional(),
+    currency: z.string().min(3).max(3).optional(),
+    is_surge: z.boolean().optional(),
+  })).optional().describe("Usage records for this time bucket"),
 }).passthrough();
 
 const GetUsageSchema = z.object({
@@ -343,7 +368,7 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -379,6 +404,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

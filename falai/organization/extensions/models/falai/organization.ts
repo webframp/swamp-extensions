@@ -23,46 +23,50 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetOrganizationBillingEventsItemSchema = z.object({
-  username: z.string().describe(
+  username: z.string().optional().describe(
     "Team username that generated this billing event",
   ),
-  request_id: z.string().describe("Unique identifier for the request"),
-  endpoint_id: z.string().describe(
+  request_id: z.string().optional().describe(
+    "Unique identifier for the request",
+  ),
+  endpoint_id: z.string().optional().describe(
     "Endpoint identifier that was used (e.g., 'fal-ai/flux/dev')",
   ),
-  timestamp: z.string().describe("Request timestamp in ISO8601 format"),
-  quantity: z.number().min(0).nullable().describe(
+  timestamp: z.string().optional().describe(
+    "Request timestamp in ISO8601 format",
+  ),
+  quantity: z.number().min(0).nullable().optional().describe(
     "Billable units consumed, in the unit named by `unit`. Same value as the deprecated `output_units`.",
   ),
-  output_units: z.number().min(0).nullable().describe(
+  output_units: z.number().min(0).nullable().optional().describe(
     "Deprecated: use quantity. Same value as quantity.",
   ),
-  unit: z.string().nullable().describe(
+  unit: z.string().nullable().optional().describe(
     "The billing unit these units are counted in (e.g. 'image', 'second', 'megapixel'). Null when the ...",
   ),
-  unit_price: z.number().min(0).nullable().describe(
+  unit_price: z.number().min(0).nullable().optional().describe(
     "Per-unit price this line is measured against: the list rate when a discount is reported in percen...",
   ),
-  percent_discount: z.number().nullable().describe(
+  percent_discount: z.number().nullable().optional().describe(
     "Discount percentage applied to this request (e.g., 10 = 10% discount)",
   ),
-  cost_subtotal: z.number().min(0).describe(
+  cost_subtotal: z.number().min(0).optional().describe(
     "Cost before discounts in USD (output_units × unit_price)",
   ),
-  cost_discount: z.number().min(0).describe(
+  cost_discount: z.number().min(0).optional().describe(
     "Discount applied to this request in USD (cost_subtotal − cost_total)",
   ),
-  cost_total: z.number().min(0).describe(
+  cost_total: z.number().min(0).optional().describe(
     "Amount charged after discounts in USD (cost_subtotal − cost_discount)",
   ),
-  cost_estimate_nano_usd: z.number().min(0).describe(
+  cost_estimate_nano_usd: z.number().min(0).optional().describe(
     "Amount charged after discounts in nano USD. The precision-preserving representation of cost_total...",
   ),
   auth_method: z.string().optional().describe(
     "Authentication method label resolved across the organization (e.g., 'my-key (owner: acme-ml-team)...",
   ),
   auth_method_structured: z.object({
-    detail: z.string(),
+    detail: z.string().optional(),
     api_key_id: z.string().optional(),
     login_username: z.string().optional(),
   }).optional().describe(
@@ -83,14 +87,18 @@ const GetOrganizationBillingEventsSchema = z.object({
 });
 
 const GetOrganizationTeamsItemSchema = z.object({
-  username: z.string().describe(
+  username: z.string().optional().describe(
     "Team username/identifier (unique within the organization)",
   ),
-  name: z.string().describe("Human-readable display name of the team"),
-  is_org_root: z.boolean().describe(
+  name: z.string().optional().describe(
+    "Human-readable display name of the team",
+  ),
+  is_org_root: z.boolean().optional().describe(
     "True if this is the root organization team; false for sub-teams",
   ),
-  created_at: z.string().describe("Team creation timestamp in ISO8601 format"),
+  created_at: z.string().optional().describe(
+    "Team creation timestamp in ISO8601 format",
+  ),
 }).passthrough();
 
 const GetOrganizationTeamsSchema = z.object({
@@ -106,29 +114,29 @@ const GetOrganizationTeamsSchema = z.object({
 });
 
 const GetOrganizationUsageItemSchema = z.object({
-  bucket: z.string().describe(
+  bucket: z.string().optional().describe(
     "Time bucket timestamp in user's timezone with offset (ISO8601 datetime)",
   ),
   results: z.array(z.object({
-    username: z.string(),
-    product: z.enum(["model_apis", "serverless", "compute"]),
-    endpoint_id: z.string(),
-    unit: z.string(),
-    quantity: z.number().min(0),
-    unit_price: z.number().min(0),
-    percent_discount: z.number().min(0).max(100).nullable(),
-    cost_subtotal: z.number().min(0),
-    cost_discount: z.number().min(0),
-    cost_total: z.number().min(0),
-    cost: z.number().min(0),
-    currency: z.string().min(3).max(3),
+    username: z.string().optional(),
+    product: z.enum(["model_apis", "serverless", "compute"]).optional(),
+    endpoint_id: z.string().optional(),
+    unit: z.string().optional(),
+    quantity: z.number().min(0).optional(),
+    unit_price: z.number().min(0).optional(),
+    percent_discount: z.number().min(0).max(100).nullable().optional(),
+    cost_subtotal: z.number().min(0).optional(),
+    cost_discount: z.number().min(0).optional(),
+    cost_total: z.number().min(0).optional(),
+    cost: z.number().min(0).optional(),
+    currency: z.string().min(3).max(3).optional(),
     auth_method: z.string().optional(),
     auth_method_structured: z.object({
-      detail: z.string(),
+      detail: z.string().optional(),
       api_key_id: z.string().optional(),
       login_username: z.string().optional(),
     }).optional(),
-  })).describe("Usage records for this time bucket"),
+  })).optional().describe("Usage records for this time bucket"),
 }).passthrough();
 
 const GetOrganizationUsageSchema = z.object({
@@ -150,7 +158,7 @@ const GetOrganizationUsageSchema = z.object({
 /** fal.ai Organization — teams, usage, billing events, focus reports */
 export const model = {
   type: "@webframp/falai/organization",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -186,6 +194,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
