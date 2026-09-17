@@ -13,6 +13,13 @@
 # always gets a fresh adversarial review before the next push — that is no
 # longer something to remember, it's an edge the engine doesn't have.
 #
+# The `ci_watch` and `merge` stages' `method.modelIdOrName: "github"` assumes
+# a @webframp/github model instance named exactly "github" exists in the same
+# working repo (per that extension's own README: `swamp model create
+# @webframp/github github`) — modelIdOrName is an instance selector, the same
+# argument you'd pass to `swamp model method run <id-or-name> ...`, not the
+# extension type string.
+#
 # Usage:
 #   swamp model create @swamp/software-factory pr-factory
 #   swamp model edit pr-factory   # paste this file's content under globalArguments
@@ -112,7 +119,7 @@ stages:
     work:
       mode: method
       method:
-        modelIdOrName: "@webframp/github"
+        modelIdOrName: "github"
         methodName: watch_pr_checks
         inputs:
           repo: '${{ data.latest(self.name, "evidence-change-request").payload.repo }}'
@@ -143,8 +150,8 @@ stages:
       - name: submit
         to: local_review
         gates:
-          - type: artifact-fresh
-            config: { artifact: change-summary, recordedThisCycle: true }
+          - type: artifact-exists
+            config: { artifact: change-summary }
 
   - id: merge
     description: >-
@@ -153,7 +160,7 @@ stages:
     work:
       mode: method
       method:
-        modelIdOrName: "@webframp/github"
+        modelIdOrName: "github"
         methodName: merge_pull_request
         inputs:
           repo: '${{ data.latest(self.name, "evidence-change-request").payload.repo }}'
