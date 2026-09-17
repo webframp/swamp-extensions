@@ -142,13 +142,21 @@ const CreateMessageSchema = z.looseObject({
 /** Griptape Cloud Threads — conversation threads and their messages */
 export const model = {
   type: "@webframp/griptape/threads",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [{
-    toVersion: "2026.09.15.1",
-    description: "No schema changes — dependency/license maintenance bump",
-    upgradeAttributes: (old: Record<string, unknown>) => old,
-  }],
+
+  upgrades: [
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "threads": {

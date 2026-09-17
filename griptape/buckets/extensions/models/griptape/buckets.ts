@@ -129,13 +129,21 @@ const CreateAssetSchema = z.looseObject({
 /** Griptape Cloud Buckets — asset buckets and their stored assets */
 export const model = {
   type: "@webframp/griptape/buckets",
-  version: "2026.09.15.1",
+  version: "2026.09.17.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [{
-    toVersion: "2026.09.15.1",
-    description: "No schema changes — dependency/license maintenance bump",
-    upgradeAttributes: (old: Record<string, unknown>) => old,
-  }],
+
+  upgrades: [
+    {
+      toVersion: "2026.09.15.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "buckets": {

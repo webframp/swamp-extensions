@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/griptape/structures"
-version: "2026.09.15.1"
+version: "2026.09.17.1"
 description: "Griptape Cloud Structures — deployed structures, runs, logs, and spans"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
