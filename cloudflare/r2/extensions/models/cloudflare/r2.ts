@@ -367,7 +367,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.09.17.2",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -413,6 +413,12 @@ export const model = {
     {
       toVersion: "2026.09.17.2",
       description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

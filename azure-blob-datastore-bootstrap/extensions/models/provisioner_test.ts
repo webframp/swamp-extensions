@@ -91,7 +91,7 @@ Deno.test("model exports correct type and version", () => {
     model.type,
     "@webframp/azure-blob-datastore-bootstrap/provisioner",
   );
-  assertEquals(model.version, "2026.09.15.1");
+  assertEquals(model.version, "2026.09.18.1");
 });
 
 Deno.test("model has provision method", () => {

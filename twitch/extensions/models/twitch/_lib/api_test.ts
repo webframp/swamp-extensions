@@ -171,9 +171,9 @@ Deno.test({
       );
 
       assertEquals(requestCount, 2);
-      assertEquals(results.length, 3);
-      assertEquals(results[0].id, "1");
-      assertEquals(results[2].id, "3");
+      assertEquals(results.data.length, 3);
+      assertEquals(results.data[0].id, "1");
+      assertEquals(results.data[2].id, "3");
     } finally {
       uninstall();
       await server.shutdown();

@@ -344,7 +344,7 @@ const InvokeStructureWebhookPostSchema = z.looseObject({
 /** Griptape Cloud Structures — deployed structures, runs, logs, and spans */
 export const model = {
   type: "@webframp/griptape/structures",
-  version: "2026.09.17.1",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -356,6 +356,12 @@ export const model = {
     {
       toVersion: "2026.09.17.1",
       description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

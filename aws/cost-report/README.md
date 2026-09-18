@@ -45,25 +45,24 @@ swamp model method run <model> <method> --report-label cost
 
 ## Troubleshooting
 
-**Report shows `*Report skipped: Not a cost-estimate model (...)*`.**
-The report only runs its logic for model types whose name contains
-`cost-estimate`. If it's attached to a different model type (directly, or
-via `reports.require`), it always skips — this is by design, not a bug.
+**Report shows `*Report skipped: Not a cost-estimate model (...)*`.** The report
+only runs its logic for model types whose name contains `cost-estimate`. If it's
+attached to a different model type (directly, or via `reports.require`), it
+always skips — this is by design, not a bug.
 
-**The cost table shows `$0.00` for every row.**
-Only `estimate_from_spec` produces a resource table, and it's built from
-the *method's input arguments* (`ec2Instances`, `rdsInstances`), not from
-computed pricing — `monthlyPerUnit`/`monthlyTotal` are hardcoded to `0` in
-the table itself. The actual computed costs live in the data artifact the
-method wrote; use the `swamp data get` command printed under "Data
-Produced" in the same report to see real numbers.
+**The cost table shows `$0.00` for every row.** Only `estimate_from_spec`
+produces a resource table, and it's built from the _method's input arguments_
+(`ec2Instances`, `rdsInstances`), not from computed pricing —
+`monthlyPerUnit`/`monthlyTotal` are hardcoded to `0` in the table itself. The
+actual computed costs live in the data artifact the method wrote; use the
+`swamp data get` command printed under "Data Produced" in the same report to see
+real numbers.
 
-**No resource table at all, just recommendations.**
-`estimate_ec2` and `estimate_rds` only get the generic recommendations
-section — the resource-table code path is gated to
-`context.methodName === "estimate_from_spec"` specifically. Use
-`swamp data get <model> <artifact>` for those methods' actual cost
-breakdowns.
+**No resource table at all, just recommendations.** `estimate_ec2` and
+`estimate_rds` only get the generic recommendations section — the resource-table
+code path is gated to `context.methodName === "estimate_from_spec"`
+specifically. Use `swamp data get <model> <artifact>` for those methods' actual
+cost breakdowns.
 
 ## License
 

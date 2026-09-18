@@ -241,7 +241,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -302,6 +302,12 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -431,7 +437,7 @@ export const model = {
           }`,
         );
 
-        const chatters = raw.map((c) => ({
+        const chatters = raw.data.map((c) => ({
           userId: c.user_id,
           login: c.user_login,
           displayName: c.user_name,
@@ -441,6 +447,7 @@ export const model = {
           channel,
           chatters,
           count: chatters.length,
+          truncated: raw.truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
@@ -531,7 +538,7 @@ export const model = {
           expires_at: string;
         }>(creds, `/moderation/banned?broadcaster_id=${broadcasterId}`);
 
-        const bans = raw.map((b) => ({
+        const bans = raw.data.map((b) => ({
           userId: b.user_id,
           login: b.user_login,
           reason: b.reason,
@@ -544,6 +551,7 @@ export const model = {
           channel,
           bans,
           count: bans.length,
+          truncated: raw.truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,
@@ -730,7 +738,7 @@ export const model = {
           `/moderation/moderators/events?broadcaster_id=${broadcasterId}`,
         );
 
-        const events = raw.map((e) => ({
+        const events = raw.data.map((e) => ({
           eventType: e.event_type,
           eventTimestamp: e.event_timestamp,
           userId: e.event_data.user_id,
@@ -742,6 +750,7 @@ export const model = {
           channel,
           events,
           count: events.length,
+          truncated: raw.truncated,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,

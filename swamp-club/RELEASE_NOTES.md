@@ -1,7 +1,6 @@
-## 2026.09.15.1
+## 2026.09.18.1
 
-**Changed:** Bump zod 4.4.3 → 4.6.5
-
-## 2026.09.08.1
-
-**Added:** Typed Lab issue collection and explicitly approved ripple posting for cross-provider triage.
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

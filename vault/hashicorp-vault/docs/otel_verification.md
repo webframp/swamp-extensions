@@ -9,8 +9,8 @@ Issue: https://github.com/webframp/swamp-extensions/issues/276
 
 The hashicorp-vault extension emits OpenTelemetry spans that carry vault name,
 key name, and KV version. It never records secret values, tokens, or request
-bodies. This document verifies that the *runtime environment* (swamp host + Deno)
-does not independently capture those values via its own instrumentation.
+bodies. This document verifies that the _runtime environment_ (swamp host +
+Deno) does not independently capture those values via its own instrumentation.
 
 ## Test Environment
 
@@ -45,11 +45,11 @@ The mock Vault logged both requests but neither produced an HTTP span in the
 exported payloads. Deno's fetch auto-instrumentation is not active under swamp
 in this build. Canary sweep:
 
-| Canary         | Occurrences in exported payloads |
-| -------------- | -------------------------------- |
-| Vault token    | 0                                |
-| Secret value   | 0                                |
-| Probe marker   | 1 (the span that deliberately set it) |
+| Canary       | Occurrences in exported payloads      |
+| ------------ | ------------------------------------- |
+| Vault token  | 0                                     |
+| Secret value | 0                                     |
+| Probe marker | 1 (the span that deliberately set it) |
 
 ### 3. Host redacts CLI arguments
 
@@ -65,8 +65,8 @@ at the extension level.
 ### 4. Host vault spans carry no attributes
 
 `swamp.vault.put` exported with an empty attribute list. `vault.name` is not set
-on the host span despite the string existing in the binary. The extension records
-`vault.name` itself rather than assuming the parent has it.
+on the host span despite the string existing in the binary. The extension
+records `vault.name` itself rather than assuming the parent has it.
 
 ## Residual Risks
 
@@ -88,9 +88,9 @@ capture.
 ### Body content attributes
 
 The binary has `http.request.body.size` and `http.response.body.size` but no
-body-content attribute, consistent with OTel HTTP semantic conventions. Sizes are
-harmless. A future deviation from semconv that adds body content capture would
-expose secret values in `put` payloads.
+body-content attribute, consistent with OTel HTTP semantic conventions. Sizes
+are harmless. A future deviation from semconv that adds body content capture
+would expose secret values in `put` payloads.
 
 **Trigger:** Unlikely absent a custom Deno instrumentation patch. Low priority.
 
@@ -112,10 +112,10 @@ wanting audit-trail certainty should run the probe for each operation.
 
 The probe requires three components:
 
-1. **OTLP sink** — A Deno script serving on port 4319 that writes every
-   received payload to disk as JSON.
-2. **Mock Vault** — A Deno script serving KV v2 endpoints on port 8299,
-   logging all requests with their headers.
+1. **OTLP sink** — A Deno script serving on port 4319 that writes every received
+   payload to disk as JSON.
+2. **Mock Vault** — A Deno script serving KV v2 endpoints on port 8299, logging
+   all requests with their headers.
 3. **Probe extension** — A copy of `hashicorp.ts` with an additional
    `tracer.startSpan("PROBE ...")` in the `put` method that sets a
    `probe.marker` attribute.
@@ -126,6 +126,7 @@ Re-create them rather than relying on any `/tmp` artifacts surviving.
 ## Re-verification Schedule
 
 Run this probe:
+
 - On any swamp release that changes the Deno runtime version
 - On any swamp release that mentions OTel, tracing, or instrumentation changes
 - Before any change to this extension that adds new `fetch` calls or modifies

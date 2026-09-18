@@ -478,7 +478,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.09.17.2",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -549,6 +549,12 @@ export const model = {
     {
       toVersion: "2026.09.17.2",
       description: "No schema changes — refreshed dependency manifest pin",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

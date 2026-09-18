@@ -70,23 +70,22 @@ This extension runs only on macOS:
 ## Security and Limits
 
 **The secret never appears in process arguments.** `put` hex-encodes the value
-and feeds `add-generic-password ... -X <hex>` to `security -i` on stdin.
-Process arguments are readable by any process running as the same user, so an
-argv-based write would expose every secret to `ps` and to endpoint monitoring
-agents; the stdin path does not.
+and feeds `add-generic-password ... -X <hex>` to `security -i` on stdin. Process
+arguments are readable by any process running as the same user, so an argv-based
+write would expose every secret to `ps` and to endpoint monitoring agents; the
+stdin path does not.
 
 **Maximum secret size is about 2 KB.** The `security -i` interface reads
 commands with a 4096-byte line buffer, which caps a hex-encoded secret at
-roughly 2 KB (the exact figure depends on the service and key length).
-Oversize writes fail with a descriptive error before anything is executed.
-Reads are not size-limited by this; larger existing items still round-trip.
+roughly 2 KB (the exact figure depends on the service and key length). Oversize
+writes fail with a descriptive error before anything is executed. Reads are not
+size-limited by this; larger existing items still round-trip.
 
-**macOS 26 hex output is handled.** On macOS 26,
-`find-generic-password -w` prints hex instead of the secret when any byte
-falls outside printable ASCII. `get` detects this through `-g`, which marks
-the encoding explicitly, and decodes only when the keychain says the output is
-hex. A secret whose value merely looks like hex (`deadbeef`) is returned
-verbatim.
+**macOS 26 hex output is handled.** On macOS 26, `find-generic-password -w`
+prints hex instead of the secret when any byte falls outside printable ASCII.
+`get` detects this through `-g`, which marks the encoding explicitly, and
+decodes only when the keychain says the output is hex. A secret whose value
+merely looks like hex (`deadbeef`) is returned verbatim.
 
 **Keys and the service name must not contain control characters.** A newline
 would split the command line sent to `security -i`. Keys must also not start
@@ -94,10 +93,11 @@ with `-`.
 
 ## Observability
 
-The provider emits OpenTelemetry spans for every vault operation — `Keychain
-get`, `Keychain put`, and `Keychain list`. It uses `@opentelemetry/api` only and
-never configures a TracerProvider; the swamp host does that. With no provider
-configured the tracer is a no-op.
+The provider emits OpenTelemetry spans for every vault operation —
+`Keychain
+get`, `Keychain put`, and `Keychain list`. It uses
+`@opentelemetry/api` only and never configures a TracerProvider; the swamp host
+does that. With no provider configured the tracer is a no-op.
 
 Attributes: `vault.name`, `vault.secret_key`, `vault.service`, `rpc.system`,
 `rpc.service`, and `rpc.method`. `list` is unsupported by this provider, so its
@@ -105,14 +105,14 @@ span reports ERROR — a caller asked for a listing and did not get one.
 
 These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
 spans when you run a `swamp vault` subcommand, but they carry no attributes, and
-when a model or workflow resolves a vault expression the host emits no vault span
-at all — the read is invisible. The extension's spans appear on both paths.
+when a model or workflow resolves a vault expression the host emits no vault
+span at all — the read is invisible. The extension's spans appear on both paths.
 
 There is no span around the `security` invocation itself. `put` hands the
 hex-encoded secret to `security -i` on stdin, so keeping span code out of the
 exec helper means neither argv nor stdin is in scope where a span could record
-it. A test asserts the secret and its hex encoding are absent from argv and
-from every span field.
+it. A test asserts the secret and its hex encoding are absent from argv and from
+every span field.
 
 **What is never recorded:** secret values, argv, stdin, and error messages. On
 failure a span carries `error.type` and an ERROR status, nothing more.
@@ -131,14 +131,14 @@ information in them.
 **`swamp vault list-keys` (or a `list()` call) always errors.** This is
 expected, not a bug: `security` has no way to enumerate accounts for a given
 service, so `list` in `keychain.ts` unconditionally rejects with "Listing
-keychain items is not supported by this vault provider" and the span records
-it as a failure. There is no config flag to work around this — track keys in
-your model/workflow config instead of listing them from the vault.
+keychain items is not supported by this vault provider" and the span records it
+as a failure. There is no config flag to work around this — track keys in your
+model/workflow config instead of listing them from the vault.
 
-**Runs everywhere except macOS.** The provider shells out to `security`,
-which only exists on Darwin. `manifest.yaml` restricts `platforms` to
-`darwin-x86_64` and `darwin-aarch64`; running on Linux or in most CI
-containers will fail before the provider code even executes.
+**Runs everywhere except macOS.** The provider shells out to `security`, which
+only exists on Darwin. `manifest.yaml` restricts `platforms` to `darwin-x86_64`
+and `darwin-aarch64`; running on Linux or in most CI containers will fail before
+the provider code even executes.
 
 **"security ... exited with code ... <stderr>" mentioning the keychain being
 locked or denying access.** `runSecurity` in `keychain.ts` wraps any non-zero
@@ -150,26 +150,25 @@ keychain (`security unlock-keychain`) or grant access, then retry.
 
 **"secret is too large for the keychain write path".** `put` hex-encodes the
 value and writes an `add-generic-password ... -X <hex>` line to `security -i`
-over stdin; that interface reads commands through a fixed 4096-byte line
-buffer. The provider checks the encoded line length before spawning anything
-and throws with the computed maximum byte count for your specific service/key
-combination rather than silently truncating or corrupting the write. Shorten
-the service name, the key, or the secret.
+over stdin; that interface reads commands through a fixed 4096-byte line buffer.
+The provider checks the encoded line length before spawning anything and throws
+with the computed maximum byte count for your specific service/key combination
+rather than silently truncating or corrupting the write. Shorten the service
+name, the key, or the secret.
 
 **"could not determine keychain password encoding: ...".** On macOS 26,
 `find-generic-password -w` prints hex instead of the literal secret when any
-byte falls outside printable ASCII. `get` disambiguates by re-running with
-`-g` and reading the `password:` line from stderr; this error means that
-probe line was missing or contained malformed hex — for example if a
-non-standard `security` build changed that output format. This is a hard
-failure, not a fallback to raw output, because guessing wrong would return
-corrupted bytes.
+byte falls outside printable ASCII. `get` disambiguates by re-running with `-g`
+and reading the `password:` line from stderr; this error means that probe line
+was missing or contained malformed hex — for example if a non-standard
+`security` build changed that output format. This is a hard failure, not a
+fallback to raw output, because guessing wrong would return corrupted bytes.
 
-**A key or the configured `service` is rejected before `security` runs.**
-Keys and the `service` config value are checked for control characters (a
-newline would split the command line sent to `security -i`) and a leading
-`-` (which `security` would parse as a flag). Both throw synchronously in
-`assertSafeKey` / the config schema's `refine` before any subprocess spawns.
+**A key or the configured `service` is rejected before `security` runs.** Keys
+and the `service` config value are checked for control characters (a newline
+would split the command line sent to `security -i`) and a leading `-` (which
+`security` would parse as a flag). Both throw synchronously in `assertSafeKey` /
+the config schema's `refine` before any subprocess spawns.
 
 ## License
 

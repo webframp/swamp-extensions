@@ -165,9 +165,13 @@ type MethodContext = {
 /** Events aggregation model — canonical windowed event set for scoring + graph. */
 export const model = {
   type: "@webframp/devops-measurement/events",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   upgrades: [{
     toVersion: "2026.09.15.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.09.18.1",
     description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],

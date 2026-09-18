@@ -175,9 +175,10 @@ const MAX_PAGINATED_RESULTS = 50_000;
 export async function helixApiPaginated<T>(
   creds: TwitchCredentials,
   path: string,
-): Promise<T[]> {
+): Promise<{ data: T[]; truncated: boolean }> {
   const allResults: T[] = [];
   let cursor: string | undefined;
+  let truncated = false;
 
   while (true) {
     const separator = path.includes("?") ? "&" : "?";
@@ -189,6 +190,9 @@ export async function helixApiPaginated<T>(
     allResults.push(...response.data);
 
     if (allResults.length >= MAX_PAGINATED_RESULTS) {
+      if (response.pagination?.cursor) {
+        truncated = true;
+      }
       break;
     }
 
@@ -198,5 +202,8 @@ export async function helixApiPaginated<T>(
     }
   }
 
-  return allResults;
+  if (allResults.length > MAX_PAGINATED_RESULTS) {
+    allResults.length = MAX_PAGINATED_RESULTS;
+  }
+  return { data: allResults, truncated };
 }

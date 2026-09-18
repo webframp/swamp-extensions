@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/swamp-club"
-version: "2026.09.15.1"
+version: "2026.09.18.1"
 description: "Narrow, typed Swamp Club Lab issue intake and approved-ripple adapter."
 repository: "https://github.com/webframp/swamp-extensions"
 models: [swamp-club/lab.ts]
