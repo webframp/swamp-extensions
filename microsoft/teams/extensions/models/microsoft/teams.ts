@@ -820,10 +820,14 @@ export const model = {
         const accessToken = await getAccessToken(context.globalArgs);
 
         const pageSize = Math.min(args.limit * 5, 50).toString();
+        // `viewpoint` is a per-user computed property, not a navigation
+        // property — Graph rejects it under $expand and requires $select.
         const params: Record<string, string> = {
           "$top": pageSize,
           "$orderby": "lastMessagePreview/createdDateTime desc",
-          "$expand": "members,viewpoint",
+          "$expand": "members",
+          "$select":
+            "id,chatType,topic,createdDateTime,lastUpdatedDateTime,webUrl,viewpoint",
         };
 
         const MAX_CHAT_PAGES = 10;
@@ -1008,11 +1012,17 @@ export const model = {
           );
         }
 
-        // Fetch recent chats with viewpoint.
+        // Fetch recent chats with viewpoint. `viewpoint` is a per-user
+        // computed property, not a navigation property — Graph rejects it
+        // under $expand and requires $select instead. $select lists every
+        // GraphChat field (not just what this method reads) since raw chat
+        // objects are echoed into the output resource.
         const params: Record<string, string> = {
           "$top": "20",
           "$orderby": "lastMessagePreview/createdDateTime desc",
-          "$expand": "members,viewpoint",
+          "$expand": "members",
+          "$select":
+            "id,chatType,topic,createdDateTime,lastUpdatedDateTime,webUrl,viewpoint",
         };
 
         const chats: GraphChat[] = [];
