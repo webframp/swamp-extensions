@@ -72,8 +72,10 @@ jobs:
 
   - name: configure
     description: Point this repo's datastore at the new Aurora cluster.
-    needs:
-      - infra
+    dependsOn:
+      - job: infra
+        condition:
+          type: succeeded
     steps:
       - name: run-setup
         description: Run `swamp datastore setup extension @webframp/postgres-datastore`.

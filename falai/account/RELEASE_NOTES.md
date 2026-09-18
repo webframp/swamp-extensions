@@ -1,6 +1,6 @@
-## 2026.09.17.1
+## 2026.09.18.1
 
-Response schema fields are now generated as optional/nullable-optional
-regardless of the spec's required list, so reading a resource stored under an
-older model version no longer throws Required when the live API adds a new
-required field. No API surface change for this extension.
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

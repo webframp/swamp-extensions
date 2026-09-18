@@ -5,7 +5,7 @@ Observe DevOps team effectiveness through **cross-boundary collaboration**.
 The organization runs several crews. Some people do most of their work inside
 their own crew; others regularly help other crews — reviewing their merge
 requests, answering their questions, committing to their repositories. Those
-people are *force multipliers*: their leverage extends past their assigned team.
+people are _force multipliers_: their leverage extends past their assigned team.
 This extension identifies them, ranks them, and shows the collaboration network
 they form.
 
@@ -29,12 +29,12 @@ them into one DAG.
    `collect-redmine`, `collect-teams`, `collect-cloudtrail`). Each `sync`
    consumes the upstream extension's flat output, canonicalizes actor identity
    against the crew reference, and emits uniform cross-boundary events. The
-   collector *is* the anti-corruption layer: the generic upstream extension
+   collector _is_ the anti-corruption layer: the generic upstream extension
    stays generic, and all source-specific shape knowledge lives here.
 2. **Aggregate.** The `events` model's `aggregate` gathers every collector's
    events into one deduplicated event log. Because each event's id is a content
-   hash of its *stable* identity, re-observing the same activity writes a new
-   *version* of the same resource — swamp's versioned data does the
+   hash of its _stable_ identity, re-observing the same activity writes a new
+   _version_ of the same resource — swamp's versioned data does the
    deduplication, so re-running a collector never double-counts.
 3. **Score and graph, in parallel.**
    - `scoring` computes each member's cross-boundary ratio, reach, tier, and
@@ -48,15 +48,15 @@ them into one DAG.
 
 The design's bounded contexts map onto swamp primitives:
 
-| Context           | Swamp realization                                                  |
-| ----------------- | ------------------------------------------------------------------ |
-| Collection        | One translation model per source, each `sync` a fan-out factory    |
-| Crew Reference    | `crew-reference` model — crews, members, mappings as a snapshot     |
-| Event Log         | `events` model — the deduplicated, append-only observation record  |
-| Scoring (core)    | `scoring` model — cross-boundary ratio, reach, tier, force-multiplier |
-| Network Analysis  | `interaction-graph` model — nodes, HELPED edges, centrality in-data |
-| Presentation      | `force_multiplier_report` — tier table + force-multiplier summary  |
-| Orchestration     | One workflow DAG: collect → aggregate → score + graph → report     |
+| Context          | Swamp realization                                                     |
+| ---------------- | --------------------------------------------------------------------- |
+| Collection       | One translation model per source, each `sync` a fan-out factory       |
+| Crew Reference   | `crew-reference` model — crews, members, mappings as a snapshot       |
+| Event Log        | `events` model — the deduplicated, append-only observation record     |
+| Scoring (core)   | `scoring` model — cross-boundary ratio, reach, tier, force-multiplier |
+| Network Analysis | `interaction-graph` model — nodes, HELPED edges, centrality in-data   |
+| Presentation     | `force_multiplier_report` — tier table + force-multiplier summary     |
+| Orchestration    | One workflow DAG: collect → aggregate → score + graph → report        |
 
 The shared kernel is `_lib/event.ts`: the uniform event vocabulary, the single
 `newEvent` factory, the one cross-boundary predicate, and the deterministic
@@ -65,16 +65,16 @@ exactly one place.
 
 ## Models
 
-| Model                 | Type                                          | Methods            |
-| --------------------- | --------------------------------------------- | ------------------ |
-| Crew Reference        | `@webframp/devops-measurement/crew-reference` | `load`, `derive`   |
-| GitLab collector      | `@webframp/devops-measurement/collect-gitlab` | `sync`             |
-| Redmine collector     | `@webframp/devops-measurement/collect-redmine`| `sync`             |
-| Teams collector       | `@webframp/devops-measurement/collect-teams`  | `sync`             |
-| CloudTrail collector  | `@webframp/devops-measurement/collect-cloudtrail` | `sync`         |
-| Event log             | `@webframp/devops-measurement/events`         | `aggregate`        |
-| Scoring               | `@webframp/devops-measurement/scoring`        | `score`, `trend`   |
-| Interaction graph     | `@webframp/devops-measurement/interaction-graph` | `build`         |
+| Model                | Type                                              | Methods          |
+| -------------------- | ------------------------------------------------- | ---------------- |
+| Crew Reference       | `@webframp/devops-measurement/crew-reference`     | `load`, `derive` |
+| GitLab collector     | `@webframp/devops-measurement/collect-gitlab`     | `sync`           |
+| Redmine collector    | `@webframp/devops-measurement/collect-redmine`    | `sync`           |
+| Teams collector      | `@webframp/devops-measurement/collect-teams`      | `sync`           |
+| CloudTrail collector | `@webframp/devops-measurement/collect-cloudtrail` | `sync`           |
+| Event log            | `@webframp/devops-measurement/events`             | `aggregate`      |
+| Scoring              | `@webframp/devops-measurement/scoring`            | `score`, `trend` |
+| Interaction graph    | `@webframp/devops-measurement/interaction-graph`  | `build`          |
 
 ## Getting started
 
@@ -133,7 +133,7 @@ The same person appears as a GitLab username, a Redmine display name, a Teams
 `displayName`, and an IAM/git email. The crew reference's `aliases` map every
 known source identifier to one canonical member username, so a single person is
 one scored `userId` across all four sources. A collector resolves a commit actor
-from *both* the git author name and email, so a member whose email — not name —
+from _both_ the git author name and email, so a member whose email — not name —
 is the registered alias still resolves correctly rather than fragmenting into a
 separate identity.
 

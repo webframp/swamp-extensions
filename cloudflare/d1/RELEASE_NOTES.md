@@ -1,6 +1,6 @@
-## 2026.09.17.2
+## 2026.09.18.1
 
-No changes to this extension's methods. Regenerated to refresh the shared
-_lib/api.ts helper library after PR #427 review fixes to cfApiPaginatedCursor
-(used by r2, kv, durable-objects, and workers-ai, but emitted into every
-extension's api.ts since it's part of the shared template).
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

@@ -260,7 +260,7 @@ type MethodContext = {
 /** Teams collector model — translates channel messages into events. */
 export const model = {
   type: "@webframp/devops-measurement/collect-teams",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   upgrades: [{
     toVersion: "2026.09.15.1",
     description: "No schema changes — dependency/license maintenance bump",

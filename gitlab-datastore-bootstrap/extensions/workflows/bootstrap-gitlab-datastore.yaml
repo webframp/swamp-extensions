@@ -54,8 +54,10 @@ jobs:
 
   - name: configure
     description: Point this repo's datastore at GitLab.
-    needs:
-      - validate
+    dependsOn:
+      - job: validate
+        condition:
+          type: succeeded
     steps:
       - name: run-setup
         description: Run `swamp datastore setup extension @webframp/gitlab-datastore`.

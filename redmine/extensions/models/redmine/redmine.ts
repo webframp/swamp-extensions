@@ -232,7 +232,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
 
   upgrades: [
     {

@@ -84,13 +84,13 @@ on `list`.
 
 These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
 spans when you run a `swamp vault` subcommand, but they carry no attributes, and
-when a model or workflow resolves a vault expression the host emits no vault span
-at all — the read is invisible. The extension's spans appear on both paths.
+when a model or workflow resolves a vault expression the host emits no vault
+span at all — the read is invisible. The extension's spans appear on both paths.
 
 There is no span around the `gopass` invocation itself. Each method is one CLI
-call, so a child span would only restate its parent, and keeping span code out of
-the exec helper means argv and stdin — which hold the plaintext — are never in
-scope where a span could record them.
+call, so a child span would only restate its parent, and keeping span code out
+of the exec helper means argv and stdin — which hold the plaintext — are never
+in scope where a span could record them.
 
 **What is never recorded:** secret values, argv, stdin, and error messages. On
 failure a span carries `error.type` and an ERROR status, nothing more.
@@ -112,33 +112,33 @@ provider's own wrapped message — it never reaches the `code !== 0` handling in
 `gopass.ts`, which only runs once a process actually spawns. Confirm with
 `which gopass` in the same shell/environment swamp uses.
 
-**"gopass show exited with code 1" with no further detail.** On a non-zero
-exit, the thrown message is built from `args[0]` (just the subcommand, e.g.
-`show`, `insert`, `list`) plus gopass's stderr — the full path and store
-argument are deliberately left out of the message so a failure doesn't leak
-the vault namespace to anyone with trace-backend read access. The stderr text
-appended after the colon is where the real cause lives: a missing GPG key, an
+**"gopass show exited with code 1" with no further detail.** On a non-zero exit,
+the thrown message is built from `args[0]` (just the subcommand, e.g. `show`,
+`insert`, `list`) plus gopass's stderr — the full path and store argument are
+deliberately left out of the message so a failure doesn't leak the vault
+namespace to anyone with trace-backend read access. The stderr text appended
+after the colon is where the real cause lives: a missing GPG key, an
 uninitialized store, or a key that doesn't exist. If stderr was empty, gopass
 printed nothing useful and the exit code alone is all that's available.
 
 **A key is rejected before gopass ever runs.** `assertSafeKey` in `gopass.ts`
 throws synchronously for keys that are empty, start with `/` or `-`, contain a
 null byte, or contain a `.` or `..` path segment. These are rejected client-side
-specifically so a key can't escape the configured `store` — a `..` segment
-would otherwise let a caller read or overwrite a secret in a different
-mount. Rename the key rather than working around the restriction.
+specifically so a key can't escape the configured `store` — a `..` segment would
+otherwise let a caller read or overwrite a secret in a different mount. Rename
+the key rather than working around the restriction.
 
 **`get` returns only the first line even though the entry has more data.**
 `passwordOnly` defaults to `true`, so `get` runs `gopass show -o -n <path>`,
-which returns only the password line. If the secret entry has additional
-lines (notes, TOTP seed, metadata), set `passwordOnly: false` in the vault
-config to get the full entry via `gopass show -n <path>` instead.
+which returns only the password line. If the secret entry has additional lines
+(notes, TOTP seed, metadata), set `passwordOnly: false` in the vault config to
+get the full entry via `gopass show -n <path>` instead.
 
 **Listed keys look duplicated or missing the store prefix.** When `store` is
 configured, `list` strips a leading `<store>/` from every key gopass returns
-before handing them back — a store whose entries aren't actually organized
-under that mount name will pass through unchanged rather than being trimmed,
-which can make results look inconsistent between mounts.
+before handing them back — a store whose entries aren't actually organized under
+that mount name will pass through unchanged rather than being trimmed, which can
+make results look inconsistent between mounts.
 
 ## License
 

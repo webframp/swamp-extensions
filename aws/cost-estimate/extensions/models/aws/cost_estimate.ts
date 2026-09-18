@@ -265,7 +265,7 @@ const HOURS_PER_MONTH = 730;
  */
 export const model = {
   type: "@webframp/aws/cost-estimate",
-  version: "2026.09.17.1",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/aws/cost-report"],
 
@@ -364,6 +364,12 @@ export const model = {
     {
       toVersion: "2026.09.17.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

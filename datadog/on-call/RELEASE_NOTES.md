@@ -1,4 +1,6 @@
-## 2026.09.15.2
+## 2026.09.18.1
 
-**Added:** `list_on_call_schedules` method and `on_call_schedules` resource,
-bringing the extension to 22 methods covering the Datadog on call API surface.
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

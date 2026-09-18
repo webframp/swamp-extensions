@@ -247,7 +247,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
 
   upgrades: [
     {

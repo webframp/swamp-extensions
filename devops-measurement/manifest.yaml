@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/devops-measurement"
-version: "2026.09.15.1"
+version: "2026.09.18.1"
 description: |
   Observe DevOps team effectiveness through cross-boundary collaboration.
   Watches the tools an organization already uses (GitLab, Redmine, Teams,

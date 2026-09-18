@@ -1,3 +1,8 @@
 # /triage
 
-Canonicalize the supplied URL with `@webframp/triage`, start or resume the matching `@swamp/software-factory` work item, and run only the state-appropriate workflow. Persist the assessment before drafting actions. Render every external side effect and exact message text. Only call the approval transition after Sean explicitly approves the immutable bundle hash. Never execute provider writes directly from an agent.
+Canonicalize the supplied URL with `@webframp/triage`, start or resume the
+matching `@swamp/software-factory` work item, and run only the state-appropriate
+workflow. Persist the assessment before drafting actions. Render every external
+side effect and exact message text. Only call the approval transition after Sean
+explicitly approves the immutable bundle hash. Never execute provider writes
+directly from an agent.

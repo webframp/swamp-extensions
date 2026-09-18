@@ -46,8 +46,10 @@ jobs:
 
   - name: configure
     description: Point this repo's datastore at Azure Blob Storage.
-    needs:
-      - infra
+    dependsOn:
+      - job: infra
+        condition:
+          type: succeeded
     steps:
       - name: run-setup
         description: Run `swamp datastore setup extension @webframp/azure-blob-datastore`.

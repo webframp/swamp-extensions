@@ -1173,7 +1173,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",

@@ -1,4 +1,6 @@
-## 2026.09.15.2
+## 2026.09.18.1
 
-**Added:** `downtime` as a valid `policy_type` for monitor configuration
-policies, alongside the existing `tag` type.
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

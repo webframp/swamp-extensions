@@ -1,9 +1,6 @@
-## 2026.09.17.2
+## 2026.09.18.1
 
-Add smart entity CRUD methods (list/create/get/update/delete_asset_entity)
-reflecting fal.ai's new /assets/entities endpoints. Also: response schema fields
-are now generated as optional/nullable-optional regardless of the spec's
-required list, so reading a resource stored under an older model version no
-longer throws when the live API has since added required fields; list methods
-with a documented default page size now use it to detect truncation when the
-caller omits limit.
+**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
+correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
+usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+Co-upgrade dependencies.

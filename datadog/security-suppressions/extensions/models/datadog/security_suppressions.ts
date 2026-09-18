@@ -308,7 +308,7 @@ const GetSuppressionVersionHistorySchema = z.object({
 /** Datadog Security Suppressions — suppression rule management */
 export const model = {
   type: "@webframp/datadog/security-suppressions",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -349,6 +349,12 @@ export const model = {
     {
       toVersion: "2026.09.15.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.18.1",
+      description:
+        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
