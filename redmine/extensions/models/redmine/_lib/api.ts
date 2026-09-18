@@ -7,6 +7,45 @@
  * @module
  */
 
+const MAX_RETRIES = 4;
+const BASE_RETRY_DELAY_MS = 1000;
+
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+function retryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("Retry-After");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (!Number.isNaN(seconds)) return seconds * 1000;
+  }
+  return BASE_RETRY_DELAY_MS * 2 ** attempt;
+}
+
+// Redmine's rate limiter can trip even under sequential (concurrency-1)
+// callers — a workflow enriching dozens of issues one at a time in a tight
+// loop is enough. Retry 429/502/503/504 with backoff (honoring Retry-After
+// when the server sends one) instead of failing the whole run on the first
+// transient block.
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  let response: Response;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    response = await fetch(url, init);
+    if (!isRetryableStatus(response.status) || attempt === MAX_RETRIES) {
+      return response;
+    }
+    await response.body?.cancel();
+    await new Promise((resolve) =>
+      setTimeout(resolve, retryDelayMs(response, attempt))
+    );
+  }
+  return response!;
+}
+
 /**
  * Make a single Redmine API request.
  * Returns parsed JSON for 2xx, null for 204. Throws on error.
@@ -30,7 +69,7 @@ export async function redmineApi<T = null>(
 
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetchWithRetry(url, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -100,7 +139,7 @@ export async function redmineApiPaginated<T>(
     }
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await fetchWithRetry(url, {
         headers: fetchHeaders,
       });
     } catch (e) {

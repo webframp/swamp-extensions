@@ -268,6 +268,67 @@ Deno.test({
 });
 
 Deno.test({
+  name: "redmineApi: retries a 429 (honoring Retry-After) then succeeds",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let requestCount = 0;
+    const { url, server } = startMockServer(() => {
+      requestCount++;
+      if (requestCount === 1) {
+        return new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "0" },
+        });
+      }
+      return Response.json({ user: { id: 1 } });
+    });
+
+    try {
+      const result = await redmineApi<{ user: { id: number } }>(
+        url,
+        "key",
+        "GET",
+        "/users/current.json",
+      );
+
+      assertEquals(result.user.id, 1);
+      assertEquals(requestCount, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: gives up after repeated 429s",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let requestCount = 0;
+    const { url, server } = startMockServer(() => {
+      requestCount++;
+      return new Response(null, {
+        status: 429,
+        headers: { "Retry-After": "0" },
+      });
+    });
+
+    try {
+      await assertRejects(
+        () => redmineApi(url, "key", "GET", "/users/current.json"),
+        Error,
+        "429",
+      );
+      // Initial attempt + MAX_RETRIES retries.
+      assertEquals(requestCount, 5);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "redmineApi: returns null for 204 No Content",
   // Server creates connection pool resources that outlive the test
   sanitizeResources: false,
