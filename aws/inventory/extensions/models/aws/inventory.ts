@@ -729,6 +729,11 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.18.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   globalArguments: GlobalArgsSchema,
 
