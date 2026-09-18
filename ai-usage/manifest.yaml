@@ -77,7 +77,7 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/aws/bedrock-usage@2026.09.15.1"
+  - "@webframp/aws/bedrock-usage@2026.09.17.1"
   - "@webframp/gcp/vertex-usage@2026.09.15.1"
   - "@webframp/azure/openai-usage@2026.09.15.1"
   - "@webframp/anthropic/analytics@2026.09.15.1"

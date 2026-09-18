@@ -100,12 +100,12 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/aws/logs@2026.09.15.1"
-  - "@webframp/aws/metrics@2026.09.15.1"
-  - "@webframp/aws/alarms@2026.09.15.1"
-  - "@webframp/aws/traces@2026.09.15.1"
-  - "@webframp/aws/inventory@2026.09.15.1"
-  - "@webframp/aws/networking@2026.09.15.1"
-  - "@webframp/aws/alarm-investigation@2026.09.15.1"
-  - "@webframp/aws/cost-explorer@2026.09.15.1"
+  - "@webframp/aws/logs@2026.09.17.1"
+  - "@webframp/aws/metrics@2026.09.17.1"
+  - "@webframp/aws/alarms@2026.09.17.1"
+  - "@webframp/aws/traces@2026.09.17.1"
+  - "@webframp/aws/inventory@2026.09.17.1"
+  - "@webframp/aws/networking@2026.09.17.1"
+  - "@webframp/aws/alarm-investigation@2026.09.17.1"
+  - "@webframp/aws/cost-explorer@2026.09.17.1"
   - "@webframp/github@2026.09.15.1"

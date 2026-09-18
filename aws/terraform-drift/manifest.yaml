@@ -45,5 +45,5 @@ labels:
   - terraform
 dependencies:
   - "@webframp/terraform@2026.09.15.1"
-  - "@webframp/aws/inventory@2026.09.15.1"
-  - "@webframp/aws/networking@2026.09.15.1"
+  - "@webframp/aws/inventory@2026.09.17.1"
+  - "@webframp/aws/networking@2026.09.17.1"
