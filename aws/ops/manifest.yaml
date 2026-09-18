@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws-ops"
-version: "2026.09.17.1"
+version: "2026.09.17.2"
 description: |
   AWS Operations Toolkit - Unified incident investigation and daily operational visibility.
 

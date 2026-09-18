@@ -1,3 +1,7 @@
+## 2026.09.17.2
+
+**Changed:** Refreshed the `@webframp/aws/inventory` and `@webframp/aws/networking` manifest pins to 2026.09.17.1. No code or behavioral changes.
+
 ## 2026.09.17.1
 
 **Changed:** Bump @webframp/terraform 2026.08.28.1 → 2026.09.15.1

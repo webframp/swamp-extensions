@@ -1,3 +1,7 @@
+## 2026.09.17.2
+
+**Changed:** Refreshed the `@webframp/aws/adopt` and `@webframp/aws/inventory` manifest pins to 2026.09.17.1. No code or behavioral changes.
+
 ## 2026.09.17.1
 
 **Changed:** Bump @webframp/aws/adopt 2026.08.29.1 → 2026.09.15.1

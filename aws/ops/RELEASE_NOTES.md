@@ -1,3 +1,7 @@
+## 2026.09.17.2
+
+**Changed:** Refreshed the eight AWS manifest pins (`logs`, `metrics`, `alarms`, `traces`, `inventory`, `networking`, `alarm-investigation`, and `cost-explorer`) to 2026.09.17.1. No code or behavioral changes.
+
 ## 2026.09.17.1
 
 **Changed:** Bump @webframp/aws/logs 2026.08.29.1 → 2026.09.15.1

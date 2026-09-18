@@ -478,7 +478,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.09.17.1",
+  version: "2026.09.17.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -544,6 +544,11 @@ export const model = {
     {
       toVersion: "2026.09.17.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.17.2",
+      description: "No schema changes — refreshed dependency manifest pin",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,3 +1,7 @@
+## 2026.09.17.2
+
+**Changed:** Refreshed the `@webframp/aws/bedrock-usage` manifest pin to 2026.09.17.1. No code or behavioral changes.
+
 ## 2026.09.17.1
 
 **Changed:** Bump @webframp/aws/bedrock-usage 2026.08.29.1 → 2026.09.15.1
