@@ -253,7 +253,7 @@ async function getConnectionString(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/azure-blob-datastore-bootstrap/provisioner",
-  version: "2026.09.15.1",
+  version: "2026.09.18.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     state: {

@@ -1,6 +1,7 @@
 ## 2026.09.18.1
 
-**Fixed:** Corrected pagination loss in Twitch API by passing truncated status
-correctly. Corrected unbounded iteration and pagination leak in Azure OpenAI
-usages. **Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
-Co-upgrade dependencies.
+**Fixed:** `helixApiPaginated` now sets `truncated: true` when the post-loop
+cap trim actually removes items, instead of returning `truncated: false` for
+a result set that is missing data.
+
+**Upgrade note:** Normalized npm:zod reference globally to 4.6.5.

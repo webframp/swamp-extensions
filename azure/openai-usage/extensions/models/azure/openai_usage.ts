@@ -115,6 +115,9 @@ const ResourceListSchema = z.object({
       "CognitiveServices account kind (OpenAI or AIServices)",
     ),
   })).describe("Discovered OpenAI/AIServices resources"),
+  truncated: z.boolean().optional().describe(
+    "True if any subscription's resource listing was truncated, meaning results may be incomplete",
+  ),
   fetchedAt: z.string().optional().describe(
     "ISO 8601 timestamp when data was fetched",
   ),
@@ -873,6 +876,7 @@ export const model = {
         );
 
         const allResources: Array<AiResource & { subscription: string }> = [];
+        let anyTruncated = false;
 
         for (const subscription of context.globalArgs.subscriptions) {
           try {
@@ -882,10 +886,17 @@ export const model = {
               fetchFn,
               context.logger,
             );
+            if (aiResourceResult.truncated) {
+              anyTruncated = true;
+              context.logger.warn("Resource list may be incomplete", {
+                subscription,
+              });
+            }
             for (const r of aiResourceResult.resources) {
               allResources.push({ ...r, subscription });
             }
           } catch (err) {
+            anyTruncated = true;
             context.logger.warn("Failed to list resources", {
               subscription,
               error: err instanceof Error
@@ -904,6 +915,7 @@ export const model = {
             location: r.location,
             kind: r.kind,
           })),
+          truncated: anyTruncated,
         };
 
         const handle = await context.writeResource(

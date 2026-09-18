@@ -650,11 +650,56 @@ Deno.test("list_ai_resources handles subscription failure gracefully", async () 
   );
 
   const resources = getWrittenResources();
-  const data = resources[0].data as { resources: Array<unknown> };
+  const data = resources[0].data as {
+    resources: Array<unknown>;
+    truncated: boolean;
+  };
   assertEquals(data.resources.length, 0);
+  assertEquals(data.truncated, true);
 
   const warns = getLogsByLevel("warning");
   assertEquals(warns.length, 1);
+});
+
+Deno.test("list_ai_resources propagates truncated when pagination exceeds max pages", async () => {
+  const mockFetch = createMockFetchFn((url) => {
+    const u = typeof url === "string" ? url : url.toString();
+    if (u.includes("login.microsoftonline.com")) return tokenResponse();
+    if (
+      u.includes("Microsoft.CognitiveServices/accounts") ||
+      u.includes("next-page")
+    ) {
+      return new Response(
+        JSON.stringify({
+          value: [],
+          nextLink: "https://management.azure.com/next-page",
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response("not found", { status: 404 });
+  });
+
+  const { context, getWrittenResources, getLogsByLevel } =
+    createModelTestContext({
+      globalArgs: DEFAULT_GLOBAL_ARGS,
+      definition: { id: "t", name: "azure-ai", version: 1, tags: {} },
+    });
+
+  await model.methods.list_ai_resources.execute(
+    {} as Record<string, never>,
+    { ...context, fetchFn: mockFetch } as unknown as ListContext,
+  );
+
+  const resources = getWrittenResources();
+  const data = resources[0].data as { truncated: boolean };
+  assertEquals(data.truncated, true);
+
+  const warns = getLogsByLevel("warning");
+  assertEquals(
+    warns.some((w) => w.message === "Resource list may be incomplete"),
+    true,
+  );
 });
 
 Deno.test("listAiResources follows nextLink to collect all pages", async () => {

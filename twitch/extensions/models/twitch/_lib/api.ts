@@ -203,6 +203,7 @@ export async function helixApiPaginated<T>(
   }
 
   if (allResults.length > MAX_PAGINATED_RESULTS) {
+    truncated = true;
     allResults.length = MAX_PAGINATED_RESULTS;
   }
   return { data: allResults, truncated };

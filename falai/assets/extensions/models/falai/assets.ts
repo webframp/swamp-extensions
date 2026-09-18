@@ -670,7 +670,7 @@ export const model = {
     {
       toVersion: "2026.09.18.1",
       description:
-        "Normalized zod dependency version and applied pagination truncation fixes where applicable",
+        "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
