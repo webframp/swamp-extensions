@@ -1,5 +1,5 @@
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import {
   assertTransition,
   instanceName,

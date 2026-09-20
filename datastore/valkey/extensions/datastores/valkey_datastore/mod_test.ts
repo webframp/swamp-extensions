@@ -1,5 +1,5 @@
 import { assertEquals, assertExists, assertRejects } from "@std/assert";
-import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
+import { assertDatastoreExportConformance } from "@swamp-club/swamp-testing";
 import type { Redis } from "npm:ioredis@6.0.0";
 import {
   createSyncService,

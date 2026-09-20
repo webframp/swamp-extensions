@@ -6,7 +6,7 @@ import {
   assertExists,
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { EventBridgeClient } from "npm:@aws-sdk/client-eventbridge@3.1133.0";
 import { SNSClient } from "npm:@aws-sdk/client-sns@3.1133.0";
 import { SQSClient } from "npm:@aws-sdk/client-sqs@3.1133.0";

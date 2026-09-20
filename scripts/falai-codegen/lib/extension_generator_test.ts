@@ -41,8 +41,8 @@ Deno.test("generateManifest: uses the @webframp/falai/<name> naming convention",
 Deno.test("generateDenoJson: pins swamp-testing via jsr and excludes no-import-prefix", () => {
   const json = JSON.parse(generateDenoJson());
   assertStringIncludes(
-    json.imports["@systeminit/swamp-testing"],
-    "jsr:@systeminit/swamp-testing@",
+    json.imports["@swamp-club/swamp-testing"],
+    "jsr:@swamp-club/swamp-testing@",
   );
   assertEquals(json.lint.rules.exclude.includes("no-import-prefix"), true);
   assertStringIncludes(json.tasks.check, "extensions/models/falai");

@@ -4,7 +4,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
-import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
+import { assertDatastoreExportConformance } from "@swamp-club/swamp-testing";
 import { createBlobLock } from "./lock.ts";
 import { BlobClient } from "./rest_client.ts";
 import { datastore } from "./mod.ts";

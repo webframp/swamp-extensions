@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { model } from "./lab.ts";
 
 const globalArgs = {

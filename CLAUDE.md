@@ -16,7 +16,7 @@ Each extension lives in its own directory with:
 - `.swamp.yaml` - Repo marker (run `swamp repo init` in the directory to create)
 - `manifest.yaml` - Extension metadata and entry points
 - `extensions/models/`, `extensions/vaults/`, `extensions/datastores/`, `extensions/reports/` - Implementation files
-- `deno.json` - Dependencies (import `@systeminit/swamp-testing` for tests, optional for model-only extensions)
+- `deno.json` - Dependencies (import `@swamp-club/swamp-testing` for tests, optional for model-only extensions)
 
 **Do not commit per-extension `CLAUDE.md` or `AGENTS.md` files.** Running `swamp repo init` generates a managed `CLAUDE.md` in each extension directory — these are local development aids, not project artifacts. To support multiple AI tools, use `swamp repo init --tool claude --tool opencode` (or `swamp repo upgrade --tool opencode` to add a tool later). Both files are excluded by the root `.gitignore`. The root `CLAUDE.md` (symlinked as `AGENTS.md`) is the single source of project guidance.
 
@@ -103,13 +103,13 @@ append a no-op upgrade entry (identity `upgradeAttributes`) so the chain's final
 - Use local HTTP servers (`Deno.serve({ port: 0, onListen() {} }, handler)`) or Deno.Command mocking
 - Restore all env vars in a `finally` block
 - Tests that create SDK clients with connection pooling need `sanitizeResources: false` with a comment explaining why
-- Use `@systeminit/swamp-testing` conformance helpers and test factories
+- Use `@swamp-club/swamp-testing` conformance helpers and test factories
 
 ### Test Factories
 
 ```typescript
-import { createModelTestContext } from "@systeminit/swamp-testing";
-import { createReportTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { createReportTestContext } from "@swamp-club/swamp-testing";
 ```
 
 - `createModelTestContext({ globalArgs, storedResources })` - Test model methods, inspect via `getWrittenResources()`, `getLogsByLevel()`

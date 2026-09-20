@@ -21,7 +21,7 @@ import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-asyn
 import {
   assertVaultConformance,
   assertVaultExportConformance,
-} from "@systeminit/swamp-testing";
+} from "@swamp-club/swamp-testing";
 import { ENV_ALLOWLIST, vault } from "./pass.ts";
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ Deno.test("createProvider throws on invalid storeDir type", () => {
 // ---------------------------------------------------------------------------
 // Mock for Deno.Command that supports spawn() with piped stdin
 //
-// withMockedCommand from @systeminit/swamp-testing does not support spawn(),
+// withMockedCommand from @swamp-club/swamp-testing does not support spawn(),
 // which the pass vault needs for piping secrets via stdin to `pass insert`.
 // ---------------------------------------------------------------------------
 

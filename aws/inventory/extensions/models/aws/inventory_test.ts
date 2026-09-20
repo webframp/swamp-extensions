@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1133.0";
 import { RDSClient } from "npm:@aws-sdk/client-rds@3.1133.0";
 import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1133.0";

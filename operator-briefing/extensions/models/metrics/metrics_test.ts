@@ -3,7 +3,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { model } from "./metrics.ts";
 
 // The harness round-trips writeResource -> readResource by instance name, so a

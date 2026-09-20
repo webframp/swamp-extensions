@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { ConfigServiceClient } from "npm:@aws-sdk/client-config-service@3.1133.0";
 import { STSClient } from "npm:@aws-sdk/client-sts@3.1133.0";
 import { model } from "./config_compliance.ts";

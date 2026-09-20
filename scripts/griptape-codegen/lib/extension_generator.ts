@@ -68,8 +68,8 @@ export function generateDenoJson(): string {
         },
       },
       imports: {
-        "@systeminit/swamp-testing":
-          `jsr:@systeminit/swamp-testing@${SWAMP_TESTING_VERSION}`,
+        "@swamp-club/swamp-testing":
+          `jsr:@swamp-club/swamp-testing@${SWAMP_TESTING_VERSION}`,
       },
     },
     null,

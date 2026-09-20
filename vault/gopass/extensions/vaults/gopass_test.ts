@@ -18,7 +18,7 @@ import {
   SimpleSpanProcessor,
 } from "npm:@opentelemetry/sdk-trace-base@2.10.0";
 import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
-import { assertVaultExportConformance } from "@systeminit/swamp-testing";
+import { assertVaultExportConformance } from "@swamp-club/swamp-testing";
 import { vault } from "./gopass.ts";
 
 // ---------------------------------------------------------------------------
