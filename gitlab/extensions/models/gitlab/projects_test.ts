@@ -69,14 +69,20 @@ Deno.test("model has all expected methods", () => {
   assertEquals(methodNames.sort(), [
     "add_issue_note",
     "add_mr_note",
+    "cancel_pipeline",
+    "check_mr_merge_endpoint",
+    "commit_file",
+    "create_branch",
     "create_issue",
     "create_label",
     "create_merge_request",
+    "create_pipeline_schedule",
     "delete_mr_note",
     "get_file",
     "get_issue",
     "get_job_log",
     "get_merge_request",
+    "get_pipeline_by_iid",
     "get_pipeline_jobs",
     "get_project_info",
     "list_branches",
@@ -89,13 +95,16 @@ Deno.test("model has all expected methods", () => {
     "list_mr_discussions",
     "list_mr_notes",
     "list_my_merge_requests",
+    "list_pipeline_bridges",
     "list_pipelines",
     "list_projects",
     "list_releases",
+    "list_repository_tree",
     "list_todos",
     "mark_todo_done",
     "mark_todos_done",
     "merge",
+    "play_pipeline_schedule",
     "rebase_merge_request",
     "remove_mr_reviewers",
     "resolve_mr_discussion",
@@ -107,14 +116,17 @@ Deno.test("model has all expected methods", () => {
     "update_issue",
     "update_merge_request",
     "update_mr_note",
+    "update_project_visibility",
   ]);
 });
 
 Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
+    "branchCreateResult",
     "branches",
     "bulkTodoResult",
+    "commitFileResult",
     "commits",
     "dashboard",
     "discussionResolution",
@@ -128,15 +140,23 @@ Deno.test("model has all expected resources", () => {
     "mergeRequests",
     "mergeStatus",
     "mrAssignees",
+    "mrMergeEndpointCheck",
     "mrReviewers",
     "noteDeleted",
     "notes",
+    "pipelineBridges",
+    "pipelineByIid",
+    "pipelineCancel",
     "pipelineJobs",
+    "pipelineSchedule",
+    "pipelineSchedulePlayResult",
     "pipelines",
     "projectInfo",
+    "projectVisibility",
     "projects",
     "rebaseResult",
     "releases",
+    "repositoryTree",
     "retryResult",
     "reviewerRemovalResult",
     "todoList",
@@ -2794,6 +2814,737 @@ Deno.test("list_branches writes branches resource (REST)", async () => {
   } finally {
     restore();
   }
+});
+
+// =============================================================================
+// Issue #420 — Pipeline, Schedule, Repository, Project, Diagnostic Methods
+// =============================================================================
+
+Deno.test("cancel_pipeline records the cancellation", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipelines/42/cancel`]: {
+      status: 200,
+      body: {
+        status: "canceled",
+        web_url: "https://git.example.org/group/proj/-/pipelines/42",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.cancel_pipeline.execute(
+      { project: "group/proj", pipelineId: 42 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "pipelineCancel"
+    )!
+      .data as any;
+    assertEquals(d.pipelineId, 42);
+    assertEquals(d.status, "canceled");
+    assertEquals(d.webUrl, "https://git.example.org/group/proj/-/pipelines/42");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_pipeline_by_iid resolves the global id from a gid", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      project: {
+        pipeline: {
+          id: "gid://gitlab/Ci::Pipeline/456",
+          status: "SUCCESS",
+          webUrl: "https://git.example.org/group/proj/-/pipelines/456",
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_pipeline_by_iid.execute(
+      { project: "group/proj", iid: 12 },
+      context as any,
+    );
+    assertEquals(m.vars().iid, "12");
+    const d = getWrittenResources().find((x) => x.specName === "pipelineByIid")!
+      .data as any;
+    assertEquals(d.id, 456);
+    assertEquals(d.status, "success");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("get_pipeline_by_iid throws when the pipeline is not found", async () => {
+  const m = mockGraphqlCapture({ data: { project: { pipeline: null } } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_pipeline_by_iid.execute(
+          { project: "group/proj", iid: 999 },
+          context as any,
+        ),
+      Error,
+      "not found",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("list_pipeline_bridges reports downstream pipelines and truncation", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/pipelines/42/bridges?per_page=100`]: {
+      status: 200,
+      headers: { "x-next-page": "2" },
+      body: [
+        {
+          id: 7,
+          name: "trigger:fanout",
+          status: "failed",
+          downstream_pipeline: {
+            id: 999,
+            status: "failed",
+            web_url: "https://git.example.org/group/child/-/pipelines/999",
+          },
+        },
+      ],
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_pipeline_bridges.execute(
+      { project: "group/proj", pipelineId: 42 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "pipelineBridges"
+    )!
+      .data as any;
+    assertEquals(d.bridges.length, 1);
+    assertEquals(d.bridges[0].downstreamPipelineId, 999);
+    assertEquals(d.truncated, true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_pipeline_schedule creates the schedule and its variables", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipeline_schedules`]: {
+      status: 201,
+      body: {
+        id: 5,
+        description: "nightly",
+        ref: "main",
+        cron: "0 2 * * *",
+        cron_timezone: "UTC",
+        active: true,
+        web_url: "https://git.example.org/group/proj/-/pipeline_schedules/5",
+        created_at: "2026-09-20T00:00:00Z",
+      },
+    },
+    [`POST /api/v4/projects/${pid}/pipeline_schedules/5/variables`]: {
+      status: 201,
+      body: { key: "DEPLOY_ENV", value: "staging" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_pipeline_schedule.execute(
+      {
+        project: "group/proj",
+        description: "nightly",
+        cron: "0 2 * * *",
+        ref: "main",
+        cronTimezone: "UTC",
+        active: true,
+        variables: [{ key: "DEPLOY_ENV", value: "staging" }],
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "pipelineSchedule"
+    )!
+      .data as any;
+    assertEquals(d.id, 5);
+    assertEquals(d.variables, [{ key: "DEPLOY_ENV", value: "staging" }]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_pipeline_schedule defaults ref/timezone/active and skips the variables call when empty", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipeline_schedules`]: {
+      status: 201,
+      body: {
+        id: 6,
+        description: "weekly",
+        ref: "master",
+        cron: "0 3 * * 0",
+        cron_timezone: "UTC",
+        active: true,
+      },
+    },
+  });
+  try {
+    const parsed = model.methods.create_pipeline_schedule.arguments.parse({
+      project: "group/proj",
+      description: "weekly",
+      cron: "0 3 * * 0",
+    });
+    assertEquals(parsed.ref, "master");
+    assertEquals(parsed.cronTimezone, "UTC");
+    assertEquals(parsed.active, true);
+    assertEquals(parsed.variables, []);
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_pipeline_schedule.execute(
+      parsed,
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "pipelineSchedule"
+    )!
+      .data as any;
+    assertEquals(d.variables, []);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("play_pipeline_schedule records the trigger message", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipeline_schedules/5/play`]: {
+      status: 201,
+      body: { message: "202 Accepted" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.play_pipeline_schedule.execute(
+      { project: "group/proj", scheduleId: 5 },
+      context as any,
+    );
+    const d = getWrittenResources()
+      .find((x) => x.specName === "pipelineSchedulePlayResult")!.data as any;
+    assertEquals(d.message, "202 Accepted");
+    assertEquals(d.scheduleId, 5);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_branch records the new branch", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/repository/branches`]: {
+      status: 201,
+      body: {
+        name: "feature/x",
+        commit: { id: "abc123" },
+        web_url: "https://git.example.org/group/proj/-/tree/feature/x",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_branch.execute(
+      { project: "group/proj", name: "feature/x", ref: "main" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "branchCreateResult"
+    )!
+      .data as any;
+    assertEquals(d.name, "feature/x");
+    assertEquals(d.commitSha, "abc123");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_branch defaults ref to main", () => {
+  const parsed = model.methods.create_branch.arguments.parse({
+    project: "group/proj",
+    name: "feature/x",
+  });
+  assertEquals(parsed.ref, "main");
+});
+
+Deno.test("commit_file creates a new file", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/repository/commits`]: {
+      status: 201,
+      body: {
+        id: "deadbeef",
+        short_id: "deadbee",
+        title: "Add file",
+        web_url: "https://git.example.org/group/proj/-/commit/deadbeef",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.commit_file.execute(
+      {
+        project: "group/proj",
+        branch: "main",
+        filePath: "docs/new.md",
+        content: "# New",
+        commitMessage: "Add file",
+      },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "commitFileResult"
+    )!
+      .data as any;
+    assertEquals(d.action, "create");
+    assertEquals(d.commitId, "deadbeef");
+    assertEquals(d.shortId, "deadbee");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("commit_file falls back to an update action when the file already exists", async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = (
+    _input: string | URL | Request,
+    init?: RequestInit,
+  ) => {
+    calls++;
+    const body = init?.body ? JSON.parse(init.body as string) : {};
+    const action = body.actions?.[0]?.action;
+    if (calls === 1) {
+      // First attempt (create) fails because the file is already there.
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ message: "A file with this name already exists" }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    assertEquals(action, "update");
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          id: "cafef00d",
+          short_id: "cafef00",
+          title: "Update file",
+          web_url: "https://git.example.org/group/proj/-/commit/cafef00d",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.commit_file.execute(
+      {
+        project: "group/proj",
+        branch: "main",
+        filePath: "docs/existing.md",
+        content: "# Updated",
+        commitMessage: "Update file",
+      },
+      context as any,
+    );
+    assertEquals(calls, 2);
+    const d = getWrittenResources().find((x) =>
+      x.specName === "commitFileResult"
+    )!
+      .data as any;
+    assertEquals(d.action, "update");
+    assertEquals(d.commitId, "cafef00d");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("commit_file surfaces an unrelated create failure without retrying", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/repository/commits`]: {
+      status: 400,
+      body: { message: "Branch does not exist" },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.commit_file.execute(
+          {
+            project: "group/proj",
+            branch: "no-such-branch",
+            filePath: "docs/new.md",
+            content: "# New",
+            commitMessage: "Add file",
+          },
+          context as any,
+        ),
+      Error,
+      "Branch does not exist",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_repository_tree lists entries under a path", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/repository/tree?per_page=100&page=1&path=scripts&ref=main`]:
+      {
+        status: 200,
+        body: [
+          {
+            id: "a1",
+            name: "policy.json",
+            type: "blob",
+            path: "scripts/policy.json",
+            mode: "100644",
+          },
+        ],
+      },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_repository_tree.execute(
+      { project: "group/proj", path: "scripts", ref: "main" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "repositoryTree"
+    )!
+      .data as any;
+    assertEquals(d.entries.length, 1);
+    assertEquals(d.entries[0].name, "policy.json");
+    assertEquals(d.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_repository_tree follows x-next-page across multiple pages", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/repository/tree?per_page=100&page=1`]: {
+      status: 200,
+      headers: { "x-next-page": "2" },
+      body: [{
+        id: "a1",
+        name: "one.txt",
+        type: "blob",
+        path: "one.txt",
+        mode: "100644",
+      }],
+    },
+    [`GET /api/v4/projects/${pid}/repository/tree?per_page=100&page=2`]: {
+      status: 200,
+      body: [{
+        id: "a2",
+        name: "two.txt",
+        type: "blob",
+        path: "two.txt",
+        mode: "100644",
+      }],
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_repository_tree.execute(
+      { project: "group/proj", path: "", ref: "" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "repositoryTree"
+    )!
+      .data as any;
+    assertEquals(d.entries.map((e: any) => e.name), ["one.txt", "two.txt"]);
+    assertEquals(d.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_repository_tree reports truncated when the page cap is hit", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    const parsed = new URL(url);
+    const page = Number(parsed.searchParams.get("page") ?? "1");
+    return Promise.resolve(
+      new Response(
+        JSON.stringify([{
+          id: `p${page}`,
+          name: `f${page}.txt`,
+          type: "blob",
+          path: `f${page}.txt`,
+          mode: "100644",
+        }]),
+        {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+            "x-next-page": String(page + 1),
+          },
+        },
+      ),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_repository_tree.execute(
+      { project: "group/proj", path: "", ref: "" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "repositoryTree"
+    )!
+      .data as any;
+    assertEquals(d.truncated, true);
+    assertEquals(d.entries.length, 20);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_project_visibility sets the new visibility", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`PUT /api/v4/projects/${pid}`]: {
+      status: 200,
+      body: {
+        path_with_namespace: "group/proj",
+        visibility: "internal",
+        web_url: "https://git.example.org/group/proj",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_project_visibility.execute(
+      { project: "group/proj", visibility: "internal" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "projectVisibility"
+    )!
+      .data as any;
+    assertEquals(d.visibility, "internal");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("update_project_visibility rejects an invalid visibility value", () => {
+  const result = model.methods.update_project_visibility.arguments.safeParse({
+    project: "group/proj",
+    visibility: "hidden",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("check_mr_merge_endpoint reports Allow/Server/Via headers on a 405", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`OPTIONS /api/v4/projects/${pid}/merge_requests/12/merge`]: {
+      status: 405,
+      body: "Method Not Allowed",
+      headers: { "allow": "GET, HEAD", "server": "nginx", "via": "1.1 proxy" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.check_mr_merge_endpoint.execute(
+      { project: "group/proj", iid: 12 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "mrMergeEndpointCheck"
+    )!
+      .data as any;
+    assertEquals(d.status, 405);
+    assertEquals(d.allowHeader, "GET, HEAD");
+    assertEquals(d.viaHeader, "1.1 proxy");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("check_mr_merge_endpoint does not throw on a non-2xx status — the status IS the answer", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`OPTIONS /api/v4/projects/${pid}/merge_requests/12/merge`]: {
+      status: 200,
+      body: "",
+      headers: { "allow": "GET, PUT, HEAD" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.check_mr_merge_endpoint.execute(
+      { project: "group/proj", iid: 12 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "mrMergeEndpointCheck"
+    )!
+      .data as any;
+    assertEquals(d.status, 200);
+    assertEquals(d.allowHeader, "GET, PUT, HEAD");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_file accepts a project/filePath/ref trio as an alternative to a blob url", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (
+      url.includes(
+        "/projects/group%2Fproj/repository/files/scripts%2Fpolicy.json/raw",
+      ) &&
+      url.includes("ref=main")
+    ) {
+      return Promise.resolve(
+        new Response("content: fine\n", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { project: "group/proj", filePath: "scripts/policy.json", ref: "main" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.project, "group/proj");
+    assertEquals(d.ref, "main");
+    assertEquals(d.path, "scripts/policy.json");
+    assertEquals(d.content, "content: fine\n");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file trio omits the ref query param when ref is not supplied", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (
+      url.endsWith("/projects/group%2Fproj/repository/files/README.md/raw")
+    ) {
+      return Promise.resolve(
+        new Response("# Readme\n", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_file.execute(
+      { project: "group/proj", filePath: "README.md" },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "fileContent")!
+      .data as any;
+    assertEquals(d.content, "# Readme\n");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_file rejects when both url and project/filePath are provided", () => {
+  const result = model.methods.get_file.arguments.safeParse({
+    url: "https://git.example.org/group/proj/-/blob/main/file.txt",
+    project: "group/proj",
+    filePath: "file.txt",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("get_file rejects when neither url nor project/filePath are provided", () => {
+  const result = model.methods.get_file.arguments.safeParse({});
+  assertEquals(result.success, false);
+});
+
+Deno.test("get_file rejects project without filePath", () => {
+  const result = model.methods.get_file.arguments.safeParse({
+    project: "group/proj",
+  });
+  assertEquals(result.success, false);
 });
 
 Deno.test("GraphQL error throws with message", async () => {

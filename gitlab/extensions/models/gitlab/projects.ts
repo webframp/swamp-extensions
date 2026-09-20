@@ -20,6 +20,9 @@ const MAX_FILE_BYTES = 500_000;
 /** Cap on ref/path split candidates probed by get_file — guards against a pathologically deep blob URL path forcing an unbounded burst of API calls. */
 const MAX_REF_CANDIDATES = 10;
 
+/** Cap on pages fetched by list_repository_tree (100 entries/page) — guards against unbounded pagination on a huge monorepo directory. */
+const REPOSITORY_TREE_MAX_PAGES = 20;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -855,6 +858,213 @@ const RebaseResultSchema = z.object({
   ),
 });
 
+const PipelineCancelSchema = z.object({
+  project: z.string().describe("Project the pipeline belongs to"),
+  pipelineId: z.number().describe("Pipeline ID"),
+  status: z.string().describe("Resulting pipeline status after cancelling"),
+  webUrl: z.string().nullable().describe("Web URL for the pipeline"),
+  cancelledAt: z.string().describe("Timestamp the cancellation was triggered"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const PipelineByIidSchema = z.object({
+  project: z.string().describe("Project the pipeline belongs to"),
+  iid: z.number().describe("Pipeline internal ID (project-scoped)"),
+  id: z.number().describe(
+    "Pipeline global ID — the id get_pipeline_jobs and retry_pipeline require",
+  ),
+  status: z.string().describe("Current pipeline status"),
+  webUrl: z.string().nullable().describe("Web URL for the pipeline"),
+  fetchedAt: z.string().describe("Timestamp the pipeline was resolved"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const PipelineBridgeSchema = z.object({
+  id: z.number().describe("Bridge job ID"),
+  name: z.string().describe("Bridge job name"),
+  status: z.string().describe("Bridge job status"),
+  downstreamPipelineId: z.number().nullable().describe(
+    "ID of the downstream (child) pipeline the bridge triggered, null if none",
+  ),
+  downstreamPipelineStatus: z.string().nullable().describe(
+    "Status of the downstream pipeline, null if none",
+  ),
+  downstreamPipelineWebUrl: z.string().nullable().describe(
+    "Web URL of the downstream pipeline, null if none",
+  ),
+});
+
+const PipelineBridgesSchema = z.object({
+  project: z.string().describe("Project the pipeline belongs to"),
+  pipelineId: z.number().describe("Pipeline ID"),
+  bridges: z.array(PipelineBridgeSchema).describe(
+    "Bridge (trigger) jobs in the pipeline, each fanning out to a downstream pipeline",
+  ),
+  count: z.number().describe("Number of bridges returned"),
+  truncated: z.boolean().describe(
+    "Whether more bridges exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the bridges were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const PipelineScheduleSchema = z.object({
+  id: z.number().describe("Pipeline schedule ID"),
+  project: z.string().describe("Project the schedule belongs to"),
+  description: z.string().describe("Schedule description"),
+  ref: z.string().describe("Git ref the schedule runs against"),
+  cron: z.string().describe(
+    "Cron expression controlling when the schedule runs",
+  ),
+  cronTimezone: z.string().describe(
+    "Timezone the cron expression is evaluated in",
+  ),
+  active: z.boolean().describe("Whether the schedule is active"),
+  variables: z.array(z.object({
+    key: z.string().describe("Variable name"),
+    value: z.string().describe("Variable value"),
+  })).describe("CI/CD variables set for pipelines created by this schedule"),
+  webUrl: z.string().nullable().describe("Web URL for the schedule"),
+  createdAt: z.string().describe("Timestamp the schedule was created"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const PipelineSchedulePlayResultSchema = z.object({
+  project: z.string().describe("Project the schedule belongs to"),
+  scheduleId: z.number().describe("Pipeline schedule ID"),
+  message: z.string().describe("GitLab's response message (e.g. 202 Accepted)"),
+  triggeredAt: z.string().describe("Timestamp the schedule was played"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const BranchCreateResultSchema = z.object({
+  project: z.string().describe("Project the branch belongs to"),
+  name: z.string().describe("New branch name"),
+  ref: z.string().describe("Ref the branch was created from"),
+  commitSha: z.string().describe("SHA of the commit the branch now points at"),
+  webUrl: z.string().nullable().describe("Web URL for the branch"),
+  createdAt: z.string().describe("Timestamp the branch was created"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CommitFileResultSchema = z.object({
+  project: z.string().describe("Project the commit belongs to"),
+  branch: z.string().describe("Branch the commit was made on"),
+  filePath: z.string().describe("File path that was created or updated"),
+  action: z.enum(["create", "update"]).describe(
+    "Whether the file was newly created or an existing file was updated",
+  ),
+  commitId: z.string().describe("Commit SHA"),
+  shortId: z.string().describe("Abbreviated commit SHA"),
+  message: z.string().describe("Commit message"),
+  webUrl: z.string().nullable().describe("Web URL for the commit"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const RepositoryTreeEntrySchema = z.object({
+  id: z.string().describe("Blob or tree SHA"),
+  name: z.string().describe("File or directory name"),
+  type: z.enum(["blob", "tree", "commit"]).describe(
+    "Entry kind: blob (file), tree (directory), or commit (submodule)",
+  ),
+  path: z.string().describe("Full path of the entry within the repository"),
+  mode: z.string().describe("Git file mode"),
+});
+
+const RepositoryTreeSchema = z.object({
+  project: z.string().describe("Project the tree belongs to"),
+  path: z.string().describe("Directory path listed (empty = repository root)"),
+  ref: z.string().describe("Branch, tag, or commit the tree was listed at"),
+  entries: z.array(RepositoryTreeEntrySchema).describe(
+    "Entries directly under the listed path",
+  ),
+  count: z.number().describe("Number of entries returned"),
+  truncated: z.boolean().describe(
+    "Whether more entries exist beyond the pages fetched",
+  ),
+  fetchedAt: z.string().describe("Timestamp the tree was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const ProjectVisibilitySchema = z.object({
+  project: z.string().describe("Project path"),
+  visibility: z.string().describe("Resulting project visibility"),
+  webUrl: z.string().nullable().describe("Web URL for the project"),
+  fetchedAt: z.string().describe("Timestamp the visibility change was applied"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const MrMergeEndpointCheckSchema = z.object({
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request internal ID"),
+  url: z.string().describe("The merge endpoint URL that was probed"),
+  status: z.number().describe("HTTP status returned by the OPTIONS probe"),
+  allowHeader: z.string().nullable().describe(
+    "The Allow header from the OPTIONS response — the verbs the endpoint permits",
+  ),
+  serverHeader: z.string().nullable().describe(
+    "The Server header from the OPTIONS response",
+  ),
+  viaHeader: z.string().nullable().describe(
+    "The Via header from the OPTIONS response — present when a proxy handled the request",
+  ),
+  bodySnippet: z.string().describe(
+    "First 500 characters of the OPTIONS response body",
+  ),
+  checkedAt: z.string().describe("Timestamp the probe was sent"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // GraphQL Client
 // =============================================================================
@@ -1150,6 +1360,15 @@ mutation todoMarkDone($id: TodoID!) {
   todoMarkDone(input: { id: $id }) {
     todo { id state }
     errors
+  }
+}`;
+
+const PIPELINE_BY_IID_QUERY = `
+query pipelineByIid($fullPath: ID!, $iid: ID!) {
+  project(fullPath: $fullPath) {
+    pipeline(iid: $iid) {
+      id status webUrl
+    }
   }
 }`;
 
@@ -1479,6 +1698,11 @@ class GitLabClient {
     return `${this.baseUrl}/projects/${encodeURIComponent(project)}`;
   }
 
+  /** Public accessor for the project's base API URL, for diagnostics that need to report the exact URL probed. */
+  baseProjectUrl(project: string): string {
+    return this.projectUrl(project);
+  }
+
   /** GET a list scoped to a project, returning data + truncation flag. */
   async getProjectList(
     project: string,
@@ -1590,6 +1814,37 @@ class GitLabClient {
       ? decodeUtf8TrimmingIncompleteTail(bytes)
       : new TextDecoder().decode(bytes);
     return { text, truncated };
+  }
+
+  /**
+   * Sends a non-mutating OPTIONS probe to a project endpoint and reports
+   * back the raw status and headers, without throwing on a non-2xx status —
+   * unlike every other client method, the point of this one IS the failure
+   * status (e.g. distinguishing a proxy's 405 from GitLab's own).
+   */
+  async optionsRaw(
+    project: string,
+    path: string,
+  ): Promise<{
+    status: number;
+    allowHeader: string | null;
+    serverHeader: string | null;
+    viaHeader: string | null;
+    bodySnippet: string;
+  }> {
+    const url = `${this.projectUrl(project)}${path}`;
+    const resp = await fetch(url, {
+      method: "OPTIONS",
+      headers: this.headers(),
+    });
+    const body = await resp.text();
+    return {
+      status: resp.status,
+      allowHeader: resp.headers.get("allow"),
+      serverHeader: resp.headers.get("server"),
+      viaHeader: resp.headers.get("via"),
+      bodySnippet: body.slice(0, 500),
+    };
   }
 }
 
@@ -1868,7 +2123,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.18.1",
+  version: "2026.09.20.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1993,6 +2248,21 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.20.1",
+      description:
+        "Added cancel_pipeline, get_pipeline_by_iid, list_pipeline_bridges, " +
+        "create_pipeline_schedule, play_pipeline_schedule, create_branch, " +
+        "commit_file, list_repository_tree, update_project_visibility, and " +
+        "check_mr_merge_endpoint methods (new resources: pipelineCancel, " +
+        "pipelineByIid, pipelineBridges, pipelineSchedule, " +
+        "pipelineSchedulePlayResult, branchCreateResult, commitFileResult, " +
+        "repositoryTree, projectVisibility, mrMergeEndpointCheck). Also " +
+        "extended get_file to accept a project/filePath/ref trio as an " +
+        "alternative to a blob url (fileContent schema unchanged). No " +
+        "globalArguments change; all additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2133,6 +2403,70 @@ export const model = {
       description: "List of recent CI/CD pipelines",
       schema: PipelineListSchema,
       lifetime: "10m" as const,
+      garbageCollection: 10,
+    },
+    pipelineCancel: {
+      description: "Outcome of cancelling a running pipeline",
+      schema: PipelineCancelSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    pipelineByIid: {
+      description:
+        "A pipeline's global id resolved from its project-scoped iid",
+      schema: PipelineByIidSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    pipelineBridges: {
+      description:
+        "Bridge (trigger) jobs in a pipeline, each fanning out to a downstream pipeline",
+      schema: PipelineBridgesSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    pipelineSchedule: {
+      description: "A created CI/CD pipeline schedule",
+      schema: PipelineScheduleSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    pipelineSchedulePlayResult: {
+      description: "Outcome of playing a pipeline schedule",
+      schema: PipelineSchedulePlayResultSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    branchCreateResult: {
+      description: "Outcome of creating a branch",
+      schema: BranchCreateResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    commitFileResult: {
+      description: "Outcome of creating or updating a file via a commit",
+      schema: CommitFileResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    repositoryTree: {
+      description: "Entries in a repository directory at a given ref",
+      schema: RepositoryTreeSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    projectVisibility: {
+      description: "Outcome of changing a project's visibility",
+      schema: ProjectVisibilitySchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    mrMergeEndpointCheck: {
+      description:
+        "Result of an OPTIONS probe against an MR's merge endpoint, for " +
+        "distinguishing a proxy rejection from GitLab's own",
+      schema: MrMergeEndpointCheckSchema,
+      lifetime: "15m" as const,
       garbageCollection: 10,
     },
     labels: {
@@ -2380,28 +2714,64 @@ export const model = {
     get_file: {
       description:
         "Fetch a file's raw content at a given ref via GitLab's REST raw-file " +
-        "endpoint. Accepts a GitLab blob URL (https://<host>/<project>/-/blob/" +
-        "<ref>/<path>, e.g. pasted from the web UI) and resolves project, ref, " +
-        "and path from it — the URL's host must match this instance's " +
-        "configured host. A ref containing slashes is disambiguated by " +
-        "probing the API, since GitLab's URL scheme does not mark where the " +
-        `ref ends and the path begins (up to ${MAX_REF_CANDIDATES} splits). ` +
-        "Content is capped at " +
-        `${MAX_FILE_BYTES / 1000}KB and common credential patterns are ` +
+        "endpoint. Accepts either a GitLab blob URL (https://<host>/<project>" +
+        "/-/blob/<ref>/<path>, e.g. pasted from the web UI) — resolving " +
+        "project, ref, and path from it, with the URL's host required to " +
+        "match this instance's configured host — or the project/filePath " +
+        "pair directly (ref optional, defaults to the project's default " +
+        "branch), for callers that already have those values and shouldn't " +
+        "have to assemble a blob URL just to have it parsed apart again. " +
+        "A ref containing slashes is disambiguated by probing the API, " +
+        "since GitLab's URL scheme does not mark where the ref ends and " +
+        `the path begins (up to ${MAX_REF_CANDIDATES} splits). Content is ` +
+        `capped at ${
+          MAX_FILE_BYTES / 1000
+        }KB and common credential patterns are ` +
         "redacted. Only text/code files are supported — binary content " +
         "(images, archives, compiled artifacts) is detected and rejected " +
         "rather than decoded as corrupted text.",
       arguments: z.object({
-        url: z.string().min(1).url().describe(
-          "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>",
+        url: z.string().min(1).url().optional().describe(
+          "GitLab blob URL, e.g. https://<host>/<group>/<project>/-/blob/<ref>/<path>. " +
+            "Alternative to project/filePath — provide exactly one.",
         ),
-      }),
-      execute: async (args: { url: string }, ctx: ModelContext) => {
+        project: z.string().min(1).optional().describe(
+          "Project path. Alternative to url — requires filePath.",
+        ),
+        filePath: z.string().min(1).optional().describe(
+          "File path within the repository. Alternative to url — requires project.",
+        ),
+        ref: z.string().optional().describe(
+          "Branch, tag, or commit. Only used with project/filePath; " +
+            "defaults to the project's default branch when omitted.",
+        ),
+      }).refine(
+        (v) =>
+          (v.url !== undefined && v.project === undefined &&
+            v.filePath === undefined) ||
+          (v.url === undefined && v.project !== undefined &&
+            v.filePath !== undefined),
+        {
+          message:
+            "Provide either url, or the project/filePath pair (ref optional) — not both, not neither",
+        },
+      ),
+      execute: async (
+        args: {
+          url?: string;
+          project?: string;
+          filePath?: string;
+          ref?: string;
+        },
+        ctx: ModelContext,
+      ) => {
         const startMs = Date.now();
-        const { project, candidates } = parseBlobUrl(
-          args.url,
-          ctx.globalArgs.host,
-        );
+        const { project, candidates } = args.url !== undefined
+          ? parseBlobUrl(args.url, ctx.globalArgs.host)
+          : {
+            project: args.project!,
+            candidates: [{ ref: args.ref ?? "", path: args.filePath! }],
+          };
         const client = new GitLabClient(
           ctx.globalArgs.host,
           ctx.globalArgs.token,
@@ -2414,11 +2784,17 @@ export const model = {
         let lastError: unknown;
         for (const candidate of candidates) {
           try {
+            // An empty ref (the trio path with no ref supplied) omits the
+            // query param entirely so GitLab falls back to the project's
+            // default branch, rather than sending a literal empty ref=.
+            const refQuery = candidate.ref
+              ? `?ref=${encodeURIComponent(candidate.ref)}`
+              : "";
             const result = await client.getProjectTextOrNull(
               project,
               `/repository/files/${
                 encodeURIComponent(candidate.path)
-              }/raw?ref=${encodeURIComponent(candidate.ref)}`,
+              }/raw${refQuery}`,
               MAX_FILE_BYTES + 4,
             );
             if (result !== null) {
@@ -2451,7 +2827,11 @@ export const model = {
           if (binaryError) throw binaryError;
           if (lastError) throw lastError;
           throw new Error(
-            `No matching ref/path found in project ${project} for blob URL: ${args.url}`,
+            args.url !== undefined
+              ? `No matching ref/path found in project ${project} for blob URL: ${args.url}`
+              : `File not found in project ${project}: ${args.filePath} @ ${
+                args.ref || "(default branch)"
+              }`,
           );
         }
         if (matches.length > 1) {
@@ -3548,6 +3928,277 @@ export const model = {
       },
     },
 
+    cancel_pipeline: {
+      description:
+        "Cancel a running pipeline. Unlike retry_pipeline, this stops a " +
+        "pipeline that is still in progress instead of re-running a finished one.",
+      arguments: z.object({
+        project: z.string().min(1),
+        pipelineId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; pipelineId: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/pipelines/${args.pipelineId}/cancel`,
+        );
+        const handle = await ctx.writeResource(
+          "pipelineCancel",
+          `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
+          {
+            project: args.project,
+            pipelineId: args.pipelineId,
+            status: raw.status ?? "",
+            webUrl: raw.web_url ?? null,
+            cancelledAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Cancelled pipeline {pid} in {project} ({status})", {
+          pid: args.pipelineId,
+          project: args.project,
+          status: raw.status ?? "?",
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_pipeline_by_iid: {
+      description:
+        "Resolve a pipeline's global id from its project-scoped iid via " +
+        "GraphQL (REST has no endpoint for this lookup). get_pipeline_jobs " +
+        "and retry_pipeline both need the global id; list_pipelines and the " +
+        "web UI only show the iid.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, PIPELINE_BY_IID_QUERY, {
+          fullPath: args.project,
+          iid: String(args.iid),
+        });
+        const pipeline = data.project?.pipeline;
+        if (!pipeline) {
+          throw new Error(
+            `Pipeline !${args.iid} not found in ${args.project}`,
+          );
+        }
+        // GraphQL id is a gid (gid://gitlab/Ci::Pipeline/123) — extract the number.
+        const id = parseInt(String(pipeline.id).split("/").pop() ?? "", 10);
+        if (Number.isNaN(id)) {
+          throw new Error(
+            `Could not parse pipeline id from GraphQL response: ${pipeline.id}`,
+          );
+        }
+        const handle = await ctx.writeResource(
+          "pipelineByIid",
+          `${sanitizeName(args.project)}-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            id,
+            status: (pipeline.status ?? "").toLowerCase(),
+            webUrl: pipeline.webUrl ?? null,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Resolved pipeline !{iid} in {project} -> id {id}", {
+          iid: args.iid,
+          project: args.project,
+          id,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_pipeline_bridges: {
+      description:
+        "List a pipeline's bridge (trigger) jobs, each fanning out to a " +
+        "downstream (child) pipeline invisible to get_pipeline_jobs and " +
+        "list_pipelines. Use this to find the real failing job behind a " +
+        "dynamically generated child pipeline.",
+      arguments: z.object({
+        project: z.string().min(1),
+        pipelineId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; pipelineId: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const { data, truncated } = await client.getProjectList(
+          args.project,
+          `/pipelines/${args.pipelineId}/bridges`,
+          { per_page: "100" },
+        );
+        const raw = Array.isArray(data) ? data : [];
+        const bridges = raw.map((b: any) => ({
+          id: b.id,
+          name: b.name ?? "",
+          status: b.status ?? "",
+          downstreamPipelineId: b.downstream_pipeline?.id ?? null,
+          downstreamPipelineStatus: b.downstream_pipeline?.status ?? null,
+          downstreamPipelineWebUrl: b.downstream_pipeline?.web_url ?? null,
+        }));
+        const handle = await ctx.writeResource(
+          "pipelineBridges",
+          `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
+          {
+            project: args.project,
+            pipelineId: args.pipelineId,
+            bridges,
+            count: bridges.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Pipeline {pid}: {count} bridge job(s)", {
+          pid: args.pipelineId,
+          count: bridges.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_pipeline_schedule: {
+      description:
+        "Create a CI/CD pipeline schedule, optionally with variables " +
+        "(a schedule is often only useful when it sets a variable a " +
+        ".gitlab-ci.yml rule checks for).",
+      arguments: z.object({
+        project: z.string().min(1),
+        description: z.string().min(1),
+        cron: z.string().min(1),
+        ref: z.string().default("master"),
+        cronTimezone: z.string().default("UTC"),
+        active: z.boolean().default(true),
+        variables: z.array(z.object({
+          key: z.string().min(1),
+          value: z.string(),
+        })).default([]),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          description: string;
+          cron: string;
+          ref: string;
+          cronTimezone: string;
+          active: boolean;
+          variables: Array<{ key: string; value: string }>;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(args.project, "/pipeline_schedules", {
+          description: args.description,
+          ref: args.ref,
+          cron: args.cron,
+          cron_timezone: args.cronTimezone,
+          active: args.active,
+        });
+        for (const variable of args.variables) {
+          await client.post(
+            args.project,
+            `/pipeline_schedules/${raw.id}/variables`,
+            { key: variable.key, value: variable.value },
+          );
+        }
+        const handle = await ctx.writeResource(
+          "pipelineSchedule",
+          `${sanitizeName(args.project)}-${raw.id}`,
+          {
+            id: raw.id,
+            project: args.project,
+            description: raw.description ?? args.description,
+            ref: raw.ref ?? args.ref,
+            cron: raw.cron ?? args.cron,
+            cronTimezone: raw.cron_timezone ?? args.cronTimezone,
+            active: raw.active ?? args.active,
+            variables: args.variables,
+            webUrl: raw.web_url ?? null,
+            createdAt: raw.created_at ?? new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Created pipeline schedule {id} in {project}", {
+          id: raw.id,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    play_pipeline_schedule: {
+      description:
+        "Trigger a fresh pipeline run carrying a schedule's CI/CD variables " +
+        "(retry_pipeline only re-runs a pipeline's own commit and jobs, not " +
+        "a schedule's variables). GitLab returns 202 Accepted with no " +
+        "pipeline id — pair with get_pipeline_by_iid to find the resulting pipeline.",
+      arguments: z.object({
+        project: z.string().min(1),
+        scheduleId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; scheduleId: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          `/pipeline_schedules/${args.scheduleId}/play`,
+        );
+        const handle = await ctx.writeResource(
+          "pipelineSchedulePlayResult",
+          `${sanitizeName(args.project)}-${args.scheduleId}`,
+          {
+            project: args.project,
+            scheduleId: args.scheduleId,
+            message: raw.message ?? "",
+            triggeredAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Played pipeline schedule {id} in {project}", {
+          id: args.scheduleId,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
     merge: {
       description: "Merge a merge request",
       arguments: z.object({
@@ -4507,6 +5158,315 @@ export const model = {
           count: branches.length,
           project: args.project,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_branch: {
+      description: "Create a new branch. list_branches is read-only, and " +
+        "create_merge_request needs a source branch that already exists.",
+      arguments: z.object({
+        project: z.string().min(1),
+        name: z.string().min(1),
+        ref: z.string().default("main"),
+      }),
+      execute: async (
+        args: { project: string; name: string; ref: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.post(
+          args.project,
+          "/repository/branches",
+          { branch: args.name, ref: args.ref },
+        );
+        const handle = await ctx.writeResource(
+          "branchCreateResult",
+          `${sanitizeName(args.project)}-${args.name}`,
+          {
+            project: args.project,
+            name: raw.name ?? args.name,
+            ref: args.ref,
+            commitSha: raw.commit?.id ?? "",
+            webUrl: raw.web_url ?? null,
+            createdAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Created branch {name} in {project} from {ref}", {
+          name: args.name,
+          project: args.project,
+          ref: args.ref,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    commit_file: {
+      description:
+        "Create or update a single file via a commit. Tries a create " +
+        "action first and falls back to an update action if the file " +
+        "already exists, so the caller does not need to know which applies.",
+      arguments: z.object({
+        project: z.string().min(1),
+        branch: z.string().min(1),
+        filePath: z.string().min(1),
+        content: z.string(),
+        commitMessage: z.string().min(1),
+      }),
+      execute: async (
+        args: {
+          project: string;
+          branch: string;
+          filePath: string;
+          content: string;
+          commitMessage: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const commitBody = (action: "create" | "update") => ({
+          branch: args.branch,
+          commit_message: args.commitMessage,
+          actions: [{
+            action,
+            file_path: args.filePath,
+            content: args.content,
+          }],
+        });
+        let action: "create" | "update" = "create";
+        let raw: any;
+        try {
+          raw = await client.post(
+            args.project,
+            "/repository/commits",
+            commitBody("create"),
+          );
+        } catch (err) {
+          // GitLab's commits API rejects a create action for a path that
+          // already exists with "A file with this name already exists" —
+          // that's the signal to retry as an update instead of surfacing
+          // this candidate's failure as fatal.
+          if (
+            err instanceof Error &&
+            /already exists/i.test(err.message)
+          ) {
+            action = "update";
+            raw = await client.post(
+              args.project,
+              "/repository/commits",
+              commitBody("update"),
+            );
+          } else {
+            throw err;
+          }
+        }
+        const handle = await ctx.writeResource(
+          "commitFileResult",
+          `${sanitizeName(args.project)}-${await shortHash(
+            `${args.branch}\0${args.filePath}`,
+          )}`,
+          {
+            project: args.project,
+            branch: args.branch,
+            filePath: args.filePath,
+            action,
+            commitId: raw.id ?? "",
+            shortId: raw.short_id ?? "",
+            message: raw.title ?? args.commitMessage,
+            webUrl: raw.web_url ?? null,
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          "Committed {path} to {project}@{branch} ({action})",
+          {
+            path: args.filePath,
+            project: args.project,
+            branch: args.branch,
+            action,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_repository_tree: {
+      description:
+        "List entries (files and directories) directly under a repository " +
+        "path at a ref. Follows GitLab's x-next-page header across pages " +
+        `(capped at ${REPOSITORY_TREE_MAX_PAGES} pages) so a large directory ` +
+        "is not silently cut off.",
+      arguments: z.object({
+        project: z.string().min(1),
+        path: z.string().default(""),
+        ref: z.string().default(""),
+      }),
+      execute: async (
+        args: { project: string; path: string; ref: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const entries: Array<
+          { id: string; name: string; type: string; path: string; mode: string }
+        > = [];
+        let truncated = false;
+        for (let page = 1; page <= REPOSITORY_TREE_MAX_PAGES; page++) {
+          const params: Record<string, string> = {
+            per_page: "100",
+            page: String(page),
+          };
+          if (args.path) params.path = args.path;
+          if (args.ref) params.ref = args.ref;
+          const { data, truncated: hasMore } = await client.getProjectList(
+            args.project,
+            "/repository/tree",
+            params,
+          );
+          const raw = Array.isArray(data) ? data : [];
+          for (const e of raw) {
+            entries.push({
+              id: e.id ?? "",
+              name: e.name ?? "",
+              type: e.type ?? "blob",
+              path: e.path ?? "",
+              mode: e.mode ?? "",
+            });
+          }
+          if (!hasMore) {
+            truncated = false;
+            break;
+          }
+          if (page === REPOSITORY_TREE_MAX_PAGES) {
+            truncated = true;
+          }
+        }
+        const handle = await ctx.writeResource(
+          "repositoryTree",
+          `${sanitizeName(args.project)}-${await shortHash(
+            `${args.path}\0${args.ref}`,
+          )}`,
+          {
+            project: args.project,
+            path: args.path,
+            ref: args.ref,
+            entries,
+            count: entries.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Found {count} entries under {path} in {project}", {
+          count: entries.length,
+          path: args.path || "/",
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_project_visibility: {
+      description: "Change a project's visibility level.",
+      arguments: z.object({
+        project: z.string().min(1),
+        visibility: z.enum(["private", "internal", "public"]),
+      }),
+      execute: async (
+        args: { project: string; visibility: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = await client.put(args.project, "", {
+          visibility: args.visibility,
+        });
+        const handle = await ctx.writeResource(
+          "projectVisibility",
+          sanitizeName(args.project),
+          {
+            project: raw.path_with_namespace ?? args.project,
+            visibility: raw.visibility ?? args.visibility,
+            webUrl: raw.web_url ?? null,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Set visibility of {project} to {visibility}", {
+          project: args.project,
+          visibility: args.visibility,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    check_mr_merge_endpoint: {
+      description:
+        "Send a non-mutating OPTIONS probe to an MR's merge endpoint and " +
+        "report back the real Allow/Server/Via headers. A 405 on a " +
+        "correctly formed merge request usually means something in front " +
+        "of the API (a proxy, ingress, or WAF) rejected the verb rather " +
+        "than GitLab itself; this never attempts a merge.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const path = `/merge_requests/${args.iid}/merge`;
+        const result = await client.optionsRaw(args.project, path);
+        const handle = await ctx.writeResource(
+          "mrMergeEndpointCheck",
+          `${sanitizeName(args.project)}-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            url: `${client.baseProjectUrl(args.project)}${path}`,
+            status: result.status,
+            allowHeader: result.allowHeader,
+            serverHeader: result.serverHeader,
+            viaHeader: result.viaHeader,
+            bodySnippet: result.bodySnippet,
+            checkedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          "Probed merge endpoint for !{iid} in {project}: {status} (allow={allow})",
+          {
+            iid: args.iid,
+            project: args.project,
+            status: result.status,
+            allow: result.allowHeader ?? "?",
+          },
+        );
         return { dataHandles: [handle] };
       },
     },

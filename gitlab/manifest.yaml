@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.09.18.1"
+version: "2026.09.20.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -41,7 +41,7 @@ description: |
   **Read:**
   - list_projects, get_project_info, list_merge_requests, list_issues
   - list_commits (REST repository/commits; optional ref + since bound)
-  - get_file (raw file content at a ref, parsed from a pasted blob URL)
+  - get_file (raw file content at a ref — a pasted blob URL, or a project/filePath/ref trio)
   - get_issue (full description body, keyed by project + iid)
   - list_releases, list_pipelines, list_issue_notes, list_mr_notes
   - list_mr_discussions (resolvable threads + resolution state + diff position)
@@ -51,6 +51,10 @@ description: |
   - get_merge_request (detailed_merge_status + why an MR can/can't merge + source/target branch + webUrl)
   - get_pipeline_jobs (jobs + failure_reason; defaults to failed jobs)
   - get_job_log (tail of a CI job's trace)
+  - get_pipeline_by_iid (GraphQL — resolves a pipeline's global id from its iid)
+  - list_pipeline_bridges (a pipeline's trigger jobs and the downstream pipelines they fan out to)
+  - list_repository_tree (directory listing at a ref, paginated past GitLab's per-page cap)
+  - check_mr_merge_endpoint (diagnostic: OPTIONS-probes an MR's merge endpoint to distinguish a proxy 405 from GitLab's own)
 
   **Write:**
   - create_issue, update_issue, add_issue_note
@@ -65,6 +69,11 @@ description: |
   - mark_todos_done (bulk-clear many todos in one call, sequential; companion to mark_todo_done)
   - rebase_merge_request (rebase a stale MR onto its target, polling to completion)
   - retry_job / retry_pipeline (re-run CI after a transient failure)
+  - cancel_pipeline (stop a pipeline that is still running)
+  - create_pipeline_schedule (CI/CD schedule, plus per-variable sub-resource calls)
+  - play_pipeline_schedule (trigger a fresh pipeline carrying a schedule's variables)
+  - create_branch, commit_file (create-or-update a single file via the commits API)
+  - update_project_visibility
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
