@@ -7,7 +7,7 @@
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",
-    "test": "deno test -A extensions/"
+    "test": "deno test --allow-env extensions/"
   },
   "lint": {
     "rules": {
@@ -18,6 +18,6 @@
     }
   },
   "imports": {
-    "@systeminit/swamp-testing": "jsr:@systeminit/swamp-testing@0.20260604.20"
+    "@swamp-club/swamp-testing": "jsr:@swamp-club/swamp-testing@0.20260917.35"
   }
 }

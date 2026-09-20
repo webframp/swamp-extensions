@@ -3,9 +3,8 @@
   "specifiers": {
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20",
+    "jsr:@swamp-club/swamp-testing@0.20260917.35": "0.20260917.35",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
-    "npm:zod@4.6.5": "4.6.5",
     "npm:zod@^4.3.6": "4.6.5"
   },
   "jsr": {
@@ -18,12 +17,12 @@
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
     },
-    "@systeminit/swamp-testing@0.20260604.20": {
-      "integrity": "643f4bbc7752a46e0188e21fea0b2907c2d333a4edfb61e4bd47ffae6286a29a",
+    "@swamp-club/swamp-testing@0.20260917.35": {
+      "integrity": "8f50e65e79785247ee5da3e8c4055a29e8fafd47900100ffb3a75e7cefc55ce9",
       "dependencies": [
         "jsr:@std/assert",
         "npm:@marcbachmann/cel-js",
-        "npm:zod@^4.3.6"
+        "npm:zod"
       ]
     }
   },
@@ -39,7 +38,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@std/assert@1.0.19",
-      "jsr:@systeminit/swamp-testing@0.20260604.20"
+      "jsr:@swamp-club/swamp-testing@0.20260917.35"
     ]
   }
 }

@@ -112,7 +112,7 @@ Shipped source MUST import dependencies with an inline, pinned `npm:`/`jsr:`
 specifier — never a bare specifier resolved through a `deno.json` import map:
 
 ```typescript
-import { z } from "npm:zod@4.4.3";   // RIGHT
+import { z } from "npm:zod@4.6.5";   // RIGHT
 import { z } from "zod";              // WRONG — publishes UNSCORED
 ```
 
@@ -120,7 +120,7 @@ The registry scorer cannot resolve bare specifiers; an extension importing
 `from "zod"` publishes but scores as unscored and fails the 14/14 rubric.
 `deno task check`/`lint`/`test` do NOT catch this — only
 `swamp extension quality` does. The specifier MUST be identical across every
-extension in the repo (currently `npm:zod@4.4.3`); verify with:
+extension in the repo (currently `npm:zod@4.6.5`); verify with:
 
 ```bash
 grep -rho 'from "npm:zod@[^"]*"' --include="*.ts" \

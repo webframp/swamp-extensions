@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
-import { createReportTestContext } from "@systeminit/swamp-testing";
+import { createReportTestContext } from "@swamp-club/swamp-testing";
 import { report } from "./scenario_comparison.ts";
 
 function artifact(

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cost-projection"
-version: "2026.09.18.1"
+version: "2026.09.19.1"
 description: |
   GPU inference cost projection across cloud, rental, and capex scenarios.
 
@@ -86,7 +86,6 @@ models:
   - cost-projection/gpu_capex.ts
 workflows: []
 vaults: []
-drivers: []
 datastores: []
 reports:
   - scenario_comparison.ts

@@ -389,7 +389,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.09.18.1",
+  version: "2026.09.19.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -451,6 +451,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.19.1",
+      description:
+        "No schema changes — request chat viewpoint via $select instead of $expand so Graph no longer rejects attention/list_chats",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -826,10 +832,14 @@ export const model = {
         const accessToken = await getAccessToken(context.globalArgs);
 
         const pageSize = Math.min(args.limit * 5, 50).toString();
+        // `viewpoint` is a per-user computed property, not a navigation
+        // property — Graph rejects it under $expand and requires $select.
         const params: Record<string, string> = {
           "$top": pageSize,
           "$orderby": "lastMessagePreview/createdDateTime desc",
-          "$expand": "members,viewpoint",
+          "$expand": "members",
+          "$select":
+            "id,chatType,topic,createdDateTime,lastUpdatedDateTime,webUrl,viewpoint",
         };
 
         const MAX_CHAT_PAGES = 10;
@@ -1014,11 +1024,17 @@ export const model = {
           );
         }
 
-        // Fetch recent chats with viewpoint.
+        // Fetch recent chats with viewpoint. `viewpoint` is a per-user
+        // computed property, not a navigation property — Graph rejects it
+        // under $expand and requires $select instead. $select lists every
+        // GraphChat field (not just what this method reads) since raw chat
+        // objects are echoed into the output resource.
         const params: Record<string, string> = {
           "$top": "20",
           "$orderby": "lastMessagePreview/createdDateTime desc",
-          "$expand": "members,viewpoint",
+          "$expand": "members",
+          "$select":
+            "id,chatType,topic,createdDateTime,lastUpdatedDateTime,webUrl,viewpoint",
         };
 
         const chats: GraphChat[] = [];

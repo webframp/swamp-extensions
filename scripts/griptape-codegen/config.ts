@@ -44,7 +44,7 @@ export const GRIPTAPE_API_BASE = "https://cloud.griptape.ai";
 export const ZOD_VERSION = "4.6.5";
 
 /** swamp-testing version for generated test files. */
-export const SWAMP_TESTING_VERSION = "0.20260604.20";
+export const SWAMP_TESTING_VERSION = "0.20260917.35";
 
 /** Max pagination pages (safety cap; matches sibling generators). */
 export const MAX_PAGES = 20;

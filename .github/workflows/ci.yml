@@ -21,7 +21,7 @@ concurrency:
 # setup-deno's tc.find would miss on the new version, and every run would
 # re-download from the CDN forever. One string, one diff line to review.
 env:
-  DENO_VERSION: "2.9.5"
+  DENO_VERSION: "2.9.7"
 
 jobs:
   discover:
@@ -244,7 +244,7 @@ jobs:
             --exclude-dir=.worktrees \
             $(find . -type d -name extensions -not -path "*/.swamp/*") 2>/dev/null || true)
           if [ -n "$matches" ]; then
-            echo "::error::Bare import specifier(s) found in shipped source. Use inline npm:/jsr: pins (e.g. \"npm:zod@4.4.3\")."
+            echo "::error::Bare import specifier(s) found in shipped source. Use inline npm:/jsr: pins (e.g. \"npm:zod@4.6.5\")."
             echo "$matches"
             exit 1
           fi

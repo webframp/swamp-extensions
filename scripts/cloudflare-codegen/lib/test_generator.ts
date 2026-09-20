@@ -39,7 +39,7 @@ export function generateTestSource(
     `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
   );
   lines.push(
-    `import { createModelTestContext } from "@systeminit/swamp-testing";`,
+    `import { createModelTestContext } from "@swamp-club/swamp-testing";`,
   );
   lines.push(`import { model } from "./${modelFileName}.ts";`);
   lines.push(``);

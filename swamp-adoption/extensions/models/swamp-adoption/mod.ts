@@ -195,7 +195,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.09.18.1",
+  version: "2026.09.19.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -265,6 +265,13 @@ export const model = {
     {
       toVersion: "2026.09.18.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.19.1",
+      description:
+        "No schema changes — migrated generated deno.json testing import " +
+        "from @systeminit/swamp-testing to @swamp-club/swamp-testing",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -776,8 +783,8 @@ Each generated file includes TODO comments marking where the user adds real logi
             },
             lint: { rules: { exclude: ["no-import-prefix"] } },
             imports: {
-              "@systeminit/swamp-testing":
-                "jsr:@systeminit/swamp-testing@0.20260604.20",
+              "@swamp-club/swamp-testing":
+                "jsr:@swamp-club/swamp-testing@0.20260917.35",
             },
           },
           null,

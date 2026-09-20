@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@swamp-club/swamp-testing@0.20260917.35": "0.20260917.35",
     "npm:@aws-sdk/client-organizations@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/client-organizations@3.1121.0": "3.1121.0",
     "npm:@aws-sdk/client-organizations@3.1126.0": "3.1126.0",
@@ -18,8 +19,10 @@
     "npm:@aws-sdk/credential-providers@3.1126.0": "3.1126.0",
     "npm:@aws-sdk/credential-providers@3.1131.0": "3.1131.0",
     "npm:@aws-sdk/credential-providers@3.1133.0": "3.1133.0",
+    "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
     "npm:zod@4.4.3": "4.4.3",
-    "npm:zod@4.6.5": "4.6.5"
+    "npm:zod@4.6.5": "4.6.5",
+    "npm:zod@^4.3.6": "4.6.5"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -30,6 +33,14 @@
     },
     "@std/internal@1.0.14": {
       "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@swamp-club/swamp-testing@0.20260917.35": {
+      "integrity": "8f50e65e79785247ee5da3e8c4055a29e8fafd47900100ffb3a75e7cefc55ce9",
+      "dependencies": [
+        "jsr:@std/assert",
+        "npm:@marcbachmann/cel-js",
+        "npm:zod@^4.3.6"
+      ]
     }
   },
   "npm": {
@@ -441,6 +452,10 @@
     "@aws/lambda-invoke-store@0.3.0": {
       "integrity": "sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ=="
     },
+    "@marcbachmann/cel-js@7.6.1": {
+      "integrity": "sha512-YyY8yiDU07ByKb2rJUoNgMAkYeeDvkdrONBREV2MP9siAW7yNft0KfbIoonWTIMY0fGtv8og0EhzKx3Xsi1Nmg==",
+      "bin": true
+    },
     "@smithy/core@3.33.3": {
       "integrity": "sha512-CsOeKq/9kA3y6VJHt+/+VTCtBaxJ4OTFpgrjIUhPpDIKxBci1k2bJaQASF2h/ELWrulGp+t97DZ0mevfAD8idg==",
       "dependencies": [
@@ -501,7 +516,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@systeminit/swamp-testing@0.20260604.20"
+      "jsr:@swamp-club/swamp-testing@0.20260917.35"
     ]
   }
 }

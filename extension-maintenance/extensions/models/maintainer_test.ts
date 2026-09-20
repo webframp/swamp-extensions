@@ -84,7 +84,7 @@ Deno.test("ExtensionStatusSchema accepts lockfileSync and directSpecifiers", () 
       inSync: false,
       staleEntries: [
         {
-          specifier: "jsr:@systeminit/swamp-testing@0.20260604.20",
+          specifier: "jsr:@swamp-club/swamp-testing@0.20260604.20",
           jsonVersion: "0.20260604.20",
           lockVersion: null,
         },
@@ -93,8 +93,8 @@ Deno.test("ExtensionStatusSchema accepts lockfileSync and directSpecifiers", () 
     directSpecifiers: [
       {
         file: "extensions/models/mod_test.ts",
-        specifier: "jsr:@systeminit/swamp-testing@0.20260504.10",
-        alias: "@systeminit/swamp-testing",
+        specifier: "jsr:@swamp-club/swamp-testing@0.20260504.10",
+        alias: "@swamp-club/swamp-testing",
       },
     ],
     pinDrift: [

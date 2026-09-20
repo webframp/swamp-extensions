@@ -436,9 +436,9 @@ async function readTestingVersion(extDir: string): Promise<string | null> {
     const content = await Deno.readTextFile(`${extDir}/deno.json`);
     const deno = JSON.parse(content);
     const imports = deno.imports ?? {};
-    const testing: string | undefined = imports["@systeminit/swamp-testing"];
+    const testing: string | undefined = imports["@swamp-club/swamp-testing"];
     if (!testing) return null;
-    // jsr:@systeminit/swamp-testing@0.20260604.20
+    // jsr:@swamp-club/swamp-testing@0.20260917.35
     const match = testing.match(/@([\d.]+)$/);
     return match ? match[1]! : null;
   } catch {
@@ -488,14 +488,14 @@ async function checkLockfileSync(extDir: string): Promise<{
   for (const [_alias, specifier] of Object.entries(imports)) {
     if (!specifier) continue;
     // Extract the version from specifiers like "npm:zod@4.6.5" or
-    // "jsr:@systeminit/swamp-testing@0.20260604.20"
+    // "jsr:@swamp-club/swamp-testing@0.20260917.35"
     const versionMatch = specifier.match(/@([\d][^"]*)$/);
     if (!versionMatch) continue;
     const jsonVersion = versionMatch[1]!;
 
     // Look for this specifier in the lock's specifiers section.
     // The lock records lines like: "npm:zod@4.6.5": "4.6.5" or
-    // "jsr:@systeminit/swamp-testing@0.20260604.20": "0.20260604.20"
+    // "jsr:@swamp-club/swamp-testing@0.20260917.35": "0.20260917.35"
     // Also check workspace.dependencies for the bare specifier.
     const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const specRegex = new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`);
@@ -530,7 +530,7 @@ async function checkLockfileSync(extDir: string): Promise<{
  * Find source files that import versioned specifiers directly instead of using
  * the deno.json import map alias.
  *
- * A direct `jsr:@systeminit/swamp-testing@0.20260504.10` import bypasses the
+ * A direct `jsr:@swamp-club/swamp-testing@0.20260917.35` import bypasses the
  * alias, so a pin change in deno.json does not reach it. This also catches
  * config files that *generate* a specifier string, since the grep pattern
  * matches any occurrence of a versioned jsr:/npm: specifier.
@@ -554,7 +554,7 @@ async function findDirectSpecifiers(
   for (const [alias, spec] of Object.entries(imports)) {
     if (!spec) continue;
     // Strip the version to match against the prefix:
-    // "jsr:@systeminit/swamp-testing@0.20260604.20" → "jsr:@systeminit/swamp-testing@"
+    // "jsr:@swamp-club/swamp-testing@0.20260917.35" → "jsr:@swamp-club/swamp-testing@"
     const atIdx = spec.lastIndexOf("@");
     if (atIdx > 4) {
       aliasFor.set(spec.slice(0, atIdx + 1), alias);
@@ -1332,7 +1332,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.09.18.1",
+  version: "2026.09.19.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1429,7 +1429,7 @@ export const model = {
 
         // Query swamp-testing latest
         const testingLatest = await jsrLatest(
-          "systeminit",
+          "swamp-club",
           "swamp-testing",
           timeoutMs,
         );
@@ -1468,7 +1468,7 @@ export const model = {
             const stale = testVer !== testingLatest;
             if (stale) hasStaleTesting = true;
             testingDep = {
-              name: "@systeminit/swamp-testing",
+              name: "@swamp-club/swamp-testing",
               current: testVer,
               latest: testingLatest,
               stale,

@@ -7,7 +7,7 @@ import {
   assertMatch,
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "@systeminit/swamp-testing";
+import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { model } from "./gpu_cloud.ts";
 
 function makeContext() {

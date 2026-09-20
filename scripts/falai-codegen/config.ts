@@ -15,7 +15,7 @@ export const OUTPUT_BASE = "../../falai";
 export const ZOD_VERSION = "4.6.5";
 
 /** swamp-testing version */
-export const SWAMP_TESTING_VERSION = "0.20260604.20";
+export const SWAMP_TESTING_VERSION = "0.20260917.35";
 
 /** Max pagination pages (matches project-wide bounded-pagination rule) */
 export const MAX_PAGES = 20;

@@ -2,7 +2,7 @@
 // ABOUTME: validation, and lock/verifier interface structure.
 
 import { assertEquals, assertExists, assertRejects } from "@std/assert";
-import { assertDatastoreExportConformance } from "@systeminit/swamp-testing";
+import { assertDatastoreExportConformance } from "@swamp-club/swamp-testing";
 import { datastore } from "./mod.ts";
 
 // Mock PostgreSQL server that simulates the wire protocol at the HTTP level
