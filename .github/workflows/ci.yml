@@ -133,6 +133,62 @@ jobs:
         # the gate is a no-op there and starts working when a test is added.
         run: deno task ${{ matrix.task }}
 
+  quality-gate:
+    # Registry quality rubric, per extension, scoped to the PR diff via the
+    # same discover matrix as extension-check. `swamp extension quality` is the
+    # authoritative gate the registry scorer runs on publish (RUBRIC_VERSION 3):
+    # README/docs, license, description, symbol docs, dependency-trust, and —
+    # critically — bare import specifiers, which score an extension UNSCORED.
+    # deno check/lint/test all PASS with a bare `from "zod"`, so this is the
+    # only gate that catches that class of regression for ANY dependency, not
+    # just the three the manifest-validate grep hardcodes. Require 100%.
+    #
+    # A separate matrixed job (rather than a step on extension-check) because it
+    # needs the swamp CLI, not Deno. Keeping it off extension-check avoids
+    # installing swamp on every one of the ~137 deno-only jobs.
+    needs: [discover]
+    name: quality ${{ matrix.extension }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        extension: ${{ fromJson(needs.discover.outputs.extensions) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.extension }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: systeminit/setup-swamp@v0.1.0
+      - name: swamp extension quality
+        run: |
+          # Model-only extensions and every other kind must score 100% on the
+          # client-earnable rubric. `--json` gives a machine-readable verdict;
+          # jq extracts status/percentage. `allPassed` also accepts the
+          # provisional repository-verified factor (server-confirmed on publish).
+          #
+          # Capture without aborting on a non-zero exit so the verdict + factor
+          # breakdown is always printed, then decide from the parsed JSON. This
+          # is robust whether `quality` signals failure via exit code, via
+          # status=failed, or both.
+          set +e
+          result=$(swamp extension quality manifest.yaml --json)
+          code=$?
+          set -e
+          if [ $code -ne 0 ] && [ -z "$result" ]; then
+            echo "::error::swamp extension quality exited $code with no output for ${{ matrix.extension }}."
+            exit 1
+          fi
+          echo "$result" | jq '{status, percentage, earnedPoints, maxClientEarnablePoints, allPassed}'
+          status=$(echo "$result" | jq -r '.status')
+          percentage=$(echo "$result" | jq -r '.percentage')
+          allPassed=$(echo "$result" | jq -r '.allPassed')
+          if [ "$status" != "passed" ] || [ "$percentage" != "100" ] || [ "$allPassed" != "true" ]; then
+            echo "::error::Quality gate failed for ${{ matrix.extension }} (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100 / true."
+            echo "$result" | jq '.factors[] | select(.status != "earned" and .status != "provisional") | {id, label, status, earnedPoints, maxPoints}'
+            exit 1
+          fi
+          echo "Quality gate passed for ${{ matrix.extension }} ($percentage%)."
+
   manifest-validate:
     name: Validate manifests
     runs-on: ubuntu-latest
