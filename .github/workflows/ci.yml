@@ -21,7 +21,7 @@ concurrency:
 # setup-deno's tc.find would miss on the new version, and every run would
 # re-download from the CDN forever. One string, one diff line to review.
 env:
-  DENO_VERSION: "2.9.5"
+  DENO_VERSION: "2.9.7"
 
 jobs:
   discover:

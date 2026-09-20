@@ -7,7 +7,7 @@
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",
-    "test": "deno test -A extensions/"
+    "test": "deno test --allow-env extensions/"
   },
   "lint": {
     "rules": {
