@@ -142,7 +142,7 @@ When building models that wrap external APIs:
 - **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
 - **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
 - **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
-- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score 14/14 (100%) on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.4.3"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
+- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score 14/14 (100%) on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.6.5"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
 - **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
 - **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
 - **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
@@ -184,7 +184,7 @@ deno task test     # Run tests
 import { z } from "zod";
 
 // RIGHT — inline, explicit, pinned:
-import { z } from "npm:zod@4.4.3";
+import { z } from "npm:zod@4.6.5";
 ```
 
 Why this is non-negotiable:
@@ -208,7 +208,7 @@ Rules:
 1. Every dependency import in a shipped source file uses `npm:<pkg>@<version>`
    or `jsr:<pkg>@<version>` inline. No exceptions for shipped code.
 2. **The specifier MUST be identical across every extension.** The whole repo
-   pins `npm:zod@4.4.3`. A bump changes it everywhere in one sweep, never
+   pins `npm:zod@4.6.5`. A bump changes it everywhere in one sweep, never
    piecemeal. Verify with:
    `grep -rho 'from "npm:zod@[^"]*"' --include="*.ts" | sort -u` → exactly one line.
 3. Do NOT add a `"zod"` (or any dependency) entry to a `deno.json` import map for
