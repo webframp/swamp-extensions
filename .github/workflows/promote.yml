@@ -40,7 +40,7 @@ jobs:
       - name: Install swamp
         id: setup_swamp
         continue-on-error: true
-        uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
+        uses: webframp/setup-swamp@a174ebbe31fd76c1c1c5adfdc5ec9cc378c03f88 # fix/swamp-club-rename
         with:
           api-key: ${{ secrets.SWAMP_API_KEY }}
       - name: Wait before swamp install retry
@@ -48,7 +48,7 @@ jobs:
         run: sleep 5
       - name: Install swamp (retry)
         if: steps.setup_swamp.outcome == 'failure'
-        uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
+        uses: webframp/setup-swamp@a174ebbe31fd76c1c1c5adfdc5ec9cc378c03f88 # fix/swamp-club-rename
         with:
           api-key: ${{ secrets.SWAMP_API_KEY }}
 
