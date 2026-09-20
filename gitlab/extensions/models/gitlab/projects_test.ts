@@ -3031,6 +3031,85 @@ Deno.test("create_pipeline_schedule defaults ref/timezone/active and skips the v
   }
 });
 
+Deno.test("create_pipeline_schedule surfaces the schedule id when a variable fails to set, after attempting the rest", async () => {
+  const pid = encodeURIComponent("group/proj");
+  let variableCalls = 0;
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/pipeline_schedules`]: {
+      status: 201,
+      body: {
+        id: 9,
+        description: "nightly",
+        ref: "main",
+        cron: "0 2 * * *",
+        cron_timezone: "UTC",
+        active: true,
+      },
+    },
+  });
+  const wrapped = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.includes("/pipeline_schedules/9/variables")) {
+      variableCalls++;
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      if (body.key === "BAD_KEY") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ message: "invalid variable" }), {
+            status: 400,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 201,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    return wrapped(input, init);
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_pipeline_schedule.execute(
+          {
+            project: "group/proj",
+            description: "nightly",
+            cron: "0 2 * * *",
+            ref: "main",
+            cronTimezone: "UTC",
+            active: true,
+            variables: [
+              { key: "GOOD_KEY", value: "1" },
+              { key: "BAD_KEY", value: "2" },
+            ],
+          },
+          context as any,
+        ),
+      Error,
+      "schedule 9",
+    );
+    // Both variables were attempted despite the first-listed failure mode
+    // not being the one that failed here — proves the loop doesn't abort early.
+    assertEquals(variableCalls, 2);
+    assertEquals(
+      getWrittenResources().find((x) => x.specName === "pipelineSchedule"),
+      undefined,
+    );
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("play_pipeline_schedule records the trigger message", async () => {
   const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({

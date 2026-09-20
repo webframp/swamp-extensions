@@ -4123,11 +4123,33 @@ export const model = {
           cron_timezone: args.cronTimezone,
           active: args.active,
         });
+        // Attempt every variable even if one fails, so a single bad key
+        // doesn't leave the rest unset — and surface the schedule's id in
+        // any failure so the caller isn't left with an orphaned schedule
+        // they have no way to find (the earlier POST's response is the
+        // only place that id exists until this method returns it).
+        const failedVariables: string[] = [];
         for (const variable of args.variables) {
-          await client.post(
-            args.project,
-            `/pipeline_schedules/${raw.id}/variables`,
-            { key: variable.key, value: variable.value },
+          try {
+            await client.post(
+              args.project,
+              `/pipeline_schedules/${raw.id}/variables`,
+              { key: variable.key, value: variable.value },
+            );
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            ctx.logger.warn(
+              "Failed to set variable {key} on schedule {id} in {project}: {msg}",
+              { key: variable.key, id: raw.id, project: args.project, msg },
+            );
+            failedVariables.push(variable.key);
+          }
+        }
+        if (failedVariables.length > 0) {
+          throw new Error(
+            `Created pipeline schedule ${raw.id} in ${args.project}, but ` +
+              `failed to set variable(s): ${failedVariables.join(", ")}. ` +
+              `Re-run with only the failed variables, or delete schedule ${raw.id} and retry.`,
           );
         }
         const handle = await ctx.writeResource(
