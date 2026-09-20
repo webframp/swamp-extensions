@@ -149,6 +149,8 @@ jobs:
     needs: [discover]
     name: quality ${{ matrix.extension }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -158,8 +160,16 @@ jobs:
         working-directory: ${{ matrix.extension }}
     steps:
       - uses: actions/checkout@v4
-      - uses: systeminit/setup-swamp@v0.1.0
+      # Pinned to the v0.1.0 commit SHA — a mutable tag could be redirected to
+      # code with full runner access to the Bedrock token and the Deno cache.
+      - uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
       - name: swamp extension quality
+        # matrix.extension is passed via env, never interpolated into the shell
+        # body. It is derived from directory names in the PR checkout, so a
+        # crafted directory name interpolated as a raw ${{ }} expression could
+        # inject shell. As $EXTENSION it is inert data.
+        env:
+          EXTENSION: ${{ matrix.extension }}
         run: |
           # Model-only extensions and every other kind must score 100% on the
           # client-earnable rubric. `--json` gives a machine-readable verdict;
@@ -175,7 +185,7 @@ jobs:
           code=$?
           set -e
           if [ $code -ne 0 ] && [ -z "$result" ]; then
-            echo "::error::swamp extension quality exited $code with no output for ${{ matrix.extension }}."
+            echo "::error::swamp extension quality exited $code with no output for $EXTENSION."
             exit 1
           fi
           echo "$result" | jq '{status, percentage, earnedPoints, maxClientEarnablePoints, allPassed}'
@@ -183,18 +193,20 @@ jobs:
           percentage=$(echo "$result" | jq -r '.percentage')
           allPassed=$(echo "$result" | jq -r '.allPassed')
           if [ "$status" != "passed" ] || [ "$percentage" != "100" ] || [ "$allPassed" != "true" ]; then
-            echo "::error::Quality gate failed for ${{ matrix.extension }} (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100 / true."
+            echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100 / true."
             echo "$result" | jq '.factors[] | select(.status != "earned" and .status != "provisional") | {id, label, status, earnedPoints, maxPoints}'
             exit 1
           fi
-          echo "Quality gate passed for ${{ matrix.extension }} ($percentage%)."
+          echo "Quality gate passed for $EXTENSION ($percentage%)."
 
   manifest-validate:
     name: Validate manifests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: systeminit/setup-swamp@v0.1.0
+      # Pinned to the v0.1.0 commit SHA (see quality-gate) — mutable tags on a
+      # third-party action are a supply-chain risk on a runner with secrets.
+      - uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
       - name: Validate all manifests
         run: |
           for manifest in $(find . -name "manifest.yaml" -not -path "./.git/*"); do
