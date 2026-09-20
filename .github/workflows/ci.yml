@@ -200,14 +200,22 @@ jobs:
           echo "$result" | jq '{status, percentage, earnedPoints, maxClientEarnablePoints, allPassed}'
           status=$(echo "$result" | jq -r '.status')
           percentage=$(echo "$result" | jq -r '.percentage')
-          allPassed=$(echo "$result" | jq -r '.allPassed')
+          # allPassed only tightens the gate when the CLI actually reports a
+          # boolean false. setup-swamp pins the action but not the CLI version,
+          # so a future CLI could drop, rename, or null this field; status +
+          # percentage are the authoritative conditions and must not be
+          # overridden by a missing/null allPassed. So: fail only on an explicit
+          # `allPassed == false`. (jq's `//` is unusable here — it treats false
+          # like null — hence the explicit `== false` test.)
+          allPassedFailed=$(echo "$result" | jq -r '.allPassed == false')
           # Numeric comparison via jq, not shell string equality: a future CLI
           # emitting the float 100.0 would make [ "100.0" != "100" ] true and
           # spuriously fail a perfect score. `.percentage == 100` is int/float
           # agnostic.
           pctOk=$(echo "$result" | jq -r '.percentage == 100')
-          if [ "$status" != "passed" ] || [ "$pctOk" != "true" ] || [ "$allPassed" != "true" ]; then
-            echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100 / true."
+          allPassed=$(echo "$result" | jq -r '.allPassed // "n/a"')
+          if [ "$status" != "passed" ] || [ "$pctOk" != "true" ] || [ "$allPassedFailed" = "true" ]; then
+            echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100, and allPassed must not be false."
             echo "$result" | jq '.factors[] | select(.status != "earned" and .status != "provisional") | {id, label, status, earnedPoints, maxPoints}'
             exit 1
           fi
