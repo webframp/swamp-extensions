@@ -188,11 +188,25 @@ jobs:
             echo "::error::swamp extension quality exited $code with no output for $EXTENSION."
             exit 1
           fi
+          # Guard against non-JSON output (network 503, auth failure, a CLI
+          # panic printing a stack trace). Without this, the jq pipe below
+          # swallows the real error and dies with a cryptic parse message, so
+          # the actual swamp error never reaches the CI log. Print it verbatim.
+          if ! printf '%s' "$result" | jq empty >/dev/null 2>&1; then
+            echo "::error::swamp extension quality did not return JSON for $EXTENSION (exit $code). Raw output:"
+            printf '%s\n' "$result"
+            exit 1
+          fi
           echo "$result" | jq '{status, percentage, earnedPoints, maxClientEarnablePoints, allPassed}'
           status=$(echo "$result" | jq -r '.status')
           percentage=$(echo "$result" | jq -r '.percentage')
           allPassed=$(echo "$result" | jq -r '.allPassed')
-          if [ "$status" != "passed" ] || [ "$percentage" != "100" ] || [ "$allPassed" != "true" ]; then
+          # Numeric comparison via jq, not shell string equality: a future CLI
+          # emitting the float 100.0 would make [ "100.0" != "100" ] true and
+          # spuriously fail a perfect score. `.percentage == 100` is int/float
+          # agnostic.
+          pctOk=$(echo "$result" | jq -r '.percentage == 100')
+          if [ "$status" != "passed" ] || [ "$pctOk" != "true" ] || [ "$allPassed" != "true" ]; then
             echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100 / true."
             echo "$result" | jq '.factors[] | select(.status != "earned" and .status != "provisional") | {id, label, status, earnedPoints, maxPoints}'
             exit 1
