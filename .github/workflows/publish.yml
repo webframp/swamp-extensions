@@ -91,7 +91,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-      - uses: systeminit/setup-swamp@v0.1.0
+      # SHA-pinned (mutable tags are a supply-chain risk on a runner holding
+      # SWAMP_API_KEY) and retried once — the installer downloads without retry,
+      # so a transient network blip would otherwise fail a publish.
+      - name: Install swamp
+        id: setup_swamp
+        continue-on-error: true
+        uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Wait before swamp install retry
+        if: steps.setup_swamp.outcome == 'failure'
+        run: sleep 5
+      - name: Install swamp (retry)
+        if: steps.setup_swamp.outcome == 'failure'
+        uses: systeminit/setup-swamp@8764f3226a675af5b78708adfdee4e13eaa19aac # v0.1.0
         with:
           api-key: ${{ secrets.SWAMP_API_KEY }}
       - name: Extract manifest info
