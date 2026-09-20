@@ -162,7 +162,7 @@ jobs:
             --exclude-dir=.worktrees \
             $(find . -type d -name extensions -not -path "*/.swamp/*") 2>/dev/null || true)
           if [ -n "$matches" ]; then
-            echo "::error::Bare import specifier(s) found in shipped source. Use inline npm:/jsr: pins (e.g. \"npm:zod@4.4.3\")."
+            echo "::error::Bare import specifier(s) found in shipped source. Use inline npm:/jsr: pins (e.g. \"npm:zod@4.6.5\")."
             echo "$matches"
             exit 1
           fi
