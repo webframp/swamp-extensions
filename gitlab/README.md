@@ -45,6 +45,8 @@ swamp model method run gitlab list_branches --input project=group/repo
 swamp model method run gitlab create_issue --input project=group/repo --input title="New issue"
 swamp model method run gitlab update_issue --input project=group/repo --input iid=1 --input stateEvent=close
 swamp model method run gitlab add_issue_note --input project=group/repo --input iid=1 --input body="Comment"
+swamp model method run gitlab set_issue_assignees --input project=group/repo --input iid=1 --input usernames='["alice"]'
+swamp model method run gitlab unassign_from_issues --input project=group/repo --input iids='[1,2,3]'
 swamp model method run gitlab create_merge_request --input project=group/repo --input title="MR" --input sourceBranch=feature
 swamp model method run gitlab merge --input project=group/repo --input iid=10
 swamp model method run gitlab add_mr_note --input project=group/repo --input iid=10 --input body="Approved"
@@ -93,6 +95,7 @@ fires the `@webframp/review-dashboard` report automatically.
 | `list_issue_notes`    | Comments on an issue                                             | `project`, `iid`                               |
 | `list_mr_notes`       | Comments on a merge request                                      | `project`, `iid`                               |
 | `list_mr_discussions` | Resolvable MR threads with resolution state + slim diff position | `project`, `iid`, `first?`                     |
+| `list_issue_discussions` | Issue discussion threads (not resolvable, unlike MR discussions) | `project`, `iid`, `first?`                  |
 | `list_labels`         | Project labels                                                   | `project`                                      |
 | `list_members`        | Project members                                                  | `project`                                      |
 | `list_branches`       | Repository branches                                              | `project`                                      |
@@ -102,12 +105,18 @@ fires the `@webframp/review-dashboard` report automatically.
 
 | Method                  | Description                                                       | Inputs                                                               |
 | ----------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `create_issue`          | Create an issue                                                   | `project`, `title`, `description?`, `labels?`                        |
-| `update_issue`          | Update an issue                                                   | `project`, `iid`, `title?`, `description?`, `labels?`, `stateEvent?` |
-| `add_issue_note`        | Comment on an issue                                               | `project`, `iid`, `body`                                             |
+| `create_issue`          | Create an issue                                                   | `project`, `title`, `description?`, `labels?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?` |
+| `update_issue`          | Update an issue                                                   | `project`, `iid`, `title?`, `description?`, `labels?`, `addLabels?`, `removeLabels?`, `stateEvent?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?` |
+| `add_issue_note`        | Comment on an issue, or reply into a thread                       | `project`, `iid`, `body`, `discussionId?`                            |
+| `update_issue_note`     | Edit a comment on an issue                                        | `project`, `iid`, `noteId`, `body`                                   |
+| `delete_issue_note`     | Delete a comment on an issue                                      | `project`, `iid`, `noteId`                                           |
+| `set_issue_assignees`   | Set (replace) an issue's assignees                                | `project`, `iid`, `usernames`                                        |
+| `unassign_from_issues`  | Remove a user (default: you) from multiple issues in one fan-out  | `project`, `iids`, `username?`                                       |
 | `create_merge_request`  | Create a merge request                                            | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
 | `merge`                 | Merge a merge request                                             | `project`, `iid`, `squash?`                                          |
 | `add_mr_note`           | Comment on a merge request, or reply into a thread                | `project`, `iid`, `body`, `discussionId?`                            |
+| `update_mr_note`        | Edit a comment on a merge request                                 | `project`, `iid`, `noteId`, `body`                                    |
+| `delete_mr_note`        | Delete a comment on a merge request                                | `project`, `iid`, `noteId`                                           |
 | `resolve_mr_discussion` | Resolve/unresolve an MR discussion thread                         | `project`, `iid`, `discussionId`, `resolved?`                        |
 | `set_mr_assignees`      | Set (replace) an MR's assignees                                   | `project`, `iid`, `usernames`                                        |
 | `unassign_from_mrs`     | Remove a user (default: you) from multiple MRs in one fan-out     | `project`, `iids`, `username?`                                       |
@@ -138,6 +147,9 @@ view:
 | **issues**        | Issue list by state               | iid, author, labels, truncated                            |
 | **issueDetail**   | Single issue (from create/update) | iid, webUrl, description, state                           |
 | **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
+| **issueAssignees** | Assignees of an issue after a set/unassign | iid, assignees                                    |
+| **issueUnassignResult** | Fan-out unassign result across issues | username, results, failed                            |
+| **issueDiscussions** | Discussion threads on an issue  | iid, discussions, truncated                               |
 | **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
 | **pipelines**     | CI/CD pipeline runs               | status, source, ref, truncated                            |
 | **labels**        | Project labels                    | name, color, description                                  |
@@ -185,16 +197,17 @@ HTTP status.
 
 ### Batch methods report partial failures
 
-`mark_todos_done`, `unassign_from_mrs`, and `remove_mr_reviewers` process items
-individually. Per-item failures are recorded in the `failed` array of the output
-resource without aborting the batch. Check this field to identify which items
-could not be processed.
+`mark_todos_done`, `unassign_from_mrs`, `unassign_from_issues`, and
+`remove_mr_reviewers` process items individually. Per-item failures are
+recorded in the `failed` array of the output resource without aborting the
+batch. Check this field to identify which items could not be processed.
 
-### `set_mr_assignees` verifies the result
+### `set_mr_assignees` / `set_issue_assignees` verify the result
 
-This method compares the resulting assignee list against the requested list. If
-GitLab silently dropped a username (e.g. user does not exist or lacks project
-access), the method throws rather than returning a partial assignment.
+These methods compare the resulting assignee list against the requested list.
+If GitLab silently dropped a username (e.g. user does not exist or lacks
+project access), the method throws rather than returning a partial
+assignment.
 
 ### No retry or rate-limit handling
 

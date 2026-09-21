@@ -1,41 +1,40 @@
-## 2026.09.20.1
+## 2026.09.20.2
 
-**Added:** Ten new methods closing gaps reported in issue #420:
+**Added:** Issue management brought to parity with merge requests, closing
+GitHub issue #412:
 
-- `cancel_pipeline` — stop a pipeline that is still running (`retry_pipeline`
-  only restarts one that's already finished).
-- `get_pipeline_by_iid` — resolve a pipeline's global id from its
-  project-scoped iid via GraphQL. `get_pipeline_jobs` and `retry_pipeline`
-  need the global id; `list_pipelines` and the web UI only show the iid.
-- `list_pipeline_bridges` — list a pipeline's trigger jobs and the downstream
-  (child) pipelines they fan out to, which `get_pipeline_jobs` cannot see.
-- `create_pipeline_schedule` — create a CI/CD pipeline schedule, including its
-  variables sub-resource.
-- `play_pipeline_schedule` — trigger a fresh pipeline carrying a schedule's
-  CI/CD variables (pair with `get_pipeline_by_iid` to find the resulting
-  pipeline, since GitLab returns 202 Accepted with no pipeline id).
-- `create_branch` — create a branch (`list_branches` was read-only).
-- `commit_file` — create or update a single file via a commit; falls back
-  from a create action to an update action automatically when the file
-  already exists.
-- `list_repository_tree` — list a repository directory at a ref, following
-  GitLab's `x-next-page` header across pages (capped at 20 pages) so a large
-  directory is not silently cut off.
-- `update_project_visibility` — change a project's visibility
-  (`get_project_info` only reads it).
-- `check_mr_merge_endpoint` — diagnostic: sends a non-mutating OPTIONS probe
-  to an MR's merge endpoint and reports back the real Allow/Server/Via
-  headers, to distinguish a proxy's 405 from GitLab's own.
+- `set_issue_assignees` — set (replace) an issue's assignees by username;
+  pass an empty list to unassign. Mirrors `set_mr_assignees`: GitLab CE keeps
+  one assignee, EE/Premium support multiple, and the method throws loudly if
+  GitLab silently drops a requested username.
+- `unassign_from_issues` — remove an assignee (default: the authenticated
+  user) from multiple issues in a project in one fan-out. Mirrors
+  `unassign_from_mrs`: uses `operationMode: REMOVE` so co-assignees are
+  preserved, is idempotent, and isolates per-issue failures into a `failed`
+  array without aborting the batch.
+- `update_issue_note` / `delete_issue_note` — edit or remove an issue comment
+  by note id. Mirrors `update_mr_note`/`delete_mr_note`, including the
+  "note not found or permission denied" error on GitLab's null-payload path.
+- `list_issue_discussions` — list discussion threads on an issue, with the
+  same hoisted resolution/location/author fields and slim diff position as
+  `list_mr_discussions`. GitLab does not support resolving plain issue
+  discussions (only MR/diff discussions), so there is no
+  `resolve_issue_discussion` method — `resolvable`/`resolved` simply read
+  `false` for issue threads.
+- `create_issue` and `update_issue` now accept optional `assignees`
+  (usernames), `milestone` (numeric id or a title resolved via the GitLab
+  API), `dueDate`, `confidential`, and `weight` (GitLab EE). `update_issue`
+  additionally accepts `addLabels`/`removeLabels` for incremental label
+  changes alongside the existing wholesale `labels` replacement, so callers
+  can adjust labels without a read-modify-write race.
+- `add_issue_note` now accepts an optional `discussionId` to reply into an
+  existing thread (from `list_issue_discussions`), mirroring `add_mr_note`.
 
-**Changed:** `get_file` now also accepts a `project`/`filePath`/`ref` input
-trio as an alternative to the existing blob `url` input — for callers that
-already have those three values and shouldn't have to assemble a blob URL
-just to have it parsed apart again. The existing size cap, credential
-redaction, and binary-file rejection apply to both input paths. `fileContent`
-output schema is unchanged.
+**Changed:** None of the above are breaking — every new argument is optional
+and every new method is additive. Existing calls to `create_issue`,
+`update_issue`, and `add_issue_note` behave exactly as before when the new
+arguments are omitted.
 
-**Upgrade note:** All additive — no `globalArguments` changes, no breaking
-schema changes. Ten new resources were added (`pipelineCancel`,
-`pipelineByIid`, `pipelineBridges`, `pipelineSchedule`,
-`pipelineSchedulePlayResult`, `branchCreateResult`, `commitFileResult`,
-`repositoryTree`, `projectVisibility`, `mrMergeEndpointCheck`).
+**Upgrade note:** No co-upgrades required. New resources `issueAssignees`,
+`issueUnassignResult`, and `issueDiscussions` are additive; no
+`globalArguments` change.

@@ -407,6 +407,76 @@ const UnassignResultSchema = z.object({
   ),
 });
 
+const IssueAssigneesSchema = z.object({
+  project: z.string().describe("Project the issue belongs to"),
+  iid: z.number().describe("Issue internal ID (project-scoped)"),
+  // Resulting assignee usernames after the set (empty when unassigned).
+  assignees: z.array(z.string()).describe(
+    "Resulting assignee usernames after the operation (empty when unassigned)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the assignees were recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const IssueUnassignResultSchema = z.object({
+  project: z.string().describe("Project the issues belong to"),
+  // The user removed from each issue (the authenticated user unless overridden).
+  username: z.string().describe(
+    "The user removed from each issue (the authenticated user unless overridden)",
+  ),
+  // Only confirmed removals land here (user absent from the resulting
+  // assignees). Anything unconfirmable — null payload, no issue, or the user
+  // still present after a REMOVE — goes to `failed` instead.
+  results: z.array(z.object({
+    iid: z.number().describe("Issue internal ID (project-scoped)"),
+    // Assignees remaining after removal — proof co-assignees are preserved.
+    remainingAssignees: z.array(z.string()).describe(
+      "Assignees remaining after removal — proof co-assignees are preserved",
+    ),
+  })).describe("Confirmed removals, one entry per successfully updated issue"),
+  // Per-issue failures (permission denied, missing issue); one bad issue does
+  // not sink the batch.
+  failed: z.array(z.object({
+    iid: z.number().describe("Issue internal ID (project-scoped)"),
+    error: z.string().describe("Why the removal could not be confirmed"),
+  })).describe("Per-issue failures; one bad issue does not sink the batch"),
+  fetchedAt: z.string().describe("Timestamp the batch was executed"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+// Issue discussion threads reuse DiscussionSchema/DiscussionNoteSchema — same
+// shape as MR discussions, just scoped to an issue. GitLab does not support
+// resolving plain issue discussions (only MR/diff discussions), so unlike
+// DiscussionListSchema's MR sibling there is no companion resolve method —
+// `resolvable`/`resolved` will simply read false for issue threads.
+const IssueDiscussionListSchema = z.object({
+  project: z.string().describe("Project the issue belongs to"),
+  iid: z.number().describe("Issue internal ID (project-scoped)"),
+  discussions: z.array(DiscussionSchema).describe(
+    "Discussion threads on the issue",
+  ),
+  truncated: z.boolean().describe(
+    "Whether more discussions exist beyond this page",
+  ),
+  fetchedAt: z.string().describe("Timestamp the discussions were fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const RemoveReviewerResultSchema = z.object({
   project: z.string().describe("Project the merge requests belong to"),
   // The reviewer removed from each MR (the authenticated user unless overridden).
@@ -1445,9 +1515,20 @@ query members($fullPath: ID!, $first: Int!) {
 }`;
 
 const CREATE_ISSUE_MUTATION = `
-mutation createIssue($projectPath: ID!, $title: String!, $description: String, $labels: [String!]) {
-  createIssue(input: { projectPath: $projectPath, title: $title, description: $description, labels: $labels }) {
-    issue { iid title description state webUrl labels { nodes { title } } createdAt updatedAt }
+mutation createIssue(
+  $projectPath: ID!, $title: String!, $description: String, $labels: [String!],
+  $assigneeUsernames: [String!], $milestoneId: MilestoneID, $dueDate: ISO8601Date,
+  $confidential: Boolean, $weight: Int
+) {
+  createIssue(input: {
+    projectPath: $projectPath, title: $title, description: $description, labels: $labels,
+    assigneeUsernames: $assigneeUsernames, milestoneId: $milestoneId, dueDate: $dueDate,
+    confidential: $confidential, weight: $weight
+  }) {
+    issue {
+      iid title description state webUrl labels { nodes { title } } createdAt updatedAt
+      assignees { nodes { username } }
+    }
     errors
   }
 }`;
@@ -1501,6 +1582,32 @@ query mrDiscussions($fullPath: ID!, $iid: String!, $first: Int!) {
   }
 }`;
 
+// Mirrors MR_DISCUSSIONS_QUERY exactly, scoped to an issue instead of an MR.
+// GitLab's Note type exposes `position` generically; it is simply null for
+// non-diff (issue) notes, same as a general MR comment.
+const ISSUE_DISCUSSIONS_QUERY = `
+query issueDiscussions($fullPath: ID!, $iid: String!, $first: Int!) {
+  project(fullPath: $fullPath) {
+    issue(iid: $iid) {
+      discussions(first: $first) {
+        nodes {
+          id
+          resolvable
+          resolved
+          resolvedBy { username }
+          notes(first: 100) {
+            nodes {
+              id system body createdAt author { username }
+              position { filePath oldLine newLine }
+            }
+          }
+        }
+        pageInfo { hasNextPage }
+      }
+    }
+  }
+}`;
+
 const UPDATE_NOTE_MUTATION = `
 mutation updateNote($id: NoteID!, $body: String!) {
   updateNote(input: { id: $id, body: $body }) {
@@ -1534,6 +1641,28 @@ const REMOVE_ASSIGNEES_MUTATION = `
 mutation removeAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
   mergeRequestSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REMOVE }) {
     mergeRequest { iid assignees { nodes { username } } }
+    errors
+  }
+}`;
+
+// operationMode REPLACE sets the full assignee set: [] unassigns, one username
+// assigns one (all GitLab CE supports), multiple assigns many (EE/Premium).
+// Mirrors SET_ASSIGNEES_MUTATION exactly, swapped to the issueSetAssignees mutation.
+const SET_ISSUE_ASSIGNEES_MUTATION = `
+mutation setIssueAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  issueSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REPLACE }) {
+    issue { iid assignees { nodes { username } } }
+    errors
+  }
+}`;
+
+// operationMode REMOVE drops the given usernames and leaves every other
+// assignee in place — atomic, no read-modify-write. Mirrors
+// REMOVE_ASSIGNEES_MUTATION exactly, swapped to the issueSetAssignees mutation.
+const REMOVE_ISSUE_ASSIGNEES_MUTATION = `
+mutation removeIssueAssignees($projectPath: ID!, $iid: String!, $usernames: [String!]!) {
+  issueSetAssignees(input: { projectPath: $projectPath, iid: $iid, assigneeUsernames: $usernames, operationMode: REMOVE }) {
+    issue { iid assignees { nodes { username } } }
     errors
   }
 }`;
@@ -1669,6 +1798,41 @@ function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
     author: node.author ? { username: node.author.username } : null,
     createdAt: node.createdAt ?? "",
   };
+}
+
+/**
+ * Resolve a `milestone` argument (a numeric id, a numeric-looking string, or
+ * a title) to GitLab's numeric milestone id. Neither the GraphQL nor REST
+ * issue write APIs accept a milestone title directly, so a title is looked
+ * up via REST (GET /milestones?search=) and matched exactly. Throws if zero
+ * or more than one milestone matches the title.
+ */
+async function resolveMilestoneId(
+  host: string,
+  token: string,
+  project: string,
+  milestone: number | string,
+): Promise<number> {
+  if (typeof milestone === "number") return milestone;
+  if (/^\d+$/.test(milestone)) return parseInt(milestone, 10);
+  const client = new GitLabClient(host, token);
+  const { data } = await client.getProjectList(project, "/milestones", {
+    search: milestone,
+  });
+  const matches = (data as Array<{ id: number; title: string }>).filter(
+    (m) => m.title === milestone,
+  );
+  if (matches.length === 0) {
+    throw new Error(
+      `resolveMilestoneId: no milestone titled "${milestone}" found in ${project}`,
+    );
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `resolveMilestoneId: multiple milestones titled "${milestone}" found in ${project}`,
+    );
+  }
+  return matches[0].id;
 }
 
 // =============================================================================
@@ -2123,7 +2287,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.20.1",
+  version: "2026.09.20.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2265,6 +2429,19 @@ export const model = {
         "globalArguments change; all additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.20.2",
+      description:
+        "Brought issue management to parity with merge requests (closes #412): " +
+        "set_issue_assignees, unassign_from_issues, update_issue_note, " +
+        "delete_issue_note, and list_issue_discussions methods (new resources: " +
+        "issueAssignees, issueUnassignResult, issueDiscussions). Also added " +
+        "optional assignees/milestone/dueDate/confidential/weight to " +
+        "create_issue and update_issue, addLabels/removeLabels to update_issue, " +
+        "and discussionId (threaded replies) to add_issue_note. No " +
+        "globalArguments change; all additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -2321,6 +2498,13 @@ export const model = {
       description:
         "Resolvable discussion threads on an MR, with per-thread resolution state and slim diff position",
       schema: DiscussionListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    issueDiscussions: {
+      description:
+        "Discussion threads on an issue with slim diff position (issues are not resolvable, unlike MR discussions)",
+      schema: IssueDiscussionListSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -2385,6 +2569,19 @@ export const model = {
       description: "Assignees of an MR after a set/unassign",
       schema: MrAssigneesSchema,
       lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    issueAssignees: {
+      description: "Assignees of an issue after a set/unassign",
+      schema: IssueAssigneesSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    issueUnassignResult: {
+      description:
+        "Result of a fan-out unassign across issues (remaining assignees + failures)",
+      schema: IssueUnassignResultSchema,
+      lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     mrReviewers: {
@@ -3065,6 +3262,19 @@ export const model = {
         title: z.string().min(1),
         description: z.string().default(""),
         labels: z.array(z.string()).default([]),
+        assignees: z.array(z.string()).optional().describe(
+          "Usernames to assign on creation",
+        ),
+        milestone: z.union([z.number(), z.string()]).optional().describe(
+          "Milestone id, or a title to resolve to an id",
+        ),
+        dueDate: z.string().optional().describe(
+          "Due date, ISO 8601 (YYYY-MM-DD)",
+        ),
+        confidential: z.boolean().optional(),
+        weight: z.number().int().nonnegative().optional().describe(
+          "Issue weight (GitLab EE)",
+        ),
       }),
       execute: async (
         args: {
@@ -3072,16 +3282,33 @@ export const model = {
           title: string;
           description: string;
           labels: string[];
+          assignees?: string[];
+          milestone?: number | string;
+          dueDate?: string;
+          confidential?: boolean;
+          weight?: number;
         },
         ctx: ModelContext,
       ) => {
         const startMs = Date.now();
         const { host, token } = ctx.globalArgs;
+        const milestoneId = args.milestone !== undefined
+          ? await resolveMilestoneId(host, token, args.project, args.milestone)
+          : undefined;
         const data = await graphqlRequest(host, token, CREATE_ISSUE_MUTATION, {
           projectPath: args.project,
           title: args.title,
           description: args.description || undefined,
           labels: args.labels.length ? args.labels : undefined,
+          assigneeUsernames: args.assignees?.length
+            ? args.assignees
+            : undefined,
+          milestoneId: milestoneId !== undefined
+            ? `gid://gitlab/Milestone/${milestoneId}`
+            : undefined,
+          dueDate: args.dueDate,
+          confidential: args.confidential,
+          weight: args.weight,
         });
         const result = data.createIssue;
         if (result.errors?.length) {
@@ -3092,6 +3319,26 @@ export const model = {
           throw new Error(
             `createIssue returned no issue (project: ${args.project})`,
           );
+        }
+        // GitLab does NOT error on an unknown/unassignable username — it just
+        // omits it. Fail loudly so an assign to a typo'd user isn't reported as
+        // success (mirrors set_mr_assignees/set_issue_assignees).
+        if (args.assignees?.length) {
+          const got = new Set(
+            (issue.assignees?.nodes ?? []).map((n: any) =>
+              n.username.toLowerCase()
+            ),
+          );
+          const missing = args.assignees.filter((u) =>
+            !got.has(u.toLowerCase())
+          );
+          if (missing.length) {
+            throw new Error(
+              `create_issue: GitLab did not assign ${
+                missing.join(", ")
+              } (unknown user, or GitLab CE's single-assignee limit)`,
+            );
+          }
         }
         const handle = await ctx.writeResource(
           "issueDetail",
@@ -3123,14 +3370,34 @@ export const model = {
 
     update_issue: {
       description:
-        "Update an existing issue (title, description, labels, state)",
+        "Update an existing issue (title, description, labels, state, " +
+        "assignees, milestone, due date, confidentiality, weight)",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
         title: z.string().optional(),
         description: z.string().optional(),
         labels: z.array(z.string()).optional(),
+        addLabels: z.array(z.string()).optional().describe(
+          "Labels to add incrementally, alongside any wholesale `labels` replacement",
+        ),
+        removeLabels: z.array(z.string()).optional().describe(
+          "Labels to remove incrementally, alongside any wholesale `labels` replacement",
+        ),
         stateEvent: z.enum(["close", "reopen"]).optional(),
+        assignees: z.array(z.string()).optional().describe(
+          "Replace (wholesale) the issue's assignees by username",
+        ),
+        milestone: z.union([z.number(), z.string()]).optional().describe(
+          "Milestone id, or a title to resolve to an id",
+        ),
+        dueDate: z.string().optional().describe(
+          "Due date, ISO 8601 (YYYY-MM-DD)",
+        ),
+        confidential: z.boolean().optional(),
+        weight: z.number().int().nonnegative().optional().describe(
+          "Issue weight (GitLab EE)",
+        ),
       }),
       execute: async (
         args: {
@@ -3139,25 +3406,90 @@ export const model = {
           title?: string;
           description?: string;
           labels?: string[];
+          addLabels?: string[];
+          removeLabels?: string[];
           stateEvent?: string;
+          assignees?: string[];
+          milestone?: number | string;
+          dueDate?: string;
+          confidential?: boolean;
+          weight?: number;
         },
         ctx: ModelContext,
       ) => {
         const startMs = Date.now();
-        const client = new GitLabClient(
-          ctx.globalArgs.host,
-          ctx.globalArgs.token,
-        );
+        const { host, token } = ctx.globalArgs;
+        const client = new GitLabClient(host, token);
         const body: Record<string, unknown> = {};
         if (args.title !== undefined) body.title = args.title;
         if (args.description !== undefined) body.description = args.description;
         if (args.labels !== undefined) body.labels = args.labels.join(",");
+        if (args.addLabels !== undefined) {
+          body.add_labels = args.addLabels.join(",");
+        }
+        if (args.removeLabels !== undefined) {
+          body.remove_labels = args.removeLabels.join(",");
+        }
         if (args.stateEvent !== undefined) body.state_event = args.stateEvent;
+        if (args.milestone !== undefined) {
+          body.milestone_id = await resolveMilestoneId(
+            host,
+            token,
+            args.project,
+            args.milestone,
+          );
+        }
+        if (args.dueDate !== undefined) body.due_date = args.dueDate;
+        if (args.confidential !== undefined) {
+          body.confidential = args.confidential;
+        }
+        if (args.weight !== undefined) body.weight = args.weight;
         const raw = await client.put(
           args.project,
           `/issues/${args.iid}`,
           body,
         );
+        // Assignees are set via the same GraphQL mutation set_issue_assignees
+        // uses (REPLACE), since the REST issues API only accepts numeric
+        // assignee_ids, not usernames. Same loud-failure check: GitLab silently
+        // omits an unknown/unassignable username rather than erroring.
+        if (args.assignees !== undefined) {
+          const assignData = await graphqlRequest(
+            host,
+            token,
+            SET_ISSUE_ASSIGNEES_MUTATION,
+            {
+              projectPath: args.project,
+              iid: String(args.iid),
+              usernames: args.assignees,
+            },
+          );
+          const assignResult = assignData.issueSetAssignees;
+          if (assignResult.errors?.length) {
+            throw new Error(
+              `update_issue: issueSetAssignees failed: ${
+                assignResult.errors.join("; ")
+              }`,
+            );
+          }
+          if (args.assignees.length > 0) {
+            const got = new Set(
+              (assignResult.issue?.assignees?.nodes ?? []).map((n: any) =>
+                n.username.toLowerCase()
+              ),
+            );
+            const missing = args.assignees.filter((u) =>
+              !got.has(u.toLowerCase())
+            );
+            if (missing.length) {
+              throw new Error(
+                `update_issue: GitLab did not assign ${
+                  missing.join(", ")
+                } (unknown user, or GitLab CE's single-assignee limit)`,
+              );
+            }
+          }
+        }
         const handle = await ctx.writeResource(
           "issueDetail",
           `${sanitizeName(args.project)}-${raw.iid}`,
@@ -3185,14 +3517,24 @@ export const model = {
     },
 
     add_issue_note: {
-      description: "Add a comment to an issue",
+      description:
+        "Add a comment to an issue, or reply into an existing thread by passing discussionId (from list_issue_discussions)",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
         body: z.string().min(1),
+        discussionId: z
+          .string()
+          .optional()
+          .describe("Reply into this discussion thread instead of top-level"),
       }),
       execute: async (
-        args: { project: string; iid: number; body: string },
+        args: {
+          project: string;
+          iid: number;
+          body: string;
+          discussionId?: string;
+        },
         ctx: ModelContext,
       ) => {
         const startMs = Date.now();
@@ -3206,10 +3548,17 @@ export const model = {
         if (!issueGid) {
           throw new Error(`Issue #${args.iid} not found in ${args.project}`);
         }
-        const data = await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
-          noteableId: issueGid,
-          body: args.body,
-        });
+        // Reply into a thread when discussionId is given; else top-level note.
+        const data = args.discussionId
+          ? await graphqlRequest(host, token, REPLY_NOTE_MUTATION, {
+            noteableId: issueGid,
+            discussionId: args.discussionId,
+            body: args.body,
+          })
+          : await graphqlRequest(host, token, CREATE_NOTE_MUTATION, {
+            noteableId: issueGid,
+            body: args.body,
+          });
         const result = data.createNote;
         if (result.errors?.length) {
           throw new Error(`createNote failed: ${result.errors.join("; ")}`);
@@ -3239,6 +3588,395 @@ export const model = {
           iid: args.iid,
           project: args.project,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_issue_note: {
+      description: "Edit an existing comment on an issue by note id.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        noteId: z.number(),
+        body: z.string().min(1),
+      }),
+      execute: async (
+        args: { project: string; iid: number; noteId: number; body: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, UPDATE_NOTE_MUTATION, {
+          id: `gid://gitlab/Note/${args.noteId}`,
+          body: args.body,
+        });
+        const result = data.updateNote;
+        // GitLab returns a null payload (not a userland error) when the caller
+        // can't edit the note — another user's note, a system note, a locked issue.
+        if (!result) {
+          throw new Error(
+            `update_issue_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(`updateNote failed: ${result.errors.join("; ")}`);
+        }
+        if (!result.note) {
+          throw new Error(
+            `updateNote returned no note (noteId: ${args.noteId}, project: ${args.project})`,
+          );
+        }
+        const note = gqlMapNote(result.note);
+        const handle = await ctx.writeResource(
+          "notes",
+          `${sanitizeName(args.project)}-issue-${args.iid}-note-${note.id}`,
+          {
+            project: args.project,
+            noteableType: "issue",
+            noteableIid: args.iid,
+            notes: [note],
+            count: 1,
+            truncated: false,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Updated note {noteId} on issue #{iid}", {
+          noteId: args.noteId,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    delete_issue_note: {
+      description: "Delete a comment on an issue by note id.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        noteId: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number; noteId: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(host, token, DESTROY_NOTE_MUTATION, {
+          id: `gid://gitlab/Note/${args.noteId}`,
+        });
+        const result = data.destroyNote;
+        // Null payload = permission denied / note not found (not a userland
+        // error). A successful delete returns { note: null, errors: [] }.
+        if (!result) {
+          throw new Error(
+            `delete_issue_note: note ${args.noteId} not found or permission denied`,
+          );
+        }
+        if (result.errors?.length) {
+          throw new Error(`destroyNote failed: ${result.errors.join("; ")}`);
+        }
+        const handle = await ctx.writeResource(
+          "noteDeleted",
+          `${sanitizeName(args.project)}-issue-${args.iid}-note-${args.noteId}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            noteId: args.noteId,
+            deleted: true,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Deleted note {noteId} on issue #{iid}", {
+          noteId: args.noteId,
+          iid: args.iid,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    set_issue_assignees: {
+      description:
+        "Set (replace) an issue's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        usernames: z.array(z.string()).default([]),
+      }),
+      execute: async (
+        args: { project: string; iid: number; usernames: string[] },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const data = await graphqlRequest(
+          host,
+          token,
+          SET_ISSUE_ASSIGNEES_MUTATION,
+          {
+            projectPath: args.project,
+            iid: String(args.iid),
+            usernames: args.usernames,
+          },
+        );
+        const result = data.issueSetAssignees;
+        if (result.errors?.length) {
+          throw new Error(
+            `issueSetAssignees failed: ${result.errors.join("; ")}`,
+          );
+        }
+        const assignees: string[] = (result.issue?.assignees?.nodes ?? []).map((
+          n: any,
+        ) => n.username);
+        // GitLab does NOT error on an unknown/unassignable username — it just
+        // omits it. Fail loudly so an assign to a typo'd user isn't reported as
+        // success (and, on CE, so dropping an extra assignee surfaces).
+        if (args.usernames.length > 0) {
+          // GitLab lowercases usernames in responses but accepts mixed case in
+          // requests — compare case-insensitively so a valid assign isn't
+          // reported as failed.
+          const got = new Set(assignees.map((u) => u.toLowerCase()));
+          const missing = args.usernames.filter((u) =>
+            !got.has(u.toLowerCase())
+          );
+          if (missing.length) {
+            throw new Error(
+              `set_issue_assignees: GitLab did not assign ${
+                missing.join(", ")
+              } (unknown user, or GitLab CE's single-assignee limit)`,
+            );
+          }
+        }
+        const handle = await ctx.writeResource(
+          "issueAssignees",
+          `${sanitizeName(args.project)}-issue-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            assignees,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          assignees.length
+            ? "Set issue #{iid} assignees: {who}"
+            : "Unassigned issue #{iid}",
+          { iid: args.iid, who: assignees.join(", ") },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    unassign_from_issues: {
+      description:
+        "Remove an assignee (default: the authenticated user) from multiple issues " +
+        "in a project, in one fan-out. Uses operationMode REMOVE, so other " +
+        "assignees are preserved. Idempotent: removing a user who isn't assigned " +
+        "is a no-op. Per-issue failures are recorded and never abort the batch.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iids: z.array(z.number()).min(1),
+        username: z.string().optional(),
+      }),
+      execute: async (
+        args: { project: string; iids: number[]; username?: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        let resolved = args.username;
+        if (!resolved) {
+          const who = await graphqlRequest(host, token, CURRENT_USER_QUERY, {});
+          resolved = who.currentUser?.username;
+        }
+        if (!resolved) {
+          throw new Error(
+            "unassign_from_issues: could not resolve the authenticated user; pass `username` explicitly",
+          );
+        }
+        const username: string = resolved;
+
+        const results: z.infer<typeof IssueUnassignResultSchema>["results"] =
+          [];
+        const failed: z.infer<typeof IssueUnassignResultSchema>["failed"] = [];
+        for (const iid of args.iids) {
+          try {
+            const data = await graphqlRequest(
+              host,
+              token,
+              REMOVE_ISSUE_ASSIGNEES_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(iid),
+                usernames: [username],
+              },
+            );
+            const result = data.issueSetAssignees;
+            // GitLab returns a null payload on permission-denied / missing
+            // issue as a routine path — guard before reading .errors.
+            if (!result) {
+              throw new Error(
+                "issueSetAssignees returned null (permission denied or issue not found)",
+              );
+            }
+            if (result.errors?.length) {
+              throw new Error(result.errors.join("; "));
+            }
+            // A null issue with empty errors is unconfirmable — do not read
+            // `assignees` off it and report a fabricated empty success.
+            if (!result.issue) {
+              throw new Error(
+                "issueSetAssignees returned no issue — removal unconfirmed",
+              );
+            }
+            const remainingAssignees: string[] =
+              (result.issue.assignees?.nodes ?? []).map((
+                n: any,
+              ) => n.username);
+            // "No error" is not "removed". If the user is still in the
+            // resulting set, treat it as a failure so a queue-clearing caller
+            // isn't told it succeeded (mirrors set_issue_assignees failing loudly).
+            const stillAssigned = remainingAssignees
+              .map((u) => u.toLowerCase())
+              .includes(username.toLowerCase());
+            if (stillAssigned) {
+              throw new Error(
+                "REMOVE reported success but the user is still assigned",
+              );
+            }
+            results.push({ iid, remainingAssignees });
+          } catch (e) {
+            failed.push({
+              iid,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        }
+
+        const handle = await ctx.writeResource(
+          "issueUnassignResult",
+          `${sanitizeName(args.project)}-issue-unassign-${username}`,
+          {
+            project: args.project,
+            username,
+            results,
+            failed,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          "Unassigned {user} from {ok}/{total} issues in {project} ({failed} failed)",
+          {
+            user: username,
+            ok: results.length,
+            total: args.iids.length,
+            project: args.project,
+            failed: failed.length,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_issue_discussions: {
+      description:
+        "List discussion threads on an issue, with slim diff position (file/line, generally null for issues). " +
+        "GitLab does not support resolving plain issue discussions (only MR/diff discussions), so `resolvable`/`resolved` read false here.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        first: z.number().int().positive().max(100).default(50),
+      }),
+      execute: async (
+        args: { project: string; iid: number; first?: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        // `?? 50` is not redundant with the Zod default: the test harness (and
+        // any caller that skips schema validation) does not apply defaults.
+        const first = args.first ?? 50;
+        const data = await graphqlRequest(
+          host,
+          token,
+          ISSUE_DISCUSSIONS_QUERY,
+          {
+            fullPath: args.project,
+            iid: String(args.iid),
+            first,
+          },
+        );
+        const conn = data.project?.issue?.discussions;
+        if (!conn) {
+          throw new Error(`Issue #${args.iid} not found in ${args.project}`);
+        }
+        const parseNoteId = (gid: unknown): number =>
+          parseInt(String(gid ?? "").split("/").pop() ?? "0", 10);
+        const slim = (
+          pos: any,
+        ): { file: string | null; line: number | null } => ({
+          file: pos?.filePath ?? null,
+          line: pos?.newLine ?? pos?.oldLine ?? null,
+        });
+        const discussions: z.infer<typeof DiscussionSchema>[] = [];
+        for (const d of conn.nodes ?? []) {
+          // Drop system-only threads (label/assignee events, not human threads).
+          const userNotes = (d.notes?.nodes ?? []).filter(
+            (n: any) => !n.system,
+          );
+          if (userNotes.length === 0) continue;
+          const root = userNotes[0];
+          const rootPos = slim(root.position);
+          discussions.push({
+            id: d.id ?? "",
+            resolvable: d.resolvable ?? false,
+            resolved: d.resolved ?? false,
+            resolvedBy: d.resolvedBy?.username ?? null,
+            file: rootPos.file,
+            line: rootPos.line,
+            author: root.author?.username ?? null,
+            createdAt: root.createdAt ?? "",
+            notes: userNotes.map((n: any) => {
+              const p = slim(n.position);
+              return {
+                id: parseNoteId(n.id),
+                author: n.author?.username ?? null,
+                body: n.body ?? "",
+                createdAt: n.createdAt ?? "",
+                file: p.file,
+                line: p.line,
+              };
+            }),
+          });
+        }
+        const handle = await ctx.writeResource(
+          "issueDiscussions",
+          `${sanitizeName(args.project)}-issue-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            discussions,
+            truncated: !!conn.pageInfo?.hasNextPage,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          } as unknown as Record<string, unknown>,
+        );
+        ctx.logger.info(
+          "Fetched {count} discussions for {project}#{iid}",
+          {
+            count: discussions.length,
+            project: args.project,
+            iid: args.iid,
+          },
+        );
         return { dataHandles: [handle] };
       },
     },

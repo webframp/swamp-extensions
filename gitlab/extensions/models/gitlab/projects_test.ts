@@ -77,6 +77,7 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "create_pipeline_schedule",
+    "delete_issue_note",
     "delete_mr_note",
     "get_file",
     "get_issue",
@@ -87,6 +88,7 @@ Deno.test("model has all expected methods", () => {
     "get_project_info",
     "list_branches",
     "list_commits",
+    "list_issue_discussions",
     "list_issue_notes",
     "list_issues",
     "list_labels",
@@ -110,10 +112,13 @@ Deno.test("model has all expected methods", () => {
     "resolve_mr_discussion",
     "retry_job",
     "retry_pipeline",
+    "set_issue_assignees",
     "set_mr_assignees",
     "set_mr_reviewers",
+    "unassign_from_issues",
     "unassign_from_mrs",
     "update_issue",
+    "update_issue_note",
     "update_merge_request",
     "update_mr_note",
     "update_project_visibility",
@@ -132,7 +137,10 @@ Deno.test("model has all expected resources", () => {
     "discussionResolution",
     "discussions",
     "fileContent",
+    "issueAssignees",
     "issueDetail",
+    "issueDiscussions",
+    "issueUnassignResult",
     "issues",
     "jobLog",
     "labels",
@@ -948,6 +956,888 @@ Deno.test("list_issue_notes writes notes resource via GraphQL", async () => {
     const resources = getWrittenResources();
     assertEquals(resources[0].name, "org~repo-issue-3");
     assertEquals((resources[0].data as any).count, 2);
+  } finally {
+    restore();
+  }
+});
+
+// =============================================================================
+// Issue Parity Tests (assignees, note edit/delete, field parity, discussions)
+// =============================================================================
+
+Deno.test("create_issue passes assigneeUsernames/milestoneId/dueDate/confidential/weight through", async () => {
+  const cap = mockGraphqlCapture({
+    data: {
+      createIssue: {
+        issue: {
+          iid: 99,
+          title: "New issue",
+          description: "body",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/99",
+          labels: { nodes: [] },
+          createdAt: "2026-06-10T00:00:00Z",
+          updatedAt: "2026-06-10T00:00:00Z",
+          assignees: { nodes: [{ username: "operator" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_issue.execute(
+      {
+        project: "org/repo",
+        title: "New issue",
+        description: "body",
+        labels: [],
+        assignees: ["operator"],
+        milestone: 42,
+        dueDate: "2026-12-01",
+        confidential: true,
+        weight: 3,
+      },
+      context as any,
+    );
+    assertEquals(cap.vars().assigneeUsernames, ["operator"]);
+    assertEquals(cap.vars().milestoneId, "gid://gitlab/Milestone/42");
+    assertEquals(cap.vars().dueDate, "2026-12-01");
+    assertEquals(cap.vars().confidential, true);
+    assertEquals(cap.vars().weight, 3);
+  } finally {
+    cap.restore();
+  }
+});
+
+Deno.test("create_issue throws when GitLab did not assign a requested username", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      createIssue: {
+        issue: {
+          iid: 99,
+          title: "New issue",
+          description: "",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/99",
+          labels: { nodes: [] },
+          createdAt: "2026-06-10T00:00:00Z",
+          updatedAt: "2026-06-10T00:00:00Z",
+          assignees: { nodes: [] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          {
+            project: "org/repo",
+            title: "x",
+            description: "",
+            labels: [],
+            assignees: ["ghost"],
+          },
+          context as any,
+        ),
+      Error,
+      "did not assign ghost",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_issue resolves a milestone title to a gid via REST search", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if ((init?.method ?? "GET") === "GET" && url.includes("/milestones")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{ id: 7, title: "Q4 Launch" }]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (init?.method === "POST" && url.includes("/api/graphql")) {
+      const body = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              createIssue: {
+                issue: {
+                  iid: 1,
+                  title: "x",
+                  description: "",
+                  state: "opened",
+                  webUrl: "https://git.example.org/org/repo/-/issues/1",
+                  labels: { nodes: [] },
+                  createdAt: "2026-01-01T00:00:00Z",
+                  updatedAt: "2026-01-01T00:00:00Z",
+                  assignees: { nodes: [] },
+                },
+                errors: [],
+              },
+            },
+            __sentVariables: body.variables,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_issue.execute(
+      {
+        project: "org/repo",
+        title: "x",
+        description: "",
+        labels: [],
+        milestone: "Q4 Launch",
+      },
+      context as any,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("create_issue throws when a milestone title does not resolve", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if ((init?.method ?? "GET") === "GET" && url.includes("/milestones")) {
+      return Promise.resolve(
+        new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          {
+            project: "org/repo",
+            title: "x",
+            description: "",
+            labels: [],
+            milestone: "Nonexistent",
+          },
+          context as any,
+        ),
+      Error,
+      "no milestone titled",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_issue sends add_labels/remove_labels/due_date/confidential/weight via REST", async () => {
+  const original = globalThis.fetch;
+  let sentBody: any = null;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      sentBody = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "Updated",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: ["kept"],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-06-10T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_issue.execute(
+      {
+        project: "org/repo",
+        iid: 5,
+        addLabels: ["urgent"],
+        removeLabels: ["stale"],
+        dueDate: "2026-12-01",
+        confidential: true,
+        weight: 5,
+        milestone: 3,
+      },
+      context as any,
+    );
+    assertEquals(sentBody.add_labels, "urgent");
+    assertEquals(sentBody.remove_labels, "stale");
+    assertEquals(sentBody.due_date, "2026-12-01");
+    assertEquals(sentBody.confidential, true);
+    assertEquals(sentBody.weight, 5);
+    assertEquals(sentBody.milestone_id, 3);
+    assertEquals((getWrittenResources()[0].data as any).title, "Updated");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_issue sets assignees via issueSetAssignees after the REST PUT", async () => {
+  const original = globalThis.fetch;
+  const requests: any[] = [];
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "Updated",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: [],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-06-10T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (init?.method === "POST" && url.includes("/api/graphql")) {
+      const body = JSON.parse(init.body as string);
+      requests.push(body.variables);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              issueSetAssignees: {
+                issue: {
+                  iid: 5,
+                  assignees: { nodes: [{ username: "operator" }] },
+                },
+                errors: [],
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_issue.execute(
+      { project: "org/repo", iid: 5, assignees: ["operator"] },
+      context as any,
+    );
+    assertEquals(requests[0].usernames, ["operator"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_issue throws when GitLab did not assign a requested username", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      issueSetAssignees: {
+        issue: { iid: 5, assignees: { nodes: [] } },
+        errors: [],
+      },
+    },
+  });
+  // update_issue does a REST PUT first; give it a passing PUT mock too.
+  const original = globalThis.fetch;
+  const gqlFetch = globalThis.fetch;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "x",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: [],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return gqlFetch(input, init);
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.update_issue.execute(
+          { project: "org/repo", iid: 5, assignees: ["ghost"] },
+          context as any,
+        ),
+      Error,
+      "did not assign ghost",
+    );
+  } finally {
+    globalThis.fetch = original;
+    restore();
+  }
+});
+
+Deno.test("add_issue_note replies into a thread when discussionId is given", async () => {
+  const cap = mockGraphqlCapture({
+    data: {
+      project: { issue: { id: "gid://gitlab/Issue/321" } },
+      createNote: {
+        note: {
+          id: "gid://gitlab/Note/1",
+          body: "ack",
+          createdAt: "2026-07-10T00:00:00Z",
+          author: { username: "operator" },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.add_issue_note.execute(
+      {
+        project: "group/proj",
+        iid: 7,
+        body: "ack",
+        discussionId: "gid://gitlab/Discussion/thread1",
+      },
+      context as any,
+    );
+    assertEquals(cap.vars().discussionId, "gid://gitlab/Discussion/thread1");
+    assertEquals(
+      (getWrittenResources()[0].data as any).notes[0].body,
+      "ack",
+    );
+  } finally {
+    cap.restore();
+  }
+});
+
+Deno.test("update_issue_note sends the note gid and edits the note", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      updateNote: {
+        note: {
+          id: "gid://gitlab/Note/5",
+          body: "edited body",
+          createdAt: "2026-01-01T00:00:00Z",
+          author: { username: "operator" },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_issue_note.execute(
+      { project: "group/proj", iid: 7, noteId: 5, body: "edited body" },
+      context as any,
+    );
+    assertEquals(m.vars().id, "gid://gitlab/Note/5");
+    assertEquals(m.vars().body, "edited body");
+    const d = getWrittenResources().find((x) => x.specName === "notes")!
+      .data as any;
+    assertEquals(d.notes[0].id, 5);
+    assertEquals(d.notes[0].body, "edited body");
+    assertEquals(d.noteableType, "issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("update_issue_note throws on a null payload (permission denied)", async () => {
+  const restore = mockGraphqlFetch({ data: { updateNote: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.update_issue_note.execute(
+          { project: "group/proj", iid: 7, noteId: 9999, body: "x" },
+          context as any,
+        ),
+      Error,
+      "not found or permission denied",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("delete_issue_note sends the note gid and records deletion", async () => {
+  const m = mockGraphqlCapture({
+    data: { destroyNote: { note: { id: "gid://gitlab/Note/5" }, errors: [] } },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.delete_issue_note.execute(
+      { project: "group/proj", iid: 7, noteId: 5 },
+      context as any,
+    );
+    assertEquals(m.vars().id, "gid://gitlab/Note/5");
+    const d = getWrittenResources().find((x) => x.specName === "noteDeleted")!
+      .data as any;
+    assertEquals(d.deleted, true);
+    assertEquals(d.noteId, 5);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("delete_issue_note throws on a null payload (permission denied)", async () => {
+  const restore = mockGraphqlFetch({ data: { destroyNote: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.delete_issue_note.execute(
+          { project: "group/proj", iid: 7, noteId: 9999 },
+          context as any,
+        ),
+      Error,
+      "not found or permission denied",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("set_issue_assignees sends usernames with REPLACE and records result", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      issueSetAssignees: {
+        issue: {
+          iid: "7",
+          assignees: { nodes: [{ username: "operator" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_issue_assignees.execute(
+      { project: "group/proj", iid: 7, usernames: ["operator"] },
+      context as any,
+    );
+    assertEquals(m.vars().usernames, ["operator"]);
+    assertEquals(m.vars().projectPath, "group/proj");
+    const d = getWrittenResources().find((x) =>
+      x.specName === "issueAssignees"
+    )!
+      .data as any;
+    assertEquals(d.assignees, ["operator"]);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_issue_assignees with an empty list sends [] to unassign", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      issueSetAssignees: {
+        issue: { iid: "7", assignees: { nodes: [] } },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_issue_assignees.execute(
+      { project: "group/proj", iid: 7, usernames: [] },
+      context as any,
+    );
+    assertEquals(m.vars().usernames, []);
+    const d = getWrittenResources().find((x) =>
+      x.specName === "issueAssignees"
+    )!
+      .data as any;
+    assertEquals(d.assignees, []);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_issue_assignees throws when a requested user was not assigned", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      issueSetAssignees: {
+        issue: { iid: "7", assignees: { nodes: [] } },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.set_issue_assignees.execute(
+          { project: "group/proj", iid: 7, usernames: ["ghost"] },
+          context as any,
+        ),
+      Error,
+      "did not assign ghost",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("set_issue_assignees matches usernames case-insensitively", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      issueSetAssignees: {
+        issue: {
+          iid: "7",
+          assignees: { nodes: [{ username: "devuser" }] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.set_issue_assignees.execute(
+      { project: "group/proj", iid: 7, usernames: ["DevUser"] },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) =>
+      x.specName === "issueAssignees"
+    )!
+      .data as any;
+    assertEquals(d.assignees, ["devuser"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test(
+  "unassign_from_issues resolves the authenticated user and removes them across issues via REMOVE",
+  async () => {
+    const requests: Array<{ query: string; variables: any }> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      requests.push(JSON.parse((init?.body as string) ?? "{}"));
+      const body = {
+        data: {
+          currentUser: { username: "operator" },
+          issueSetAssignees: {
+            issue: {
+              iid: 1,
+              assignees: { nodes: [{ username: "otheruser" }] },
+            },
+            errors: [],
+          },
+        },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_issues.execute(
+        { project: "group/proj", iids: [11, 22] },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_issues.execute
+        >[1],
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "issueUnassignResult");
+      const data = resources[0].data as {
+        username: string;
+        results: Array<{ iid: number; remainingAssignees: string[] }>;
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.username, "operator");
+      assertEquals(data.results.map((r) => r.iid), [11, 22]);
+      assertEquals(data.results[0].remainingAssignees, ["otheruser"]);
+      assertEquals(data.failed.length, 0);
+      const mutations = requests.filter((r) =>
+        r.query.includes("issueSetAssignees")
+      );
+      assertEquals(mutations.length, 2);
+      for (const m of mutations) {
+        assertEquals(m.query.includes("operationMode: REMOVE"), true);
+        assertEquals(m.variables.usernames, ["operator"]);
+      }
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_issues routes a still-assigned result (no GraphQL error) to failed",
+  async () => {
+    const restore = mockGraphqlFetch({
+      data: {
+        currentUser: { username: "operator" },
+        issueSetAssignees: {
+          issue: {
+            iid: 1,
+            assignees: {
+              nodes: [{ username: "operator" }, { username: "otheruser" }],
+            },
+          },
+          errors: [],
+        },
+      },
+    });
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_issues.execute(
+        { project: "group/proj", iids: [42] },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_issues.execute
+        >[1],
+      );
+      const data = getWrittenResources()[0].data as {
+        results: unknown[];
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.results.length, 0);
+      assertEquals(data.failed.map((f) => f.iid), [42]);
+      assertEquals(data.failed[0].error.includes("still assigned"), true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_issues throws when the authenticated user cannot be resolved",
+  async () => {
+    const restore = mockGraphqlFetch({ data: { currentUser: null } });
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await assertRejects(
+        () =>
+          model.methods.unassign_from_issues.execute(
+            { project: "group/proj", iids: [1] },
+            context as unknown as Parameters<
+              typeof model.methods.unassign_from_issues.execute
+            >[1],
+          ),
+        Error,
+        "could not resolve the authenticated user",
+      );
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "unassign_from_issues records per-issue failures and still writes a result",
+  async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+      const parsed = JSON.parse((init?.body as string) ?? "{}");
+      const iid = parsed?.variables?.iid;
+      const payload = iid === "20" ? { data: { issueSetAssignees: null } } : {
+        data: {
+          issueSetAssignees: {
+            issue: {
+              iid: 10,
+              assignees: { nodes: [{ username: "keeper" }] },
+            },
+            errors: [],
+          },
+        },
+      };
+      return Promise.resolve(
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await model.methods.unassign_from_issues.execute(
+        { project: "group/proj", iids: [10, 20], username: "operator" },
+        context as unknown as Parameters<
+          typeof model.methods.unassign_from_issues.execute
+        >[1],
+      );
+      const data = getWrittenResources()[0].data as {
+        results: Array<{ iid: number; remainingAssignees: string[] }>;
+        failed: Array<{ iid: number; error: string }>;
+      };
+      assertEquals(data.results.map((r) => r.iid), [10]);
+      assertEquals(data.results[0].remainingAssignees, ["keeper"]);
+      assertEquals(data.failed.map((f) => f.iid), [20]);
+      assertEquals(data.failed[0].error.length > 0, true);
+    } finally {
+      globalThis.fetch = original;
+    }
+  },
+);
+
+Deno.test("list_issue_discussions hoists fields, drops system-only threads", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issue: {
+          discussions: {
+            nodes: [
+              {
+                id: "gid://gitlab/Discussion/aaa",
+                resolvable: false,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "gid://gitlab/Note/101",
+                      system: false,
+                      body: "needs more detail",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "operator" },
+                      position: null,
+                    },
+                  ],
+                },
+              },
+              {
+                id: "gid://gitlab/Discussion/bbb",
+                resolvable: false,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "gid://gitlab/Note/9",
+                      system: true,
+                      body: "changed the description",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "someone" },
+                      position: null,
+                    },
+                  ],
+                },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_issue_discussions.execute(
+      { project: "group/proj", iid: 7 },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "issueDiscussions");
+    const data = resources[0].data as {
+      discussions: Array<
+        { id: string; resolvable: boolean; author: string | null }
+      >;
+      truncated: boolean;
+    };
+    // System-only thread bbb is dropped; aaa remains.
+    assertEquals(data.discussions.map((d) => d.id), [
+      "gid://gitlab/Discussion/aaa",
+    ]);
+    assertEquals(data.discussions[0].resolvable, false);
+    assertEquals(data.discussions[0].author, "operator");
+    assertEquals(data.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_issue_discussions throws when the issue is not found", async () => {
+  const restore = mockGraphqlFetch({ data: { project: { issue: null } } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.list_issue_discussions.execute(
+          { project: "group/proj", iid: 404 },
+          context as any,
+        ),
+      Error,
+      "not found",
+    );
   } finally {
     restore();
   }
