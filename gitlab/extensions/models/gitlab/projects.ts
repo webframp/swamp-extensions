@@ -2207,6 +2207,17 @@ class GitLabClient {
     url: string,
     maxBytes: number,
   ): Promise<{ text: string; truncated: boolean } | null> {
+    // raw_url is attacker-influenceable (a compromised/MITM'd GitLab
+    // response could point it anywhere), and it's about to be fetched with
+    // the PRIVATE-TOKEN header attached — refuse to send that credential to
+    // any host other than the one this client was configured for.
+    const parsedHost = new URL(url).host;
+    const expectedHost = new URL(this.baseUrl).host;
+    if (parsedHost !== expectedHost) {
+      throw new Error(
+        `getRawTextOrNull: refusing to fetch from external host ${parsedHost} (expected ${expectedHost})`,
+      );
+    }
     const resp = await fetch(url, { headers: this.headers() });
     if (resp.status === 404) return null;
     if (!resp.ok) {
@@ -6692,8 +6703,10 @@ export const model = {
           ctx.globalArgs.token,
         );
         const { data, truncated } = args.project
-          ? await client.getProjectList(args.project, "/snippets")
-          : await client.getInstanceList("/snippets");
+          ? await client.getProjectList(args.project, "/snippets", {
+            per_page: "100",
+          })
+          : await client.getInstanceList("/snippets", { per_page: "100" });
         const rawList = Array.isArray(data) ? data : [];
         const snippets = rawList.map((raw: any) => ({
           id: raw.id,
@@ -6883,6 +6896,12 @@ export const model = {
             file_path: f.filePath,
             content: f.content,
           }));
+        }
+        if (Object.keys(body).length === 0) {
+          throw new Error(
+            "update_snippet: no fields to update — provide at least one of " +
+              "title, description, visibility, or files",
+          );
         }
         const raw = args.project
           ? await client.put(args.project, `/snippets/${args.id}`, body)

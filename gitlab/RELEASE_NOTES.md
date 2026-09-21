@@ -10,15 +10,16 @@
   `private` (`private`/`internal`/`public`).
 - `list_snippets` — the caller's personal snippets (`GET /snippets`), or a
   project's snippets when `project` is given (`GET /projects/:id/snippets`).
-  Paginated the same way `list_branches`/`list_repository_tree` are, flagging
-  `truncated` from GitLab's `x-next-page` header.
+  Requests `per_page=100` (matching `list_branches`/`list_repository_tree`)
+  and flags `truncated` from GitLab's `x-next-page` header.
 - `get_snippet` — fetch a snippet's metadata (instance/personal or project,
   by `id`). Set `includeContent` to also fetch raw file content — the whole
   snippet by default, or a specific file via `filePath` — capped at 500KB and
   redacted for common credential patterns exactly like `get_file`, including
   rejecting binary content rather than decoding it as corrupted text.
 - `update_snippet` — update an existing snippet's `title`, `description`,
-  `visibility`, and/or `files` (only the fields provided are sent).
+  `visibility`, and/or `files` (only the fields provided are sent). Throws if
+  called with none of those fields, rather than sending an empty PUT.
 - `delete_snippet` — delete a snippet by `id` (instance/personal, or project
   when `project` is given). Throws a descriptive error on a non-2xx response
   (e.g. 404) rather than silently succeeding.
@@ -35,6 +36,9 @@ new instance-level HTTP helpers (`getInstance`, `getInstanceList`,
 project-scoped `get`/`del`, since GitLab's snippet GraphQL surface doesn't
 cover create/delete and instance snippets live directly off the API base URL
 rather than under `/projects/:id` like everything else this model reads.
+`getRawTextOrNull` refuses to send the configured `PRIVATE-TOKEN` to any host
+other than this client's own GitLab instance, since `raw_url` is a value
+GitLab's API hands back rather than a code-controlled path.
 
 **Upgrade note:** No co-upgrades required. All new resources and methods are
 additive; no `globalArguments` change.

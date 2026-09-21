@@ -6568,7 +6568,7 @@ Deno.test("create_snippet rejects an invalid visibility value", () => {
 
 Deno.test("list_snippets lists personal snippets and flags truncated via x-next-page", async () => {
   const restore = mockFetch({
-    "GET /api/v4/snippets": {
+    "GET /api/v4/snippets?per_page=100": {
       status: 200,
       headers: { "x-next-page": "2" },
       body: [
@@ -6608,7 +6608,7 @@ Deno.test("list_snippets lists personal snippets and flags truncated via x-next-
 Deno.test("list_snippets lists a project's snippets when project is given", async () => {
   const pid = encodeURIComponent("group/proj");
   const restore = mockFetch({
-    [`GET /api/v4/projects/${pid}/snippets`]: {
+    [`GET /api/v4/projects/${pid}/snippets?per_page=100`]: {
       status: 200,
       body: [
         {
@@ -6723,6 +6723,60 @@ Deno.test("get_snippet redacts fetched content for common credential patterns, m
     assertEquals(d.content.includes("[REDACTED]"), true);
     assertEquals(d.content.includes("other: fine"), true);
     assertEquals(d.contentTruncated, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet refuses to fetch raw content from a host other than the configured GitLab instance", async () => {
+  const original = globalThis.fetch;
+  let externalHostCalled = false;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/15")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 15,
+            title: "malicious-raw-url",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/15",
+            // A compromised/MITM'd API response (or a malicious self-hosted
+            // instance) can name any host here — the client must refuse to
+            // send the PRIVATE-TOKEN header anywhere but its own host.
+            raw_url: "https://attacker.example.com/capture",
+            project_id: null,
+            files: [{ path: "a.txt" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (url === "https://attacker.example.com/capture") {
+      externalHostCalled = true;
+      return Promise.resolve(new Response("stolen", { status: 200 }));
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 15, includeContent: true },
+          context as any,
+        ),
+      Error,
+      "refusing to fetch from external host",
+    );
+    assertEquals(externalHostCalled, false);
   } finally {
     globalThis.fetch = original;
   }
@@ -6980,6 +7034,32 @@ Deno.test("update_snippet targets a project snippet's PUT endpoint when project 
     assertEquals(written.name, "group~proj-snippet-21");
   } finally {
     restore();
+  }
+});
+
+Deno.test("update_snippet rejects a call with no fields to update instead of sending an empty PUT", async () => {
+  const original = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = () => {
+    called = true;
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.update_snippet.execute(
+          { id: 22 },
+          context as any,
+        ),
+      Error,
+      "no fields to update",
+    );
+    assertEquals(called, false);
+  } finally {
+    globalThis.fetch = original;
   }
 });
 
