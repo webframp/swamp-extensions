@@ -1818,6 +1818,7 @@ async function resolveMilestoneId(
   const client = new GitLabClient(host, token);
   const { data } = await client.getProjectList(project, "/milestones", {
     search: milestone,
+    per_page: "100",
   });
   const matches = (data as Array<{ id: number; title: string }>).filter(
     (m) => m.title === milestone,
@@ -3336,7 +3337,10 @@ export const model = {
             throw new Error(
               `create_issue: GitLab did not assign ${
                 missing.join(", ")
-              } (unknown user, or GitLab CE's single-assignee limit)`,
+              } (unknown user, or GitLab CE's single-assignee limit) — ` +
+                `the issue was already created as #${issue.iid} (${
+                  issue.webUrl ?? "no webUrl available"
+                }); reconcile assignees on it directly`,
             );
           }
         }
@@ -3465,6 +3469,19 @@ export const model = {
             },
           );
           const assignResult = assignData.issueSetAssignees;
+          // GitLab returns a null payload on permission-denied / missing
+          // issue as a routine path — guard before reading .errors. By this
+          // point the REST PUT above has already committed, so the issue's
+          // other fields were already updated; only assignees failed to
+          // apply. Say so explicitly so the caller isn't confused about
+          // partial state.
+          if (!assignResult) {
+            throw new Error(
+              `update_issue: issueSetAssignees returned null (permission denied or issue not found) — ` +
+                `issue #${args.iid} in ${args.project} was already updated via REST for its other fields, ` +
+                `but assignees were not applied`,
+            );
+          }
           if (assignResult.errors?.length) {
             throw new Error(
               `update_issue: issueSetAssignees failed: ${
@@ -3723,6 +3740,13 @@ export const model = {
           },
         );
         const result = data.issueSetAssignees;
+        // GitLab returns a null payload on permission-denied / missing
+        // issue as a routine path — guard before reading .errors.
+        if (!result) {
+          throw new Error(
+            "set_issue_assignees: issueSetAssignees returned null (permission denied or issue not found)",
+          );
+        }
         if (result.errors?.length) {
           throw new Error(
             `issueSetAssignees failed: ${result.errors.join("; ")}`,
@@ -3918,7 +3942,7 @@ export const model = {
           throw new Error(`Issue #${args.iid} not found in ${args.project}`);
         }
         const parseNoteId = (gid: unknown): number =>
-          parseInt(String(gid ?? "").split("/").pop() ?? "0", 10);
+          parseInt(String(gid ?? "").split("/").pop() || "0", 10);
         const slim = (
           pos: any,
         ): { file: string | null; line: number | null } => ({

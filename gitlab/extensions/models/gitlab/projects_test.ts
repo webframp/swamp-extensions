@@ -1055,6 +1055,66 @@ Deno.test("create_issue throws when GitLab did not assign a requested username",
   }
 });
 
+Deno.test("create_issue's assignee-mismatch error includes the orphaned issue's iid and webUrl", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      createIssue: {
+        issue: {
+          iid: 99,
+          title: "New issue",
+          description: "",
+          state: "opened",
+          webUrl: "https://git.example.org/org/repo/-/issues/99",
+          labels: { nodes: [] },
+          createdAt: "2026-06-10T00:00:00Z",
+          updatedAt: "2026-06-10T00:00:00Z",
+          assignees: { nodes: [] },
+        },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          {
+            project: "org/repo",
+            title: "x",
+            description: "",
+            labels: [],
+            assignees: ["ghost"],
+          },
+          context as any,
+        ),
+      Error,
+      "#99",
+    );
+    // The webUrl should also be present so a caller can locate the
+    // already-created issue without a separate lookup.
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          {
+            project: "org/repo",
+            title: "x",
+            description: "",
+            labels: [],
+            assignees: ["ghost"],
+          },
+          context as any,
+        ),
+      Error,
+      "org/repo/-/issues/99",
+    );
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("create_issue resolves a milestone title to a gid via REST search", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (input: any, init?: any) => {
@@ -1110,6 +1170,70 @@ Deno.test("create_issue resolves a milestone title to a gid via REST search", as
       },
       context as any,
     );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("create_issue's milestone title lookup paginates the REST search at per_page=100", async () => {
+  const original = globalThis.fetch;
+  let milestoneUrl: any = null;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if ((init?.method ?? "GET") === "GET" && url.includes("/milestones")) {
+      milestoneUrl = url;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify([{ id: 7, title: "Q4 Launch" }]),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (init?.method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              createIssue: {
+                issue: {
+                  iid: 1,
+                  title: "x",
+                  description: "",
+                  state: "opened",
+                  webUrl: "https://git.example.org/org/repo/-/issues/1",
+                  labels: { nodes: [] },
+                  createdAt: "2026-01-01T00:00:00Z",
+                  updatedAt: "2026-01-01T00:00:00Z",
+                  assignees: { nodes: [] },
+                },
+                errors: [],
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_issue.execute(
+      {
+        project: "org/repo",
+        title: "x",
+        description: "",
+        labels: [],
+        milestone: "Q4 Launch",
+      },
+      context as any,
+    );
+    // GitLab defaults to per_page=20 when unspecified; without an explicit
+    // per_page=100, a matching milestone past the first 20 results would be
+    // missed and the lookup would wrongly report "not found".
+    assertEquals(milestoneUrl?.includes("per_page=100"), true);
   } finally {
     globalThis.fetch = original;
   }
@@ -1314,6 +1438,55 @@ Deno.test("update_issue throws when GitLab did not assign a requested username",
   } finally {
     globalThis.fetch = original;
     restore();
+  }
+});
+
+Deno.test("update_issue throws a clear error on a null issueSetAssignees payload, mentioning the partial update", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "x",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: [],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (init?.method === "POST" && url.includes("/api/graphql")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ data: { issueSetAssignees: null } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.update_issue.execute(
+          { project: "org/repo", iid: 5, assignees: ["operator"] },
+          context as any,
+        ),
+      Error,
+      "already updated via REST",
+    );
+  } finally {
+    globalThis.fetch = original;
   }
 });
 
@@ -1563,6 +1736,26 @@ Deno.test("set_issue_assignees matches usernames case-insensitively", async () =
     )!
       .data as any;
     assertEquals(d.assignees, ["devuser"]);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("set_issue_assignees throws a clear error on a null issueSetAssignees payload", async () => {
+  const restore = mockGraphqlFetch({ data: { issueSetAssignees: null } });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.set_issue_assignees.execute(
+          { project: "group/proj", iid: 7, usernames: ["operator"] },
+          context as any,
+        ),
+      Error,
+      "issueSetAssignees returned null",
+    );
   } finally {
     restore();
   }
@@ -1818,6 +2011,55 @@ Deno.test("list_issue_discussions hoists fields, drops system-only threads", asy
     assertEquals(data.discussions[0].resolvable, false);
     assertEquals(data.discussions[0].author, "operator");
     assertEquals(data.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_issue_discussions falls back to note id 0 on an empty-string gid, not NaN", async () => {
+  const restore = mockGraphqlFetch({
+    data: {
+      project: {
+        issue: {
+          discussions: {
+            nodes: [
+              {
+                id: "gid://gitlab/Discussion/aaa",
+                resolvable: false,
+                resolved: false,
+                resolvedBy: null,
+                notes: {
+                  nodes: [
+                    {
+                      id: "",
+                      system: false,
+                      body: "no gid available",
+                      createdAt: "2026-07-10T00:00:00Z",
+                      author: { username: "operator" },
+                      position: null,
+                    },
+                  ],
+                },
+              },
+            ],
+            pageInfo: { hasNextPage: false },
+          },
+        },
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_issue_discussions.execute(
+      { project: "group/proj", iid: 7 },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as {
+      discussions: Array<{ notes: Array<{ id: number }> }>;
+    };
+    assertEquals(data.discussions[0].notes[0].id, 0);
   } finally {
     restore();
   }
