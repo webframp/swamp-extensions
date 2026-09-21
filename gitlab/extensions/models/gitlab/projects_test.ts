@@ -77,8 +77,10 @@ Deno.test("model has all expected methods", () => {
     "create_label",
     "create_merge_request",
     "create_pipeline_schedule",
+    "create_snippet",
     "delete_issue_note",
     "delete_mr_note",
+    "delete_snippet",
     "get_file",
     "get_issue",
     "get_job_log",
@@ -86,6 +88,7 @@ Deno.test("model has all expected methods", () => {
     "get_pipeline_by_iid",
     "get_pipeline_jobs",
     "get_project_info",
+    "get_snippet",
     "list_branches",
     "list_commits",
     "list_issue_discussions",
@@ -102,6 +105,7 @@ Deno.test("model has all expected methods", () => {
     "list_projects",
     "list_releases",
     "list_repository_tree",
+    "list_snippets",
     "list_todos",
     "mark_todo_done",
     "mark_todos_done",
@@ -122,6 +126,7 @@ Deno.test("model has all expected methods", () => {
     "update_merge_request",
     "update_mr_note",
     "update_project_visibility",
+    "update_snippet",
   ]);
 });
 
@@ -167,6 +172,9 @@ Deno.test("model has all expected resources", () => {
     "repositoryTree",
     "retryResult",
     "reviewerRemovalResult",
+    "snippetDeleted",
+    "snippetDetail",
+    "snippetList",
     "todoList",
     "unassignResult",
   ]);
@@ -6420,3 +6428,650 @@ Deno.test(
     }
   },
 );
+
+// =============================================================================
+// Snippet Methods
+// =============================================================================
+
+Deno.test("create_snippet creates an instance/personal snippet with a multi-file payload", async () => {
+  let capturedBody: any;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets") && init?.method === "POST") {
+      capturedBody = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 42,
+            title: "multi",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/42",
+            raw_url: "https://git.example.org/-/snippets/42/raw",
+            project_id: null,
+            files: [
+              { path: "a.txt" },
+              { path: "b.txt" },
+            ],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 201, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_snippet.execute(
+      {
+        title: "multi",
+        files: [
+          { filePath: "a.txt", content: "aaa" },
+          { filePath: "b.txt", content: "bbb" },
+        ],
+        visibility: "private",
+        description: "",
+      },
+      context as any,
+    );
+    // GitLab's actual field name is snake_case file_path — the outbound
+    // payload must map filePath -> file_path, not ship the camelCase key.
+    assertEquals(capturedBody.files, [
+      { file_path: "a.txt", content: "aaa" },
+      { file_path: "b.txt", content: "bbb" },
+    ]);
+    const d = getWrittenResources().find((x) => x.specName === "snippetDetail")!
+      .data as any;
+    assertEquals(d.id, 42);
+    assertEquals(d.projectId, null);
+    assertEquals(d.fileCount, 2);
+    assertEquals(getWrittenResources()[0].name, "snippet-42");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("create_snippet creates a project snippet under /projects/:id/snippets", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`POST /api/v4/projects/${pid}/snippets`]: {
+      status: 201,
+      body: {
+        id: 7,
+        title: "proj-snip",
+        visibility: "internal",
+        web_url: "https://git.example.org/group/proj/-/snippets/7",
+        raw_url: "https://git.example.org/group/proj/-/snippets/7/raw",
+        project_id: 99,
+        files: [{ path: "one.txt" }],
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_snippet.execute(
+      {
+        title: "proj-snip",
+        files: [{ filePath: "one.txt", content: "hello" }],
+        visibility: "internal",
+        description: "",
+        project: "group/proj",
+      },
+      context as any,
+    );
+    const written = getWrittenResources()[0];
+    assertEquals(written.specName, "snippetDetail");
+    assertEquals(written.name, "group~proj-snippet-7");
+    const d = written.data as any;
+    assertEquals(d.projectId, 99);
+    assertEquals(d.visibility, "internal");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("create_snippet defaults visibility to private", () => {
+  const parsed = model.methods.create_snippet.arguments.parse({
+    title: "t",
+    files: [{ filePath: "a.txt", content: "x" }],
+  });
+  assertEquals(parsed.visibility, "private");
+  assertEquals(parsed.description, "");
+});
+
+Deno.test("create_snippet rejects an empty files array", () => {
+  const result = model.methods.create_snippet.arguments.safeParse({
+    title: "t",
+    files: [],
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("create_snippet rejects an invalid visibility value", () => {
+  const result = model.methods.create_snippet.arguments.safeParse({
+    title: "t",
+    files: [{ filePath: "a.txt", content: "x" }],
+    visibility: "secret",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("list_snippets lists personal snippets and flags truncated via x-next-page", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/snippets": {
+      status: 200,
+      headers: { "x-next-page": "2" },
+      body: [
+        {
+          id: 1,
+          title: "one",
+          visibility: "private",
+          web_url: "https://git.example.org/-/snippets/1",
+          files: [{ path: "a.txt" }],
+        },
+        {
+          id: 2,
+          title: "two",
+          visibility: "public",
+          web_url: "https://git.example.org/-/snippets/2",
+          file_name: "legacy.txt",
+        },
+      ],
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_snippets.execute({}, context as any);
+    const d = getWrittenResources().find((x) => x.specName === "snippetList")!
+      .data as any;
+    assertEquals(d.snippets.length, 2);
+    assertEquals(d.snippets[0].fileCount, 1);
+    assertEquals(d.snippets[1].fileCount, 1);
+    assertEquals(d.truncated, true);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("list_snippets lists a project's snippets when project is given", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/snippets`]: {
+      status: 200,
+      body: [
+        {
+          id: 5,
+          title: "proj-only",
+          visibility: "private",
+          web_url: "https://git.example.org/group/proj/-/snippets/5",
+          files: [],
+        },
+      ],
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.list_snippets.execute(
+      { project: "group/proj" },
+      context as any,
+    );
+    const written = getWrittenResources()[0];
+    assertEquals(written.name, "group~proj-snippets");
+    const d = written.data as any;
+    assertEquals(d.snippets.length, 1);
+    assertEquals(d.snippets[0].id, 5);
+    assertEquals(d.truncated, false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_snippet fetches metadata only when includeContent is false", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/snippets/9": {
+      status: 200,
+      body: {
+        id: 9,
+        title: "meta-only",
+        visibility: "private",
+        web_url: "https://git.example.org/-/snippets/9",
+        raw_url: "https://git.example.org/-/snippets/9/raw",
+        project_id: null,
+        files: [{ path: "a.txt" }],
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      { id: 9, includeContent: false },
+      context as any,
+    );
+    const d = getWrittenResources()[0].data as any;
+    assertEquals(d.id, 9);
+    assertEquals(d.content, undefined);
+    assertEquals(d.contentTruncated, undefined);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_snippet redacts fetched content for common credential patterns, matching get_file", async () => {
+  const original = globalThis.fetch;
+  const rawContent =
+    "token: glpat-ABCDEFGHIJKLMNOPQRSTUVWXYZ012345\nother: fine\n";
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/11")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 11,
+            title: "secret-snip",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/11",
+            raw_url: "https://git.example.org/-/snippets/11/raw",
+            project_id: null,
+            files: [{ path: "config.yml" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (url === "https://git.example.org/-/snippets/11/raw") {
+      return Promise.resolve(
+        new Response(rawContent, {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      { id: 11, includeContent: true },
+      context as any,
+    );
+    const d = getWrittenResources()[0].data as any;
+    assertEquals(d.content.includes("ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"), false);
+    assertEquals(d.content.includes("[REDACTED]"), true);
+    assertEquals(d.content.includes("other: fine"), true);
+    assertEquals(d.contentTruncated, false);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet fetches a specific file's content via its raw_url when filePath is given", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/12")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 12,
+            title: "multi-file",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/12",
+            raw_url: "https://git.example.org/-/snippets/12/raw",
+            project_id: null,
+            files: [
+              {
+                path: "a.txt",
+                raw_url:
+                  "https://git.example.org/-/snippets/12/files/main/a.txt/raw",
+              },
+              {
+                path: "b.txt",
+                raw_url:
+                  "https://git.example.org/-/snippets/12/files/main/b.txt/raw",
+              },
+            ],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    if (
+      url === "https://git.example.org/-/snippets/12/files/main/b.txt/raw"
+    ) {
+      return Promise.resolve(
+        new Response("content of b", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
+    }
+    // The whole-snippet raw_url should NOT be hit when filePath resolves
+    // to a specific file's own raw_url.
+    if (url === "https://git.example.org/-/snippets/12/raw") {
+      return Promise.resolve(
+        new Response("WRONG FILE", { status: 200 }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      { id: 12, includeContent: false, filePath: "b.txt" },
+      context as any,
+    );
+    const d = getWrittenResources()[0].data as any;
+    assertEquals(d.content, "content of b");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet throws instead of silently falling back to the whole-snippet raw content when filePath does not match any file", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/13")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 13,
+            title: "multi-file",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/13",
+            raw_url: "https://git.example.org/-/snippets/13/raw",
+            project_id: null,
+            files: [
+              {
+                path: "a.txt",
+                raw_url:
+                  "https://git.example.org/-/snippets/13/files/main/a.txt/raw",
+              },
+            ],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    // If the code wrongly falls back to the whole-snippet raw_url on a
+    // filePath miss, this would be hit and the bug would go undetected —
+    // fail the test loudly instead by returning content that would only
+    // ever be seen if the fallback bug is present.
+    if (url === "https://git.example.org/-/snippets/13/raw") {
+      return Promise.resolve(
+        new Response("WRONG FILE — should never be fetched", {
+          status: 200,
+        }),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 13, includeContent: false, filePath: "c.txt" },
+          context as any,
+        ),
+      Error,
+      "c.txt",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet works for a project snippet via /projects/:id/snippets/:id", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/snippets/3`]: {
+      status: 200,
+      body: {
+        id: 3,
+        title: "proj-snip",
+        visibility: "private",
+        web_url: "https://git.example.org/group/proj/-/snippets/3",
+        raw_url: "https://git.example.org/group/proj/-/snippets/3/raw",
+        project_id: 99,
+        files: [{ path: "a.txt" }],
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      { id: 3, project: "group/proj", includeContent: false },
+      context as any,
+    );
+    const written = getWrittenResources()[0];
+    assertEquals(written.name, "group~proj-snippet-3");
+    const d = written.data as any;
+    assertEquals(d.projectId, 99);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("update_snippet sends only provided fields via PUT, mapping files to file_path", async () => {
+  let capturedBody: any;
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/20") && init?.method === "PUT") {
+      capturedBody = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 20,
+            title: "updated-title",
+            visibility: "public",
+            web_url: "https://git.example.org/-/snippets/20",
+            raw_url: "https://git.example.org/-/snippets/20/raw",
+            project_id: null,
+            files: [{ path: "new.txt" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_snippet.execute(
+      {
+        id: 20,
+        title: "updated-title",
+        visibility: "public",
+        files: [{ filePath: "new.txt", content: "new content" }],
+      },
+      context as any,
+    );
+    assertEquals(capturedBody.title, "updated-title");
+    assertEquals(capturedBody.visibility, "public");
+    assertEquals(capturedBody.files, [
+      { file_path: "new.txt", content: "new content" },
+    ]);
+    // description was not provided — must not be sent at all.
+    assertEquals("description" in capturedBody, false);
+    const d = getWrittenResources()[0].data as any;
+    assertEquals(d.title, "updated-title");
+    assertEquals(d.visibility, "public");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_snippet targets a project snippet's PUT endpoint when project is given", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const restore = mockFetch({
+    [`PUT /api/v4/projects/${pid}/snippets/21`]: {
+      status: 200,
+      body: {
+        id: 21,
+        title: "t",
+        visibility: "private",
+        web_url: "https://git.example.org/group/proj/-/snippets/21",
+        raw_url: "https://git.example.org/group/proj/-/snippets/21/raw",
+        project_id: 99,
+        files: [],
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.update_snippet.execute(
+      { id: 21, project: "group/proj", description: "d" },
+      context as any,
+    );
+    const written = getWrittenResources()[0];
+    assertEquals(written.name, "group~proj-snippet-21");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("delete_snippet deletes an instance/personal snippet", async () => {
+  const original = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/30") && init?.method === "DELETE") {
+      called = true;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.delete_snippet.execute(
+      { id: 30 },
+      context as any,
+    );
+    assertEquals(called, true);
+    const d = getWrittenResources()[0].data as any;
+    assertEquals(d.id, 30);
+    assertEquals(d.project, null);
+    assertEquals(d.deleted, true);
+    assertEquals(getWrittenResources()[0].name, "snippet-30");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("delete_snippet deletes a project snippet", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (
+      url.endsWith(
+        `/api/v4/projects/${pid}/snippets/31`,
+      ) && init?.method === "DELETE"
+    ) {
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.delete_snippet.execute(
+      { id: 31, project: "group/proj" },
+      context as any,
+    );
+    const written = getWrittenResources()[0];
+    assertEquals(written.name, "group~proj-snippet-31");
+    const d = written.data as any;
+    assertEquals(d.project, "group/proj");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("delete_snippet throws a descriptive error on a non-2xx response (e.g. not found)", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response("404 Snippet Not Found", { status: 404 }),
+    );
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.delete_snippet.execute(
+          { id: 999 },
+          context as any,
+        ),
+      Error,
+      "404",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});

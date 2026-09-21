@@ -1135,6 +1135,78 @@ const MrMergeEndpointCheckSchema = z.object({
   ),
 });
 
+const SnippetVisibilitySchema = z.enum(["private", "internal", "public"]);
+
+const SnippetDetailSchema = z.object({
+  id: z.number().describe("Snippet ID"),
+  title: z.string().describe("Snippet title"),
+  visibility: SnippetVisibilitySchema.describe("Snippet visibility"),
+  webUrl: z.string().describe("Web URL for the snippet"),
+  rawUrl: z.string().describe("Raw content URL for the whole snippet"),
+  projectId: z.number().nullable().describe(
+    "Project ID for a project snippet; null for an instance/personal snippet",
+  ),
+  fileCount: z.number().describe("Number of files in the snippet"),
+  content: z.string().optional().describe(
+    "Raw content of a fetched file, redacted for common credential " +
+      `patterns; truncated at ${
+        MAX_FILE_BYTES / 1000
+      }KB (bytes); only present when a file's content was fetched`,
+  ),
+  contentTruncated: z.boolean().optional().describe(
+    "Whether fetched content was cut off at the size cap; only present " +
+      "when content was fetched",
+  ),
+  createdAt: z.string().describe("Timestamp the snippet was created"),
+  fetchedAt: z.string().describe("Timestamp this data was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const SnippetListItemSchema = z.object({
+  id: z.number().describe("Snippet ID"),
+  title: z.string().describe("Snippet title"),
+  visibility: SnippetVisibilitySchema.describe("Snippet visibility"),
+  webUrl: z.string().describe("Web URL for the snippet"),
+  fileCount: z.number().describe("Number of files in the snippet"),
+});
+
+const SnippetListSchema = z.object({
+  snippets: z.array(SnippetListItemSchema).describe(
+    "Snippets visible to the caller — personal snippets, or a project's " +
+      "snippets when a project was given",
+  ),
+  truncated: z.boolean().describe(
+    "Whether more pages existed past what was fetched",
+  ),
+  fetchedAt: z.string().describe("Timestamp the list was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const SnippetDeletedSchema = z.object({
+  id: z.number().describe("Deleted snippet's ID"),
+  project: z.string().nullable().describe(
+    "Project the snippet belonged to; null for an instance/personal snippet",
+  ),
+  deleted: z.boolean().describe("Whether the deletion was confirmed"),
+  fetchedAt: z.string().describe("Timestamp the deletion was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // GraphQL Client
 // =============================================================================
@@ -2011,6 +2083,147 @@ class GitLabClient {
       bodySnippet: body.slice(0, 500),
     };
   }
+
+  /** GET a single JSON resource scoped to a project (not a list — no pagination handling). */
+  async get(project: string, path: string): Promise<any> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      headers: this.headers(),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${project}${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  /** DELETE a project-scoped endpoint. GitLab returns 204 with no body on success. */
+  async del(project: string, path: string): Promise<void> {
+    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+      method: "DELETE",
+      headers: this.headers(),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(
+        `GitLab DELETE ${project}${path}: ${resp.status} ${text}`,
+      );
+    }
+  }
+
+  /**
+   * Instance-level (non-project-scoped) GET of a single JSON resource, e.g.
+   * `/snippets/:id`. Personal/instance snippets live directly off the API
+   * base URL rather than under `/projects/:id`, unlike every other resource
+   * this client reads.
+   */
+  async getInstance(path: string): Promise<any> {
+    const resp = await fetch(`${this.baseUrl}${path}`, {
+      headers: this.headers(),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  /** Instance-level GET of a list, returning data + truncation flag (mirrors getProjectList). */
+  async getInstanceList(
+    path: string,
+    params?: Record<string, string>,
+  ): Promise<ListResponse> {
+    const url = new URL(`${this.baseUrl}${path}`);
+    if (params) {
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    }
+    const resp = await fetch(url.toString(), { headers: this.headers() });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
+    }
+    const nextPage = resp.headers.get("x-next-page");
+    return {
+      data: await resp.json(),
+      truncated: !!nextPage && nextPage !== "",
+    };
+  }
+
+  /** Instance-level POST. */
+  async postInstance(
+    path: string,
+    body: Record<string, unknown> = {},
+  ): Promise<any> {
+    const resp = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab POST ${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  /** Instance-level PUT. */
+  async putInstance(
+    path: string,
+    body: Record<string, unknown>,
+  ): Promise<any> {
+    const resp = await fetch(`${this.baseUrl}${path}`, {
+      method: "PUT",
+      headers: this.headers(),
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab PUT ${path}: ${resp.status} ${text}`);
+    }
+    return resp.json();
+  }
+
+  /** Instance-level DELETE. GitLab returns 204 with no body on success. */
+  async deleteInstance(path: string): Promise<void> {
+    const resp = await fetch(`${this.baseUrl}${path}`, {
+      method: "DELETE",
+      headers: this.headers(),
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab DELETE ${path}: ${resp.status} ${text}`);
+    }
+  }
+
+  /**
+   * GET raw text content from an absolute URL (e.g. a snippet's `raw_url`,
+   * which GitLab returns fully-qualified), with the same size-cap and
+   * binary-rejection handling as getProjectTextOrNull. Unlike that method,
+   * the URL is used as-is rather than built from a project + path, since
+   * snippet raw URLs already point at the exact resource (instance or
+   * project-scoped) and re-deriving that path from parts would risk
+   * mismatching the ref GitLab actually used to generate the URL.
+   */
+  async getRawTextOrNull(
+    url: string,
+    maxBytes: number,
+  ): Promise<{ text: string; truncated: boolean } | null> {
+    const resp = await fetch(url, { headers: this.headers() });
+    if (resp.status === 404) return null;
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`GitLab GET ${url}: ${resp.status} ${text}`);
+    }
+    const { bytes, truncated } = await readBoundedBytes(resp, maxBytes);
+    if (isBinaryContent(bytes)) {
+      throw new Error(
+        `GitLab GET ${url}: binary content detected — get_snippet only supports text/code files`,
+      );
+    }
+    const text = truncated
+      ? decodeUtf8TrimmingIncompleteTail(bytes)
+      : new TextDecoder().decode(bytes);
+    return { text, truncated };
+  }
 }
 
 /**
@@ -2288,7 +2501,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.20.2",
+  version: "2026.09.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2441,6 +2654,16 @@ export const model = {
         "create_issue and update_issue, addLabels/removeLabels to update_issue, " +
         "and discussionId (threaded replies) to add_issue_note. No " +
         "globalArguments change; all additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.21.1",
+      description:
+        "Added create_snippet, list_snippets, get_snippet, update_snippet, and " +
+        "delete_snippet methods for GitLab instance and project snippets " +
+        "(new resources: snippetDetail, snippetList, snippetDeleted; new " +
+        "GitLabClient instance-level HTTP helpers). No globalArguments change; " +
+        "all additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2704,6 +2927,27 @@ export const model = {
       description:
         "Result of a bulk mark-todos-done (confirmed done + per-todo failures)",
       schema: BulkTodoResultSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    snippetDetail: {
+      description:
+        "A single instance (personal) or project snippet's metadata, " +
+        "optionally including a fetched file's redacted content",
+      schema: SnippetDetailSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    snippetList: {
+      description:
+        "List of the caller's personal snippets, or a project's snippets",
+      schema: SnippetListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    snippetDeleted: {
+      description: "Record of a deleted snippet",
+      schema: SnippetDeletedSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -6353,6 +6597,360 @@ export const model = {
             auth: authored.length,
           },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    create_snippet: {
+      description:
+        "Create a snippet with one or more files. Omit project for a " +
+        "personal/instance snippet (POST /snippets); provide it for a " +
+        "project snippet (POST /projects/:id/snippets).",
+      arguments: z.object({
+        title: z.string().min(1),
+        files: z.array(
+          z.object({
+            filePath: z.string().min(1),
+            content: z.string(),
+          }),
+        ).min(1).describe(
+          "Snippet files. Mapped to GitLab's files[] with file_path/content.",
+        ),
+        visibility: SnippetVisibilitySchema.default("private"),
+        description: z.string().default(""),
+        project: z.string().min(1).optional().describe(
+          "Project path. Omit for a personal/instance snippet.",
+        ),
+      }),
+      execute: async (
+        args: {
+          title: string;
+          files: Array<{ filePath: string; content: string }>;
+          visibility: "private" | "internal" | "public";
+          description: string;
+          project?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const body = {
+          title: args.title,
+          description: args.description || undefined,
+          visibility: args.visibility,
+          files: args.files.map((f) => ({
+            file_path: f.filePath,
+            content: f.content,
+          })),
+        };
+        const raw = args.project
+          ? await client.post(args.project, "/snippets", body)
+          : await client.postInstance("/snippets", body);
+        const instanceName = args.project
+          ? `${sanitizeName(args.project)}-snippet-${raw.id}`
+          : `snippet-${raw.id}`;
+        const handle = await ctx.writeResource("snippetDetail", instanceName, {
+          id: raw.id,
+          title: raw.title ?? args.title,
+          visibility: raw.visibility ?? args.visibility,
+          webUrl: raw.web_url ?? "",
+          rawUrl: raw.raw_url ?? "",
+          projectId: raw.project_id ?? null,
+          fileCount: Array.isArray(raw.files)
+            ? raw.files.length
+            : args.files.length,
+          createdAt: raw.created_at ?? new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+        ctx.logger.info("Created snippet {id} ({title})", {
+          id: raw.id,
+          title: raw.title ?? args.title,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    list_snippets: {
+      description:
+        "List the caller's personal snippets (GET /snippets), or a " +
+        "project's snippets when project is given (GET " +
+        "/projects/:id/snippets).",
+      arguments: z.object({
+        project: z.string().min(1).optional().describe(
+          "When given, list this project's snippets instead of personal ones",
+        ),
+      }),
+      execute: async (args: { project?: string }, ctx: ModelContext) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const { data, truncated } = args.project
+          ? await client.getProjectList(args.project, "/snippets")
+          : await client.getInstanceList("/snippets");
+        const rawList = Array.isArray(data) ? data : [];
+        const snippets = rawList.map((raw: any) => ({
+          id: raw.id,
+          title: raw.title ?? "",
+          visibility: raw.visibility ?? "private",
+          webUrl: raw.web_url ?? "",
+          fileCount: Array.isArray(raw.files)
+            ? raw.files.length
+            : (raw.file_name ? 1 : 0),
+        }));
+        const instanceName = args.project
+          ? `${sanitizeName(args.project)}-snippets`
+          : "personal-snippets";
+        const handle = await ctx.writeResource("snippetList", instanceName, {
+          snippets,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+        ctx.logger.info("Found {count} snippets", { count: snippets.length });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_snippet: {
+      description:
+        "Fetch metadata for a snippet (instance/personal, or project when " +
+        "project is given). Set includeContent to also fetch raw file " +
+        "content — the whole snippet's raw content by default, or a " +
+        "specific file's when filePath is given — capped at " +
+        `${MAX_FILE_BYTES / 1000}KB and redacted for common credential ` +
+        "patterns, same as get_file. Binary content is rejected rather " +
+        "than decoded as corrupted text.",
+      arguments: z.object({
+        id: z.number(),
+        project: z.string().min(1).optional().describe(
+          "Project path, for a project snippet. Omit for an instance/personal snippet.",
+        ),
+        includeContent: z.boolean().default(false).describe(
+          "Fetch raw file content in addition to metadata",
+        ),
+        filePath: z.string().min(1).optional().describe(
+          "When given (implies includeContent), fetch this file's raw " +
+            "content instead of the whole snippet's",
+        ),
+      }),
+      execute: async (
+        args: {
+          id: number;
+          project?: string;
+          includeContent: boolean;
+          filePath?: string;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const raw = args.project
+          ? await client.get(args.project, `/snippets/${args.id}`)
+          : await client.getInstance(`/snippets/${args.id}`);
+
+        let content: string | undefined;
+        let contentTruncated: boolean | undefined;
+        const wantContent = args.includeContent || args.filePath !== undefined;
+        if (wantContent) {
+          let targetRawUrl: string = raw.raw_url ?? "";
+          if (args.filePath !== undefined) {
+            // A filePath was explicitly requested — resolving to the
+            // whole-snippet raw_url on a miss (typo, renamed file, or a
+            // files[] the API didn't return) would silently serve the
+            // wrong file's content mislabeled as the requested one. Fail
+            // loudly instead.
+            const match = Array.isArray(raw.files)
+              ? raw.files.find((f: any) =>
+                f.path === args.filePath || f.file_path === args.filePath
+              )
+              : undefined;
+            if (!match?.raw_url) {
+              throw new Error(
+                `get_snippet: file ${args.filePath} not found in snippet ${args.id} (available: ${
+                  Array.isArray(raw.files)
+                    ? raw.files.map((f: any) => f.path ?? f.file_path).join(
+                      ", ",
+                    )
+                    : "none"
+                })`,
+              );
+            }
+            targetRawUrl = match.raw_url;
+          }
+          if (!targetRawUrl) {
+            throw new Error(
+              `get_snippet: no raw_url available for snippet ${args.id}`,
+            );
+          }
+          const result = await client.getRawTextOrNull(
+            targetRawUrl,
+            MAX_FILE_BYTES + 4,
+          );
+          if (result === null) {
+            throw new Error(
+              `get_snippet: raw content not found for snippet ${args.id} at ${targetRawUrl}`,
+            );
+          }
+          const redacted = redactSecrets(result.text);
+          const encoded = new TextEncoder().encode(redacted);
+          contentTruncated = result.truncated ||
+            encoded.length > MAX_FILE_BYTES;
+          content = encoded.length > MAX_FILE_BYTES
+            ? decodeUtf8UpToBoundary(encoded, MAX_FILE_BYTES)
+            : redacted;
+        }
+
+        const instanceName = args.project
+          ? `${sanitizeName(args.project)}-snippet-${args.id}`
+          : `snippet-${args.id}`;
+        const handle = await ctx.writeResource("snippetDetail", instanceName, {
+          id: raw.id,
+          title: raw.title ?? "",
+          visibility: raw.visibility ?? "private",
+          webUrl: raw.web_url ?? "",
+          rawUrl: raw.raw_url ?? "",
+          projectId: raw.project_id ?? null,
+          fileCount: Array.isArray(raw.files)
+            ? raw.files.length
+            : (raw.file_name ? 1 : 0),
+          content,
+          contentTruncated,
+          createdAt: raw.created_at ?? "",
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+        ctx.logger.info("Fetched snippet {id}", { id: args.id });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    update_snippet: {
+      description:
+        "Update an existing snippet's title, description, visibility, " +
+        "and/or files. Only fields provided are changed.",
+      arguments: z.object({
+        id: z.number(),
+        project: z.string().min(1).optional().describe(
+          "Project path, for a project snippet. Omit for an instance/personal snippet.",
+        ),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        visibility: SnippetVisibilitySchema.optional(),
+        files: z.array(
+          z.object({
+            filePath: z.string().min(1),
+            content: z.string(),
+          }),
+        ).min(1).optional().describe(
+          "Replacement files for the snippet. Mapped to GitLab's " +
+            "files[] with file_path/content.",
+        ),
+      }),
+      execute: async (
+        args: {
+          id: number;
+          project?: string;
+          title?: string;
+          description?: string;
+          visibility?: "private" | "internal" | "public";
+          files?: Array<{ filePath: string; content: string }>;
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const body: Record<string, unknown> = {};
+        if (args.title !== undefined) body.title = args.title;
+        if (args.description !== undefined) body.description = args.description;
+        if (args.visibility !== undefined) body.visibility = args.visibility;
+        if (args.files !== undefined) {
+          body.files = args.files.map((f) => ({
+            file_path: f.filePath,
+            content: f.content,
+          }));
+        }
+        const raw = args.project
+          ? await client.put(args.project, `/snippets/${args.id}`, body)
+          : await client.putInstance(`/snippets/${args.id}`, body);
+        const instanceName = args.project
+          ? `${sanitizeName(args.project)}-snippet-${args.id}`
+          : `snippet-${args.id}`;
+        const handle = await ctx.writeResource("snippetDetail", instanceName, {
+          id: raw.id ?? args.id,
+          title: raw.title ?? args.title ?? "",
+          visibility: raw.visibility ?? args.visibility ?? "private",
+          webUrl: raw.web_url ?? "",
+          rawUrl: raw.raw_url ?? "",
+          projectId: raw.project_id ?? null,
+          fileCount: Array.isArray(raw.files)
+            ? raw.files.length
+            : (raw.file_name ? 1 : 0),
+          createdAt: raw.created_at ?? "",
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+        ctx.logger.info("Updated snippet {id}", { id: args.id });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    delete_snippet: {
+      description:
+        "Delete a snippet by id (instance/personal, or project when " +
+        "project is given). Throws a descriptive error on a non-2xx " +
+        "response (e.g. 404 not found) rather than silently succeeding.",
+      arguments: z.object({
+        id: z.number(),
+        project: z.string().min(1).optional().describe(
+          "Project path, for a project snippet. Omit for an instance/personal snippet.",
+        ),
+      }),
+      execute: async (
+        args: { id: number; project?: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        if (args.project) {
+          await client.del(args.project, `/snippets/${args.id}`);
+        } else {
+          await client.deleteInstance(`/snippets/${args.id}`);
+        }
+        const instanceName = args.project
+          ? `${sanitizeName(args.project)}-snippet-${args.id}`
+          : `snippet-${args.id}`;
+        const handle = await ctx.writeResource(
+          "snippetDeleted",
+          instanceName,
+          {
+            id: args.id,
+            project: args.project ?? null,
+            deleted: true,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Deleted snippet {id}", { id: args.id });
         return { dataHandles: [handle] };
       },
     },

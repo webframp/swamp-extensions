@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
-version: "2026.09.20.2"
+version: "2026.09.21.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -81,6 +81,7 @@ description: |
   - play_pipeline_schedule (trigger a fresh pipeline carrying a schedule's variables)
   - create_branch, commit_file (create-or-update a single file via the commits API)
   - update_project_visibility
+  - create_snippet / list_snippets / get_snippet / update_snippet / delete_snippet (instance and project snippets, multi-file)
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gitlab/projects.ts
