@@ -17,6 +17,10 @@ import { awsQuotasNormalizer } from "./aws_quotas.ts";
 import { securityhubFindingsNormalizer } from "./securityhub_findings.ts";
 import { costExplorerNormalizer } from "./cost_explorer.ts";
 import { redmineNormalizer } from "./redmine.ts";
+import { ecrObservationNormalizer } from "./ecr_observation.ts";
+import { kiroUsageNormalizer } from "./kiro_usage.ts";
+import { awsLogsNormalizer } from "./aws_logs.ts";
+import { typesafeAiNormalizer } from "./typesafe_ai.ts";
 
 export const registry: Record<string, Normalizer> = {
   "@webframp/gitlab": gitlabNormalizer,
@@ -26,6 +30,10 @@ export const registry: Record<string, Normalizer> = {
   "@webframp/aws/securityhub-findings": securityhubFindingsNormalizer,
   "@webframp/aws/cost-explorer": costExplorerNormalizer,
   "@webframp/redmine": redmineNormalizer,
+  "@webframp/aws/ecr-observation": ecrObservationNormalizer,
+  "@webframp/aws/kiro-usage": kiroUsageNormalizer,
+  "@webframp/aws/logs": awsLogsNormalizer,
+  "@swamp/typesafe-ai": typesafeAiNormalizer,
 };
 
 /**
