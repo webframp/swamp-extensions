@@ -2226,3 +2226,108 @@ Deno.test("cost flattened costDrivers: info signal names largest", async () => {
     false,
   );
 });
+
+// --- Round-2 CI adversarial findings (PR #445) ---
+
+Deno.test("securityhub diff: truncated with unclassified new findings -> warn, not ok", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "diff_findings", ["diff-trunc"]),
+  ];
+  const artifacts = [
+    // The dangerous case: 50 new findings reported by the aggregate, but the
+    // client-side array is truncated (empty here). Counting only the array
+    // would grade this "ok" and silently hide a potentially critical batch.
+    makeArtifact(SECURITYHUB, "sh-findings", "diff-trunc", {
+      newFindings: [],
+      resolvedFindings: [],
+      newCount: 50,
+      resolvedCount: 0,
+      truncated: true,
+      currentSnapshot: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "findings-delta");
+  assertEquals(sig.severity, "warn");
+  assertStringIncludes(sig.detail, "50 new");
+  assertStringIncludes(sig.detail, "unclassified");
+});
+
+Deno.test("securityhub diff: truncated but fully classified critical stays critical", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "diff_findings", ["diff-crit"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "diff-crit", {
+      newFindings: [{ severity: "CRITICAL" }, { severity: "CRITICAL" }],
+      resolvedFindings: [],
+      newCount: 2,
+      resolvedCount: 0,
+      truncated: true,
+      currentSnapshot: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "findings-delta");
+  assertEquals(sig.severity, "critical");
+  // Fully classified (newCount === array length): no "unclassified" note.
+  assertEquals(sig.detail.includes("unclassified"), false);
+});
+
+Deno.test("jev: highest-severity score wins when multiple scores present", async () => {
+  const steps = [makeStep(JEV, "jev", "ask", ["evaluation-multi"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "evaluation-multi", {
+      // A benign leading score followed by a severe one — first-wins would
+      // grade this "ok" and hide the critical.
+      answers: {
+        preflight: {
+          type: "score",
+          score: 0,
+          legend: { "0": "Benign", "1": "Mid", "2": "Severe" },
+        },
+        overall: {
+          type: "score",
+          score: 2,
+          legend: { "0": "Routine", "1": "Look", "2": "Act today" },
+        },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.source === "jev");
+  assertEquals(sig.severity, "critical");
+});
+
+Deno.test("jev: an answer named 'severity' is preferred as the grade", async () => {
+  const steps = [makeStep(JEV, "jev", "ask", ["evaluation-named"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "evaluation-named", {
+      answers: {
+        // Equal-severity scores; the one literally named "severity" is the
+        // designated grade per the workflow convention.
+        other: {
+          type: "score",
+          score: 1,
+          legend: { "0": "a", "1": "b", "2": "c" },
+        },
+        severity: {
+          type: "score",
+          score: 1,
+          legend: { "0": "Routine", "1": "Worth a look", "2": "Act" },
+        },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.source === "jev");
+  assertStringIncludes(sig.detail, "Worth a look");
+});

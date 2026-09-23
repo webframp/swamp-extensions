@@ -180,13 +180,22 @@ export function securityhubFindingsNormalizer(
       const newFindings = data.newFindings as Array<{ severity?: string }>;
       const newCount = data.newCount as number;
       const resolvedCount = data.resolvedCount as number;
+      const truncated = data.truncated === true;
       const { critical: newCritical, high: newHigh } = countBySeverity(
         newFindings,
       );
 
+      // The severity breakdown is counted from the client-side newFindings
+      // array, but newCount is the server-side aggregate. When the diff is
+      // truncated the array can be shorter than newCount (even empty), so
+      // trusting only the array would understate a security signal — e.g.
+      // newCount=50, truncated, newFindings=[] would grade "ok". Escalate to at
+      // least "warn" whenever there are new findings we could not fully
+      // classify, so a truncated batch of unknown severity is never silently ok.
+      const unclassified = truncated && newCount > newFindings.length;
       const severity = newCritical > 0
         ? "critical"
-        : newHigh > 0
+        : (newHigh > 0 || (unclassified && newCount > 0))
         ? "warn"
         : "ok";
 
@@ -197,12 +206,18 @@ export function securityhubFindingsNormalizer(
         const bits: string[] = [];
         if (newCritical > 0) bits.push(`${newCritical} CRITICAL`);
         if (newHigh > 0) bits.push(`${newHigh} HIGH`);
+        if (unclassified) {
+          // Name the shortfall so the "warn" is explained rather than mysterious.
+          const shown = newCritical + newHigh;
+          const rest = newCount - shown;
+          if (rest > 0) bits.push(`${rest} unclassified`);
+        }
         parts.push(
           `${newCount} new` + (bits.length ? ` (${bits.join(", ")})` : ""),
         );
       }
       if (resolvedCount > 0) parts.push(`${resolvedCount} resolved`);
-      const truncatedNote = data.truncated === true ? ", truncated" : "";
+      const truncatedNote = truncated ? ", truncated" : "";
 
       ops.push({
         source: SOURCE,
