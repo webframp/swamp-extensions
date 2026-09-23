@@ -207,9 +207,11 @@ export function securityhubFindingsNormalizer(
         if (newCritical > 0) bits.push(`${newCritical} CRITICAL`);
         if (newHigh > 0) bits.push(`${newHigh} HIGH`);
         if (unclassified) {
-          // Name the shortfall so the "warn" is explained rather than mysterious.
-          const shown = newCritical + newHigh;
-          const rest = newCount - shown;
+          // The truly-unseen count is the aggregate newCount minus the findings
+          // actually present in the (truncated) array — every array element has
+          // a known severity, so subtract the whole array length, not just the
+          // critical+high subset, or the remainder overstates the shortfall.
+          const rest = newCount - newFindings.length;
           if (rest > 0) bits.push(`${rest} unclassified`);
         }
         parts.push(

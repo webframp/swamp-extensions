@@ -2331,3 +2331,28 @@ Deno.test("jev: an answer named 'severity' is preferred as the grade", async () 
   const sig = (json.ops as Any[]).find((o) => o.source === "jev");
   assertStringIncludes(sig.detail, "Worth a look");
 });
+
+Deno.test("securityhub diff: unclassified count subtracts all classified array entries", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "diff_findings", ["diff-med"]),
+  ];
+  const artifacts = [
+    // newCount=5 aggregate, but the truncated array holds 2 MEDIUM entries —
+    // 3 are truly unseen, not 5. Severity stays conservatively warn.
+    makeArtifact(SECURITYHUB, "sh-findings", "diff-med", {
+      newFindings: [{ severity: "MEDIUM" }, { severity: "MEDIUM" }],
+      resolvedFindings: [],
+      newCount: 5,
+      resolvedCount: 0,
+      truncated: true,
+      currentSnapshot: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "findings-delta");
+  assertEquals(sig.severity, "warn");
+  assertStringIncludes(sig.detail, "3 unclassified");
+  assertEquals(sig.detail.includes("5 unclassified"), false);
+});
