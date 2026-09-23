@@ -2063,3 +2063,166 @@ Deno.test("new signals do not mark the briefing degraded", async () => {
     false,
   );
 });
+
+// --- Adversarial-review regression tests (PR #445) ---
+
+Deno.test("jev noul-only evaluation: headline not duplicated in detail", async () => {
+  const steps = [makeStep(JEV, "jev", "ask", ["evaluation-logs-health"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "evaluation-logs-health", {
+      model: "jev-1.13.0",
+      // No score answer — only a noul. The noul is the headline; it must not
+      // also be appended as supporting context.
+      answers: {
+        real_problem: { type: "noul", noul: 0.8 },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.source === "jev");
+  assertEquals(sig.severity, "warn"); // noul >= 0.5
+  assertEquals(sig.detail, "real_problem 80%");
+  // The bug was "real_problem 80%, real_problem 80%" — assert no duplication.
+  assertEquals(sig.detail.split("real_problem").length - 1, 1);
+});
+
+Deno.test("jev noul-only below 0.5 -> ok, single headline", async () => {
+  const steps = [makeStep(JEV, "jev", "ask", ["evaluation-x"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "evaluation-x", {
+      answers: { some_q: { type: "noul", noul: 0.2 } },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.source === "jev");
+  assertEquals(sig.severity, "ok");
+  assertEquals(sig.detail, "some_q 20%");
+});
+
+Deno.test("securityhub: account_map + unknown shape still flags the unknown", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "mixed", ["accts", "weird"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "accts", {
+      accounts: [{ id: "123456789012", name: "jw-cd-cicd-01" }],
+      count: 1,
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+    // An unrecognized shape alongside the account map.
+    makeArtifact(SECURITYHUB, "sh-findings", "weird", {
+      something: "unexpected",
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  // The unknown shape must still be reported despite the recognized account map.
+  assertEquals(
+    (json.notes as string[]).some((n) =>
+      n.includes("Security Hub: no recognizable data shape")
+    ),
+    true,
+  );
+});
+
+Deno.test("securityhub: account_map alone does NOT flag unrecognized", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "resolve_accounts", ["accts"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "accts", {
+      accounts: [{ id: "123456789012", name: "jw-cd-cicd-01" }],
+      count: 1,
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(
+    (json.notes as string[]).some((n) => n.includes("no recognizable")),
+    false,
+  );
+});
+
+// --- Flattened cost specs (post-flatten model output, no envelope) ---
+
+Deno.test("cost flattened costComparison: material rise -> warn with driver", async () => {
+  const steps = [
+    makeStep(COST, "aws-costs", "get_cost_comparison", ["comparison-7d"]),
+  ];
+  const artifacts = [
+    // The current model writes this FLATTENED (no queryType/data envelope).
+    makeArtifact(COST, "aws-costs", "comparison-7d", {
+      currentPeriod: { start: "2026-09-15", end: "2026-09-22", total: 120000 },
+      previousPeriod: { start: "2026-09-08", end: "2026-09-15", total: 90000 },
+      totalDelta: 30000,
+      totalDeltaPercent: 33.3,
+      services: [
+        {
+          service: "Amazon EKS",
+          currentAmount: 40000,
+          previousAmount: 15000,
+          delta: 25000,
+          deltaPercent: 140,
+        },
+      ],
+      days: 7,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "spend-delta");
+  assertEquals(sig.severity, "warn");
+  assertStringIncludes(sig.detail, "+33.3%");
+  assertStringIncludes(sig.detail, "Amazon EKS");
+  // Must not fall through to the unrecognized-shape note.
+  assertEquals(
+    (json.notes as string[]).some((n) => n.includes("no recognizable")),
+    false,
+  );
+});
+
+Deno.test("cost flattened costDrivers: info signal names largest", async () => {
+  const steps = [
+    makeStep(COST, "aws-costs", "get_top_cost_drivers", ["top-drivers-7d"]),
+  ];
+  const artifacts = [
+    // FLATTENED: { drivers, totalCost, days, fetchedAt } — no envelope.
+    makeArtifact(COST, "aws-costs", "top-drivers-7d", {
+      drivers: [
+        {
+          service: "Claude Enterprise",
+          usageType: "MP:usage",
+          amount: 7500,
+          unit: "USD",
+        },
+        {
+          service: "AmazonCloudWatch",
+          usageType: "DataProc",
+          amount: 4500,
+          unit: "USD",
+        },
+      ],
+      totalCost: 12000,
+      days: 7,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "drivers");
+  assertEquals(sig.severity, "info");
+  assertStringIncludes(sig.detail, "Claude Enterprise");
+  assertEquals(
+    (json.notes as string[]).some((n) => n.includes("no recognizable")),
+    false,
+  );
+});

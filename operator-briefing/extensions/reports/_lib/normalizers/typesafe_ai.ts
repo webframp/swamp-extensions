@@ -78,6 +78,10 @@ function isNoul(a: Answer): a is NoulAnswer {
  * used. Scales with other legend sizes by normalizing to the [0,1] fraction.
  */
 function scoreSeverity(a: ScoreAnswer): Severity {
+  // A non-finite score (NaN/Infinity) is not a usable grade — do not let it
+  // fall through the fraction math to a dishonest "ok". `typeof NaN` is
+  // "number", so an upstream NaN otherwise passes isScore() unnoticed.
+  if (!Number.isFinite(a.score)) return "info";
   const levels = a.legend ? Object.keys(a.legend).length : 3;
   const maxLevel = Math.max(1, levels - 1);
   const frac = Math.min(1, Math.max(0, a.score / maxLevel));
@@ -135,16 +139,28 @@ export function typesafeAiNormalizer(inputs: SourceInput[]): Contribution {
       headline = scoreLabel(sa);
     } else if (noulEntry && isNoul(noulEntry[1])) {
       const na = noulEntry[1];
-      severity = na.noul >= 0.5 ? "warn" : "ok";
-      headline = `${noulEntry[0]} ${(na.noul * 100).toFixed(0)}%`;
+      // A non-finite noul (NaN/Infinity) is not a usable probability — do not
+      // let it fall through `>= 0.5` to a dishonest "ok" with a "NaN%" detail.
+      // Mirrors the finite guard in scoreSeverity for the score path.
+      if (!Number.isFinite(na.noul)) {
+        severity = "info";
+        headline = `${noulEntry[0]} (probability unavailable)`;
+      } else {
+        severity = na.noul >= 0.5 ? "warn" : "ok";
+        headline = `${noulEntry[0]} ${(na.noul * 100).toFixed(0)}%`;
+      }
     } else {
       // Recognized as an evaluation but no usable answer — skip quietly.
       continue;
     }
 
-    // Add the yes/no probability as supporting context when present alongside
-    // a score (e.g. needs_attention 8%).
-    const noulContext = noulEntry && isNoul(noulEntry[1])
+    // Add the yes/no probability as supporting context ONLY when a score is
+    // the primary signal (e.g. "Act today, needs_attention 8%"). On the
+    // noul-only path the noul already IS the headline, so appending it here
+    // would duplicate it ("needs_attention 80%, needs_attention 80%"). A
+    // non-finite supporting noul is omitted rather than rendered as "NaN%".
+    const noulContext = scoreEntry && noulEntry && isNoul(noulEntry[1]) &&
+        Number.isFinite(noulEntry[1].noul)
       ? `, ${noulEntry[0]} ${(noulEntry[1].noul * 100).toFixed(0)}%`
       : "";
 

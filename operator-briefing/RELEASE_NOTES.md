@@ -11,6 +11,10 @@ skipped as unrecognized:
   shape" note).
 - **Cost Explorer** — `cost_comparison` (period-over-period `spend-delta`,
   warns at ≥10% rise and names the top service driver) and `top_cost_drivers`.
+  Both the flattened specs (`costComparison` / `costDrivers`, the current model
+  output) and the legacy `{queryType, data}` envelope are handled through one
+  shared builder, and `totalDeltaPercent` is finite-guarded so a bad value
+  never renders "NaN%" or trips the warn threshold.
 - **ECR** (`@webframp/aws/ecr-observation`) — fleet image-hygiene signal from
   the survey aggregate (ADR-011 naming violations, repos without a lifecycle
   policy); per-account detail is never surfaced.

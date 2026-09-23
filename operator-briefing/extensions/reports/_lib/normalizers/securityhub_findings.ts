@@ -80,11 +80,11 @@ function isAccountMap(data: Record<string, unknown>): boolean {
 
 /** Count findings in a diff list at CRITICAL / HIGH severity. */
 function countBySeverity(
-  findings: Array<{ severity?: string }>,
+  findings: Array<{ severity?: string } | null | undefined>,
 ): { critical: number; high: number } {
   return {
-    critical: findings.filter((f) => f.severity === "CRITICAL").length,
-    high: findings.filter((f) => f.severity === "HIGH").length,
+    critical: findings.filter((f) => f?.severity === "CRITICAL").length,
+    high: findings.filter((f) => f?.severity === "HIGH").length,
   };
 }
 
@@ -93,10 +93,11 @@ export function securityhubFindingsNormalizer(
 ): Contribution {
   const ops: OpsSignal[] = [];
   const notes: string[] = [];
-  // Count inputs whose shape we recognized, even if they emit no signal (e.g.
-  // account_map). Separate from ops.length so the "no recognizable shape" note
-  // fires only for genuinely unknown shapes.
-  let recognized = 0;
+  // Track whether ANY input had a shape we did not recognize. account_map is
+  // recognized-but-unemitted, so we cannot infer "recognized" from ops.length.
+  // Flagging per-input (not a global counter) means a step mixing a known
+  // account_map with an unknown shape still reports the unknown one.
+  let sawUnrecognized = false;
 
   for (const { data } of inputs) {
     const fetchedAt = typeof data.fetchedAt === "string"
@@ -218,14 +219,17 @@ export function securityhubFindingsNormalizer(
       // Recognized so it does not trip the "no recognizable shape" note, but
       // deliberately not emitted — it carries account IDs (CLAUDE.md forbids
       // surfacing them) and contributes no operational status on its own.
-      recognized++;
+    } else {
+      // A shape we do not recognize at all.
+      sawUnrecognized = true;
     }
   }
 
-  // The note fires only when NOTHING in the step was recognized. account_map is
-  // recognized-but-not-emitted, so a step that produced only an account_map
-  // must not be flagged as an unrecognized shape.
-  if (ops.length === 0 && recognized === 0) {
+  // Fire the note when ANY input was an unrecognized shape. account_map and the
+  // recognized specs above never set the flag, so a step that produced only an
+  // account_map is not flagged — but a mixed step with one unknown shape still
+  // reports it.
+  if (sawUnrecognized) {
     notes.push("Security Hub: no recognizable data shape in step output.");
   }
 

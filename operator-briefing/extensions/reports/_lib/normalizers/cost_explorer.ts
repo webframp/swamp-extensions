@@ -12,9 +12,11 @@
  * Also handles the legacy envelope shape `{ region, queryType, data, fetchedAt }`
  * from cached resources written before the 2026.08.13.1 flatten, so the
  * normalizer produces correct output during the transition period while old
- * cached data ages out. The envelope covers four query types: `cost_trend`,
- * `cost_by_service`, `cost_comparison` (period-over-period delta, warns on a
- * material rise), and `top_cost_drivers` (largest service+usage driver).
+ * cached data ages out. Both the flattened specs and the legacy envelope are
+ * covered for four query types: `cost_trend`, `cost_by_service`,
+ * `cost_comparison` (period-over-period delta, warns on a material rise), and
+ * `top_cost_drivers` (largest service+usage driver). The comparison and
+ * drivers signals share one builder across the flattened and envelope paths.
  *
  * Contract reference: `swamp model type describe @webframp/aws/cost-explorer --json`
  *
@@ -49,6 +51,32 @@ function isCostByService(data: Record<string, unknown>): boolean {
 }
 
 /**
+ * Identify the flattened `costComparison` spec (from `get_cost_comparison`
+ * after the model's flatten): `currentPeriod` + `previousPeriod` objects and a
+ * numeric `totalDeltaPercent` at the top level (no `queryType`/`data` wrapper).
+ */
+function isCostComparison(data: Record<string, unknown>): boolean {
+  return (
+    typeof data.currentPeriod === "object" &&
+    data.currentPeriod !== null &&
+    !Array.isArray(data.currentPeriod) &&
+    typeof data.previousPeriod === "object" &&
+    data.previousPeriod !== null &&
+    !Array.isArray(data.previousPeriod) &&
+    typeof data.totalDeltaPercent === "number"
+  );
+}
+
+/**
+ * Identify the flattened `costDrivers` spec (from `get_top_cost_drivers` after
+ * the model's flatten): a `drivers` array plus a numeric `totalCost` at the top
+ * level. Distinct from `costByService` (which keys on `services`).
+ */
+function isCostDrivers(data: Record<string, unknown>): boolean {
+  return Array.isArray(data.drivers) && typeof data.totalCost === "number";
+}
+
+/**
  * Identify legacy envelope shape: { region, queryType, data, fetchedAt }.
  * These are cached resources from before the 2026.08.13.1 flatten.
  */
@@ -63,6 +91,94 @@ function fmtUsd(n: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   });
+}
+
+interface CmpService {
+  service?: string;
+  delta?: number;
+  deltaPercent?: number;
+}
+
+/**
+ * Build the `spend-delta` signal from an unwrapped comparison payload (the
+ * flattened `costComparison` spec and the legacy `cost_comparison` envelope
+ * share these fields). Warns on a material period-over-period rise (>= 10%) and
+ * names the single largest positive service increase.
+ */
+function buildComparisonSignal(
+  payload: Record<string, unknown>,
+  fetchedAt: string | null,
+  stale: boolean,
+  degraded: boolean,
+): OpsSignal {
+  const cur = payload.currentPeriod as { total?: number } | undefined;
+  const prev = payload.previousPeriod as { total?: number } | undefined;
+  // Finite-guard the percentage: a non-finite value (e.g. divide-by-zero in an
+  // old cached envelope) must not render "NaN%" or drive the warn threshold.
+  const rawPct = payload.totalDeltaPercent;
+  const totalDeltaPct = typeof rawPct === "number" && Number.isFinite(rawPct)
+    ? rawPct
+    : undefined;
+  const services = Array.isArray(payload.services)
+    ? payload.services as CmpService[]
+    : [];
+
+  const topIncrease = services
+    .filter((s) => typeof s.delta === "number" && s.delta > 0)
+    .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))[0];
+
+  const severity: "ok" | "warn" =
+    totalDeltaPct !== undefined && totalDeltaPct >= 10 ? "warn" : "ok";
+
+  const dir = totalDeltaPct === undefined
+    ? ""
+    : totalDeltaPct >= 0
+    ? `+${totalDeltaPct.toFixed(1)}%`
+    : `${totalDeltaPct.toFixed(1)}%`;
+  const curTotal = typeof cur?.total === "number" ? cur.total : NaN;
+  const prevTotal = typeof prev?.total === "number" ? prev.total : NaN;
+  const driver = topIncrease?.service && severity === "warn"
+    ? ` — top rise ${topIncrease.service} +${fmtUsd(topIncrease.delta ?? 0)}`
+    : "";
+  const dirLabel = dir ? ` (${dir})` : "";
+
+  return {
+    source: SOURCE,
+    label: "spend-delta",
+    severity,
+    detail: `${fmtUsd(curTotal)} vs ${
+      fmtUsd(prevTotal)
+    } prior${dirLabel}${driver}`,
+    fetchedAt,
+    stale,
+    degraded,
+  };
+}
+
+/**
+ * Build the `drivers` signal from an unwrapped drivers list (the flattened
+ * `costDrivers` spec's `drivers` array and the legacy `top_cost_drivers`
+ * envelope's `data` array share the `{ service, amount }` element shape).
+ */
+function buildDriversSignal(
+  drivers: Array<{ service?: string; amount?: number }>,
+  fetchedAt: string | null,
+  stale: boolean,
+  degraded: boolean,
+): OpsSignal {
+  const top = drivers[0];
+  const topLabel = top?.service
+    ? `${top.service} (${fmtUsd(top.amount ?? 0)})`
+    : "n/a";
+  return {
+    source: SOURCE,
+    label: "drivers",
+    severity: "info",
+    detail: `${drivers.length} top drivers; largest ${topLabel}`,
+    fetchedAt,
+    stale,
+    degraded,
+  };
 }
 
 export function costExplorerNormalizer(inputs: SourceInput[]): Contribution {
@@ -113,6 +229,19 @@ export function costExplorerNormalizer(inputs: SourceInput[]): Contribution {
         stale,
         degraded,
       });
+    } else if (isCostComparison(data)) {
+      // Flattened costComparison spec (post-flatten model output).
+      ops.push(buildComparisonSignal(data, fetchedAt, stale, degraded));
+    } else if (isCostDrivers(data)) {
+      // Flattened costDrivers spec (post-flatten model output).
+      ops.push(
+        buildDriversSignal(
+          data.drivers as Array<{ service?: string; amount?: number }>,
+          fetchedAt,
+          stale,
+          degraded,
+        ),
+      );
     } else if (isLegacyEnvelope(data)) {
       // Legacy envelope shape from before 2026.08.13.1
       const queryType = data.queryType as string;
@@ -177,74 +306,25 @@ export function costExplorerNormalizer(inputs: SourceInput[]): Contribution {
         typeof nested === "object" &&
         !Array.isArray(nested)
       ) {
-        // Period-over-period comparison: current vs. previous window, with a
-        // total delta and per-service breakdown. The signal warns when spend
-        // rose materially, and names the single largest service increase so the
-        // operator sees the driver, not just the aggregate.
-        const cur = nested.currentPeriod as { total?: number } | undefined;
-        const prev = nested.previousPeriod as { total?: number } | undefined;
-        const totalDeltaPct = typeof nested.totalDeltaPercent === "number"
-          ? nested.totalDeltaPercent
-          : undefined;
-        const services = Array.isArray(nested.services)
-          ? nested.services as Array<
-            { service?: string; delta?: number; deltaPercent?: number }
-          >
-          : [];
-
-        // Largest positive dollar increase among services (ignore decreases).
-        const topIncrease = services
-          .filter((s) => typeof s.delta === "number" && s.delta > 0)
-          .sort((a, b) => (b.delta ?? 0) - (a.delta ?? 0))[0];
-
-        // Warn on a material overall rise (>= 10% period-over-period).
-        const severity: "ok" | "warn" =
-          totalDeltaPct !== undefined && totalDeltaPct >= 10 ? "warn" : "ok";
-
-        const dir = totalDeltaPct === undefined
-          ? ""
-          : totalDeltaPct >= 0
-          ? `+${totalDeltaPct.toFixed(1)}%`
-          : `${totalDeltaPct.toFixed(1)}%`;
-        const curTotal = typeof cur?.total === "number" ? cur.total : NaN;
-        const prevTotal = typeof prev?.total === "number" ? prev.total : NaN;
-        const driver = topIncrease?.service && severity === "warn"
-          ? ` — top rise ${topIncrease.service} +${
-            fmtUsd(topIncrease.delta ?? 0)
-          }`
-          : "";
-
-        ops.push({
-          source: SOURCE,
-          label: "spend-delta",
-          severity,
-          detail: `${fmtUsd(curTotal)} vs ${
-            fmtUsd(prevTotal)
-          } prior (${dir})${driver}`,
-          fetchedAt,
-          stale,
-          degraded,
-        });
+        // Legacy envelope: unwrap `data` and reuse the shared builder.
+        ops.push(
+          buildComparisonSignal(
+            nested as Record<string, unknown>,
+            fetchedAt,
+            stale,
+            degraded,
+          ),
+        );
       } else if (queryType === "top_cost_drivers" && Array.isArray(nested)) {
-        // Top drivers by service+usage-type. Informational: names the single
-        // largest driver so the operator has attribution behind any spike.
-        const drivers = nested as Array<
-          { service?: string; usageType?: string; amount?: number }
-        >;
-        const top = drivers[0];
-        const topLabel = top?.service
-          ? `${top.service} (${fmtUsd(top.amount ?? 0)})`
-          : "n/a";
-
-        ops.push({
-          source: SOURCE,
-          label: "drivers",
-          severity: "info",
-          detail: `${drivers.length} top drivers; largest ${topLabel}`,
-          fetchedAt,
-          stale,
-          degraded,
-        });
+        // Legacy envelope: `data` is the drivers array itself.
+        ops.push(
+          buildDriversSignal(
+            nested as Array<{ service?: string; amount?: number }>,
+            fetchedAt,
+            stale,
+            degraded,
+          ),
+        );
       }
     }
   }
