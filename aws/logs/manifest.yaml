@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/logs"
-version: "2026.09.18.1"
+version: "2026.09.24.1"
 description: |
   Query and analyze CloudWatch Logs for operational visibility and incident investigation.
 
@@ -38,6 +38,13 @@ description: |
     --input 'queryString=fields @timestamp, @message | filter @message like /error/i | limit 50' \
     --input startTime=1h
 
+  # Complete results: set a limit, check truncated, name the instance
+  swamp model method run aws-logs query \
+    --input 'logGroupNames=["/aws/lambda/my-function"]' \
+    --input 'queryString=fields @timestamp, @message | sort @timestamp desc' \
+    --input startTime=2026-03-30T00:00:00Z --input endTime=2026-03-31T00:00:00Z \
+    --input limit=100000 --input instanceName=errors-2026-03-30
+
   # Find error patterns
   swamp model method run aws-logs find_errors \
     --input 'logGroupNames=["/aws/lambda/my-function"]' \
@@ -58,7 +65,8 @@ description: |
   ## Methods
 
   - **list_log_groups** - Discover log groups by prefix
-  - **query** - Run CloudWatch Logs Insights queries
+  - **query** - Run CloudWatch Logs Insights queries. Follows `nextToken` past the
+    10,000-row page size; set `limit` to know whether results were `truncated`
   - **find_errors** - Analyze error patterns with keyword detection
   - **get_recent_events** - Filter recent log events
 repository: "https://github.com/webframp/swamp-extensions"

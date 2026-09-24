@@ -34,6 +34,9 @@ type ListMetricsContext = Parameters<
 >[1];
 type GetDataContext = Parameters<typeof model.methods.get_data.execute>[1];
 type AnalyzeContext = Parameters<typeof model.methods.analyze.execute>[1];
+type GetMetricDataContext = Parameters<
+  typeof model.methods.get_metric_data.execute
+>[1];
 type GetEc2CpuContext = Parameters<
   typeof model.methods.get_ec2_cpu.execute
 >[1];
@@ -252,6 +255,143 @@ Deno.test({
     } finally {
       restore();
     }
+  },
+});
+
+// =============================================================================
+// get_metric_data Tests
+// =============================================================================
+
+type MetricDataWritten = {
+  name: string;
+  specName: string;
+  data: {
+    datapoints: Array<
+      { timestamp: string; value: number; unit: string | null }
+    >;
+    sum?: number | null;
+    truncated?: boolean;
+  };
+};
+
+async function runGetMetricData(
+  handler: (command: unknown) => unknown,
+  args: Record<string, unknown> = {},
+): Promise<MetricDataWritten> {
+  const restore = mockCloudWatch(handler);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: { region: "us-east-1" },
+      definition: { id: "test-id", name: "aws-metrics", version: 1, tags: {} },
+    });
+    await model.methods.get_metric_data.execute(
+      {
+        namespace: "AWS/Logs",
+        metricName: "IncomingBytes",
+        dimensions: [{ name: "LogGroupName", value: "/app/web" }],
+        statistic: "Sum",
+        startTime: "2026-04-14T00:00:00Z",
+        endTime: "2026-04-16T00:00:00Z",
+        ...args,
+      } as Parameters<typeof model.methods.get_metric_data.execute>[0],
+      context as unknown as GetMetricDataContext,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    return resources[0] as unknown as MetricDataWritten;
+  } finally {
+    restore();
+  }
+}
+
+Deno.test({
+  name: "get_metric_data follows NextToken, sorts, and sums datapoints",
+  sanitizeResources: false, // AWS SDK client uses connection pooling
+  fn: async () => {
+    const inputs: Array<Record<string, unknown>> = [];
+    const written = await runGetMetricData((cmd: unknown) => {
+      const input = (cmd as { input: Record<string, unknown> }).input;
+      inputs.push(input);
+      if (!input.NextToken) {
+        return {
+          MetricDataResults: [{
+            Id: "m0",
+            Timestamps: [new Date("2026-04-15T00:00:00Z")],
+            Values: [300],
+          }],
+          NextToken: "page-2",
+        };
+      }
+      return {
+        MetricDataResults: [{
+          Id: "m0",
+          Timestamps: [new Date("2026-04-14T00:00:00Z")],
+          Values: [100],
+        }],
+      };
+    }, { period: 86400 });
+
+    assertEquals(inputs.length, 2);
+    assertEquals(inputs[1].NextToken, "page-2");
+    const query = (inputs[0].MetricDataQueries as Array<{
+      MetricStat: { Stat: string; Period: number };
+    }>)[0];
+    assertEquals(query.MetricStat.Stat, "Sum");
+    assertEquals(query.MetricStat.Period, 86400);
+    assertEquals(written.specName, "metric_data");
+    assertEquals(written.data.datapoints.map((d) => d.value), [100, 300]);
+    assertEquals(written.data.datapoints[0].unit, null);
+    assertEquals(written.data.sum, 400);
+    assertEquals(written.data.truncated, false);
+  },
+});
+
+Deno.test({
+  name: "get_metric_data sum is null when there are no datapoints",
+  sanitizeResources: false, // AWS SDK client uses connection pooling
+  fn: async () => {
+    const written = await runGetMetricData(() => ({
+      MetricDataResults: [{ Id: "m0", Timestamps: [], Values: [] }],
+    }));
+    assertEquals(written.data.datapoints.length, 0);
+    assertEquals(written.data.sum, null);
+  },
+});
+
+Deno.test({
+  name: "get_metric_data marks truncated when pagination is capped",
+  sanitizeResources: false, // AWS SDK client uses connection pooling
+  fn: async () => {
+    let calls = 0;
+    const written = await runGetMetricData(() => {
+      calls++;
+      return {
+        MetricDataResults: [{
+          Id: "m0",
+          Timestamps: [new Date(Date.UTC(2026, 3, 14, calls))],
+          Values: [1],
+        }],
+        NextToken: `page-${calls + 1}`,
+      };
+    });
+    assertEquals(calls, 10);
+    assertEquals(written.data.datapoints.length, 10);
+    assertEquals(written.data.truncated, true);
+  },
+});
+
+Deno.test({
+  name: "get_metric_data instanceName overrides the default name",
+  sanitizeResources: false, // AWS SDK client uses connection pooling
+  fn: async () => {
+    const empty = () => ({ MetricDataResults: [] });
+    const named = await runGetMetricData(empty, { instanceName: "web-ingest" });
+    assertEquals(named.name, "web-ingest");
+    const defaulted = await runGetMetricData(empty);
+    assertEquals(
+      defaulted.name,
+      "AWS-Logs-IncomingBytes-LogGroupName=-app-web",
+    );
   },
 });
 

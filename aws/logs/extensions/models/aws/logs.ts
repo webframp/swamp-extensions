@@ -24,6 +24,18 @@ import { fromIni } from "npm:@aws-sdk/credential-providers@3.1133.0";
 
 const EXTENSION_NAME = "@webframp/aws/logs";
 
+/** StartQuery's documented cap on queryString length. */
+const QUERY_STRING_MAX = 10000;
+
+/** StartQuery's documented maximum for `limit`. */
+const QUERY_LIMIT_MAX = 100000;
+
+/**
+ * GetQueryResults returns at most 10,000 rows per call and the rest via
+ * `nextToken`. QUERY_LIMIT_MAX / 10,000 pages plus one bounds the loop.
+ */
+const MAX_RESULT_PAGES = 11;
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -82,6 +94,13 @@ const LogQueryResultSchema = z.object({
     bytesScanned: z.number(),
   }).nullable(),
   fetchedAt: z.string(),
+  limit: z.number().nullable().optional().describe(
+    "StartQuery limit that was passed, or null when the API default applied",
+  ),
+  truncated: z.boolean().nullable().optional().describe(
+    "True when the row limit was reached (or pagination was capped), so more " +
+      "rows may exist. Null when no limit was passed and it cannot be known.",
+  ),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
   ),
@@ -191,6 +210,7 @@ async function waitForQueryCompletion(
     recordsScanned: number;
     bytesScanned: number;
   } | null;
+  pagesCapped: boolean;
 }> {
   const startTime = Date.now();
   let status = "Running";
@@ -200,6 +220,7 @@ async function waitForQueryCompletion(
     recordsScanned: number;
     bytesScanned: number;
   } | null = null;
+  let nextToken: string | undefined;
 
   while (Date.now() - startTime < maxWaitMs) {
     const command = new GetQueryResultsCommand({ queryId });
@@ -220,17 +241,8 @@ async function waitForQueryCompletion(
     if (
       status === "Complete" || status === "Failed" || status === "Cancelled"
     ) {
-      if (response.results) {
-        results = response.results.map((row) => {
-          const record: Record<string, string> = {};
-          for (const field of row) {
-            if (field.field && field.value !== undefined) {
-              record[field.field] = field.value;
-            }
-          }
-          return record;
-        });
-      }
+      results = toRecords(response.results);
+      nextToken = response.nextToken;
 
       if (response.statistics) {
         statistics = {
@@ -281,7 +293,50 @@ async function waitForQueryCompletion(
     }
   }
 
-  return { status, results, statistics };
+  // A Complete query holds at most 10,000 rows per page; the rest come via
+  // nextToken. Without this loop a larger result silently stops at 10,000.
+  let pages = 1;
+  while (status === "Complete" && nextToken && pages < MAX_RESULT_PAGES) {
+    let page;
+    try {
+      page = await client.send(
+        new GetQueryResultsCommand({ queryId, nextToken }),
+      );
+    } catch (err) {
+      throw new Error(
+        `Failed to get results page ${
+          pages + 1
+        } for Logs Insights query "${queryId}": ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        { cause: err },
+      );
+    }
+    results.push(...toRecords(page.results));
+    nextToken = page.nextToken;
+    pages++;
+  }
+
+  return {
+    status,
+    results,
+    statistics,
+    pagesCapped: status === "Complete" && Boolean(nextToken),
+  };
+}
+
+function toRecords(
+  rows: Array<Array<{ field?: string; value?: string }>> | undefined,
+): Array<Record<string, string>> {
+  return (rows ?? []).map((row) => {
+    const record: Record<string, string> = {};
+    for (const field of row) {
+      if (field.field && field.value !== undefined) {
+        record[field.field] = field.value;
+      }
+    }
+    return record;
+  });
 }
 
 // =============================================================================
@@ -298,7 +353,7 @@ async function waitForQueryCompletion(
  */
 export const model = {
   type: "@webframp/aws/logs",
-  version: "2026.09.18.1",
+  version: "2026.09.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -406,6 +461,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.24.1",
+      description:
+        "query: follow nextToken, optional limit/instanceName; added optional limit and truncated fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -539,6 +600,10 @@ export const model = {
         queryString: z
           .string()
           .min(1, "queryString must not be empty")
+          .max(
+            QUERY_STRING_MAX,
+            `queryString must be at most ${QUERY_STRING_MAX} characters (StartQuery limit)`,
+          )
           .describe(
             "Logs Insights query string (e.g., 'fields @timestamp, @message | filter @message like /error/i | limit 50')",
           ),
@@ -561,6 +626,24 @@ export const model = {
             "Fail if the query does not reach Complete status. Set to false " +
               "to store partial/incomplete results without error.",
           ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(QUERY_LIMIT_MAX)
+          .optional()
+          .describe(
+            "Maximum rows to return, passed to StartQuery. Set it whenever " +
+              "completeness matters: `truncated` is only known when it is set.",
+          ),
+        instanceName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "Resource instance name to write. Defaults to a hash of the log " +
+              "groups and query string. Set it to address the result from CEL.",
+          ),
       }),
       execute: async (
         args: {
@@ -570,6 +653,8 @@ export const model = {
           endTime?: string;
           maxWaitSeconds: number;
           requireComplete?: boolean;
+          limit?: number;
+          instanceName?: string;
         },
         context: {
           globalArgs: GlobalArgs;
@@ -597,6 +682,7 @@ export const model = {
             queryString: args.queryString,
             startTime: Math.floor(startTime.getTime() / 1000),
             endTime: Math.floor(endTime.getTime() / 1000),
+            limit: args.limit,
           });
 
           let startResponse;
@@ -623,17 +709,20 @@ export const model = {
           context.logger.info("Started query {queryId}", { queryId });
 
           // Wait for completion
-          const { status, results, statistics } = await waitForQueryCompletion(
-            client,
-            queryId,
-            args.maxWaitSeconds * 1000,
-            args.requireComplete ?? true,
-          );
+          const { status, results, statistics, pagesCapped } =
+            await waitForQueryCompletion(
+              client,
+              queryId,
+              args.maxWaitSeconds * 1000,
+              args.requireComplete ?? true,
+            );
+
+          const truncated = pagesCapped ||
+            (args.limit !== undefined ? results.length >= args.limit : null);
 
           const groupsKey = args.logGroupNames.slice().sort().join(",");
-          const instanceName = `query-${await shortHash(
-            `${groupsKey}\n${args.queryString}`,
-          )}`;
+          const instanceName = args.instanceName ??
+            `query-${await shortHash(`${groupsKey}\n${args.queryString}`)}`;
 
           const handle = await context.writeResource(
             "query_results",
@@ -644,6 +733,8 @@ export const model = {
               results,
               statistics,
               fetchedAt: new Date().toISOString(),
+              limit: args.limit ?? null,
+              truncated,
               durationMs: Date.now() - startMs,
               collectedBy: EXTENSION_NAME,
             },

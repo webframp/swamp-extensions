@@ -23,6 +23,9 @@ import { fromIni } from "npm:@aws-sdk/credential-providers@3.1133.0";
 
 const EXTENSION_NAME = "@webframp/aws/metrics";
 
+/** Bound on GetMetricData pagination (each page holds up to 100,800 datapoints). */
+const MAX_METRIC_DATA_PAGES = 10;
+
 /** Local type for SDK dimension responses where Name and Value are optional in list responses. */
 interface AwsDimension {
   Name?: string;
@@ -111,6 +114,14 @@ const MetricDataSchema = z.object({
     start: z.string(),
     end: z.string(),
   }),
+  sum: z.number().nullable().optional().describe(
+    "Sum of all datapoint values (get_metric_data). Null when the metric " +
+      "returned no datapoints, which means unknown rather than zero.",
+  ),
+  truncated: z.boolean().optional().describe(
+    "True when pagination was capped and datapoints may be missing " +
+      "(get_metric_data)",
+  ),
   fetchedAt: z.string(),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -300,7 +311,7 @@ function findAnomalies(
  */
 export const model = {
   type: "@webframp/aws/metrics",
-  version: "2026.09.18.1",
+  version: "2026.09.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -403,6 +414,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.24.1",
+      description:
+        "Add get_metric_data method; added optional sum and truncated fields to metric_data",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -662,6 +679,198 @@ export const model = {
                 start: startTime.toISOString(),
                 end: endTime.toISOString(),
               },
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+
+          context.logger.info("Retrieved {count} datapoints for {metric}", {
+            count: datapoints.length,
+            metric: args.metricName,
+          });
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    get_metric_data: {
+      description:
+        "Get metric data points via GetMetricData (paginated), with their sum",
+      arguments: z.object({
+        namespace: z.string().min(1).describe("AWS namespace (e.g., AWS/Logs)"),
+        metricName: z.string().min(1).describe(
+          "Metric name (e.g., IncomingBytes)",
+        ),
+        dimensions: z
+          .array(
+            z.object({
+              name: z.string(),
+              value: z.string(),
+            }),
+          )
+          .default([])
+          .describe("Metric dimensions"),
+        statistic: z
+          .enum(["Average", "Sum", "Minimum", "Maximum", "SampleCount"])
+          .default("Average")
+          .describe("Statistic to retrieve"),
+        startTime: z
+          .string()
+          .default("1h")
+          .describe("Start time (ISO date or relative: 1h, 30m, 2d)"),
+        endTime: z
+          .string()
+          .optional()
+          .describe("End time (ISO date, defaults to now)"),
+        period: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            "Period in seconds (auto-calculated if not specified; must be a " +
+              "multiple of 60 for standard-resolution metrics)",
+          ),
+        instanceName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "Resource instance name to write. Defaults to namespace, metric " +
+              "and dimensions. Set it to address the result from CEL.",
+          ),
+      }),
+      execute: async (
+        args: {
+          namespace: string;
+          metricName: string;
+          dimensions: Array<{ name: string; value: string }>;
+          statistic: "Average" | "Sum" | "Minimum" | "Maximum" | "SampleCount";
+          startTime: string;
+          endTime?: string;
+          period?: number;
+          instanceName?: string;
+        },
+        context: {
+          globalArgs: GlobalArgs;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const startMs = Date.now();
+        const client = new CloudWatchClient(
+          makeClientConfig(context.globalArgs),
+        );
+        try {
+          const startTime = parseRelativeTime(args.startTime);
+          const endTime = args.endTime
+            ? parseRelativeTime(args.endTime)
+            : new Date();
+          const period = args.period ?? calculatePeriod(startTime, endTime);
+
+          const dimensions: Dimension[] = args.dimensions.map((d) => ({
+            Name: d.name,
+            Value: d.value,
+          }));
+
+          const datapoints: Array<
+            { timestamp: string; value: number; unit: string | null }
+          > = [];
+          let nextToken: string | undefined;
+          let pages = 0;
+          do {
+            let response;
+            try {
+              response = await client.send(
+                new GetMetricDataCommand({
+                  StartTime: startTime,
+                  EndTime: endTime,
+                  NextToken: nextToken,
+                  MetricDataQueries: [{
+                    Id: "m0",
+                    ReturnData: true,
+                    MetricStat: {
+                      Metric: {
+                        Namespace: args.namespace,
+                        MetricName: args.metricName,
+                        Dimensions: dimensions.length > 0
+                          ? dimensions
+                          : undefined,
+                      },
+                      Period: period,
+                      Stat: args.statistic,
+                    },
+                  }],
+                }),
+              );
+            } catch (err) {
+              throw new Error(
+                `Failed to get metric data for "${args.namespace}/${args.metricName}": ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+                { cause: err },
+              );
+            }
+            for (const result of response.MetricDataResults ?? []) {
+              const timestamps = result.Timestamps ?? [];
+              const values = result.Values ?? [];
+              timestamps.forEach((ts: Date, i: number) => {
+                datapoints.push({
+                  timestamp: ts?.toISOString?.() ?? String(ts),
+                  value: values[i] ?? 0,
+                  // GetMetricData does not return a unit per datapoint.
+                  unit: null,
+                });
+              });
+            }
+            nextToken = response.NextToken;
+            pages++;
+          } while (nextToken && pages < MAX_METRIC_DATA_PAGES);
+
+          datapoints.sort(
+            (a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+          );
+          const sum = datapoints.length > 0
+            ? datapoints.reduce((total, dp) => total + dp.value, 0)
+            : null;
+
+          const dimStr = args.dimensions
+            .map((d) => `${d.name}=${d.value}`)
+            .join(",");
+          const instanceName = args.instanceName ??
+            `${args.namespace}-${args.metricName}-${dimStr || "all"}`.replace(
+              /[\/\s]/g,
+              "-",
+            ).substring(0, 100);
+
+          const handle = await context.writeResource(
+            "metric_data",
+            instanceName,
+            {
+              metric: {
+                namespace: args.namespace,
+                metricName: args.metricName,
+                dimensions: args.dimensions,
+              },
+              statistic: args.statistic,
+              period,
+              datapoints,
+              timeRange: {
+                start: startTime.toISOString(),
+                end: endTime.toISOString(),
+              },
+              sum,
+              truncated: Boolean(nextToken),
               fetchedAt: new Date().toISOString(),
               durationMs: Date.now() - startMs,
               collectedBy: EXTENSION_NAME,

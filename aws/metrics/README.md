@@ -50,6 +50,15 @@ swamp model method run aws-metrics get_data \
   --input 'dimensions=[{"name":"InstanceId","value":"i-1234567890abcdef0"}]' \
   --input startTime=1h
 
+# Same via GetMetricData (paginated), summed - e.g. bytes ingested into a log group
+swamp model method run aws-metrics get_metric_data \
+  --input namespace=AWS/Logs \
+  --input metricName=IncomingBytes \
+  --input 'dimensions=[{"name":"LogGroupName","value":"/aws/lambda/my-function"}]' \
+  --input statistic=Sum \
+  --input startTime=2026-03-30T00:00:00Z --input endTime=2026-03-31T00:00:00Z \
+  --input instanceName=my-function-ingest
+
 # Analyze a metric for trends and anomalies
 swamp model method run aws-metrics analyze \
   --input namespace=AWS/Lambda \
@@ -64,6 +73,7 @@ swamp model method run aws-metrics analyze \
 | -------------------- | -------------------------------------------------------- |
 | `list_metrics`       | Discover available CloudWatch metrics by namespace       |
 | `get_data`           | Retrieve metric data points with configurable statistics |
+| `get_metric_data`    | Same via GetMetricData, paginated, with a summed `sum`   |
 | `analyze`            | Analyze metrics for trends, anomalies, and summaries     |
 | `get_ec2_cpu`        | Convenience method for EC2 CPU utilization               |
 | `get_lambda_metrics` | Get key Lambda metrics (invocations, errors, duration)   |
@@ -90,6 +100,20 @@ than 15 days are available only at 1-hour resolution; older than 63 days only at
 resolution for the time range, the API returns zero datapoints. The extension
 auto-calculates period from the time range, but an explicitly set `period` that
 is too granular will produce empty results without error.
+
+### `get_data` vs `get_metric_data`
+
+`get_data` calls `GetMetricStatistics`; `get_metric_data` calls `GetMetricData`,
+which AWS recommends for new work, paginates past a single response, and needs
+only `cloudwatch:GetMetricData`. Use it when your role grants that action but
+not `GetMetricStatistics`. It writes the same `metric_data` resource plus:
+
+- `sum` — the total of all datapoint values, or `null` when the metric returned
+  none. Null means unknown, not zero: the metric may have aged out (15 months)
+  or the dimensions may not match.
+- `truncated` — `true` if pagination stopped at its 10-page cap.
+
+Datapoint `unit` is always `null`, as `GetMetricData` does not return units.
 
 ### `analyze` shows `trend: "insufficient_data"`
 

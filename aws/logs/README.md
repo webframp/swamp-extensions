@@ -52,6 +52,13 @@ swamp model method run aws-logs query \
   --input 'queryString=fields @timestamp, @message | filter @message like /error/i | limit 50' \
   --input startTime=1h
 
+# Complete results over an absolute window: set a limit, name the instance
+swamp model method run aws-logs query \
+  --input 'logGroupNames=["/aws/lambda/my-function"]' \
+  --input 'queryString=fields @timestamp, @message | sort @timestamp desc' \
+  --input startTime=2026-03-30T00:00:00Z --input endTime=2026-03-31T00:00:00Z \
+  --input limit=100000 --input instanceName=errors-2026-03-30
+
 # Find error patterns in the last two hours
 swamp model method run aws-logs find_errors \
   --input 'logGroupNames=["/aws/lambda/my-function"]' \
@@ -118,6 +125,20 @@ Both methods paginate until the `limit` is satisfied or the API runs out of
 results. Neither has a `MAX_PAGES` guard. Very high `limit` values can cause
 many sequential API calls. Use the `prefix` or `filterPattern` arguments to
 scope the request.
+
+### Knowing whether `query` returned every row
+
+`GetQueryResults` pages at 10,000 rows; `query` follows `nextToken` for the
+rest, up to 11 pages. Pass `limit` (up to 100,000, StartQuery's maximum) and
+read `truncated` on the result:
+
+- `true` — the limit was reached, so more rows may match. Narrow the window.
+- `false` — fewer rows than the limit matched; the result is complete.
+- `null` — no `limit` was passed, so the API default applied and completeness
+  cannot be known.
+
+`queryString` is capped at 10,000 characters by StartQuery and rejected before
+the query starts if longer.
 
 ### `query` with `requireComplete=false` stores partial results
 

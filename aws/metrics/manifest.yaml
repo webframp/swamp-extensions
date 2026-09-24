@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/metrics"
-version: "2026.09.18.1"
+version: "2026.09.24.1"
 description: |
   Query and analyze CloudWatch Metrics for operational visibility and performance monitoring.
 
@@ -30,6 +30,12 @@ description: |
     --input 'dimensions=[{"name":"InstanceId","value":"i-1234567890abcdef0"}]' \
     --input startTime=1h
 
+  # Sum a metric via GetMetricData (e.g. bytes ingested into a log group)
+  swamp model method run aws-metrics get_metric_data \
+    --input namespace=AWS/Logs --input metricName=IncomingBytes \
+    --input 'dimensions=[{"name":"LogGroupName","value":"/aws/lambda/my-function"}]' \
+    --input statistic=Sum --input startTime=1d
+
   # Analyze a metric for trends and anomalies
   swamp model method run aws-metrics analyze \
     --input namespace=AWS/Lambda \
@@ -54,6 +60,7 @@ description: |
 
   - **list_metrics** - Discover available CloudWatch metrics by namespace
   - **get_data** - Retrieve metric data points with configurable statistics
+  - **get_metric_data** - Same via GetMetricData, paginated, with the datapoints' `sum`
   - **analyze** - Analyze metrics for trends, anomalies, and summary statistics
   - **get_ec2_cpu** - Convenience method for EC2 CPU utilization
   - **get_lambda_metrics** - Get key Lambda function metrics (invocations, errors, duration, throttles)

@@ -393,6 +393,196 @@ Deno.test(
   },
 );
 
+function row(i: number) {
+  return [
+    {
+      field: "@timestamp",
+      value: `2026-01-01 00:00:${String(i).padStart(2, "0")}`,
+    },
+    { field: "@message", value: `line ${i}` },
+  ];
+}
+
+/** Mock that completes immediately and serves `pages` of results by nextToken. */
+function mockPagedQuery(
+  pages: Array<Array<ReturnType<typeof row>>>,
+  seen: { startLimit?: number; tokens: string[] },
+) {
+  return mockLogsClient((cmd: unknown) => {
+    const name = (cmd as { constructor: { name: string } }).constructor.name;
+    const input = (cmd as { input: Record<string, unknown> }).input;
+    if (name === "StartQueryCommand") {
+      seen.startLimit = input.limit as number | undefined;
+      return { queryId: "q-paged" };
+    }
+    if (name === "GetQueryResultsCommand") {
+      const token = input.nextToken as string | undefined;
+      if (token) seen.tokens.push(token);
+      const index = token ? Number(token.replace("page-", "")) : 0;
+      return {
+        status: "Complete",
+        results: pages[index],
+        nextToken: index + 1 < pages.length ? `page-${index + 1}` : undefined,
+        statistics: {
+          recordsMatched: 99,
+          recordsScanned: 100,
+          bytesScanned: 1000,
+        },
+      };
+    }
+    return {};
+  });
+}
+
+async function runQuery(args: Record<string, unknown>) {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { region: "us-east-1" },
+    definition: { id: "test-id", name: "aws-logs", version: 1, tags: {} },
+  });
+  await model.methods.query.execute(
+    {
+      logGroupNames: ["/aws/lambda/func1"],
+      queryString: "fields @timestamp, @message",
+      startTime: "2026-01-01T00:00:00Z",
+      endTime: "2026-01-02T00:00:00Z",
+      maxWaitSeconds: 5,
+      ...args,
+    } as Parameters<typeof model.methods.query.execute>[0],
+    context as unknown as Parameters<typeof model.methods.query.execute>[1],
+  );
+  const resources = getWrittenResources();
+  assertEquals(resources.length, 1);
+  return resources[0] as unknown as {
+    name: string;
+    data: {
+      results: Array<Record<string, string>>;
+      limit?: number | null;
+      truncated?: boolean | null;
+    };
+  };
+}
+
+Deno.test(
+  "query: follows nextToken across pages and passes limit to StartQuery",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const seen = {
+      startLimit: undefined as number | undefined,
+      tokens: [] as string[],
+    };
+    const restore = mockPagedQuery(
+      [[row(1), row(2)], [row(3), row(4)], [row(5)]],
+      seen,
+    );
+    try {
+      const written = await runQuery({ limit: 10 });
+      assertEquals(seen.startLimit, 10);
+      assertEquals(seen.tokens, ["page-1", "page-2"]);
+      assertEquals(written.data.results.length, 5);
+      assertEquals(written.data.results[4]["@message"], "line 5");
+      assertEquals(written.data.limit, 10);
+      assertEquals(written.data.truncated, false);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: truncated is true when the row limit is reached",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const seen = { tokens: [] as string[] };
+    const restore = mockPagedQuery([[row(1), row(2)], [row(3)]], seen);
+    try {
+      const written = await runQuery({ limit: 3 });
+      assertEquals(written.data.results.length, 3);
+      assertEquals(written.data.truncated, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: truncated is null and limit omitted when no limit is passed",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const seen = {
+      startLimit: 1 as number | undefined,
+      tokens: [] as string[],
+    };
+    const restore = mockPagedQuery([[row(1)]], seen);
+    try {
+      const written = await runQuery({});
+      assertEquals(seen.startLimit, undefined);
+      assertEquals(written.data.limit, null);
+      assertEquals(written.data.truncated, null);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: truncated is true when pagination is capped",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const seen = { tokens: [] as string[] };
+    const pages = Array.from({ length: 13 }, (_, i) => [row(i)]);
+    const restore = mockPagedQuery(pages, seen);
+    try {
+      const written = await runQuery({});
+      assertEquals(seen.tokens.length, 10); // 11 pages read in total
+      assertEquals(written.data.results.length, 11);
+      assertEquals(written.data.truncated, true);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test(
+  "query: instanceName overrides the hashed default",
+  { sanitizeResources: false }, // CloudWatchLogsClient uses connection pooling
+  async () => {
+    const seen = { tokens: [] as string[] };
+    const restore = mockPagedQuery([[row(1)]], seen);
+    try {
+      const named = await runQuery({ instanceName: "nightly-errors" });
+      assertEquals(named.name, "nightly-errors");
+      const hashed = await runQuery({});
+      assertMatch(hashed.name, /^query-[0-9a-f]{16}$/);
+    } finally {
+      restore();
+    }
+  },
+);
+
+Deno.test("query: arguments reject a queryString over 10,000 characters", () => {
+  const schema = model.methods.query.arguments;
+  const base = { logGroupNames: ["/aws/lambda/func1"] };
+  assertEquals(
+    schema.safeParse({ ...base, queryString: "x".repeat(10000) }).success,
+    true,
+  );
+  assertEquals(
+    schema.safeParse({ ...base, queryString: "x".repeat(10001) }).success,
+    false,
+  );
+});
+
+Deno.test("query: arguments bound limit to StartQuery's 1..100000", () => {
+  const schema = model.methods.query.arguments;
+  const base = {
+    logGroupNames: ["/aws/lambda/func1"],
+    queryString: "fields @message",
+  };
+  assertEquals(schema.safeParse({ ...base, limit: 100000 }).success, true);
+  assertEquals(schema.safeParse({ ...base, limit: 100001 }).success, false);
+  assertEquals(schema.safeParse({ ...base, limit: 0 }).success, false);
+});
+
 // =============================================================================
 // profile Global Argument Tests
 // =============================================================================
