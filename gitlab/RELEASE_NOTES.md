@@ -1,3 +1,16 @@
+## 2026.09.23.1
+
+**Changed:** Documented `@`-mention escaping on `add_issue_note` and
+`add_mr_note`. GitLab notifies a user only when the comment body contains a
+real `@handle` mention, but the swamp CLI's `--arg body=@...` reads a value
+that *starts with* `@` as a file path — so `--arg body=@ADADY ...` fails with
+"input file not found" rather than posting a mention. The method descriptions
+and the `body` argument's schema description now state the fix: escape a
+leading `@` as `\@` on the CLI (e.g. `--arg 'body=\@ADADY please review'`); a
+mid-body `@` needs no escape. Documentation only — no schema, resource, or
+`globalArguments` change, and no change to how a body is posted once it reaches
+the method.
+
 ## 2026.09.21.1
 
 **Added:** Snippet management, closing GitHub issue #411:

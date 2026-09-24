@@ -2512,7 +2512,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.21.1",
+  version: "2026.09.23.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2675,6 +2675,16 @@ export const model = {
         "(new resources: snippetDetail, snippetList, snippetDeleted; new " +
         "GitLabClient instance-level HTTP helpers). No globalArguments change; " +
         "all additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.23.1",
+      description:
+        "Documented @-mention escaping on add_issue_note / add_mr_note: a " +
+        "comment body that starts with @ must be escaped as \\@ on the CLI " +
+        "because `--arg body=@...` reads a leading @ as a file path. Method " +
+        "descriptions and the body argument .describe() only; no schema, " +
+        "resource, or globalArguments change.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3790,11 +3800,13 @@ export const model = {
 
     add_issue_note: {
       description:
-        "Add a comment to an issue, or reply into an existing thread by passing discussionId (from list_issue_discussions)",
+        "Add a comment to an issue, or reply into an existing thread by passing discussionId (from list_issue_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
-        body: z.string().min(1),
+        body: z.string().min(1).describe(
+          "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
+        ),
         discussionId: z
           .string()
           .optional()
@@ -5349,11 +5361,13 @@ export const model = {
 
     add_mr_note: {
       description:
-        "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions)",
+        "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number(),
-        body: z.string().min(1),
+        body: z.string().min(1).describe(
+          "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
+        ),
         discussionId: z
           .string()
           .optional()
