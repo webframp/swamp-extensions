@@ -66,11 +66,14 @@ export interface BriefingResult {
   json: BriefingJson;
 }
 
-/** Items for a tier, oldest-waiting first (design §3). */
-function tierItems(queue: QueueItem[], tier: Tier): QueueItem[] {
-  return queue
-    .filter((q) => q.tier === tier)
-    .sort((a, b) => b.ageDays - a.ageDays);
+/** Items for a tier, oldest-waiting first unless a caller applied a safe priority. */
+function tierItems(
+  queue: QueueItem[],
+  tier: Tier,
+  preserveOrder = false,
+): QueueItem[] {
+  const items = queue.filter((q) => q.tier === tier);
+  return preserveOrder ? items : items.sort((a, b) => b.ageDays - a.ageDays);
 }
 
 function renderQueueTable(items: QueueItem[]): string[] {
@@ -149,16 +152,17 @@ export function buildJson(
   generatedAt: string,
   degraded: boolean,
   sourceErrors: SourceErrors = { skippedSteps: 0, parseFailures: 0 },
+  preserveQueueOrder = false,
 ): BriefingJson {
   const sourceDegraded = sourceErrors.skippedSteps > 0 ||
     sourceErrors.parseFailures > 0;
   return {
     generatedAt,
     tiers: {
-      waitingOnYou: tierItems(queue, 1),
-      awaitingMerge: tierItems(queue, 2),
-      mentions: tierItems(queue, 3),
-      yourOpenMrs: tierItems(queue, 4),
+      waitingOnYou: tierItems(queue, 1, preserveQueueOrder),
+      awaitingMerge: tierItems(queue, 2, preserveQueueOrder),
+      mentions: tierItems(queue, 3, preserveQueueOrder),
+      yourOpenMrs: tierItems(queue, 4, preserveQueueOrder),
     },
     queue,
     ops,
@@ -247,6 +251,7 @@ export function render(
   generatedAt: string,
   degraded = false,
   sourceErrors: SourceErrors = { skippedSteps: 0, parseFailures: 0 },
+  preserveQueueOrder = false,
 ): BriefingResult {
   const json = buildJson(
     queue,
@@ -255,6 +260,7 @@ export function render(
     generatedAt,
     degraded,
     sourceErrors,
+    preserveQueueOrder,
   );
 
   const lines = renderQueueSection(json, "Operator Briefing");

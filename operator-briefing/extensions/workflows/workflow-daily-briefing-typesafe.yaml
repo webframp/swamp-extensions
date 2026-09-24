@@ -1,0 +1,78 @@
+id: 76a7db87-8d50-464a-9b72-3628d33f8988
+name: "@webframp/daily-briefing-typesafe"
+description: >-
+  Fetch the GitLab review queue and apply bounded TypeSafe triage. The
+  evaluation step is isolated: a provider outage leaves the factual queue and
+  operator briefing available.
+tags:
+  purpose: daily-briefing
+  typesafe: "true"
+inputs:
+  properties:
+    gitlabModel:
+      type: string
+      default: gitlab
+      description: Existing @webframp/gitlab model name
+    typesafeModel:
+      type: string
+      default: jev
+      description: Existing @swamp/typesafe-ai model name
+    queueDataName:
+      type: string
+      description: Data name emitted by list_my_merge_requests for the operator
+  required:
+    - queueDataName
+reports:
+  require:
+    - "@webframp/operator-briefing"
+jobs:
+  - name: fetch
+    description: Fetch the factual queue, then classify its compact projection.
+    steps:
+      - name: queue
+        description: GitLab MRs and todos for the authenticated operator.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.gitlabModel }}
+          methodName: list_my_merge_requests
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: triage_reviews
+        description: >-
+          Classify a compact review projection in one bounded batch. Raw MR
+          state and questions are not retained; individual failures degrade to
+          deterministic queue ordering.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.typesafeModel }}
+          methodName: triage_batch
+          inputs:
+            name: daily
+            concurrency: 4
+            items: >-
+              ${{ data.latest(inputs.gitlabModel, inputs.queueDataName).attributes.reviewing.map(m, {"id": m.reference, "state": {"reference": m.reference, "title": m.title, "updatedAt": m.updatedAt, "draft": m.draft, "labels": m.labels, "approvedByMe": m.approvedByMe, "myReviewState": m.myReviewState}}) }}
+            questions:
+              reply_needed:
+                type: noul
+                instructions: Does this merge request require my substantive review action now?
+                criteria:
+                  true: It is open, ready for review, pending my review, and not already approved by me.
+                  false: It is a draft, already approved, or waiting on another person.
+              urgency:
+                type: score
+                instructions: How urgently should I review this merge request today?
+                criteria:
+                  - "Routine: can wait, stale, or still a draft"
+                  - "Worth a look this week: active but not blocking"
+                  - "Needs attention today: out of draft, recent, or blocking work"
+        dependsOn:
+          - step: queue
+            condition:
+              type: succeeded
+        guard: ${{ size(data.latest(inputs.gitlabModel, inputs.queueDataName).attributes.reviewing) == 0 }}
+        weight: 0
+        allowFailure: true
+    dependsOn: []
+    weight: 0
+version: 1

@@ -32,6 +32,7 @@
 import { freshness } from "../freshness.ts";
 import type {
   Contribution,
+  NormalizerContext,
   OpsSignal,
   Severity,
   SourceInput,
@@ -144,11 +145,158 @@ function labelFromName(name: string): string {
   return `verdict:${stripped || "eval"}`;
 }
 
-export function typesafeAiNormalizer(inputs: SourceInput[]): Contribution {
+function object(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * State is caller-projected evidence, not model-generated rationale. Render a
+ * bounded factual companion for known briefing verdicts so "Worth a look" is
+ * useful without asking TypeSafe to generate prose or exposing identifiers.
+ */
+function evidence(
+  state: Record<string, unknown> | undefined,
+  accountNames: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!state) return undefined;
+
+  if ("newCount" in state || "newFindings" in state) {
+    const newCount = finiteNumber(state.newCount);
+    const findings = Array.isArray(state.newFindings) ? state.newFindings : [];
+    let critical = 0;
+    let high = 0;
+    const affected = new Set<string>();
+    for (const finding of findings) {
+      const item = object(finding);
+      if (!item) continue;
+      if (item.severity === "CRITICAL") critical++;
+      if (item.severity === "HIGH") high++;
+      if (typeof item.accountId === "string") {
+        const name = accountNames.get(item.accountId);
+        if (name) affected.add(name);
+      }
+    }
+    const count = newCount ?? findings.length;
+    const accounts = affected.size > 0
+      ? `; affected ${[...affected].sort().join(", ")}`
+      : "";
+    return `${count} new finding(s): ${critical} critical, ${high} high${accounts}`;
+  }
+
+  if ("comparison" in state || "topDrivers" in state) {
+    const comparison = object(state.comparison);
+    const delta = finiteNumber(comparison?.totalDeltaPercent);
+    const driverContainer = object(state.topDrivers);
+    const drivers = Array.isArray(state.topDrivers)
+      ? state.topDrivers
+      : Array.isArray(driverContainer?.drivers)
+      ? driverContainer.drivers
+      : [];
+    const first = object(drivers[0]);
+    const driver = typeof first?.service === "string"
+      ? `; top driver ${first.service}`
+      : "";
+    const direction = delta === undefined
+      ? "cost delta unavailable"
+      : `period delta ${delta >= 0 ? "+" : ""}${delta.toFixed(1)}%`;
+    return direction + driver;
+  }
+
+  if ("totalErrors" in state || "topPatterns" in state) {
+    const total = finiteNumber(state.totalErrors);
+    const patterns = Array.isArray(state.topPatterns) ? state.topPatterns : [];
+    return `${
+      total ?? 0
+    } matched event(s) across ${patterns.length} top pattern(s)`;
+  }
+
+  return undefined;
+}
+
+function triageBatchContribution(
+  data: Record<string, unknown>,
+  context: NormalizerContext,
+): Contribution {
+  const failures = Array.isArray(data.failures) ? data.failures : [];
+  const fingerprint = typeof data.sourceFingerprint === "string"
+    ? data.sourceFingerprint
+    : undefined;
+  if (!fingerprint || fingerprint !== context.triageFingerprint) {
+    return {
+      queue: [],
+      ops: [{
+        source: SOURCE,
+        label: "review-triage",
+        severity: "warn",
+        detail:
+          "review triage snapshot did not match the current queue; deterministic queue ordering used",
+        fetchedAt: typeof data.evaluatedAt === "string"
+          ? data.evaluatedAt
+          : null,
+        stale: false,
+        degraded: true,
+        degradedReason: "source fingerprint mismatch",
+      }],
+      notes: [],
+    };
+  }
+  if (failures.length === 0) {
+    const results = Array.isArray(data.results) ? data.results : [];
+    for (const result of results) {
+      const item = object(result);
+      if (!item || typeof item.id !== "string") continue;
+      const answers = object(item.answers);
+      if (answers) context.triageAnswers?.set(item.id, answers);
+    }
+    return {
+      queue: [],
+      ops: [],
+      notes: ["Verified TypeSafe review triage applied to queue ordering."],
+    };
+  }
+  const results = Array.isArray(data.results) ? data.results : [];
+  return {
+    queue: [],
+    ops: [{
+      source: SOURCE,
+      label: "review-triage",
+      severity: "warn",
+      detail:
+        `${failures.length} review triage decision(s) unavailable; deterministic queue ordering used`,
+      fetchedAt: typeof data.evaluatedAt === "string" ? data.evaluatedAt : null,
+      stale: false,
+      degraded: true,
+      degradedReason: `${results.length} of ${
+        results.length + failures.length
+      } decisions completed`,
+    }],
+    notes: [],
+  };
+}
+
+export function typesafeAiNormalizer(
+  inputs: SourceInput[],
+  context: NormalizerContext = { accountNames: new Map() },
+): Contribution {
   const ops: OpsSignal[] = [];
   const notes: string[] = [];
 
   for (const { dataName, data } of inputs) {
+    if (dataName.startsWith("triage-batch-")) {
+      const contribution = triageBatchContribution(data, context);
+      ops.push(...contribution.ops);
+      notes.push(...contribution.notes);
+      continue;
+    }
+
     // Triage resources feed the review-queue ordering, not the ops line.
     // Recognized and skipped — never an "unrecognized shape" note.
     if (dataName.startsWith("triage-")) continue;
@@ -214,11 +362,13 @@ export function typesafeAiNormalizer(inputs: SourceInput[]): Contribution {
       ? `, ${noulEntry[0]} ${(noulEntry[1].noul * 100).toFixed(0)}%`
       : "";
 
+    const stateEvidence = evidence(object(data.state), context.accountNames);
     ops.push({
       source: SOURCE,
       label: labelFromName(dataName),
       severity,
-      detail: `${headline}${noulContext}`,
+      detail: `${headline}${noulContext}` +
+        (stateEvidence ? ` — ${stateEvidence}` : ""),
       fetchedAt,
       stale,
       degraded: false,

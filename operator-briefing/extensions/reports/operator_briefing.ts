@@ -22,6 +22,7 @@ import { render } from "./_lib/render.ts";
 import { type DataRepository, readJson } from "./_lib/read.ts";
 import type {
   Contribution,
+  NormalizerContext,
   OpsSignal,
   QueueItem,
   SourceInput,
@@ -52,6 +53,121 @@ interface WorkflowReportContext {
   logger?: { info?: (msg: string, props: Record<string, unknown>) => void };
 }
 
+const SECURITYHUB_TYPE = "@webframp/aws/securityhub-findings";
+const GITLAB_TYPE = "@webframp/gitlab";
+const TYPESAFE_TYPE = "@swamp/typesafe-ai";
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${
+    Object.keys(record).sort().map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+    ).join(",")
+  }}`;
+}
+
+export async function queueFingerprint(reviewing: unknown[]): Promise<string> {
+  const items = reviewing.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const item = candidate as Record<string, unknown>;
+    if (typeof item.reference !== "string") return [];
+    return [{
+      id: item.reference,
+      state: {
+        reference: item.reference,
+        title: item.title ?? null,
+        updatedAt: item.updatedAt ?? null,
+        draft: item.draft ?? null,
+        labels: item.labels ?? null,
+        approvedByMe: item.approvedByMe ?? null,
+        myReviewState: item.myReviewState ?? null,
+      },
+    }];
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonicalJson(items)),
+  );
+  return `sha256-${
+    Array.from(new Uint8Array(digest)).map((byte) =>
+      byte.toString(16).padStart(2, "0")
+    ).join("")
+  }`;
+}
+
+function triageRank(answers: Record<string, unknown> | undefined): number {
+  if (!answers) return Number.NEGATIVE_INFINITY;
+  const urgency = answers.urgency;
+  const reply = answers.reply_needed;
+  const score = urgency && typeof urgency === "object" &&
+      typeof (urgency as Record<string, unknown>).score === "number"
+    ? (urgency as Record<string, number>).score
+    : 0;
+  const noul = reply && typeof reply === "object" &&
+      typeof (reply as Record<string, unknown>).noul === "number"
+    ? (reply as Record<string, number>).noul
+    : 0;
+  return score * 10 + noul;
+}
+
+/** Apply verified AI priority only within a tier; facts and deterministic ties remain intact. */
+function prioritizeQueue(
+  queue: QueueItem[],
+  answers: ReadonlyMap<string, Record<string, unknown>>,
+): void {
+  if (answers.size === 0) return;
+  const indexed = queue.map((item, index) => ({ item, index }));
+  indexed.sort((a, b) => {
+    if (a.item.tier !== b.item.tier) return a.item.tier - b.item.tier;
+    const delta = triageRank(answers.get(b.item.reference)) -
+      triageRank(answers.get(a.item.reference));
+    if (!Number.isNaN(delta) && delta !== 0) return delta;
+    const ageDelta = b.item.ageDays - a.item.ageDays;
+    return ageDelta !== 0 ? ageDelta : a.index - b.index;
+  });
+  queue.splice(0, queue.length, ...indexed.map(({ item }) => item));
+}
+
+/**
+ * Read the Security Hub account map once for this report. It is enrichment
+ * only: unknown IDs are deliberately not retained or rendered elsewhere.
+ */
+async function collectAccountNames(
+  steps: StepExecution[],
+  repository: DataRepository,
+): Promise<ReadonlyMap<string, string>> {
+  const names = new Map<string, string>();
+  for (const step of steps) {
+    if (step.modelType !== SECURITYHUB_TYPE) continue;
+    for (const handle of step.dataHandles ?? []) {
+      if (!handle?.name || handle.name.startsWith("report-")) continue;
+      const { data } = await readJson(
+        repository,
+        step.modelType,
+        step.modelId,
+        handle.name,
+        handle.version,
+      );
+      if (!data || !Array.isArray(data.accounts)) continue;
+      for (const account of data.accounts) {
+        if (!account || typeof account !== "object") continue;
+        const candidate = account as Record<string, unknown>;
+        if (
+          typeof candidate.id === "string" && candidate.id.length > 0 &&
+          typeof candidate.name === "string" && candidate.name.length > 0
+        ) {
+          names.set(candidate.id, candidate.name);
+        }
+      }
+    }
+  }
+  return names;
+}
+
 /**
  * The `@webframp/operator-briefing` workflow-scope report. Aggregates every
  * source that ran in a `daily-briefing` workflow into a four-tier review queue
@@ -78,6 +194,10 @@ export const report = {
       let parseFailures = 0;
 
       const steps = context.stepExecutions ?? [];
+      const normalizerContext: NormalizerContext = {
+        accountNames: await collectAccountNames(steps, context.dataRepository),
+        triageAnswers: new Map(),
+      };
 
       for (const step of steps) {
         // Non-source steps (e.g. the metrics accumulator appending to the trend
@@ -118,10 +238,45 @@ export const report = {
           inputs.push({ dataName: handle.name, data });
         }
 
-        if (inputs.length === 0) continue;
+        if (inputs.length === 0) {
+          // An interpretation outage must not hide the factual signals that
+          // precede it or fail the whole report. Make the degradation explicit
+          // so callers can distinguish "no anomaly" from "no verdict".
+          if (
+            step.modelType === TYPESAFE_TYPE && step.methodName === "ask" &&
+            step.status === "failed"
+          ) {
+            ops.push({
+              source: "jev",
+              label: `verdict:${step.stepName ?? step.methodName ?? "unknown"}`,
+              severity: "warn",
+              detail:
+                "interpretation unavailable; factual source signals remain available",
+              fetchedAt: null,
+              stale: false,
+              degraded: true,
+              degradedReason: "ask evaluation failed",
+            });
+          }
+          continue;
+        }
+
+        // Reuse the queue input already read for the GitLab normalizer. This
+        // avoids a second repository read and scopes a later batch verdict to
+        // this exact compact source snapshot.
+        if (step.modelType === GITLAB_TYPE) {
+          const queueData = inputs.find((input) =>
+            Array.isArray(input.data.reviewing)
+          )?.data.reviewing;
+          if (Array.isArray(queueData)) {
+            normalizerContext.triageFingerprint = await queueFingerprint(
+              queueData,
+            );
+          }
+        }
 
         try {
-          const contrib: Contribution = normalizer(inputs);
+          const contrib: Contribution = normalizer(inputs, normalizerContext);
           queue.push(...contrib.queue);
           ops.push(...contrib.ops);
           notes.push(...contrib.notes);
@@ -144,10 +299,13 @@ export const report = {
         notes.push(`${skippedSteps} step(s) skipped (no normalizer or error).`);
       }
 
+      const triageAnswers = normalizerContext.triageAnswers ?? new Map();
+      prioritizeQueue(queue, triageAnswers);
+
       const result = render(queue, ops, notes, generatedAt, false, {
         skippedSteps,
         parseFailures,
-      });
+      }, triageAnswers.size > 0);
 
       context.logger?.info?.(
         "operator-briefing: {queue} queue items, {ops} ops signals, {skipped} skipped",

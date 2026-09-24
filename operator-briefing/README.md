@@ -33,6 +33,7 @@ line. The render / tiering / freshness core never changes.
 | `@webframp/anthropic/analytics`  | Seats (DAU/WAU/MAU), adoption, cost window                  |
 | `@webframp/anthropic/compliance` | Effective-settings count, recent activity volume            |
 | `@webframp/aws/service-quotas`   | Quota utilization over threshold, pending increase requests |
+| `@swamp/typesafe-ai`             | Typed verdicts with compact source evidence and failure status |
 
 ### Queue tiers (GitLab)
 
@@ -107,6 +108,35 @@ completes. Read the results:
 swamp data get report-@webframp/operator-briefing --markdown
 swamp data get report-@webframp/operator-briefing-json --json
 ```
+
+The packaged `@webframp/daily-briefing-typesafe` workflow fetches GitLab, then
+invokes `triage_batch` on a compact projection. Install it with the package and
+run it with the GitLab output data name for the operator, for example
+`--input queueDataName=sescriva`. Its triage step is guarded for an empty queue
+and `allowFailure: true`, so factual data and the briefing report survive a
+TypeSafe outage.
+
+### TypeSafe interpretation and batch triage
+
+Use TypeSafe only after source models have fetched the facts. Pass a compact,
+redacted CEL projection to `ask` or `triage_batch`; TypeSafe classifies that
+state and never writes to an external system. Every downstream action remains
+draft-first and requires human confirmation.
+
+`triage_batch` extends `@swamp/typesafe-ai` with bounded fan-out. It writes one
+`triage-batch-<name>` resource containing only `{ id, answers }`, a SHA-256
+fingerprint of the compact queue, aggregate usage, and bounded failure
+records—never raw MR state or question text. The consumer must compare that
+fingerprint with its current compact queue, discards a mismatch or any partial
+batch, and otherwise uses the verified scores only to prioritize existing
+factual queue items. It never hides an item or takes an external action.
+
+For a typed verdict, define explicit criteria and an action threshold. A
+three-level `score` rubric conventionally maps to routine / review-this-week /
+act-today; a `noul` probability below the defined threshold is not an action.
+If a TypeSafe `ask` step fails, this report emits a degraded
+"interpretation unavailable" signal while preserving the underlying factual
+signals.
 
 ## Troubleshooting
 

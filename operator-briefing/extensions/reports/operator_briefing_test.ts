@@ -3,7 +3,7 @@
 
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import { createReportTestContext } from "@swamp-club/swamp-testing";
-import { report } from "./operator_briefing.ts";
+import { queueFingerprint, report } from "./operator_briefing.ts";
 
 // deno-lint-ignore no-explicit-any
 type Any = any;
@@ -2101,6 +2101,162 @@ Deno.test("jev noul-only below 0.5 -> ok, single headline", async () => {
   const sig = (json.ops as Any[]).find((o) => o.source === "jev");
   assertEquals(sig.severity, "ok");
   assertEquals(sig.detail, "some_q 20%");
+});
+
+Deno.test("jev security verdict includes mapped account evidence without leaking its id", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "resolve_accounts", ["accounts"]),
+    makeStep(JEV, "jev", "ask", ["evaluation-security-posture"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "accounts", {
+      accounts: [{ id: "123456789012", name: "security-platform" }],
+      count: 1,
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+    makeArtifact(JEV, "jev", "evaluation-security-posture", {
+      state: {
+        newCount: 1,
+        newFindings: [{ severity: "CRITICAL", accountId: "123456789012" }],
+      },
+      answers: {
+        needs_attention: { type: "noul", noul: 0.95 },
+        severity: {
+          type: "score",
+          score: 2,
+          legend: { "0": "Routine", "1": "Review", "2": "Act today" },
+        },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const sig = (result.json as Any).ops.find((o: Any) =>
+    o.label === "verdict:security-posture"
+  );
+  assertEquals(sig.severity, "critical");
+  assertStringIncludes(sig.detail, "1 new finding(s): 1 critical, 0 high");
+  assertStringIncludes(sig.detail, "affected security-platform");
+  assertEquals(sig.detail.includes("123456789012"), false);
+  assertEquals(result.markdown.includes("123456789012"), false);
+});
+
+Deno.test("missing TypeSafe output degrades the verdict without hiding facts", async () => {
+  const steps = [{ ...makeStep(JEV, "jev", "ask", []), status: "failed" }];
+  const result = await report.execute(createContext(steps) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.source === "jev");
+  assertEquals(sig.degraded, true);
+  assertStringIncludes(sig.detail, "interpretation unavailable");
+  assertEquals(json.degraded, true);
+});
+
+Deno.test("skipped TypeSafe batch triage is an expected empty-queue outcome", async () => {
+  const steps = [{
+    ...makeStep(JEV, "jev", "triage_batch", []),
+    status: "skipped",
+  }];
+  const result = await report.execute(createContext(steps) as Any);
+  const json = result.json as Any;
+  assertEquals((json.ops as Any[]).some((o) => o.source === "jev"), false);
+  assertEquals(json.degraded, false);
+});
+
+Deno.test("partial TypeSafe batch warns that deterministic queue ordering is used", async () => {
+  const steps = [makeStep(JEV, "jev", "triage_batch", ["triage-batch-daily"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "triage-batch-daily", {
+      sourceFingerprint: "queue-20260924-abcdef",
+      results: [{ id: "group/project!1", answers: {} }],
+      failures: [{ id: "group/project!2", reason: "evaluation unavailable" }],
+      model: "jev-latest",
+      totalInputTokens: 12,
+      totalOutputTokens: 3,
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "review-triage");
+  assertEquals(sig.degraded, true);
+  assertStringIncludes(sig.detail, "deterministic queue ordering used");
+});
+
+Deno.test("verified TypeSafe batch prioritizes only its matching queue snapshot", async () => {
+  const reviewing = [
+    {
+      project: "grp/proj",
+      iid: 1,
+      reference: "grp/proj!1",
+      title: "Lower priority",
+      author: "bob",
+      updatedAt: daysAgo(4),
+      draft: false,
+      labels: [],
+      approvedByMe: false,
+      myReviewState: "pending",
+    },
+    {
+      project: "grp/proj",
+      iid: 2,
+      reference: "grp/proj!2",
+      title: "Higher priority",
+      author: "alice",
+      updatedAt: hoursAgo(1),
+      draft: false,
+      labels: [],
+      approvedByMe: false,
+      myReviewState: "pending",
+    },
+  ];
+  const fingerprint = await queueFingerprint(reviewing);
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["operator"]),
+    makeStep(JEV, "jev", "triage_batch", ["triage-batch-daily"]),
+  ];
+  const artifacts = [
+    makeArtifact(GITLAB, "gitlab", "operator", dashboard({ reviewing })),
+    makeArtifact(JEV, "jev", "triage-batch-daily", {
+      sourceFingerprint: fingerprint,
+      results: [
+        { id: "grp/proj!1", answers: { urgency: { type: "score", score: 0 } } },
+        { id: "grp/proj!2", answers: { urgency: { type: "score", score: 2 } } },
+      ],
+      failures: [],
+      model: "jev-latest",
+      totalInputTokens: 1,
+      totalOutputTokens: 1,
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(
+    json.tiers.waitingOnYou.map((item: Any) => item.reference),
+    ["grp/proj!2", "grp/proj!1"],
+  );
+  assertEquals(json.degraded, false);
+});
+
+Deno.test("mismatched TypeSafe batch keeps deterministic factual ordering", async () => {
+  const steps = [makeStep(JEV, "jev", "triage_batch", ["triage-batch-daily"])];
+  const artifacts = [
+    makeArtifact(JEV, "jev", "triage-batch-daily", {
+      sourceFingerprint: "sha256-another-snapshot",
+      results: [],
+      failures: [],
+      model: "jev-latest",
+      totalInputTokens: 1,
+      totalOutputTokens: 1,
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const sig = (result.json as Any).ops.find((item: Any) =>
+    item.label === "review-triage"
+  );
+  assertEquals(sig.degradedReason, "source fingerprint mismatch");
 });
 
 Deno.test("securityhub: account_map + unknown shape still flags the unknown", async () => {

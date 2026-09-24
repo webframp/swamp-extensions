@@ -3,7 +3,7 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/reports/*.ts extensions/models/metrics/metrics.ts",
+    "check": "deno check extensions/reports/*.ts extensions/models/metrics/metrics.ts extensions/models/typesafe_triage.ts",
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",

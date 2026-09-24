@@ -106,10 +106,28 @@ export interface Contribution {
 }
 
 /**
+ * Read-only enrichment shared by normalizers for one briefing run.
+ *
+ * Account identifiers never leave this map. Normalizers may use it to render a
+ * friendly account name, but must omit an unmapped identifier rather than
+ * falling back to the raw value.
+ */
+export interface NormalizerContext {
+  accountNames: ReadonlyMap<string, string>;
+  /** Fingerprint of this run's compact GitLab queue, when present. */
+  triageFingerprint?: string;
+  /** Verified TypeSafe answers, keyed by MR reference, used only for ordering. */
+  triageAnswers?: Map<string, Record<string, unknown>>;
+}
+
+/**
  * A normalizer turns the parsed data resources of one workflow step into a
  * `Contribution`. Registered by `modelType` in the registry.
  */
-export type Normalizer = (inputs: SourceInput[]) => Contribution;
+export type Normalizer = (
+  inputs: SourceInput[],
+  context?: NormalizerContext,
+) => Contribution;
 
 /** Human-readable heading per tier. */
 export const TIER_LABELS: Record<Tier, string> = {

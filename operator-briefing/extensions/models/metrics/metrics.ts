@@ -197,7 +197,7 @@ type AppendArgs = {
 /** Durable append-only time-series accumulator for operator-briefing trends. */
 export const model = {
   type: "@webframp/operator-briefing/metrics",
-  version: "2026.09.23.1",
+  version: "2026.09.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -276,6 +276,12 @@ export const model = {
       toVersion: "2026.09.23.1",
       description:
         "No schema changes — report normalizers gained ECR, Kiro usage, GitLab logs, TypeSafe verdict, Security Hub diff/account-map, and cost comparison/drivers support; the metrics model is unchanged.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.24.1",
+      description:
+        "No metrics schema changes — added TypeSafe batch-triage and evidence-backed report handling.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
