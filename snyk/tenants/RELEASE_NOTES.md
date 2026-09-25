@@ -1,4 +1,6 @@
-## 2026.09.18.1
+## 2026.09.25.1
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Added:** Tenant member listings can be filtered by `account_type` (`user` or
+`service`).
+
+**Fixed:** Dynamic path identifiers are percent-encoded before API requests.
