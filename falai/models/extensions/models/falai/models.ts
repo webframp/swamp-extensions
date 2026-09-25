@@ -183,6 +183,7 @@ const GetUsageItemSchema = z.object({
     cost: z.number().min(0).optional(),
     currency: z.string().min(3).max(3).optional(),
     auth_method: z.string().optional(),
+    tags: z.record(z.string(), z.string()).optional(),
     auth_method_structured: z.object({
       detail: z.string().optional(),
       api_key_id: z.string().optional(),
@@ -295,6 +296,9 @@ const GetBillingEventsItemSchema = z.object({
   }).optional().describe(
     "Structured authentication method identity. Only populated when 'auth_method_structured' is includ...",
   ),
+  tags: z.record(z.string(), z.string()).optional().describe(
+    "Activated X-Fal-Tags key/values set on this request. Only populated when source=tagged-billed; a ...",
+  ),
 }).passthrough();
 
 const GetBillingEventsSchema = z.object({
@@ -399,7 +403,7 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.09.18.1",
+  version: "2026.09.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -447,6 +451,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -826,6 +835,9 @@ export const model = {
         bound_to_timeframe: z.enum(["true", "false"]).optional().describe(
           "Whether to adjust start/end dates to align with timeframe boundaries and use exclusive end. Defaults to true. When true, dates are aligned to the start of the timeframe period (e.g., start of day) and end is made exclusive (e.g., start of next day). When false, uses exact dates provided.",
         ),
+        source: z.enum(["estimate", "tagged-estimate"]).optional().describe(
+          "Data source. 'estimate' is the default usage estimate. 'tagged-estimate' reads the tagged aggregate instead, populating each row's 'tags' and enabling the 'tag' filter; it requires tagged reporting to be enabled for the account, and recent usage is delayed relative to 'estimate'.",
+        ),
         endpoint_id: z.union([z.string(), z.array(z.string())]).optional()
           .describe(
             "Filter by specific endpoint ID(s). Accepts 1-50 endpoint IDs. Supports comma-separated values: ?endpoint_id=model1,model2 or array syntax: ?endpoint_id=model1&endpoint_id=model2",
@@ -838,6 +850,9 @@ export const model = {
           .describe(
             "Filter by team member login username(s) (nickname). Accepts 1-50 usernames. Supports comma-separated values: ?login_username=alice,bob or array syntax: ?login_username=alice&login_username=bob",
           ),
+        tag: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Filter by X-Fal-Tags 'key=value' pairs. Accepts 1-10 filters: different keys are AND-combined (?tag=env=prod&tag=team=design), and repeating a key matches any of its values. Use the value '(untagged)' to match requests that did not set the key.",
+        ),
         expand: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Data to include in the response. Use 'time_series' for time-bucketed data, 'summary' for aggregate statistics, 'auth_method' to include a formatted authentication method label, and 'auth_method_structured' to include a machine-readable auth method object (detail, api_key_id, login_username). At least one of 'time_series' or 'summary' is required.",
         ),
@@ -1022,6 +1037,9 @@ export const model = {
         ]).optional().describe(
           "End date in ISO8601 format, exclusive (e.g., '2025-02-01T00:00:00Z' or '2025-02-01'). Data up to but not including this timestamp is returned. Defaults to current time.",
         ),
+        source: z.enum(["billed", "tagged-billed"]).optional().describe(
+          "Data source. 'billed' is the default billed-event feed. 'tagged-billed' reads the tagged billing-event pivot instead, populating each row's 'tags' and enabling the 'tag' filter; it requires tagged reporting to be enabled for the account, and recent events are delayed relative to 'billed'.",
+        ),
         endpoint_id: z.union([z.string(), z.array(z.string())]).optional()
           .describe(
             "Filter by specific endpoint ID(s). Accepts 1-50 endpoint IDs. Supports comma-separated values: ?endpoint_id=model1,model2 or array syntax: ?endpoint_id=model1&endpoint_id=model2",
@@ -1030,6 +1048,9 @@ export const model = {
           .describe(
             "Filter by specific request ID(s). Accepts 1-50 request IDs. Supports comma-separated values: ?request_id=req1,req2 or array syntax: ?request_id=req1&request_id=req2",
           ),
+        tag: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Filter by X-Fal-Tags 'key=value' pairs. Accepts 1-10 filters: different keys are AND-combined (?tag=env=prod&tag=team=design), and repeating a key matches any of its values. Use the value '(untagged)' to match requests that did not set the key.",
+        ),
         api_key_id: z.union([z.string(), z.array(z.string())]).optional()
           .describe(
             "Filter by specific API key ID(s). Accepts 1-50 key IDs. Supports comma-separated values: ?api_key_id=key1,key2 or array syntax: ?api_key_id=key1&api_key_id=key2",

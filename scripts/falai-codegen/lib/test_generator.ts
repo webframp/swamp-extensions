@@ -246,7 +246,10 @@ function generateExecutionTest(
   }
 
   if (method.type === "create") {
-    const createArgs = buildFinalTestArgs(method, generateRequestFixture(method));
+    const createArgs = buildFinalTestArgs(
+      method,
+      generateRequestFixture(method),
+    );
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
   sanitizeResources: false,
