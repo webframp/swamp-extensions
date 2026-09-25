@@ -304,6 +304,26 @@ All changes go through pull requests — no direct pushes to main.
 
 **New extensions**: When adding a new extension, update the root `README.md` — add it to the appropriate table, the install commands section, and any relevant usage examples.
 
+## Operational Workspace and Code Generation
+
+- This repository is **not** a root Swamp repo. Do not run `swamp repo init` at
+  the repository root or add a root `.swamp.yaml`; root `.swamp/` state is
+  local-only and ignored. Use `/home/sme/src/disciplines/devsecops` for
+  operational models, workflows, and the `pr-factory` tracker.
+- Run `pr-factory` commands from that DevSecOps workspace, then perform Git and
+  GitHub operations from this checkout. A `pr-factory` invocation in this
+  repository is rejected because it has no root `.swamp.yaml`.
+- FAL AI codegen: start on a branch, run from `scripts/falai-codegen`, and
+  scope regeneration when possible: `deno task generate -- --service <name>`.
+  If an existing extension changes, regeneration intentionally refuses to
+  overwrite `RELEASE_NOTES.md` without an accurate user-facing note; rerun with
+  `--notes "..."` (or `--notes-file`), never an initial-release placeholder.
+  Do not hand-edit generated model files; regenerate, then validate both the
+  generator (`check`, `lint`, `fmt:check`, `test`) and the affected extension.
+- Deno validation may refresh an extension's `deno.lock` even when its pinned
+  source imports are unchanged. Inspect that diff; commit it when it is the
+  lockfile's normal resolution update for the validated extension.
+
 ## Publishing
 
 CI auto-publishes when `manifest.yaml` changes land on main and CI passes. The publish workflow triggers only after a successful CI run — it will not publish broken code. Do not push extensions locally — always open a PR and let CI handle publishing via `swamp extension push manifest.yaml --yes`.
