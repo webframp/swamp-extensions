@@ -45,6 +45,34 @@ export interface QueueItem {
   effort?: number;
   draft?: boolean;
   actionHint: string;
+  /**
+   * jev (`@swamp/typesafe-ai`) enrichment, attached by the report after
+   * normalizers run. ADVISORY AND ADDITIVE ONLY: these fields are rendered next
+   * to the deterministic facts but NEVER reorder the queue or change a tier.
+   * Absent when no jev grade exists for this item (the common case).
+   *
+   * jev judges only the item's described content (an MR's visible fields, an
+   * issue's subject + description) — never tracker/priority/author/date
+   * metadata. The report join renders the answers; it does not re-introduce
+   * metadata into the judgment.
+   */
+  jev?: {
+    /** MR review recommendation (from `triage_reviews`). */
+    recommendation?: { choice: string; confidence: number };
+    /** Renovate held-back bump-risk grade (from `renovate_grade`). */
+    bumpRisk?: { score: number; confidence: number };
+    /** Redmine issue type (from `issue_assessment`). */
+    issueType?: { choice: string; confidence: number };
+    /** Redmine issue architectural domain (from `issue_assessment`). */
+    sourceDomain?: { choice: string; confidence: number };
+    /**
+     * Strict 0/1 probability that the issue text describes a specific,
+     * concrete improper-access mechanism. A noul — no confidence field. When
+     * >= 0.5, renderers surface it prominently as an explicit jev flag; it does
+     * NOT reorder or re-tier the item (operator decision, 2026-09-25).
+     */
+    describesVulnerability?: number;
+  };
 }
 
 /**
@@ -118,6 +146,16 @@ export interface NormalizerContext {
   triageFingerprint?: string;
   /** Verified TypeSafe answers, keyed by MR reference, used only for ordering. */
   triageAnswers?: Map<string, Record<string, unknown>>;
+  /**
+   * jev triage/grade/assessment answers keyed by item id (MR reference or
+   * `string(issue.id)`), collected from base `triage-*` resources for ADVISORY
+   * ATTACHMENT ONLY. The report joins these onto queue items as `QueueItem.jev`
+   * after normalizers run; they never feed ordering (distinct from
+   * `triageAnswers`, which the verified batch path uses for within-tier
+   * ordering). Each value is the raw `content.answers` map, partitioned by the
+   * caller on its answer-key set.
+   */
+  jevAnswers?: Map<string, Record<string, unknown>>;
 }
 
 /**
