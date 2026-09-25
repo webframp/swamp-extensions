@@ -839,12 +839,16 @@ function buildApiPath(path: string, scope: string): string {
 
   return path.replace(/\{([^}]+)\}/g, (_, name) => {
     if (primaryParam && name === primaryParam) {
-      return `\${${primaryVar}}`;
+      return `\${encodeURIComponent(${primaryVar})}`;
     }
     // Secondary scope params become args references
-    if (name === "org_id") return `\${args.org_id}`;
-    if (name === "group_id") return `\${args.group_id}`;
-    return `\${args.${sanitizeFieldName(name)}}`;
+    if (name === "org_id") {
+      return `\${encodeURIComponent(String(args.org_id))}`;
+    }
+    if (name === "group_id") {
+      return `\${encodeURIComponent(String(args.group_id))}`;
+    }
+    return `\${encodeURIComponent(String(args.${sanitizeFieldName(name)}))}`;
   });
 }
 
@@ -905,5 +909,18 @@ function escapeStr(s: string): string {
 
 function truncateStr(s: string): string {
   const oneLine = s.replace(/\s+/g, " ").trim();
-  return oneLine.length <= 80 ? oneLine : oneLine.slice(0, 77) + "...";
+  if (oneLine.length <= 80) return oneLine;
+
+  // Avoid emitting dangling fragments such as "whe..." in user-facing help.
+  // Prefer the last complete sentence in the normal display budget, then a
+  // whole-word truncation when there is no sentence boundary.
+  const bounded = oneLine.slice(0, 80);
+  const sentenceEnd = Math.max(
+    bounded.lastIndexOf("."),
+    bounded.lastIndexOf("!"),
+    bounded.lastIndexOf("?"),
+  );
+  if (sentenceEnd > 0) return bounded.slice(0, sentenceEnd + 1);
+  const wordEnd = bounded.lastIndexOf(" ");
+  return `${bounded.slice(0, wordEnd > 0 ? wordEnd : bounded.length)}...`;
 }

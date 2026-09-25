@@ -1027,7 +1027,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}`,
           version,
         );
 
@@ -1074,7 +1074,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}`,
           version,
           body,
         );
@@ -1118,7 +1118,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/connections/${args.connection_id}/integrations`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/integrations`,
           version,
           params,
         );
@@ -1185,7 +1189,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/connections/${args.connection_id}/orgs/${args.org_id}/integration`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/orgs/${encodeURIComponent(String(args.org_id))}/integration`,
           version,
           body,
         );
@@ -1230,7 +1238,13 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/connections/${args.connection_id}/orgs/${args.org_id}/integrations/${args.integration_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/orgs/${encodeURIComponent(String(args.org_id))}/integrations/${
+            encodeURIComponent(String(args.integration_id))
+          }`,
           version,
         );
 
@@ -1269,7 +1283,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/deployments`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/deployments`,
           version,
           params,
         );
@@ -1334,7 +1350,13 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/connections/${args.connection_id}/contexts`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/contexts`,
           version,
           params,
         );
@@ -1389,7 +1411,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/contexts/${args.context_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/contexts/${encodeURIComponent(String(args.context_id))}`,
           version,
         );
 
@@ -1442,7 +1468,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/contexts/${args.context_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/contexts/${encodeURIComponent(String(args.context_id))}`,
           version,
           body,
         );
@@ -1481,7 +1511,11 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/contexts/${args.context_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/contexts/${encodeURIComponent(String(args.context_id))}`,
           version,
         );
 
@@ -1532,7 +1566,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/contexts/${args.context_id}/integration`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/contexts/${
+            encodeURIComponent(String(args.context_id))
+          }/integration`,
           version,
           body,
         );
@@ -1572,7 +1612,13 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/contexts/${args.context_id}/integrations/${args.integration_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/contexts/${
+            encodeURIComponent(String(args.context_id))
+          }/integrations/${encodeURIComponent(String(args.integration_id))}`,
           version,
         );
 
@@ -1612,7 +1658,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments`,
           version,
           params,
         );
@@ -1673,7 +1723,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments`,
           version,
           body,
         );
@@ -1726,7 +1780,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${encodeURIComponent(String(args.deployment_id))}`,
           version,
           body,
         );
@@ -1765,7 +1823,11 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${encodeURIComponent(String(args.deployment_id))}`,
           version,
         );
 
@@ -1810,7 +1872,13 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections`,
           version,
           params,
         );
@@ -1879,7 +1947,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections`,
           version,
           body,
         );
@@ -1921,7 +1995,13 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections`,
           version,
         );
 
@@ -1957,7 +2037,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections/${args.connection_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections/${encodeURIComponent(String(args.connection_id))}`,
           version,
         );
 
@@ -2012,7 +2098,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections/${args.connection_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections/${encodeURIComponent(String(args.connection_id))}`,
           version,
           body,
         );
@@ -2052,7 +2144,13 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections/${args.connection_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections/${encodeURIComponent(String(args.connection_id))}`,
           version,
         );
 
@@ -2099,7 +2197,15 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections/${args.connection_id}/bulk_migration`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/bulk_migration`,
           version,
           params,
         );
@@ -2169,7 +2275,15 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/connections/${args.connection_id}/bulk_migration`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/connections/${
+            encodeURIComponent(String(args.connection_id))
+          }/bulk_migration`,
           version,
           body,
         );
@@ -2223,7 +2337,13 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/contexts`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/contexts`,
           version,
           params,
         );
@@ -2292,7 +2412,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/contexts`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/contexts`,
           version,
           body,
         );
@@ -2344,7 +2470,13 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/credentials`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/credentials`,
           version,
           params,
         );
@@ -2413,7 +2545,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/credentials`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/credentials`,
           version,
           body,
         );
@@ -2456,7 +2594,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/credentials/${args.credential_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/credentials/${encodeURIComponent(String(args.credential_id))}`,
           version,
         );
 
@@ -2507,7 +2651,13 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/credentials/${args.credential_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/credentials/${encodeURIComponent(String(args.credential_id))}`,
           version,
           body,
         );
@@ -2547,7 +2697,13 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/brokers/installs/${args.install_id}/deployments/${args.deployment_id}/credentials/${args.credential_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/brokers/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/deployments/${
+            encodeURIComponent(String(args.deployment_id))
+          }/credentials/${encodeURIComponent(String(args.credential_id))}`,
           version,
         );
 
@@ -2565,13 +2721,13 @@ export const model = {
           "RSQL filter expression for filtering results. See schema for full documentation.",
         ),
         sort: z.string().optional().describe(
-          "Comma-separated sort fields. Prefix with `-` for descending order. **Supporte...",
+          "Comma-separated sort fields. Prefix with `-` for descending order.",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
         meta_count: z.enum(["with", "only"]).optional().describe(
-          "Provide summary count in the response meta object when requested. When `with`...",
+          "Provide summary count in the response meta object when requested.",
         ),
       }),
       execute: async (
@@ -2598,7 +2754,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets`,
           version,
           params,
         );
@@ -2654,7 +2812,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/inventory/assets`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets`,
           version,
           body,
         );
@@ -2700,7 +2860,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/filters`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/filters`,
           version,
           params,
         );
@@ -2735,10 +2897,10 @@ export const model = {
       arguments: z.object({
         tenant_id: z.string().describe("The unique identifier of the tenant"),
         filter_id: z.string().describe(
-          "The UUID of the filter field to get values for (from the filter fields list e...",
+          "The UUID of the filter field to get values for (from the filter fields list...",
         ),
         q: z.string().optional().describe(
-          "Full text search term to filter the list of values. If keys_only is true, thi...",
+          "Full text search term to filter the list of values.",
         ),
         keys_only: z.boolean().optional().describe(
           "Return only the keys of the object filter values",
@@ -2771,7 +2933,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/filters/${args.filter_id}/values`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/filters/${
+            encodeURIComponent(String(args.filter_id))
+          }/values`,
           version,
           params,
         );
@@ -2833,7 +2999,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/groups`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/groups`,
           version,
           params,
         );
@@ -2868,22 +3036,22 @@ export const model = {
       arguments: z.object({
         tenant_id: z.string().describe("The unique identifier of the tenant"),
         group_field_id: z.string().describe(
-          "The UUID of the group field to get values for (from the group fields list end...",
+          "The UUID of the group field to get values for (from the group fields list...",
         ),
         asset_types: z.string().optional().describe(
           "Comma-separated list of asset types to filter the aggregation",
         ),
         filter: z.string().optional().describe(
-          "RSQL filter expression for filtering which assets are included in aggregation...",
+          "RSQL filter expression for filtering which assets are included in aggregation.",
         ),
         sort: z.string().optional().describe(
-          "Comma-separated sort fields for group values. Prefix with `-` for descending ...",
+          "Comma-separated sort fields for group values.",
         ),
         meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified. Ava...",
+          "Meta fields to include in the response. Multiple fields can be specified.",
         ),
         aggregate: z.string().optional().describe(
-          "Per-field aggregate function override for meta fields. All fields default to ...",
+          "Per-field aggregate function override for meta fields.",
         ),
       }),
       execute: async (
@@ -2910,7 +3078,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/groups/${args.group_field_id}/values`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/groups/${
+            encodeURIComponent(String(args.group_field_id))
+          }/values`,
           version,
           params,
         );
@@ -2978,7 +3150,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/inventory/assets/searches`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/searches`,
           version,
           body,
         );
@@ -3004,10 +3178,10 @@ export const model = {
           "The unique identifier of the search operation",
         ),
         sort: z.string().optional().describe(
-          "Comma-separated sort fields. Prefix with `-` for descending order. **Supporte...",
+          "Comma-separated sort fields. Prefix with `-` for descending order.",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -3034,7 +3208,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/searches/${args.search_id}/results`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/searches/${
+            encodeURIComponent(String(args.search_id))
+          }/results`,
           version,
           params,
         );
@@ -3070,7 +3248,7 @@ export const model = {
         tenant_id: z.string().describe("The unique identifier of the tenant"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -3102,7 +3280,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}/inventory/assets/${args.asset_id}${qs}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/${encodeURIComponent(String(args.asset_id))}${qs}`,
           version,
         );
 
@@ -3146,7 +3326,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/inventory/assets/${args.asset_id}`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/${encodeURIComponent(String(args.asset_id))}`,
           version,
           body,
         );
@@ -3166,10 +3348,10 @@ export const model = {
         tenant_id: z.string().describe("The unique identifier of the tenant"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         canonical: z.enum(["with", "only", "none"]).optional().describe(
-          "Filter projects by canonical status. - `with`: Returns all projects (canonica...",
+          "Filter projects by canonical status.",
         ),
         target_id: z.string().optional().describe(
-          "Filter projects by target ID. When provided, returns only projects that belon...",
+          "Filter projects by target ID.",
         ),
         sort: z.enum([
           "snapshot_created_at",
@@ -3177,7 +3359,7 @@ export const model = {
           "issues",
           "-issues",
         ]).optional().describe(
-          "Sort field with optional direction prefix. Prefix with `-` for descending ord...",
+          "Sort field with optional direction prefix. Prefix with `-` for descending order.",
         ),
       }),
       execute: async (
@@ -3204,7 +3386,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/${args.asset_id}/relationships/projects`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/projects`,
           version,
           params,
         );
@@ -3264,7 +3450,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/inventory/assets/${args.asset_id}/relationships/targets`,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/targets`,
           version,
           params,
         );
@@ -3327,7 +3517,7 @@ export const model = {
           "Filter the response for results only with the specified role.",
         ),
         account_type: z.enum(["user", "service"]).optional().describe(
-          'Filter the response by the account type of the member. Defaults to "user" whe...',
+          "Filter the response by the account type of the member.",
         ),
       }),
       execute: async (
@@ -3354,7 +3544,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/memberships`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/memberships`,
           version,
           params,
         );
@@ -3417,7 +3607,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/memberships/${args.membership_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/memberships/${
+            encodeURIComponent(String(args.membership_id))
+          }`,
           version,
           body,
         );
@@ -3458,7 +3650,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/memberships/${args.membership_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/memberships/${
+            encodeURIComponent(String(args.membership_id))
+          }`,
           version,
         );
 
@@ -3475,7 +3669,7 @@ export const model = {
           "Whether role is custom or not.",
         ),
         assignable_by_me: z.string().optional().describe(
-          "When true, only return roles that the current user can assign to others in th...",
+          "When true, only return roles that the current user can assign to others in the...",
         ),
         expand_permissions: z.boolean().optional().describe(
           "option to show all permission types",
@@ -3505,7 +3699,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/tenants/${args.tenant_id}/roles`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles`,
           version,
           params,
         );
@@ -3565,7 +3759,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/tenants/${args.tenant_id}/roles`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles`,
           version,
           body,
         );
@@ -3617,7 +3811,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/tenants/${args.tenant_id}/roles/${args.role_id}${qs}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles/${
+            encodeURIComponent(String(args.role_id))
+          }${qs}`,
           version,
         );
 
@@ -3669,7 +3865,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/tenants/${args.tenant_id}/roles/${args.role_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles/${
+            encodeURIComponent(String(args.role_id))
+          }`,
           version,
           body,
         );
@@ -3708,7 +3906,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/tenants/${args.tenant_id}/roles/${args.role_id}`,
+          `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles/${
+            encodeURIComponent(String(args.role_id))
+          }`,
           version,
         );
 

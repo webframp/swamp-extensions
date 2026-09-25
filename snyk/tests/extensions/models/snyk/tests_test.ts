@@ -414,6 +414,112 @@ Deno.test({
 });
 
 Deno.test({
+  name: "tests model: list_findings fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "cause_of_failure": true,
+        "component_key": {},
+        "description": "test-value",
+        "evidence": [{
+          "path": [{ "name": "my-app:1.0.0", "version": "log4j:2.4.1" }],
+          "source": "dependency_path",
+        }],
+        "finding_type": {},
+        "key": "test-value",
+        "locations": [],
+        "policy_modifications": [],
+        "problems": [{ "id": "CWE-943", "source": "cwe" }, {
+          "default_configuration": { "severity": "high" },
+          "help": { "markdown": "help text goes here" },
+          "id": "javascript/NoSqli",
+          "name": "NoSqli",
+          "properties": {
+            "categories": ["Security"],
+            "cwe": ["CWE-943"],
+            "example_commit_descriptions": [],
+            "example_commit_fixes": [],
+            "precision": "very-high",
+            "repo_dataset_size": 30,
+            "tags": ["javascript", "NoSqli"],
+          },
+          "short_description": { "text": "NoSQL Injection" },
+          "source": "snyk_code_rule",
+        }],
+        "rating": { "severity": null },
+        "risk": { "risk_score": null },
+        "suppression": {
+          "created_at": "2024-01-01T00:00:00Z",
+          "expires_at": "2024-01-01T00:00:00Z",
+          "justification": "test-value",
+          "path": [],
+          "policy": null,
+          "skipIfFixable": true,
+          "status": null,
+        },
+        "title": "test-value",
+        "asset_id": "test-value",
+        "fix_id": "test-value",
+        "org_id": "test-value",
+        "policy_id": "test-value",
+        "project_id": "test-value",
+        "test_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/tests/test-id-123/findings": { data: [mockItem], isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: { id: "test-id", name: "test-tests", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_findings.execute({ "test_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/tests/test-id-123/findings");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "findings");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "tests model: create_test surfaces API errors",
   sanitizeResources: false,
   fn: async () => {

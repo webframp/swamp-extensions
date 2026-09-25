@@ -545,7 +545,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/tests`,
+          `/orgs/${encodeURIComponent(orgId)}/tests`,
           version,
           body,
         );
@@ -583,7 +583,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/tests/${args.test_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/tests/${
+            encodeURIComponent(String(args.test_id))
+          }`,
           version,
         );
 
@@ -630,7 +632,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/tests/${args.test_id}/components/${args.component_id}/findings`,
+          `/orgs/${encodeURIComponent(orgId)}/tests/${
+            encodeURIComponent(String(args.test_id))
+          }/components/${
+            encodeURIComponent(String(args.component_id))
+          }/findings`,
           version,
           params,
         );
@@ -691,7 +697,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/tests/${args.test_id}/findings`,
+          `/orgs/${encodeURIComponent(orgId)}/tests/${
+            encodeURIComponent(String(args.test_id))
+          }/findings`,
           version,
           params,
         );

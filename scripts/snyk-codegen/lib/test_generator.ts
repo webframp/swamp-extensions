@@ -117,10 +117,19 @@ export function generateTestSource(
   lines.push(generateMockServer());
   lines.push(``);
 
-  // One execution test per method type
+  // Cover two distinct list methods: this retains baseline list-path coverage
+  // when a service gains a second list contract, while keeping generated suites
+  // bounded for services with many list endpoints. For the remaining method
+  // types, one representative execution test is sufficient.
   const testedTypes = new Set<string>();
+  let listTests = 0;
   for (const method of methods) {
-    if (testedTypes.has(method.type)) continue;
+    if (method.type === "list") {
+      if (listTests >= 2) continue;
+      listTests++;
+    } else if (testedTypes.has(method.type)) {
+      continue;
+    }
     testedTypes.add(method.type);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);

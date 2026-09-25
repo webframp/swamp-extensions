@@ -400,6 +400,76 @@ Deno.test({
 
 Deno.test({
   name:
+    "tenants model: get_broker_connection_integrations fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {},
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/tenants/test-id-123/brokers/connections/test-id-123/integrations": {
+        data: [mockItem],
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_broker_connection_integrations.execute({
+        "tenant_id": "test-id-123",
+        "connection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(
+        req0.path,
+        "/tenants/test-id-123/brokers/connections/test-id-123/integrations",
+      );
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "get_broker_connection_integrations");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "tenants model: create_broker_connection_integration creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
