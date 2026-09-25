@@ -1,4 +1,7 @@
-## 2026.09.18.1
+## 2026.09.25.1
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Added:** Usage insights and billing events support tagged reporting through
+new `source` selectors and `tag` filters.
+
+**Changed:** Tagged reporting responses now expose the request tag key/value map
+when returned by fal.ai.
