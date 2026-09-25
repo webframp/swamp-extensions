@@ -1,3 +1,10 @@
+## 2026.09.24.2
+
+**Fixed:** The packaged TypeSafe briefing workflow now preserves the CEL
+projection for `triage_batch` as an array-valued input. Previously YAML's
+folded scalar form coerced the projection to a string, so queue collection
+succeeded but TypeSafe triage failed input validation.
+
 ## 2026.09.24.1
 
 **Added:** `triage_batch`, an extension method on `@swamp/typesafe-ai` for

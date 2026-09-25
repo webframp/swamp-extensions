@@ -50,8 +50,7 @@ jobs:
           inputs:
             name: daily
             concurrency: 4
-            items: >-
-              ${{ data.latest(inputs.gitlabModel, inputs.queueDataName).attributes.reviewing.map(m, {"id": m.reference, "state": {"reference": m.reference, "title": m.title, "updatedAt": m.updatedAt, "draft": m.draft, "labels": m.labels, "approvedByMe": m.approvedByMe, "myReviewState": m.myReviewState}}) }}
+            items: '${{ data.latest(inputs.gitlabModel, inputs.queueDataName).attributes.reviewing.map(m, {"id": m.reference, "state": {"reference": m.reference, "title": m.title, "updatedAt": m.updatedAt, "draft": m.draft, "labels": m.labels, "approvedByMe": m.approvedByMe, "myReviewState": m.myReviewState } }) }}'
             questions:
               reply_needed:
                 type: noul
