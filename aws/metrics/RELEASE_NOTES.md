@@ -1,3 +1,7 @@
+## 2026.09.24.2
+
+**Changed:** Bump @aws-sdk/* 3.1133.0 → 3.1139.0 (2 packages)
+
 ## 2026.09.24.1
 
 **Added:** `get_metric_data` method. Same arguments as `get_data` plus optional

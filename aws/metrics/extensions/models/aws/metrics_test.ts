@@ -7,7 +7,7 @@ import {
   assertGreater,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1133.0";
+import { CloudWatchClient } from "npm:@aws-sdk/client-cloudwatch@3.1139.0";
 import { model } from "./metrics.ts";
 
 // =============================================================================

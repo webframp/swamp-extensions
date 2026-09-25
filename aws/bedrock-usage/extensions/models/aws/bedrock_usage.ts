@@ -14,8 +14,8 @@ import {
   CloudWatchClient,
   GetMetricDataCommand,
   ListMetricsCommand,
-} from "npm:@aws-sdk/client-cloudwatch@3.1133.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1133.0";
+} from "npm:@aws-sdk/client-cloudwatch@3.1139.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1139.0";
 
 const EXTENSION_NAME = "@webframp/aws/bedrock-usage";
 
@@ -313,7 +313,7 @@ async function getInvocations(
 /** AWS Bedrock token usage monitoring model. */
 export const model = {
   type: "@webframp/aws/bedrock-usage",
-  version: "2026.09.18.1",
+  version: "2026.09.24.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -401,6 +401,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.24.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
