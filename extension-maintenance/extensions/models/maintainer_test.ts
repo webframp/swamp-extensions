@@ -1,5 +1,11 @@
 import { assertEquals, assertMatch } from "@std/assert";
-import { model } from "./maintainer.ts";
+import {
+  compareVersions,
+  model,
+  parseQualityResult,
+  pickEligibleVersion,
+  publishedNpmVersions,
+} from "./maintainer.ts";
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/extension-maintenance/maintainer");
@@ -283,4 +289,151 @@ Deno.test("ApplyResultSchema accepts a real apply", () => {
     errors: [],
   });
   assertEquals(result.success, true);
+});
+
+Deno.test("globalArguments defaults min_dependency_age_hours to Deno's 24h", () => {
+  assertEquals(model.globalArguments.parse({}).min_dependency_age_hours, 24);
+  assertEquals(
+    model.globalArguments.safeParse({ min_dependency_age_hours: -1 }).success,
+    false,
+  );
+  assertEquals(
+    model.globalArguments.safeParse({ min_dependency_age_hours: 0 }).success,
+    true,
+  );
+});
+
+Deno.test("compareVersions orders numerically, not lexically", () => {
+  assertEquals(compareVersions("3.1140.0", "3.999.0") > 0, true);
+  assertEquals(compareVersions("3.1139.0", "3.1140.0") < 0, true);
+  assertEquals(compareVersions("0.20260923.37", "0.20260917.35") > 0, true);
+  assertEquals(compareVersions("4.6.5", "4.6.5"), 0);
+});
+
+Deno.test("pickEligibleVersion skips releases newer than the cutoff", () => {
+  const published = {
+    created: "2020-01-01T00:00:00Z",
+    modified: "2026-09-24T19:03:21Z",
+    "3.1138.0": "2026-09-22T20:00:00Z",
+    "3.1139.0": "2026-09-23T23:26:28Z",
+    "3.1140.0": "2026-09-24T19:03:21Z",
+  };
+  // The 2026-09-24 sweep ran at 20:07Z; a 24h window cuts off at 09-23 20:07Z.
+  const auditAt = Date.parse("2026-09-24T20:07:00Z");
+  assertEquals(
+    pickEligibleVersion(published, "3.1140.0", new Date(auditAt - 86_400_000)),
+    "3.1138.0",
+  );
+  // min_dependency_age_hours: 0 — cutoff is the audit time itself.
+  assertEquals(
+    pickEligibleVersion(published, "3.1140.0", new Date(auditAt)),
+    "3.1140.0",
+  );
+});
+
+Deno.test("pickEligibleVersion ignores prereleases and versions above latest", () => {
+  const published = {
+    "2.0.0": "2026-01-01T00:00:00Z",
+    "3.0.0-beta.1": "2026-01-02T00:00:00Z",
+    "3.0.0": "2026-01-03T00:00:00Z",
+  };
+  const cutoff = new Date("2026-06-01T00:00:00Z");
+  assertEquals(pickEligibleVersion(published, "2.0.0", cutoff), "2.0.0");
+  assertEquals(pickEligibleVersion(published, null, cutoff), "3.0.0");
+  assertEquals(
+    pickEligibleVersion(published, "3.0.0", new Date("2025-01-01T00:00:00Z")),
+    null,
+  );
+});
+
+Deno.test("parseQualityResult applies CI's pass condition", () => {
+  const ok = (stdout: string, stderr = "", success = true) =>
+    parseQualityResult({ stdout, stderr, success });
+
+  const pass = ok(
+    JSON.stringify({ status: "passed", percentage: 100, allPassed: true }),
+  );
+  assertEquals(pass.passed, true);
+  assertEquals(pass.detail, null);
+
+  const partial = ok(JSON.stringify({ status: "passed", percentage: 95 }));
+  assertEquals(partial.passed, false);
+  assertEquals(partial.percentage, 95);
+
+  const notAll = ok(
+    JSON.stringify({ status: "passed", percentage: 100, allPassed: false }),
+  );
+  assertEquals(notAll.passed, false);
+
+  // The #450 failure: JSON error on stderr, nothing on stdout, non-zero exit.
+  const denoDoc = ok(
+    "",
+    JSON.stringify({
+      error: "deno doc --json failed: minimum dependency date",
+    }),
+    false,
+  );
+  assertEquals(denoDoc.passed, false);
+  assertMatch(denoDoc.detail ?? "", /deno doc --json failed/);
+
+  const garbage = ok("", "panic: something", false);
+  assertEquals(garbage.passed, false);
+  assertMatch(garbage.detail ?? "", /panic/);
+});
+
+Deno.test("compareVersions ranks a release above its prereleases and ignores build metadata", () => {
+  assertEquals(compareVersions("2.0.0", "2.0.0-rc.1") > 0, true);
+  assertEquals(compareVersions("2.0.0-rc.1", "2.0.0") < 0, true);
+  assertEquals(compareVersions("2.0.0-rc.2", "2.0.0-rc.1") > 0, true);
+  assertEquals(compareVersions("1.0.0+abc", "1.0.0"), 0);
+  // CalVer manifest pins.
+  assertEquals(compareVersions("2026.09.23.1", "2026.09.24.1") < 0, true);
+  assertEquals(compareVersions("2026.09.24.10", "2026.09.24.9") > 0, true);
+});
+
+Deno.test("publishedNpmVersions drops unpublished and deprecated versions", () => {
+  const published = publishedNpmVersions({
+    time: {
+      created: "2020-01-01T00:00:00Z",
+      "3.9.8": "2026-01-01T00:00:00Z",
+      "3.9.9": "2026-01-02T00:00:00Z", // unpublished: absent from versions
+      "3.9.10": "2026-01-03T00:00:00Z", // deprecated
+      "4.0.0": "2026-09-24T00:00:00Z",
+    },
+    versions: {
+      "3.9.8": {},
+      "3.9.10": { deprecated: "broken build" },
+      "4.0.0": {},
+    },
+  });
+  assertEquals(Object.keys(published).sort(), ["3.9.8", "4.0.0"]);
+  // 4.0.0 is too fresh, 3.9.9 and 3.9.10 cannot be pinned: 3.9.8 wins.
+  assertEquals(
+    pickEligibleVersion(published, "4.0.0", new Date("2026-06-01T00:00:00Z")),
+    "3.9.8",
+  );
+});
+
+Deno.test("parseQualityResult never crashes and never passes on stderr alone", () => {
+  const nullOut = parseQualityResult({
+    stdout: "null",
+    stderr: "",
+    success: true,
+  });
+  assertEquals(nullOut.passed, false);
+
+  // CI reads stdout only: a verdict printed solely to stderr is not a pass.
+  const stderrVerdict = parseQualityResult({
+    stdout: "",
+    stderr: JSON.stringify({ status: "passed", percentage: 100 }),
+    success: false,
+  });
+  assertEquals(stderrVerdict.passed, false);
+
+  const floatPct = parseQualityResult({
+    stdout: JSON.stringify({ status: "passed", percentage: 100.0 }),
+    stderr: "",
+    success: true,
+  });
+  assertEquals(floatPct.passed, true);
 });

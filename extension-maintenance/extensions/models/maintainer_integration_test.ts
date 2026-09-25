@@ -10,10 +10,12 @@
  *
  * @module
  */
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertRejects, assertStringIncludes } from "@std/assert";
 import {
+  appendUpgradeEntry,
   checkMetadataCoverage,
   computeModalPins,
+  maskCommentsAndStrings,
   model,
 } from "./maintainer.ts";
 
@@ -75,7 +77,11 @@ function mockContext(repoRoot: string, planData: Record<string, unknown>) {
 
   return {
     context: {
-      globalArgs: { repo_root: repoRoot, registry_timeout: 30 },
+      globalArgs: {
+        repo_root: repoRoot,
+        registry_timeout: 30,
+        min_dependency_age_hours: 24,
+      },
       writeResource: (
         specName: string,
         name: string,
@@ -260,8 +266,10 @@ Deno.test("apply-bump scopes npm updates by package prefix while preserving rele
 
 Deno.test("apply-bump includes test files in glob replacements", async () => {
   const { root, cleanup } = await createFixture({
-    sourceContent: `import { foo } from "npm:some-pkg@1.0.0";\n`,
-    testContent: `import { foo } from "npm:some-pkg@1.0.0";\n`,
+    // A pinned-specifier string, not an import: the glob replacement is
+    // exercised without `deno cache` needing the registry.
+    sourceContent: `export const pin = "some-pkg@1.0.0";\n`,
+    testContent: `export const pin = "some-pkg@1.0.0";\n`,
   });
 
   const plan = {
@@ -351,7 +359,12 @@ Deno.test("apply-bump reports an error and skips extensionsBumped when the writt
   };
 
   const { context, written } = mockContext(root, plan);
-  await model.methods["apply-bump"].execute({}, context);
+  // apply-bump persists current-apply, then fails the method on any error.
+  await assertRejects(
+    () => model.methods["apply-bump"].execute({}, context),
+    Error,
+    "apply-bump finished with 1 error(s)",
+  );
 
   const applyResult = written.find((w) => w.spec === "apply")
     ?.data as Record<string, unknown>;
@@ -551,7 +564,12 @@ Deno.test("apply-bump detects the relabel anti-pattern (previous entry destroyed
   };
 
   const { context, written } = mockContext(root, plan);
-  await model.methods["apply-bump"].execute({}, context);
+  // apply-bump persists current-apply, then fails the method on any error.
+  await assertRejects(
+    () => model.methods["apply-bump"].execute({}, context),
+    Error,
+    "apply-bump finished with 1 error(s)",
+  );
 
   const applyResult = written.find((w) => w.spec === "apply")
     ?.data as Record<string, unknown>;
@@ -718,4 +736,283 @@ const _meta = { durationMs: 1, collectedBy: "x", fetchedAt: "t" };
   assertEquals(cov.missing, []);
   await cleanup();
   void root;
+});
+
+Deno.test("apply-bump appends to a compact `}, {` upgrades array without breaking syntax", async () => {
+  // The @webframp/triage shape: the closing `]` shares a line with the last
+  // element's `}`. The old splice landed inside that element (SyntaxError).
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.2",
+  upgrades: [{
+    toVersion: "2026.01.01.1",
+    description: "initial",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.01.01.2",
+    description: "second",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
+};
+`,
+  });
+
+  const plan = {
+    plannedAt: "2026-07-27T00:00:00Z",
+    totalEntries: 1,
+    entries: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        currentVersion: "2026.01.01.2",
+        nextVersion: "2026.07.27.1",
+        changes: [
+          {
+            file: "extensions/**/*.ts",
+            find: 'version: "2026.01.01.2"',
+            replace: 'version: "2026.07.27.1"',
+            category: "source-version",
+          },
+        ],
+        upgradeInserts: [
+          {
+            file: "extensions/models/mod.ts",
+            toVersion: "2026.07.27.1",
+            description: "No schema changes",
+          },
+        ],
+        releaseNotes: "## 2026.07.27.1\n\n**Changed:** Bumped something.\n",
+      },
+    ],
+    skipped: [],
+  };
+
+  const { context, written } = mockContext(root, plan);
+  await model.methods["apply-bump"].execute({}, context);
+
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  assertEquals(applyResult.errors, []);
+  assertEquals(applyResult.extensionsBumped, 1);
+
+  // The file must still import and expose the full chain, in order.
+  const src = await Deno.readTextFile(`${extDir}/extensions/models/mod.ts`);
+  const mod = await import(
+    `data:text/typescript;base64,${btoa(unescape(encodeURIComponent(src)))}`
+  );
+  assertEquals(
+    mod.model.upgrades.map((u: { toVersion: string }) => u.toVersion),
+    ["2026.01.01.1", "2026.01.01.2", "2026.07.27.1"],
+  );
+
+  await cleanup();
+});
+
+Deno.test("appendUpgradeEntry handles multi-line, no-trailing-comma, and empty arrays", async () => {
+  for (
+    const body of [
+      `[\n    {\n      toVersion: "1",\n    },\n  ]`,
+      `[\n    {\n      toVersion: "1",\n    }\n  ]`,
+      `[{ toVersion: "1" }]`,
+      `[]`,
+    ]
+  ) {
+    const src = `export const model = {\n  upgrades: ${body},\n};\n`;
+    const out = appendUpgradeEntry(src, "2", "maintenance");
+    const mod = await import(
+      `data:text/typescript;base64,${btoa(unescape(encodeURIComponent(out)))}`
+    );
+    const versions = mod.model.upgrades.map((u: { toVersion: string }) =>
+      u.toVersion
+    );
+    assertEquals(versions[versions.length - 1], "2", `input: ${body}`);
+    assertEquals(versions.length, body === "[]" ? 1 : 2, `input: ${body}`);
+  }
+});
+
+/** Imports TypeScript source as a module (to inspect the real runtime value). */
+function importSource(src: string) {
+  return import(
+    `data:text/typescript;base64,${btoa(unescape(encodeURIComponent(src)))}`
+  );
+}
+
+Deno.test("appendUpgradeEntry ignores trailing comments and brackets in strings", async () => {
+  for (
+    const body of [
+      // Block comment after the last element: the old scan prepended `, `
+      // after `*/`, producing an array hole that fmt and lint accepted.
+      `[\n    { toVersion: "1", description: "x" }, /* first release */\n  ]`,
+      // Line comment after the last element.
+      `[\n    { toVersion: "1", description: "x" }, // note\n  ]`,
+      // Brackets inside a description string.
+      `[\n    { toVersion: "1", description: "fix ] and [ and }" },\n  ]`,
+    ]
+  ) {
+    const src = `export const model = {\n  upgrades: ${body},\n};\n`;
+    const out = appendUpgradeEntry(src, "2", "maintenance");
+    const mod = await importSource(out);
+    const chain = mod.model.upgrades as Array<{ toVersion: string }>;
+    // No holes: every element is a real entry.
+    assertEquals(chain.length, 2, `input: ${body}`);
+    assertEquals(chain.map((u) => u.toVersion), ["1", "2"], `input: ${body}`);
+  }
+});
+
+Deno.test("maskCommentsAndStrings preserves length and newlines", () => {
+  const src = `const a = "x]y"; // c ]\n/* [ */ const b = [1];\n`;
+  const masked = maskCommentsAndStrings(src);
+  assertEquals(masked.length, src.length);
+  assertEquals(masked.split("\n").length, src.split("\n").length);
+  assertEquals(masked.includes("x]y"), false);
+  assertEquals(masked.includes("[1]"), true);
+});
+
+/** One-entry plan that appends an upgrade entry to extensions/models/mod.ts. */
+function upgradeInsertPlan(currentVersion: string) {
+  return {
+    plannedAt: "2026-07-27T00:00:00Z",
+    totalEntries: 1,
+    entries: [
+      {
+        name: "@test/ext",
+        dir: "test-ext",
+        currentVersion,
+        nextVersion: "2026.07.27.1",
+        changes: [
+          {
+            file: "extensions/**/*.ts",
+            find: `version: "${currentVersion}"`,
+            replace: 'version: "2026.07.27.1"',
+            category: "source-version",
+          },
+        ],
+        upgradeInserts: [
+          {
+            file: "extensions/models/mod.ts",
+            toVersion: "2026.07.27.1",
+            description: "No schema changes",
+          },
+        ],
+        releaseNotes: "## 2026.07.27.1\n\n**Changed:** Bumped something.\n",
+      },
+    ],
+    skipped: [],
+  };
+}
+
+Deno.test("apply-bump leaves a file unchanged when the upgrade insert would not parse", async () => {
+  // Source that is already unparseable elsewhere: the insert cannot produce
+  // valid TypeScript, so it must be reported and never written.
+  const source = `export const model = {
+  version: "2026.01.01.1",
+  upgrades: [{
+    toVersion: "2026.01.01.1",
+    description: "initial",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
+  broken: (,
+};
+`;
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: source,
+  });
+  const { context, written } = mockContext(
+    root,
+    upgradeInsertPlan("2026.01.01.1"),
+  );
+  await assertRejects(
+    () => model.methods["apply-bump"].execute({}, context),
+    Error,
+    "apply-bump finished with 1 error(s)",
+  );
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  const errors = applyResult.errors as Array<{ error: string }>;
+  assertStringIncludes(errors[0].error, "file left unchanged");
+  const after = await Deno.readTextFile(`${extDir}/extensions/models/mod.ts`);
+  // Only the source-version find/replace touched it; no upgrade entry.
+  assertEquals(
+    after,
+    source.replace('version: "2026.01.01.1"', 'version: "2026.07.27.1"'),
+  );
+  await cleanup();
+});
+
+Deno.test("apply-bump appends to a model file the extension's fmt config excludes", async () => {
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: `export const model = {
+  version: "2026.01.01.1",
+  upgrades: [{
+    toVersion: "2026.01.01.1",
+    description: "initial",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
+};
+`,
+    denoJson: { imports: {}, fmt: { exclude: ["extensions/models/mod.ts"] } },
+  });
+  const { context, written } = mockContext(
+    root,
+    upgradeInsertPlan("2026.01.01.1"),
+  );
+  await model.methods["apply-bump"].execute({}, context);
+  const applyResult = written.find((w) => w.spec === "apply")
+    ?.data as Record<string, unknown>;
+  assertEquals(applyResult.errors, []);
+  const mod = await importSource(
+    await Deno.readTextFile(`${extDir}/extensions/models/mod.ts`),
+  );
+  assertEquals(
+    mod.model.upgrades.map((u: { toVersion: string }) => u.toVersion),
+    ["2026.01.01.1", "2026.07.27.1"],
+  );
+  await cleanup();
+});
+
+Deno.test("appendUpgradeEntry is not desynced by regex or template literals earlier in the file", async () => {
+  for (
+    const prefix of [
+      // From aws/support and aws/service-quotas: quotes inside a regex.
+      `export const redact = (s: string) => s.replace(/arn:aws[^\\s"']*/gi, "arn:***");\n`,
+      // From research-collector.
+      `export const re = /<category[^>]*term\\s*=\\s*"([^"]+)"/;\n`,
+      // A backtick inside a template-literal substitution.
+      'export const t = `a${"`"}b`;\n',
+    ]
+  ) {
+    const src = prefix +
+      `export const model = {\n  upgrades: [{\n    toVersion: "1",\n    description: "x",\n  }],\n};\n`;
+    const out = appendUpgradeEntry(src, "2", "maintenance");
+    const mod = await importSource(out);
+    assertEquals(
+      mod.model.upgrades.map((u: { toVersion: string }) => u.toVersion),
+      ["1", "2"],
+      `prefix: ${prefix}`,
+    );
+  }
+});
+
+Deno.test("appendUpgradeEntry does not splice into doc comments or strings that mention upgrades", async () => {
+  const src = `/** The chain lives in upgrades: [ ... ] below. */
+export const help = \`append to upgrades: [ {...} ]\`;
+export const model = {
+  upgrades: [{
+    toVersion: "1",
+    description: "x",
+  }],
+};
+`;
+  const out = appendUpgradeEntry(src, "2", "maintenance");
+  // Doc comment and string untouched; only the real array grew.
+  assertStringIncludes(
+    out,
+    "/** The chain lives in upgrades: [ ... ] below. */",
+  );
+  const mod = await importSource(out);
+  assertEquals(mod.help, "append to upgrades: [ {...} ]");
+  assertEquals(
+    mod.model.upgrades.map((u: { toVersion: string }) => u.toVersion),
+    ["1", "2"],
+  );
 });
