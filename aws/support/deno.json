@@ -23,6 +23,6 @@
     ]
   },
   "imports": {
-    "@swamp-club/swamp-testing": "jsr:@swamp-club/swamp-testing@0.20260917.35"
+    "@swamp-club/swamp-testing": "jsr:@swamp-club/swamp-testing@0.20260923.37"
   }
 }

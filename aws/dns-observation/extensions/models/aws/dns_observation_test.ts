@@ -7,8 +7,8 @@ import {
   assertMatch,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { Route53Client } from "npm:@aws-sdk/client-route-53@3.1133.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1133.0";
+import { Route53Client } from "npm:@aws-sdk/client-route-53@3.1139.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1139.0";
 import { model } from "./dns_observation.ts";
 
 // =============================================================================

@@ -5,8 +5,8 @@ import {
   assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
 import { assertDatastoreExportConformance } from "@swamp-club/swamp-testing";
-import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1133.0";
-import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1133.0";
+import { DynamoDBClient } from "npm:@aws-sdk/client-dynamodb@3.1139.0";
+import { DynamoDBDocumentClient } from "npm:@aws-sdk/lib-dynamodb@3.1139.0";
 import { datastore } from "./mod.ts";
 import { FakeDynamoTable, installFakeDynamo } from "./_lib/fake_dynamo.ts";
 

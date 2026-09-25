@@ -1,3 +1,7 @@
+## 2026.09.24.2
+
+**Changed:** Bump @aws-sdk/* 3.1133.0 → 3.1139.0 (2 packages)
+
 ## 2026.09.24.1
 
 **Fixed:** `query` silently stopped at 10,000 rows. `GetQueryResults` returns at
