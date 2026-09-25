@@ -132,6 +132,80 @@ function prioritizeQueue(
   queue.splice(0, queue.length, ...indexed.map(({ item }) => item));
 }
 
+function num(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+/**
+ * Read a `{choice, confidence}` pair from a jev choice answer, or undefined
+ * when the shape is not a usable choice answer.
+ */
+function choiceAnswer(
+  value: unknown,
+): { choice: string; confidence: number } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const a = value as Record<string, unknown>;
+  const confidence = num(a.confidence);
+  return typeof a.choice === "string" && confidence !== undefined
+    ? { choice: a.choice, confidence }
+    : undefined;
+}
+
+/**
+ * Read a `{score, confidence}` pair from a jev score answer, or undefined.
+ */
+function scoreAnswer(
+  value: unknown,
+): { score: number; confidence: number } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const a = value as Record<string, unknown>;
+  const score = num(a.score);
+  const confidence = num(a.confidence);
+  return score !== undefined && confidence !== undefined
+    ? { score, confidence }
+    : undefined;
+}
+
+/**
+ * Attach jev triage/grade/assessment answers onto matching queue items as
+ * advisory `QueueItem.jev` enrichment. Joins by `reference` == the jev item id
+ * (MR reference or `<projectName>#<id>` for a Redmine issue — the same form
+ * the Redmine normalizer builds as `reference`, using the project NAME, not its
+ * numeric id). Partitions each answer
+ * set by the keys present — MR triage (`recommendation`), Renovate grade
+ * (`bump_risk`), issue assessment (`issue_type` / `source_domain` /
+ * `describes_vulnerability`). ADDITIVE AND ADVISORY: this never reorders or
+ * re-tiers the queue (operator decision, 2026-09-25) — it only decorates.
+ */
+function attachJevEnrichment(
+  queue: QueueItem[],
+  jevAnswers: ReadonlyMap<string, Record<string, unknown>>,
+): void {
+  if (jevAnswers.size === 0) return;
+  for (const item of queue) {
+    const answers = jevAnswers.get(item.reference);
+    if (!answers) continue;
+    const jev: NonNullable<QueueItem["jev"]> = {};
+    const recommendation = choiceAnswer(answers.recommendation);
+    if (recommendation) jev.recommendation = recommendation;
+    const bumpRisk = scoreAnswer(answers.bump_risk);
+    if (bumpRisk) jev.bumpRisk = bumpRisk;
+    const issueType = choiceAnswer(answers.issue_type);
+    if (issueType) jev.issueType = issueType;
+    const sourceDomain = choiceAnswer(answers.source_domain);
+    if (sourceDomain) jev.sourceDomain = sourceDomain;
+    const vuln = answers.describes_vulnerability;
+    if (vuln && typeof vuln === "object") {
+      const noul = num((vuln as Record<string, unknown>).noul);
+      if (noul !== undefined) jev.describesVulnerability = noul;
+    }
+    // Only attach when at least one dimension was present.
+    if (Object.keys(jev).length > 0) item.jev = jev;
+  }
+}
+
 /**
  * Read the Security Hub account map once for this report. It is enrichment
  * only: unknown IDs are deliberately not retained or rendered elsewhere.
@@ -197,6 +271,7 @@ export const report = {
       const normalizerContext: NormalizerContext = {
         accountNames: await collectAccountNames(steps, context.dataRepository),
         triageAnswers: new Map(),
+        jevAnswers: new Map(),
       };
 
       for (const step of steps) {
@@ -205,6 +280,13 @@ export const report = {
         // Skip them silently — counting them as a skipped source would falsely
         // mark the whole briefing degraded.
         if (nonSourceModelTypes.has(step.modelType)) continue;
+
+        // A step the workflow engine SKIPPED (its guard fired — an expected
+        // idempotency outcome, e.g. jev triage guarded off an empty queue) is
+        // not a source failure. It carries no data and often no modelType.
+        // Skip it silently; counting it would falsely mark the contract
+        // degraded. Same for a step that produced no data handles at all.
+        if (step.status === "skipped") continue;
 
         const normalizer = registry[step.modelType];
         if (!normalizer) {
@@ -301,6 +383,12 @@ export const report = {
 
       const triageAnswers = normalizerContext.triageAnswers ?? new Map();
       prioritizeQueue(queue, triageAnswers);
+
+      // Advisory jev enrichment: decorate queue items with recommendation /
+      // bump-risk / issue-assessment answers. Runs AFTER ordering so it can
+      // never influence it (operator decision: jev does not reorder the
+      // contract). Attach-only; additive to the stable contract.
+      attachJevEnrichment(queue, normalizerContext.jevAnswers ?? new Map());
 
       const result = render(queue, ops, notes, generatedAt, false, {
         skippedSteps,

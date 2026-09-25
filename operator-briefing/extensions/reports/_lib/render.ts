@@ -76,19 +76,58 @@ function tierItems(
   return preserveOrder ? items : items.sort((a, b) => b.ageDays - a.ageDays);
 }
 
+/** Compact jev enrichment cell for the queue table, or "" when absent. */
+function jevCell(item: QueueItem): string {
+  const jev = item.jev;
+  if (!jev) return "";
+  const parts: string[] = [];
+  // Vulnerability is the highest-signal output — surface it first and loudly.
+  if (typeof jev.describesVulnerability === "number") {
+    const pct = (jev.describesVulnerability * 100).toFixed(0);
+    if (jev.describesVulnerability >= 0.5) parts.push(`⚠ vuln ${pct}%`);
+  }
+  if (jev.recommendation && jev.recommendation.confidence >= 0.5) {
+    parts.push(
+      `rec: ${jev.recommendation.choice} (${
+        (jev.recommendation.confidence * 100).toFixed(0)
+      }%)`,
+    );
+  }
+  if (jev.bumpRisk && jev.bumpRisk.confidence >= 0.5) {
+    parts.push(`bump-risk ${jev.bumpRisk.score.toFixed(1)}/2`);
+  }
+  if (jev.issueType && jev.issueType.confidence >= 0.5) {
+    parts.push(`type: ${jev.issueType.choice}`);
+  }
+  if (jev.sourceDomain && jev.sourceDomain.confidence >= 0.5) {
+    parts.push(`src: ${jev.sourceDomain.choice}`);
+  }
+  return parts.join("; ");
+}
+
 function renderQueueTable(items: QueueItem[]): string[] {
   const lines: string[] = [];
-  lines.push("| Item | Title | Who | Age | Effort | Action |");
-  lines.push("|------|-------|-----|-----|--------|--------|");
+  // The jev column appears only when at least one item in this tier carries
+  // enrichment, so tiers with no grades keep the original compact shape.
+  const anyJev = items.some((i) => jevCell(i) !== "");
+  const header = anyJev
+    ? "| Item | Title | Who | Age | Effort | Action | jev |"
+    : "| Item | Title | Who | Age | Effort | Action |";
+  const divider = anyJev
+    ? "|------|-------|-----|-----|--------|--------|-----|"
+    : "|------|-------|-----|-----|--------|--------|";
+  lines.push(header);
+  lines.push(divider);
   for (const i of items) {
     const staleMark = i.stale ? " ⚠" : "";
     const draftMark = i.draft ? " 🚧" : "";
     const effort = i.effort != null ? `${i.effort}/5` : "";
-    lines.push(
-      `| ${esc(i.reference)} | ${esc(truncate(i.title))}${draftMark} | ${
-        esc(i.who)
-      } | ${i.ageDays}d${staleMark} | ${effort} | ${i.actionHint} |`,
-    );
+    const base = `| ${esc(i.reference)} | ${
+      esc(truncate(i.title))
+    }${draftMark} | ${
+      esc(i.who)
+    } | ${i.ageDays}d${staleMark} | ${effort} | ${i.actionHint} |`;
+    lines.push(anyJev ? `${base} ${esc(jevCell(i))} |` : base);
   }
   return lines;
 }

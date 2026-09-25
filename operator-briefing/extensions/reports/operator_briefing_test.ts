@@ -2512,3 +2512,265 @@ Deno.test("securityhub diff: unclassified count subtracts all classified array e
   assertStringIncludes(sig.detail, "3 unclassified");
   assertEquals(sig.detail.includes("5 unclassified"), false);
 });
+
+// --- jev advisory enrichment (2026.09.25.1): attach-only, never reorders ---
+
+Deno.test("jev enrichment: MR recommendation attaches to the matching queue item", async () => {
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+    makeStep(JEV, "jev", "triage", ["triage-appsvc-docs-4803"]),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "appsvc/docs",
+          iid: 4803,
+          reference: "appsvc/docs!4803",
+          title: "Adjust recommendation for direnv/.envrc setup",
+          author: "ABROSSIA",
+          updatedAt: hoursAgo(2),
+          draft: false,
+          pipelineStatus: "success",
+        }],
+      }),
+    ),
+    makeArtifact(JEV, "jev", "triage-appsvc-docs-4803", {
+      id: "appsvc/docs!4803",
+      answers: {
+        reply_needed: { type: "noul", noul: 0.06 },
+        urgency: {
+          type: "score",
+          score: 1.6,
+          legend: { "0": "a", "1": "b", "2": "c" },
+          probabilities: { "0": 0.1, "1": 0.3, "2": 0.6 },
+          confidence: 0.7,
+        },
+        recommendation: {
+          type: "choice",
+          choice: "approve",
+          probabilities: { approve: 0.9, comment: 0.1, request_changes: 0 },
+          confidence: 0.9,
+        },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const item = (json.queue as Any[]).find((q) =>
+    q.reference === "appsvc/docs!4803"
+  );
+  assertEquals(item.jev.recommendation.choice, "approve");
+  assertEquals(item.jev.recommendation.confidence, 0.9);
+  // Markdown surfaces the recommendation in the jev column.
+  assertStringIncludes(result.markdown, "rec: approve (90%)");
+});
+
+Deno.test("jev enrichment: issue vulnerability >= 0.5 emits an EXPLICIT ops signal and attaches, without reordering", async () => {
+  const REDMINE = "@webframp/redmine";
+  const steps = [
+    makeStep(REDMINE, "tracker", "list_issues", ["a:me-s:open"]),
+    makeStep(JEV, "jev", "triage", [
+      "triage-secops-1",
+      "triage-secops-2",
+    ]),
+  ];
+  const artifacts = [
+    makeArtifact(REDMINE, "tracker", "a:me-s:open", {
+      issues: [
+        {
+          id: 1,
+          project: { id: 9, name: "SecOps" },
+          tracker: { id: 1, name: "Task" },
+          status: { id: 1, name: "New" },
+          priority: { id: 2, name: "Normal" },
+          author: { id: 3, name: "Someone" },
+          assignedTo: { id: 4, name: "sescriva" },
+          subject: "Aruba AP password request",
+          description:
+            "Please send the AP admin password for MEX-B3-R531-AP-1.",
+          createdOn: daysAgo(1),
+          updatedOn: daysAgo(1),
+        },
+        {
+          id: 2,
+          project: { id: 9, name: "SecOps" },
+          tracker: { id: 1, name: "Task" },
+          status: { id: 1, name: "New" },
+          priority: { id: 2, name: "Normal" },
+          author: { id: 3, name: "Someone" },
+          assignedTo: { id: 4, name: "sescriva" },
+          subject: "Rotate EKS node AMI",
+          description: "Routine node group AMI rotation.",
+          createdOn: daysAgo(3),
+          updatedOn: daysAgo(3),
+        },
+      ],
+      totalCount: 2,
+      fetchedAt: hoursAgo(1),
+    }),
+    makeArtifact(JEV, "jev", "triage-secops-1", {
+      id: "SecOps#1",
+      answers: {
+        issue_type: {
+          type: "choice",
+          choice: "security_issue",
+          probabilities: { security_issue: 0.8 },
+          confidence: 0.76,
+        },
+        source_domain: {
+          type: "choice",
+          choice: "identity_access",
+          probabilities: { identity_access: 0.9 },
+          confidence: 0.8,
+        },
+        describes_vulnerability: { type: "noul", noul: 0.96 },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+    makeArtifact(JEV, "jev", "triage-secops-2", {
+      id: "SecOps#2",
+      answers: {
+        issue_type: {
+          type: "choice",
+          choice: "platform_infra",
+          probabilities: { platform_infra: 0.8 },
+          confidence: 0.8,
+        },
+        source_domain: {
+          type: "choice",
+          choice: "infrastructure_platform",
+          probabilities: { infrastructure_platform: 0.85 },
+          confidence: 0.82,
+        },
+        describes_vulnerability: { type: "noul", noul: 0.02 },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+
+  // Explicit jev-sourced ops signal for the vulnerability, critical (>=0.75).
+  const vulnSig = (json.ops as Any[]).find((o) =>
+    o.label === "issue-vulnerability"
+  );
+  assertEquals(vulnSig.severity, "critical");
+  assertStringIncludes(vulnSig.detail, "SecOps#1");
+  assertStringIncludes(vulnSig.detail, "verify the issue text");
+  // Only the vulnerable issue produces the signal.
+  assertEquals(
+    (json.ops as Any[]).filter((o) => o.label === "issue-vulnerability").length,
+    1,
+  );
+
+  // Enrichment attached to both issues.
+  const i1 = (json.queue as Any[]).find((q) => q.reference === "SecOps#1");
+  const i2 = (json.queue as Any[]).find((q) => q.reference === "SecOps#2");
+  assertEquals(i1.jev.describesVulnerability, 0.96);
+  assertEquals(i1.jev.issueType.choice, "security_issue");
+  assertEquals(i2.jev.describesVulnerability, 0.02);
+
+  // NO reordering: both issues remain tier 1 (Redmine assigned default),
+  // and the vulnerable one did not jump tiers — the tier is unchanged.
+  assertEquals(i1.tier, i2.tier);
+  // Markdown flags the vulnerability explicitly.
+  assertStringIncludes(result.markdown, "⚠ vuln 96%");
+});
+
+Deno.test("jev enrichment: low-confidence choice is omitted from markdown but kept in JSON", async () => {
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+    makeStep(JEV, "jev", "triage", ["triage-x-1"]),
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "x",
+          iid: 1,
+          reference: "x!1",
+          title: "Ambiguous change",
+          author: "someone",
+          updatedAt: hoursAgo(2),
+          draft: false,
+          pipelineStatus: "success",
+        }],
+      }),
+    ),
+    makeArtifact(JEV, "jev", "triage-x-1", {
+      id: "x!1",
+      answers: {
+        recommendation: {
+          type: "choice",
+          choice: "comment",
+          probabilities: { comment: 0.4, approve: 0.35, request_changes: 0.25 },
+          confidence: 0.3,
+        },
+      },
+      evaluatedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  const item = (json.queue as Any[]).find((q) => q.reference === "x!1");
+  // JSON keeps the raw low-confidence answer (consumers decide).
+  assertEquals(item.jev.recommendation.choice, "comment");
+  assertEquals(item.jev.recommendation.confidence, 0.3);
+  // Markdown omits the shaky (<0.5 confidence) label.
+  assertEquals(result.markdown.includes("rec: comment"), false);
+});
+
+Deno.test("a guard-skipped step is silent, not a degraded source", async () => {
+  // The report-only workflow routinely skips jev grade/assessment steps when
+  // their guards fire (empty queue / no held-back Renovate). A skipped step
+  // carries no data and often no modelType — it must NOT count as a source
+  // failure or degrade the contract.
+  const skippedStep = {
+    jobName: "report",
+    stepName: "issue_assessment",
+    modelName: "jev",
+    modelType: "",
+    modelId: "jev",
+    methodName: "triage",
+    status: "skipped" as const,
+    dataHandles: [],
+    methodArgs: {},
+    globalArgs: {},
+  };
+  const steps = [
+    makeStep(GITLAB, "gitlab", "list_my_merge_requests", ["sescriva"]),
+    skippedStep,
+  ];
+  const artifacts = [
+    makeArtifact(
+      GITLAB,
+      "gitlab",
+      "sescriva",
+      dashboard({
+        reviewing: [{
+          project: "x",
+          iid: 1,
+          reference: "x!1",
+          title: "A change",
+          author: "someone",
+          updatedAt: hoursAgo(2),
+          draft: false,
+        }],
+      }),
+    ),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const json = result.json as Any;
+  assertEquals(json.sourceErrors.skippedSteps, 0);
+  assertEquals(json.degraded, false);
+  // The GitLab queue still rendered.
+  assertEquals(json.queue.length, 1);
+});

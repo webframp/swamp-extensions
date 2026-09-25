@@ -298,8 +298,43 @@ export function typesafeAiNormalizer(
     }
 
     // Triage resources feed the review-queue ordering, not the ops line.
-    // Recognized and skipped — never an "unrecognized shape" note.
-    if (dataName.startsWith("triage-")) continue;
+    // Recognized here; their answers are ALSO collected for advisory
+    // attachment onto queue items (QueueItem.jev) by the report's join pass.
+    // Never an "unrecognized shape" note.
+    if (dataName.startsWith("triage-")) {
+      const id = typeof data.id === "string" ? data.id : undefined;
+      const answers = object(data.answers);
+      if (id && answers && context.jevAnswers) {
+        context.jevAnswers.set(id, answers);
+        // A described improper-access mechanism (issue_assessment's strict 0/1
+        // vulnerability noul >= 0.5) is the single highest-signal jev output.
+        // Surface it EXPLICITLY as a jev-sourced ops signal so the contract
+        // itself flags it — it does not reorder or re-tier the queue item
+        // (operator decision, 2026-09-25); the flag is the whole point.
+        const vuln = object(answers.describes_vulnerability);
+        const noul = vuln && typeof vuln.noul === "number"
+          ? vuln.noul
+          : undefined;
+        if (typeof noul === "number" && Number.isFinite(noul) && noul >= 0.5) {
+          ops.push({
+            source: SOURCE,
+            label: "issue-vulnerability",
+            severity: noul >= 0.75 ? "critical" : "warn",
+            detail:
+              `${id} may describe a specific access/secret/privilege exposure ` +
+              `(jev ${
+                (noul * 100).toFixed(0)
+              }%) — verify the issue text before acting`,
+            fetchedAt: typeof data.evaluatedAt === "string"
+              ? data.evaluatedAt
+              : null,
+            stale: false,
+            degraded: false,
+          });
+        }
+      }
+      continue;
+    }
 
     if (!isEvaluation(data)) continue;
 
