@@ -99,21 +99,49 @@ workflow). The apply reads the `current-plan` resource.
 
 ### Registry unavailability produces false "not stale" results
 
-If npm or JSR registries are unreachable during audit, the `npmLatest()` and
-`jsrLatest()` helpers return `null`. The audit then compares the current version
-against itself, reporting zero staleness. Re-run audit when registry
+If npm or JSR registries are unreachable during audit, the `npmEligible()` and
+`jsrEligible()` helpers return `null`. The audit then compares the current
+version against itself, reporting zero staleness. Re-run audit when registry
 connectivity is restored.
 
-### Per-extension apply failures do not abort the sweep
+### Per-extension apply failures fail the method after the loop
 
-If one extension fails during `apply-bump` (e.g., file write error, missing
-directory), the error is recorded in the `errors` array and the loop continues.
-Check the `current-apply` resource for per-extension failure details.
+If one extension fails during `apply-bump` (a file write error, an upgrade entry
+that would leave the source unparseable, a broken upgrade chain, or a failed
+`deno.lock` regeneration), the error is recorded in the `errors` array and the
+loop continues with the remaining extensions. Once every entry has been
+attempted, `current-apply` is written and the method fails, so the sweep
+workflow run is marked failed. The `verify` step still runs (it depends on
+`apply` with `always`) to snapshot what state the repo is in. Check
+`current-apply` for per-extension details. An upgrade entry that would not parse
+is never written; the file is left as it was.
+
+### Audit plans only versions older than Deno's minimum dependency age
+
+Deno refuses npm and JSR versions published less than 24 hours ago by default.
+`swamp extension quality`, which CI runs on every changed extension, resolves
+dependencies without the lockfile and has no per-extension override, so a
+fresher pin fails CI. Audit therefore reports as `latest` the newest release
+published at least `min_dependency_age_hours` ago (default 24). For fast-moving
+packages such as `@aws-sdk/*` that means a sweep lands one daily release behind.
+`--global-arg min_dependency_age_hours=0` plans the newest release regardless of
+age.
+
+Local `deno cache` and `deno task` runs inside `apply-bump` and `quality-gate`
+ignore the age rule, since audit already bounds it. The gate's
+`swamp extension quality` check does not, so that check fails locally exactly
+when CI would.
 
 ### `registry_timeout` global arg for slow registries
 
 The default registry query timeout is 30 seconds. If you hit timeouts against a
 slow npm mirror, increase it: `--global-arg registry_timeout=60`.
+
+### Quality gate requires CI's quality verdict
+
+Each extension must score what CI's quality job requires: status `passed`, 100%,
+and `allPassed` not false. A lower score is listed in that extension's errors
+and counts as a failure.
 
 ### Quality gate runs `deno task fmt`, not `fmt:check`
 

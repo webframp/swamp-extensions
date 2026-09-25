@@ -33,6 +33,15 @@ const GlobalArgsSchema = z.object({
     .max(120)
     .default(30)
     .describe("Seconds to wait for registry queries"),
+  min_dependency_age_hours: z
+    .number()
+    .int()
+    .min(0)
+    .max(720)
+    .default(24)
+    .describe(
+      "Only plan npm/JSR versions published at least this many hours ago. Matches Deno's default minimum dependency age, which `swamp extension quality` (and so CI) enforces with no per-extension override. 0 plans the latest release regardless of age.",
+    ),
 });
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
@@ -41,7 +50,9 @@ type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 const DepStatusSchema = z.object({
   name: z.string().describe("Dependency package name"),
   current: z.string().describe("Currently pinned version"),
-  latest: z.string().describe("Latest available version"),
+  latest: z.string().describe(
+    "Newest version old enough for the minimum dependency age (npm/JSR), or the registry latest (manifest pins). Equals current when not stale.",
+  ),
   stale: z.boolean().describe("Whether current < latest"),
 });
 
@@ -244,7 +255,9 @@ const QualityResultSchema = z.object({
     lint: z.boolean().describe("Whether `deno task lint` passed"),
     fmt: z.boolean().describe("Whether `deno task fmt` passed"),
     test: z.boolean().describe("Whether `deno task test` passed"),
-    quality: z.number().describe("Quality score 0-100"),
+    quality: z.number().describe(
+      "Quality score 0-100. Anything short of CI's pass condition (status passed, 100%) is also listed in errors.",
+    ),
     extensionFmt: z.boolean().describe(
       "Whether `swamp extension fmt --check` passed",
     ),
@@ -275,10 +288,12 @@ const QualityResultSchema = z.object({
 async function run(
   cmd: string[],
   cwd?: string,
+  env?: Record<string, string>,
 ): Promise<{ stdout: string; stderr: string; success: boolean }> {
   const proc = new Deno.Command(cmd[0]!, {
     args: cmd.slice(1),
     cwd,
+    env,
     stdout: "piped",
     stderr: "piped",
   });
@@ -297,29 +312,117 @@ function summarize(text: string, maxLen = 300): string {
   return trimmed.length > maxLen ? `${trimmed.slice(0, maxLen)}...` : trimmed;
 }
 
-/** Query npm registry for latest version of a package. */
-async function npmLatest(
+/**
+ * Environment for local `deno` subprocesses that turns off Deno's minimum
+ * dependency age. The age rule is enforced where it matters — audit only plans
+ * versions older than `min_dependency_age_hours` — so a local resolution
+ * failure on a fresh release is noise, not signal. Deno reads the npm-config
+ * variable (DENO_MINIMUM_DEPENDENCY_AGE is not honored), and an env var reaches
+ * processes spawned by `deno task`, which a CLI flag does not.
+ *
+ * Deliberately NOT passed to `swamp extension quality`: that call mirrors CI,
+ * which cannot disable the rule, so it must fail locally exactly when CI would.
+ */
+const LOCAL_DENO_ENV = { NPM_CONFIG_MIN_RELEASE_AGE: "0" };
+
+/** Compares two dotted numeric versions (semver or CalVer) numerically.
+ * Returns a negative number, zero, or a positive number. Build metadata
+ * (`+...`) is ignored. With equal cores, a release sorts above its own
+ * prereleases (`2.0.0` > `2.0.0-rc.1`); two prereleases compare as strings.
+ *
+ * Exported for unit testing. */
+export function compareVersions(a: string, b: string): number {
+  const [coreA, preA] = splitVersion(a);
+  const [coreB, preB] = splitVersion(b);
+  const pa = coreA.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = coreB.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  if (preA === preB) return 0;
+  if (preA === null) return 1;
+  if (preB === null) return -1;
+  return preA < preB ? -1 : 1;
+}
+
+/** Splits `1.2.3-rc.1+build` into its core and prerelease (null if none). */
+function splitVersion(v: string): [string, string | null] {
+  const noBuild = v.split("+")[0]!;
+  const dash = noBuild.indexOf("-");
+  return dash === -1
+    ? [noBuild, null]
+    : [noBuild.slice(0, dash), noBuild.slice(dash + 1)];
+}
+
+/** Picks the newest stable version published at or before `cutoff` and not
+ * newer than the registry's `latest` tag. `published` maps version to publish
+ * timestamp. Returns null when no version qualifies.
+ *
+ * Exported for unit testing. */
+export function pickEligibleVersion(
+  published: Record<string, string>,
+  latest: string | null,
+  cutoff: Date,
+): string | null {
+  let best: string | null = null;
+  for (const [ver, at] of Object.entries(published)) {
+    if (!/^\d+\.\d+\.\d+$/.test(ver)) continue; // prereleases, "created", "modified"
+    const ts = Date.parse(at);
+    if (isNaN(ts) || ts > cutoff.getTime()) continue;
+    if (latest && compareVersions(ver, latest) > 0) continue;
+    if (best === null || compareVersions(ver, best) > 0) best = ver;
+  }
+  return best;
+}
+
+/** Maps version to publish time from an npm packument, keeping only versions
+ * that can still be installed: `time` retains timestamps for unpublished
+ * versions, and deprecated versions should not be newly pinned.
+ *
+ * Exported for unit testing. */
+export function publishedNpmVersions(data: {
+  time?: Record<string, string>;
+  versions?: Record<string, { deprecated?: string }>;
+}): Record<string, string> {
+  const versions = data.versions ?? {};
+  const published: Record<string, string> = {};
+  for (const [ver, at] of Object.entries(data.time ?? {})) {
+    if (versions[ver] && !versions[ver].deprecated) published[ver] = at;
+  }
+  return published;
+}
+
+/** Query npm for the newest version of a package published before `cutoff`. */
+async function npmEligible(
   pkg: string,
   timeoutMs: number,
+  cutoff: Date,
 ): Promise<string | null> {
   try {
     const resp = await fetch(
-      `https://registry.npmjs.org/${pkg}/latest`,
+      `https://registry.npmjs.org/${pkg.replace("/", "%2f")}`,
       { signal: AbortSignal.timeout(timeoutMs) },
     );
     if (!resp.ok) return null;
     const data = await resp.json();
-    return data.version ?? null;
+    const published = publishedNpmVersions(data);
+    return pickEligibleVersion(
+      published,
+      data["dist-tags"]?.latest ?? null,
+      cutoff,
+    );
   } catch {
     return null;
   }
 }
 
-/** Query JSR for latest version of a scoped package. */
-async function jsrLatest(
+/** Query JSR for the newest non-yanked version published before `cutoff`. */
+async function jsrEligible(
   scope: string,
   name: string,
   timeoutMs: number,
+  cutoff: Date,
 ): Promise<string | null> {
   try {
     const resp = await fetch(
@@ -328,7 +431,18 @@ async function jsrLatest(
     );
     if (!resp.ok) return null;
     const data = await resp.json();
-    return data.latest ?? null;
+    const published: Record<string, string> = {};
+    for (
+      const [ver, meta] of Object.entries(
+        (data.versions ?? {}) as Record<
+          string,
+          { createdAt?: string; yanked?: boolean }
+        >,
+      )
+    ) {
+      if (!meta.yanked && meta.createdAt) published[ver] = meta.createdAt;
+    }
+    return pickEligibleVersion(published, data.latest ?? null, cutoff);
   } catch {
     return null;
   }
@@ -824,19 +938,68 @@ async function readManifestDeps(
   }
 }
 
-/** Get extension quality score via swamp extension quality. */
-async function getQualityScore(extDir: string): Promise<number> {
-  const result = await run(
-    ["swamp", "extension", "quality", "manifest.yaml", "--json"],
-    extDir,
-  );
-  if (!result.success) return 0;
-  try {
-    const data = JSON.parse(result.stdout);
-    return data.percentage ?? 0;
-  } catch {
-    return 0;
+/** Parses `swamp extension quality --json` output against CI's pass condition
+ * (`.github/workflows/ci.yml`, quality job): status "passed", percentage 100,
+ * and allPassed not false. Returns the score and, on failure, why.
+ *
+ * Exported for unit testing. */
+export function parseQualityResult(
+  output: { stdout: string; stderr: string; success: boolean },
+): { percentage: number; passed: boolean; detail: string | null } {
+  type QualityJson = {
+    status?: string;
+    percentage?: number;
+    allPassed?: boolean;
+    error?: string;
+  };
+  const parse = (text: string): QualityJson | null => {
+    try {
+      const v = JSON.parse(text);
+      return v && typeof v === "object" && !Array.isArray(v) ? v : null;
+    } catch {
+      return null;
+    }
+  };
+  const fail = (percentage: number, detail: string) => ({
+    percentage,
+    passed: false,
+    detail,
+  });
+
+  // CI reads the verdict from stdout only. stderr is consulted solely for an
+  // error report (swamp prints `{error, stack}` there when deno doc fails), so
+  // a verdict that exists only on stderr can never count as a pass.
+  const data = parse(output.stdout);
+  if (!data) {
+    const err = parse(output.stderr);
+    return fail(
+      0,
+      summarize(err?.error ?? (output.stderr || output.stdout)),
+    );
   }
+  const percentage = typeof data.percentage === "number" ? data.percentage : 0;
+  if (data.error) return fail(percentage, summarize(data.error));
+  const passed = data.status === "passed" && percentage === 100 &&
+    data.allPassed !== false;
+  return passed ? { percentage, passed, detail: null } : fail(
+    percentage,
+    `status=${data.status ?? "unknown"} percentage=${percentage} allPassed=${
+      data.allPassed ?? "n/a"
+    }`,
+  );
+}
+
+/** Run `swamp extension quality` the way CI does. Runs without
+ * LOCAL_DENO_ENV so a dependency CI cannot resolve fails here too. */
+async function getQualityResult(
+  extDir: string,
+): Promise<{ percentage: number; passed: boolean; detail: string | null }> {
+  return parseQualityResult(
+    await run(
+      ["swamp", "extension", "quality", "manifest.yaml", "--json"],
+      extDir,
+    ),
+  );
 }
 
 /** Standard observation-output metadata fields introduced repo-wide in #386.
@@ -915,12 +1078,16 @@ export function computeModalPins(
   for (const [pkg, vc] of counts) {
     const total = [...vc.values()].reduce((a, b) => a + b, 0);
     if (total < 2) continue; // used by a single extension — nothing to compare
-    // Pick the highest-count version; tie-break by lexically greatest version
-    // so the result is deterministic.
+    // Pick the highest-count version; tie-break by numerically greatest
+    // version so the result is deterministic.
     let best: string | null = null;
     let bestCount = -1;
     for (const [ver, count] of vc) {
-      if (count > bestCount || (count === bestCount && ver > (best ?? ""))) {
+      if (
+        count > bestCount ||
+        (count === bestCount && best !== null &&
+          compareVersions(ver, best) > 0)
+      ) {
         best = ver;
         bestCount = count;
       }
@@ -1068,56 +1235,130 @@ async function findUpgradeArrayFiles(extDir: string): Promise<string[]> {
   return out;
 }
 
-/** Inserts a no-op upgrade entry (identity `upgradeAttributes`) immediately
- * before the closing `]` of every `upgrades:` array in `content`, using a
- * balanced-bracket scan so brackets inside `upgradeAttributes` bodies are
- * handled correctly. Returns the rewritten content.
+/** Returns `src` with comment bodies and string-literal contents replaced by
+ * spaces (newlines kept), so structural scans see only code. Same length as
+ * the input. Template-literal `${}` nesting and regex literals are not parsed,
+ * so callers mask only the region they scan (from an array's `[` onward), never
+ * a whole file.
+ *
+ * Exported for unit testing. */
+export function maskCommentsAndStrings(src: string): string {
+  const out = src.split("");
+  const blank = (i: number) => {
+    if (out[i] !== "\n") out[i] = " ";
+  };
+  let i = 0;
+  while (i < src.length) {
+    const c = src[i]!;
+    const next = src[i + 1];
+    if (c === "/" && next === "/") {
+      while (i < src.length && src[i] !== "\n") blank(i++);
+    } else if (c === "/" && next === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      while (i < stop) blank(i++);
+    } else if (c === '"' || c === "'" || c === "`") {
+      i++; // keep the opening quote
+      while (i < src.length && src[i] !== c) {
+        if (src[i] === "\\") blank(i++);
+        if (i < src.length) blank(i++);
+      }
+      i++; // keep the closing quote
+    } else {
+      i++;
+    }
+  }
+  return out.join("");
+}
+
+/** Inserts a no-op upgrade entry (identity `upgradeAttributes`) as the last
+ * element of every `upgrades:` array in `content`, using a balanced-bracket
+ * scan so brackets inside `upgradeAttributes` bodies are handled correctly.
+ * The entry goes directly after the last element's closing `}` — not at the
+ * start of the `]` line, which in the compact `}, {` / `}],` style is inside
+ * that element. Callers run `deno fmt` afterwards to normalize layout.
+ * Returns the rewritten content.
+ *
+ * Exported for unit testing.
  *
  * The appended migration is intentionally identity `(old) => old`: the
  * maintenance sweep only performs dependency/license bumps, which never change
  * a model's data shape. This helper MUST NOT be used for a schema-changing
  * bump — it would append an identity migration that silently fails to migrate
  * stored data. */
-function appendUpgradeEntry(
+export function appendUpgradeEntry(
   content: string,
   toVersion: string,
   description: string,
 ): string {
-  const entry = `    {\n` +
+  const entry = `{\n` +
     `      toVersion: "${toVersion}",\n` +
-    `      description:\n` +
-    `        ${JSON.stringify(description)},\n` +
+    `      description: ${JSON.stringify(description)},\n` +
     `      upgradeAttributes: (old: Record<string, unknown>) => old,\n` +
-    `    },\n`;
+    `    }`;
 
-  // Locate each `upgrades: [` array and its matching `]` via bracket balance,
-  // then splice the entry in before the closing bracket. Process right-to-left
-  // so earlier indices stay valid. Note: the scan counts brackets literally and
-  // does not skip brackets inside string literals — safe here because upgrade
-  // descriptions in this repo contain none. Revisit if that changes.
-  const spans: Array<[number, number]> = [];
-  const re = /upgrades:\s*\[/g;
+  // Scan each array on a copy with comments and string contents blanked (same
+  // length, so indices line up) — a `]` in a description or a trailing
+  // `/* note */` after the last element must not steer the splice. Masking
+  // starts at the array's `[`, not the top of the file: the masker does not
+  // parse regex literals, and a quote inside one earlier in the file (e.g.
+  // `/[^\s"']*/`) would otherwise desync it. Process right-to-left so earlier
+  // indices stay valid.
+  //
+  // Only property-position matches count — at line start or right after `{`
+  // or `,`, the same shape hasUpgradeArray accepts — so a mention in a JSDoc
+  // line (` * upgrades: [...]`) or mid-sentence in a string is not spliced.
+  const spans: Array<[number, number, string]> = [];
+  const re = /(?:^|[,{])[ \t]*upgrades:\s*\[/gm;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
-    const openIdx = content.indexOf("[", m.index);
+    const openIdx = m.index + m[0].length - 1;
+    const tail = maskCommentsAndStrings(content.slice(openIdx));
     let depth = 0;
-    for (let i = openIdx; i < content.length; i++) {
-      const c = content[i];
+    for (let i = 0; i < tail.length; i++) {
+      const c = tail[i];
       if (c === "[") depth++;
       else if (c === "]") {
         depth--;
         if (depth === 0) {
-          spans.push([openIdx, i]);
+          spans.push([openIdx, openIdx + i, tail]);
           break;
         }
       }
     }
   }
-  for (const [, closeIdx] of spans.sort((a, b) => b[1] - a[1])) {
-    const lineStart = content.lastIndexOf("\n", closeIdx) + 1;
-    content = content.slice(0, lineStart) + entry + content.slice(lineStart);
+  for (const [openIdx, closeIdx, tail] of spans.sort((a, b) => b[1] - a[1])) {
+    // Last significant character before `]`: `}` (last element, no trailing
+    // comma), `,` (trailing comma), or `[` (empty array). `tail` is indexed
+    // from openIdx.
+    let p = closeIdx - openIdx - 1;
+    while (p > 0 && /\s/.test(tail[p]!)) p--;
+    const insertAt = openIdx + p + 1;
+    const insertion = tail[p] === "[" || tail[p] === ","
+      ? ` ${entry},`
+      : `, ${entry},`;
+    content = content.slice(0, insertAt) + insertion +
+      content.slice(insertAt);
   }
   return content;
+}
+
+/** Returns null when `source` parses as TypeScript, else deno's error. Formats
+ * a temp copy with `--no-config` so the extension's fmt excludes cannot mask
+ * a syntax error. */
+async function tsSyntaxError(source: string): Promise<string | null> {
+  const tmp = await Deno.makeTempFile({ suffix: ".ts" });
+  try {
+    await Deno.writeTextFile(tmp, source);
+    const result = await run(
+      ["deno", "fmt", "--no-config", tmp],
+      undefined,
+      LOCAL_DENO_ENV,
+    );
+    return result.success ? null : summarize(result.stderr);
+  } finally {
+    await Deno.remove(tmp).catch(() => {});
+  }
 }
 
 /** Finds test files that assert an exact model version literal, e.g.
@@ -1332,7 +1573,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.09.19.1",
+  version: "2026.09.24.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     audit: {
@@ -1418,20 +1659,26 @@ export const model = {
 
         // Batch-query npm registry
         const timeoutMs = context.globalArgs.registry_timeout * 1000;
+        // "Latest" means the newest release old enough to resolve under the
+        // minimum dependency age. Planning anything fresher produces a bump
+        // that `swamp extension quality` rejects in CI.
+        const minAgeHours = context.globalArgs.min_dependency_age_hours ?? 24;
+        const cutoff = new Date(Date.now() - minAgeHours * 3_600_000);
         context.logger.info(
-          `Querying npm registry for ${allNpmPkgs.size} packages`,
+          `Querying npm registry for ${allNpmPkgs.size} packages (versions published before ${cutoff.toISOString()})`,
         );
         const npmLatestVersions = new Map<string, string>();
         for (const pkg of allNpmPkgs) {
-          const latest = await npmLatest(pkg, timeoutMs);
+          const latest = await npmEligible(pkg, timeoutMs, cutoff);
           if (latest) npmLatestVersions.set(pkg, latest);
         }
 
         // Query swamp-testing latest
-        const testingLatest = await jsrLatest(
+        const testingLatest = await jsrEligible(
           "swamp-club",
           "swamp-testing",
           timeoutMs,
+          cutoff,
         );
         context.logger.info(`swamp-testing latest: ${testingLatest}`);
 
@@ -1453,8 +1700,11 @@ export const model = {
           const npmDeps: z.infer<typeof DepStatusSchema>[] = [];
           let hasStaleNpm = false;
           for (const [pkg, ver] of npmImports) {
-            const latest = npmLatestVersions.get(pkg) ?? ver;
-            const stale = ver !== latest;
+            const eligible = npmLatestVersions.get(pkg) ?? ver;
+            // A pin newer than the eligible version (hand-bumped to a fresh
+            // release) is not stale — planning it would be a downgrade.
+            const stale = compareVersions(eligible, ver) > 0;
+            const latest = stale ? eligible : ver;
             if (stale) hasStaleNpm = true;
             npmDeps.push({ name: pkg, current: ver, latest, stale });
           }
@@ -1465,12 +1715,12 @@ export const model = {
           let testingDep: z.infer<typeof DepStatusSchema> | null = null;
           let hasStaleTesting = false;
           if (testVer && testingLatest) {
-            const stale = testVer !== testingLatest;
+            const stale = compareVersions(testingLatest, testVer) > 0;
             if (stale) hasStaleTesting = true;
             testingDep = {
               name: "@swamp-club/swamp-testing",
               current: testVer,
-              latest: testingLatest,
+              latest: stale ? testingLatest : testVer,
               stale,
             };
           }
@@ -1482,7 +1732,8 @@ export const model = {
           let hasStaleManifest = false;
           for (const dep of mDeps) {
             const latest = await registryLatest(dep.name);
-            const stale = latest !== null && dep.version !== latest;
+            const stale = latest !== null &&
+              compareVersions(latest, dep.version) > 0;
             if (stale) hasStaleManifest = true;
             manifestDeps.push({
               name: dep.name,
@@ -1494,7 +1745,7 @@ export const model = {
           if (hasStaleManifest) staleManifest++;
 
           // quality
-          const qualityScore = await getQualityScore(dir);
+          const qualityScore = (await getQualityResult(dir)).percentage;
 
           // lockfile sync
           const lockfileSync = await checkLockfileSync(dir);
@@ -1865,7 +2116,7 @@ export const model = {
 
     "apply-bump": {
       description:
-        "Execute the latest plan. Writes files. Requires human approval.",
+        "Execute the latest plan. Writes files. Requires human approval. Fails after writing current-apply if any extension errored (broken source, broken upgrade chain, or deno.lock regeneration failure).",
       arguments: z.object({
         dry_run: z
           .boolean()
@@ -2085,8 +2336,34 @@ export const model = {
                 ins.toVersion,
                 ins.description,
               );
+              // Prove the splice left valid source before touching the file,
+              // so a failed insert leaves the original in place (and a re-run
+              // does not skip past it via the "already appended" check).
+              const syntaxError = await tsSyntaxError(updated);
+              if (syntaxError) {
+                throw new Error(
+                  `upgrade entry insert would leave ${ins.file} unparseable; file left unchanged: ${syntaxError}`,
+                );
+              }
               await Deno.writeTextFile(filePath, updated);
               filesModified++;
+              // Normalize layout with the extension's own fmt config. A file
+              // that config excludes is left as spliced.
+              const fmtResult = await run(
+                ["deno", "fmt", filePath],
+                extDir,
+                LOCAL_DENO_ENV,
+              );
+              if (
+                !fmtResult.success &&
+                !fmtResult.stderr.includes("No target files found")
+              ) {
+                throw new Error(
+                  `deno fmt failed on ${ins.file} after upgrade entry insert: ${
+                    summarize(fmtResult.stderr)
+                  }`,
+                );
+              }
             }
 
             // Write RELEASE_NOTES.md — prepend the new entry, preserving
@@ -2128,9 +2405,16 @@ export const model = {
                 : [];
 
               // Run deno cache with all source files — this resolves both
-              // import-map and direct specifiers into the lockfile.
-              const cacheCmd = ["deno", "cache", ...fileList];
-              const lockResult = await run(cacheCmd, extDir);
+              // import-map and direct specifiers into the lockfile. The flag
+              // (npm and JSR) plus LOCAL_DENO_ENV keep a fresh release from
+              // failing lock regeneration; audit already bounds version age.
+              const cacheCmd = [
+                "deno",
+                "cache",
+                "--minimum-dependency-age=0",
+                ...fileList,
+              ];
+              const lockResult = await run(cacheCmd, extDir, LOCAL_DENO_ENV);
               if (lockResult.success) {
                 context.logger.info(
                   `  ↳ deno.lock regenerated for ${entry.name}`,
@@ -2197,6 +2481,17 @@ export const model = {
           collectedBy: EXTENSION_NAME,
           fetchedAt: new Date().toISOString(),
         });
+        // Fail after persisting the result so `current-apply` stays
+        // inspectable and the sweep run is marked failed rather than
+        // reporting success over half-written lockfiles or broken source.
+        // (The workflow's verify step still runs, via `always`.)
+        if (errors.length > 0) {
+          throw new Error(
+            `apply-bump finished with ${errors.length} error(s) in ${
+              new Set(errors.map((e) => e.extension)).size
+            } extension(s); see current-apply. First: ${errors[0]!.error}`,
+          );
+        }
         return { dataHandles: [handle] };
       },
     },
@@ -2254,10 +2549,26 @@ export const model = {
 
           context.logger.info(`Quality gate: ${name}`);
 
-          const checkResult = await run(["deno", "task", "check"], dir);
-          const lintResult = await run(["deno", "task", "lint"], dir);
-          const fmtResult = await run(["deno", "task", "fmt"], dir);
-          const testResult = await run(["deno", "task", "test"], dir);
+          const checkResult = await run(
+            ["deno", "task", "check"],
+            dir,
+            LOCAL_DENO_ENV,
+          );
+          const lintResult = await run(
+            ["deno", "task", "lint"],
+            dir,
+            LOCAL_DENO_ENV,
+          );
+          const fmtResult = await run(
+            ["deno", "task", "fmt"],
+            dir,
+            LOCAL_DENO_ENV,
+          );
+          const testResult = await run(
+            ["deno", "task", "test"],
+            dir,
+            LOCAL_DENO_ENV,
+          );
 
           if (!checkResult.success) {
             errors.push(
@@ -2288,7 +2599,15 @@ export const model = {
             );
           }
 
-          const quality = await getQualityScore(dir);
+          // Same verdict CI's quality job requires. Previously only the score
+          // was recorded, so an extension CI rejects could pass this gate.
+          const qualityResult = await getQualityResult(dir);
+          const quality = qualityResult.percentage;
+          if (!qualityResult.passed) {
+            errors.push(
+              `swamp extension quality failed for ${name}: ${qualityResult.detail}`,
+            );
+          }
 
           // Extension fmt
           const extFmtResult = await run(
