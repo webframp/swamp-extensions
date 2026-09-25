@@ -35,12 +35,14 @@ Deno.test("tests model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.create_test);
   assertExists(model.methods.get_test);
+  assertExists(model.methods.list_component_findings);
   assertExists(model.methods.list_findings);
 });
 
 Deno.test("tests model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["test"]);
+  assertExists(model.resources["component_findings"]);
   assertExists(model.resources["findings"]);
 });
 
@@ -297,7 +299,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tests model: list_findings fetches and writes resource",
+  name: "tests model: list_component_findings fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockItem = {
@@ -353,7 +355,10 @@ Deno.test({
       },
     };
     const { url, server, requests } = startMockSnykServer({
-      "/tests/test-id-123/findings": { data: [mockItem], isCollection: true },
+      "/tests/test-id-123/components/test-id-123/findings": {
+        data: [mockItem],
+        isCollection: true,
+      },
     });
     const uninstall = installFetchMock(url);
 
@@ -375,19 +380,25 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_findings.execute({ "test_id": "test-id-123" }, context);
+      >).list_component_findings.execute({
+        "test_id": "test-id-123",
+        "component_id": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
-      assertStringIncludes(req0.path, "/tests/test-id-123/findings");
+      assertStringIncludes(
+        req0.path,
+        "/tests/test-id-123/components/test-id-123/findings",
+      );
       assertStringIncludes(req0.search, "version=");
       assertEquals(req0.headers["authorization"], "token test-token");
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "findings");
+      assertEquals(resources[0].specName, "component_findings");
       const data = resources[0].data as {
         items: unknown[];
         truncated: boolean;

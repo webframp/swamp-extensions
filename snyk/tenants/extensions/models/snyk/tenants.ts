@@ -689,7 +689,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.09.18.1",
+  version: "2026.09.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -741,6 +741,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3320,6 +3325,9 @@ export const model = {
         ),
         role_name: z.string().optional().describe(
           "Filter the response for results only with the specified role.",
+        ),
+        account_type: z.enum(["user", "service"]).optional().describe(
+          'Filter the response by the account type of the member. Defaults to "user" whe...',
         ),
       }),
       execute: async (

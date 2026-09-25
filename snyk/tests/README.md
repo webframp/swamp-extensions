@@ -17,11 +17,12 @@ swamp model create @webframp/snyk/tests snyk-tests \
 
 ## Methods
 
-| Method          | Description                              |
-| --------------- | ---------------------------------------- |
-| `create_test`   | Create a new test. (Early Access)        |
-| `get_test`      | Get a test. (Early Access)               |
-| `list_findings` | List findings for a test. (Early Access) |
+| Method                    | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `create_test`             | Create a new test. (Early Access)             |
+| `get_test`                | Get a test. (Early Access)                    |
+| `list_component_findings` | List findings for a component. (Early Access) |
+| `list_findings`           | List findings for a test. (Early Access)      |
 
 ## Development
 

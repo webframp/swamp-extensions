@@ -22,6 +22,208 @@ const GlobalArgsSchema = z.object({
   version: z.string().default("2024-10-15").describe("Snyk API version date"),
 });
 
+const ComponentFindingsItemSchema = z.object({
+  id: z.string(),
+  type: z.enum(["findings"]).optional(),
+  cause_of_failure: z.boolean().default(false).describe(
+    "Did this finding cause the test outcome to fail?",
+  ),
+  component_key: z.object({}).optional(),
+  description: z.string().describe(
+    "A longer human-readable text description for this finding.",
+  ),
+  evidence: z.array(z.unknown()).describe(
+    "Supporting evidence for (rather than representative of) the finding in other security domains and...",
+  ),
+  finding_type: z.object({}),
+  key: z.string().describe(
+    "An opaque key used for aggregating the finding across multiple test executions operating on the s...",
+  ),
+  locations: z.array(z.unknown()).describe(
+    "Locations in the tested component's contents where the finding may be found.",
+  ),
+  policy_modifications: z.array(z.unknown()).optional().describe(
+    "Attributes which have been modified by policy decisions.",
+  ),
+  problems: z.array(z.union([
+    z.object({
+      id: z.string().regex(new RegExp("^CWE-[0-9]+$")),
+      source: z.enum(["cwe"]),
+    }),
+    z.object({
+      default_configuration: z.object({
+        severity: z.unknown(),
+      }),
+      help: z.object({
+        markdown: z.string().optional(),
+        text: z.string().optional(),
+      }),
+      id: z.string(),
+      name: z.string(),
+      properties: z.object({
+        categories: z.array(z.string()),
+        cwe: z.array(z.string()),
+        example_commit_descriptions: z.array(z.string()),
+        example_commit_fixes: z.array(z.object({
+          commit_url: z.string(),
+          lines: z.array(z.unknown()),
+        })),
+        precision: z.string(),
+        repo_dataset_size: z.number().int(),
+        tags: z.array(z.string()),
+      }),
+      short_description: z.object({
+        markdown: z.string().optional(),
+        text: z.string().optional(),
+      }),
+      source: z.enum(["snyk_code_rule"]),
+    }),
+    z.object({
+      id: z.string().regex(new RegExp("^CVE-[0-9]+-[0-9]+$")),
+      source: z.enum(["cve"]),
+    }),
+    z.object({
+      affected_hash_ranges: z.array(z.string()).optional(),
+      affected_hashes: z.array(z.string()).optional(),
+      affected_versions: z.array(z.string()).optional(),
+      alternative_ids: z.array(z.string()).optional(),
+      created_at: z.string(),
+      credits: z.array(z.string()),
+      cvss_base_score: z.unknown(),
+      cvss_sources: z.array(z.object({
+        assigner: z.string(),
+        base_score: z.unknown(),
+        cvss_version: z.string(),
+        modified_at: z.string(),
+        severity: z.unknown(),
+        type: z.unknown(),
+        vector: z.string(),
+      })),
+      cvss_vector: z.string(),
+      disclosed_at: z.string(),
+      ecosystem: z.unknown(),
+      epss_details: z.unknown().optional(),
+      exploit_details: z.unknown(),
+      id: z.string().regex(
+        new RegExp("(^SNYK(-[^-]+)+[-][0-9]+$)|(^[^:]+(:[^:]+)+$)"),
+      ),
+      initially_fixed_in_versions: z.array(z.string()),
+      insights: z.unknown().optional(),
+      is_disputed: z.boolean().optional().default(false),
+      is_fixable: z.boolean().default(false),
+      is_malicious: z.boolean().default(false),
+      is_proprietary: z.boolean().optional().default(false),
+      is_social_media_trending: z.boolean().default(false),
+      modified_at: z.string(),
+      module_name: z.string().optional(),
+      package_full_name: z.string().optional(),
+      package_name: z.string(),
+      package_namespace: z.string().optional(),
+      package_popularity_rank: z.number().min(0).max(100).optional(),
+      package_repository_url: z.string().optional(),
+      package_version: z.string(),
+      published_at: z.string(),
+      references: z.array(z.object({
+        title: z.string(),
+        url: z.string(),
+      })),
+      severity: z.unknown(),
+      severity_based_on: z.string().optional(),
+      source: z.enum(["snyk_vuln"]),
+      vendor_severity: z.string().optional(),
+      vulnerable_functions: z.record(
+        z.string(),
+        z.object({
+          function_id: z.unknown(),
+          versions: z.array(z.string()),
+        }),
+      ).optional(),
+      vulnerable_functions_list: z.array(z.object({
+        function_id: z.unknown(),
+        versions: z.array(z.string()),
+      })).optional(),
+    }),
+    z.object({
+      affected_hash_ranges: z.array(z.string()).optional(),
+      affected_hashes: z.array(z.string()).optional(),
+      affected_versions: z.array(z.string()).optional(),
+      created_at: z.string(),
+      ecosystem: z.unknown(),
+      id: z.string().regex(new RegExp("^snyk(:[^:]+)+$")),
+      instructions: z.array(z.object({
+        content: z.string(),
+        license: z.string(),
+      })),
+      license: z.string(),
+      package_full_name: z.string().optional(),
+      package_name: z.string(),
+      package_namespace: z.string().optional(),
+      package_version: z.string(),
+      published_at: z.string(),
+      severity: z.unknown(),
+      source: z.enum(["snyk_license"]),
+    }),
+    z.object({
+      id: z.string().regex(new RegExp("^SNYK-CC-([^-]+)+[-][0-9]+$")),
+      source: z.enum(["snyk_cloud_rule"]),
+    }),
+    z.object({
+      id: z.string(),
+      source: z.enum(["ghsa"]),
+    }),
+    z.object({
+      categories: z.array(z.string()),
+      help: z.string(),
+      id: z.string(),
+      name: z.string(),
+      precision: z.string(),
+      severity: z.unknown(),
+      short_description: z.string(),
+      source: z.enum(["secret"]),
+      tags: z.array(z.string()),
+    }),
+    z.object({
+      source: z.enum(["other"]),
+    }),
+  ])).describe(
+    "Problems are representative of the finding in other security domains and systems with a well-know...",
+  ),
+  rating: z.object({
+    severity: z.unknown(),
+  }),
+  risk: z.object({
+    risk_score: z.unknown().optional(),
+  }),
+  suppression: z.object({
+    created_at: z.string().optional(),
+    expires_at: z.string().optional(),
+    justification: z.string().optional(),
+    path: z.array(z.string()).optional(),
+    policy: z.unknown().optional(),
+    skipIfFixable: z.boolean().optional(),
+    status: z.unknown(),
+  }).optional(),
+  title: z.string().describe("A human-readable title for this finding."),
+  asset_id: z.string().optional().describe("Related asset ID"),
+  fix_id: z.string().optional().describe("Related fix ID"),
+  org_id: z.string().optional().describe("Related org ID"),
+  policy_id: z.string().optional().describe("Related policy ID"),
+  project_id: z.string().optional().describe("Related project ID"),
+  test_id: z.string().optional().describe("Related test ID"),
+}).passthrough();
+
+const ListComponentFindingsSchema = z.object({
+  items: z.array(ComponentFindingsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const FindingsItemSchema = z.object({
   id: z.string(),
   type: z.enum(["findings"]).optional(),
@@ -231,7 +433,7 @@ const ListFindingsSchema = z.object({
 /** Snyk Tests — on-demand package and dependency vulnerability testing */
 export const model = {
   type: "@webframp/snyk/tests",
-  version: "2026.09.18.1",
+  version: "2026.09.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -285,6 +487,11 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -293,6 +500,12 @@ export const model = {
       schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    "component_findings": {
+      description: "List findings for a component. (Early Access)",
+      schema: ListComponentFindingsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
     "findings": {
       description: "List findings for a test. (Early Access)",
@@ -380,6 +593,70 @@ export const model = {
           result,
         );
         context.logger.info("Fetched test", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    list_component_findings: {
+      description: "List findings for a component. (Early Access)",
+      arguments: z.object({
+        test_id: z.string().describe(
+          "Test ID returned from the Test API to query.",
+        ),
+        component_id: z.string().describe(
+          "Component ID whose Findings should be listed or converted into a document.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, orgId, version } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>(["test_id", "component_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await snykApiPaginated(
+          apiToken,
+          `/orgs/${orgId}/tests/${args.test_id}/components/${args.component_id}/findings`,
+          version,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "component_findings",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} component_findings", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },
