@@ -1,4 +1,7 @@
-## 2026.09.18.1
+## 2026.09.25.1
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Added:** `get_downtime` can request preview `run_as` principal assignments
+from Datadog.
+
+**Changed:** Downtime resources now expose `run_as` assignments returned by
+Datadog.

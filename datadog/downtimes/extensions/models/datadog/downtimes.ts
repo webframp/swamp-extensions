@@ -57,6 +57,9 @@ const DowntimesItemSchema = z.object({
   notify_end_types: z.array(z.unknown()).optional().describe(
     "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
   ),
+  run_as: z.array(z.unknown()).optional().describe(
+    "The principals (users, roles, or teams) allowed to act on behalf of the downtime. **Note**: This ...",
+  ),
   schedule: z.union([z.unknown(), z.unknown()]).optional().describe(
     "The schedule that defines when the monitor starts, stops, and recurs. There are two types of sche...",
   ),
@@ -111,6 +114,9 @@ const CreateDowntimeSchema = z.object({
   notify_end_types: z.array(z.unknown()).optional().describe(
     "Actions that will trigger a monitor notification if the downtime is in the `notify_end_types` state.",
   ),
+  run_as: z.array(z.unknown()).optional().describe(
+    "The principals (users, roles, or teams) allowed to act on behalf of the downtime. **Note**: This ...",
+  ),
   schedule: z.union([z.unknown(), z.unknown()]).optional().describe(
     "The schedule that defines when the monitor starts, stops, and recurs. There are two types of sche...",
   ),
@@ -156,7 +162,7 @@ const ListMonitorDowntimesSchema = z.object({
 /** Datadog Downtimes — scheduled downtime management for monitors */
 export const model = {
   type: "@webframp/datadog/downtimes",
-  version: "2026.09.18.1",
+  version: "2026.09.25.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -208,6 +214,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -361,6 +372,9 @@ export const model = {
         downtime_id: z.string().describe("ID of the downtime to fetch."),
         include: z.string().optional().describe(
           "Comma-separated list of resource paths for related resources to include in th...",
+        ),
+        with_run_as: z.boolean().optional().describe(
+          "If `true`, include the `run_as` attribute in the response, which lists the pr...",
         ),
       }),
       execute: async (

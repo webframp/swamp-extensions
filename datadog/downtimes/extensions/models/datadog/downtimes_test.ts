@@ -150,6 +150,7 @@ Deno.test({
               "mute_first_recovery_notification": false,
               "notify_end_states": ["alert", "warn"],
               "notify_end_types": ["canceled", "expired"],
+              "run_as": [],
               "schedule": null,
               "scope": "env:(staging OR prod) AND datacenter:us-east-1",
               "status": "active",
@@ -234,6 +235,7 @@ Deno.test({
               "mute_first_recovery_notification": false,
               "notify_end_states": ["alert", "warn"],
               "notify_end_types": ["canceled", "expired"],
+              "run_as": [],
               "schedule": null,
               "scope": "env:(staging OR prod) AND datacenter:us-east-1",
               "status": "active",
@@ -313,6 +315,7 @@ Deno.test({
               "mute_first_recovery_notification": false,
               "notify_end_states": ["alert", "warn"],
               "notify_end_types": ["canceled", "expired"],
+              "run_as": [],
               "schedule": null,
               "scope": "env:(staging OR prod) AND datacenter:us-east-1",
               "status": "active",
@@ -348,13 +351,17 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_downtime.execute({ "downtime_id": "test-id-123" }, context);
+      >).get_downtime.execute(
+        { "downtime_id": "test-id-123", "with_run_as": true },
+        context,
+      );
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/downtime/test-id-123");
+      assertEquals(req0.search, "?with_run_as=true");
       assertEquals(req0.headers["dd-api-key"], "test-api-key");
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
 
@@ -392,6 +399,7 @@ Deno.test({
               "mute_first_recovery_notification": false,
               "notify_end_states": ["alert", "warn"],
               "notify_end_types": ["canceled", "expired"],
+              "run_as": [],
               "schedule": null,
               "scope": "env:(staging OR prod) AND datacenter:us-east-1",
               "status": "active",
