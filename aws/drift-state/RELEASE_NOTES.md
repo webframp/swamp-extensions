@@ -1,4 +1,5 @@
-## 2026.09.18.1
+## 2026.09.25.1
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** Updated the required `@webframp/aws/adopt` and
+`@webframp/aws/inventory` dependencies to 2026.09.24.1. Pull all three
+extensions together.

@@ -1,4 +1,4 @@
-## 2026.09.18.1
+## 2026.09.25.1
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** Updated the required `@webframp/aws/bedrock-usage` dependency
+to 2026.09.24.1. Pull both extensions together.
