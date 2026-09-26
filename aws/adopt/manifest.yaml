@@ -1,25 +1,29 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
-version: "2026.09.24.1"
+version: "2026.09.26.1"
 description: |
-  Brownfield adoption of existing AWS infrastructure into swamp models.
-  Discovers resources via native SDK calls, generates setup commands,
-  and orchestrates import via a dependency-ordered workflow.
+  Brownfield adoption of AWS resources into swamp models, whatever created
+  them. plan_account_sweep enumerates about 40 resource types in a region
+  through Cloud Control and writes adoption candidates with deterministic
+  flags, live dependencies, swamp-managed matching, and coverage gaps.
+  plan_stack_adoption scopes the same question to one CloudFormation stack.
 
   ## Authentication
 
-  Uses the default AWS credential chain. Requires appropriate IAM permissions
-  for discovery (ReadOnly access to EC2, RDS, SecretsManager).
+  Uses the default AWS credential chain, or the optional `profile` global
+  argument. Required read permissions: Cloud Control (ListResources,
+  GetResource) plus the service reads it makes on your behalf, which the AWS
+  managed ReadOnlyAccess policy covers; STS GetCallerIdentity for the sweep;
+  CloudFormation (ListStackResources) for stack adoption; and EC2, RDS, and
+  Secrets Manager for the discover_* methods.
 
   ## Quick Start
 
   ```bash
   swamp extension pull @webframp/aws/adopt
-  swamp model create @webframp/aws/adopt my-discovery \
-    --global-arg region=us-east-1 --global-arg vpcId=vpc-xxx
-  swamp model method run my-discovery discover_all
-  # Follow the setup commands in the output, then:
-  swamp workflow run @webframp/adopt-stack --input vpcId=vpc-xxx
+  swamp model create @webframp/aws/adopt acct --global-arg region=us-east-1
+  swamp model method run acct plan_account_sweep
+  swamp data get acct sweep-us-east-1 --json
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 models:
@@ -48,5 +52,5 @@ labels:
   - iac
 dependencies:
   - "@swamp/aws/ec2@2026.09.24.1"
-  - "@swamp/aws/rds@2026.09.24.1"
-  - "@swamp/aws/secretsmanager@2026.09.24.1"
+  - "@swamp/aws/rds@2026.09.25.1"
+  - "@swamp/aws/secretsmanager@2026.09.25.1"

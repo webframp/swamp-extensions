@@ -1,8 +1,11 @@
 /**
  * AWS Adopt Model.
  *
- * Discovers existing AWS resources (VPCs, subnets, security groups, route
- * tables, internet gateways) and adopts them into swamp-managed state.
+ * Finds AWS resources running in an account and region and plans their
+ * adoption into swamp-managed state. `plan_account_sweep` enumerates every
+ * registry type through Cloud Control; `plan_stack_adoption` scopes to one
+ * CloudFormation stack; the `discover_*` methods keep the original
+ * VPC-centric SDK discovery.
  *
  * @module
  */
@@ -32,6 +35,43 @@ import {
   SecretsManagerClient,
 } from "npm:@aws-sdk/client-secrets-manager@3.1139.0";
 import { fromIni } from "npm:@aws-sdk/credential-providers@3.1139.0";
+import {
+  CloudControlClient,
+  GetResourceCommand,
+  ListResourcesCommand,
+} from "npm:@aws-sdk/client-cloudcontrol@3.1139.0";
+import {
+  GetCallerIdentityCommand,
+  STSClient,
+} from "npm:@aws-sdk/client-sts@3.1139.0";
+import {
+  ADOPTION_TIERS,
+  ADOPTION_TYPES_BY_CFN,
+  type AdoptionCandidate,
+  AdoptionPlanSchema,
+  type AdoptionType,
+  arnFor,
+  candidateId,
+  candidateModelName,
+  cfnToSwampTypeMap,
+  classifySweepError,
+  type CoverageGapSchema,
+  deterministicFlags,
+  identityKeys,
+  listingIsComplete,
+  managedKeys,
+  type ManagedRecord,
+  projectJudgeState,
+  resolveDependsOn,
+  selectSweepTypes,
+  stackShortName,
+  stackUnmappableReason,
+  type SweepScope,
+  tagsFor,
+} from "./_lib/adoption.ts";
+
+export { ADOPTION_TIERS, ADOPTION_TYPES } from "./_lib/adoption.ts";
+export type { AdoptionCandidate, AdoptionType } from "./_lib/adoption.ts";
 
 const EXTENSION_NAME = "@webframp/aws/adopt";
 
@@ -911,42 +951,14 @@ type MethodContext = {
 // =============================================================================
 
 /**
- * Static map of CloudFormation resource types to swamp model types.
+ * CloudFormation resource type → swamp model type, derived from
+ * `ADOPTION_TYPES`. Kept for callers of the original export.
  *
- * This map is intentionally manual: swamp method context does not expose
- * a runtime type registry. Adding a new entry is a one-line PR.
- *
- * Types not in this map will surface in the plan's `unmapped[]` list,
- * with a clear reason — they are not silent.
+ * Types not in this map surface in a stack plan's `unmapped[]` list with a
+ * reason; they are not silent.
  */
-export const CFN_TO_SWAMP_TYPE_MAP: Readonly<Record<string, string>> = Object
-  .freeze({
-    "AWS::EC2::VPC": "@swamp/aws/ec2/vpc",
-    "AWS::EC2::Subnet": "@swamp/aws/ec2/subnet",
-    "AWS::EC2::InternetGateway": "@swamp/aws/ec2/internet-gateway",
-    "AWS::EC2::RouteTable": "@swamp/aws/ec2/route-table",
-    "AWS::EC2::SecurityGroup": "@swamp/aws/ec2/security-group",
-    "AWS::EC2::NatGateway": "@swamp/aws/ec2/nat-gateway",
-    "AWS::EC2::EIP": "@swamp/aws/ec2/eip",
-    "AWS::RDS::DBCluster": "@swamp/aws/rds/dbcluster",
-    "AWS::RDS::DBInstance": "@swamp/aws/rds/dbinstance",
-    "AWS::RDS::DBSubnetGroup": "@swamp/aws/rds/dbsubnet-group",
-    "AWS::SecretsManager::Secret": "@swamp/aws/secretsmanager/secret",
-    "AWS::S3::Bucket": "@swamp/aws/s3/bucket",
-    "AWS::Lambda::Function": "@swamp/aws/lambda/function",
-    "AWS::IAM::Role": "@swamp/aws/iam/role",
-  });
-
-/**
- * Short-name suffix derived from a CFN resource type. Used to construct
- * deterministic swamp model names from a stack's logical IDs.
- */
-function shortNameForCfnType(cfnType: string): string {
-  // "AWS::EC2::VPC" -> "vpc", "AWS::SecretsManager::Secret" -> "secret"
-  const parts = cfnType.split("::");
-  const last = parts[parts.length - 1] ?? cfnType;
-  return last.toLowerCase();
-}
+export const CFN_TO_SWAMP_TYPE_MAP: Readonly<Record<string, string>> =
+  cfnToSwampTypeMap();
 
 /**
  * Compute a deterministic collision-resistant suffix for a model name from
@@ -1248,10 +1260,475 @@ function planInstanceName(stackName: string): string {
   return `plan-${stackName.replace(/[^a-zA-Z0-9-]/g, "-")}`;
 }
 
+// =============================================================================
+// Account Sweep (Cloud Control)
+// =============================================================================
+
+/** Cloud Control returns at most 100 descriptions per ListResources page. */
+const CLOUD_CONTROL_PAGE_SIZE = 100;
+
+/** Arguments accepted by `plan_account_sweep`. */
+const SweepArgsSchema = z.object({
+  prefix: z.string()
+    .regex(
+      /^[a-z0-9][a-z0-9-]*$/,
+      "prefix must be lowercase alphanumeric and hyphens only",
+    )
+    .default("adopt")
+    .describe("Prefix for generated swamp model names"),
+  types: z.array(
+    z.string().refine((t) => ADOPTION_TYPES_BY_CFN.has(t), {
+      message: "not a registry type; see ADOPTION_TYPES",
+    }),
+  ).optional().describe(
+    "Limit the sweep to these CloudFormation types (default: all)",
+  ),
+  tiers: z.array(z.enum(ADOPTION_TIERS)).optional().describe(
+    "Limit the sweep to these tiers (default: all)",
+  ),
+  maxPagesPerType: z.number().int().min(1).max(50).default(5).describe(
+    "ListResources page cap per type (and per parent for child types)",
+  ),
+  maxResourcesPerType: z.number().int().min(1).max(5000).default(200)
+    .describe("Resource cap per type; the excess marks the type truncated"),
+  readConcurrency: z.number().int().min(1).max(10).default(4).describe(
+    "Concurrent GetResource calls",
+  ),
+  managed: z.array(z.object({
+    modelType: z.string(),
+    attributes: z.record(z.string(), z.unknown()).nullable(),
+  })).default([]).describe(
+    "Stored swamp state to match against, as projected by " +
+      `data.query('modelType.startsWith("@swamp/aws/") && specName == "state"', ` +
+      `'{"modelType": modelType, "attributes": attributes}')`,
+  ),
+});
+
+/** Parsed `plan_account_sweep` arguments. */
+type SweepArgs = z.infer<typeof SweepArgsSchema>;
+
+/** A resource returned by ListResources, before GetResource. */
+interface ListedResource {
+  identifier: string;
+  properties?: Record<string, unknown>;
+  parentId?: string;
+}
+
+/** Result of listing one registry type. */
+interface ListOutcome {
+  items: ListedResource[];
+  truncated: boolean;
+  gap?: z.infer<typeof CoverageGapSchema>;
+}
+
+/** Parse a Cloud Control `Properties` JSON string, or return undefined. */
+function parseProperties(
+  raw: string | undefined,
+): Record<string, unknown> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * List one registry type through Cloud Control, bounded by page and
+ * resource caps. `resourceModel` scopes a child type to one parent.
+ */
+async function listCloudControl(
+  cc: CloudControlClient,
+  type: AdoptionType,
+  limits: { maxPages: number; maxResources: number },
+  resourceModel?: Record<string, string>,
+): Promise<{ items: ListedResource[]; truncated: boolean }> {
+  const items: ListedResource[] = [];
+  const seen = new Set<string>();
+  let nextToken: string | undefined;
+  let pages = 0;
+  do {
+    const response = await cc.send(
+      new ListResourcesCommand({
+        TypeName: type.cfnType,
+        MaxResults: CLOUD_CONTROL_PAGE_SIZE,
+        ...(resourceModel
+          ? { ResourceModel: JSON.stringify(resourceModel) }
+          : {}),
+        ...(nextToken ? { NextToken: nextToken } : {}),
+      }),
+    );
+    for (const desc of response.ResourceDescriptions ?? []) {
+      const identifier = desc.Identifier;
+      if (!identifier || seen.has(identifier)) continue;
+      if (items.length >= limits.maxResources) {
+        return { items, truncated: true };
+      }
+      seen.add(identifier);
+      items.push({ identifier, properties: parseProperties(desc.Properties) });
+    }
+    nextToken = response.NextToken;
+    pages++;
+  } while (nextToken && pages < limits.maxPages);
+  return { items, truncated: !!nextToken };
+}
+
+/** Build a coverage gap from a listing error. */
+function gapFromError(
+  cfnType: string,
+  err: unknown,
+  context?: string,
+): z.infer<typeof CoverageGapSchema> {
+  const message = err instanceof Error ? err.message : String(err);
+  return {
+    cfnType,
+    reason: classifySweepError(err),
+    detail: context ? `${context}: ${message}` : message,
+  };
+}
+
+/** Run `fn` over `items` with at most `limit` calls in flight. */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(Math.max(limit, 1), items.length) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i]);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+/** Look up default VPC ids so the sweep can flag them. */
+async function findDefaultVpcIds(ec2: EC2Client): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const response = await ec2.send(
+    new DescribeVpcsCommand({
+      Filters: [{ Name: "isDefault", Values: ["true"] }],
+    }),
+  );
+  for (const vpc of response.Vpcs ?? []) {
+    if (vpc.VpcId) ids.add(vpc.VpcId);
+  }
+  return ids;
+}
+
+/** Enumerate every selected type: top-level types first, then children. */
+async function sweepListings(
+  cc: CloudControlClient,
+  selected: readonly AdoptionType[],
+  limits: { maxPages: number; maxResources: number },
+): Promise<Map<string, ListOutcome>> {
+  const outcomes = new Map<string, ListOutcome>();
+
+  for (const type of selected.filter((t) => !t.parent)) {
+    try {
+      outcomes.set(type.cfnType, await listCloudControl(cc, type, limits));
+    } catch (err) {
+      outcomes.set(type.cfnType, {
+        items: [],
+        truncated: false,
+        gap: gapFromError(type.cfnType, err),
+      });
+    }
+  }
+
+  for (const type of selected.filter((t) => t.parent)) {
+    const parent = type.parent!;
+    const parentOutcome = outcomes.get(parent.cfnType);
+    if (!parentOutcome || parentOutcome.gap) {
+      outcomes.set(type.cfnType, {
+        items: [],
+        truncated: false,
+        gap: {
+          cfnType: type.cfnType,
+          reason: "parent-not-swept",
+          detail: parentOutcome
+            ? `parent ${parent.cfnType} could not be listed`
+            : `include ${parent.cfnType} in the sweep to list this type`,
+        },
+      });
+      continue;
+    }
+    const items: ListedResource[] = [];
+    let truncated = parentOutcome.truncated;
+    let firstFailure: z.infer<typeof CoverageGapSchema> | undefined;
+    let failedParents = 0;
+    for (const p of parentOutcome.items) {
+      const remaining = limits.maxResources - items.length;
+      try {
+        // At the cap, list one more item only to learn whether anything
+        // was actually left out.
+        const listed = await listCloudControl(
+          cc,
+          type,
+          { maxPages: limits.maxPages, maxResources: Math.max(remaining, 1) },
+          { [parent.listKey]: p.identifier },
+        );
+        if (remaining <= 0) {
+          if (listed.items.length > 0 || listed.truncated) {
+            truncated = true;
+            break;
+          }
+          continue;
+        }
+        const parentId = candidateId(parent.cfnType, p.identifier);
+        for (const item of listed.items) items.push({ ...item, parentId });
+        if (listed.truncated) truncated = true;
+      } catch (err) {
+        // Keep going: later parents may still list.
+        failedParents++;
+        firstFailure ??= gapFromError(
+          type.cfnType,
+          err,
+          `listing under ${parent.cfnType} ${p.identifier}`,
+        );
+      }
+    }
+    const gap = firstFailure && {
+      ...firstFailure,
+      detail: `${failedParents} of ${parentOutcome.items.length} ` +
+        `${parent.cfnType} parents failed to list; first: ${firstFailure.detail}`,
+    };
+    outcomes.set(type.cfnType, { items, truncated, ...(gap ? { gap } : {}) });
+  }
+
+  return outcomes;
+}
+
+/** Everything `runAccountSweep` produces besides the stored resource. */
+interface SweepResult {
+  candidates: AdoptionCandidate[];
+  coverage: z.infer<typeof AdoptionPlanSchema>["coverage"];
+  truncated: boolean;
+}
+
+/**
+ * Run the full sweep: list, read what the listing lacks, flag, match
+ * against stored swamp state, and resolve live dependencies.
+ */
+async function runAccountSweep(
+  cc: CloudControlClient,
+  ec2: EC2Client,
+  args: SweepArgs,
+  scope: SweepScope,
+  logger: MethodContext["logger"],
+): Promise<SweepResult> {
+  const region = scope.region;
+  const selected = selectSweepTypes(args.types, args.tiers);
+  const limits = {
+    maxPages: args.maxPagesPerType ?? 5,
+    maxResources: args.maxResourcesPerType ?? 200,
+  };
+  const warnings: string[] = [];
+
+  const outcomes = await sweepListings(cc, selected, limits);
+
+  let defaultVpcIds = new Set<string>();
+  if (selected.some((t) => t.cfnType === "AWS::EC2::VPC")) {
+    try {
+      defaultVpcIds = await findDefaultVpcIds(ec2);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      warnings.push(
+        `default VPC lookup failed; default-vpc not flagged: ${message}`,
+      );
+    }
+  }
+
+  const work: Array<{ type: AdoptionType; item: ListedResource }> = [];
+  for (const type of selected) {
+    for (const item of outcomes.get(type.cfnType)?.items ?? []) {
+      work.push({ type, item });
+    }
+  }
+
+  let readFailures = 0;
+  const resolved = await mapWithConcurrency(
+    work,
+    args.readConcurrency ?? 4,
+    async ({ type, item }) => {
+      if (listingIsComplete(type, item.properties)) {
+        return { type, item, properties: item.properties!, readFailed: false };
+      }
+      try {
+        const response = await cc.send(
+          new GetResourceCommand({
+            TypeName: type.cfnType,
+            Identifier: item.identifier,
+          }),
+        );
+        const properties = parseProperties(
+          response.ResourceDescription?.Properties,
+        );
+        if (!properties) throw new Error("GetResource returned no properties");
+        return { type, item, properties, readFailed: false };
+      } catch (err) {
+        readFailures++;
+        logger.warn?.("GetResource failed for {cfnType} {identifier}", {
+          cfnType: type.cfnType,
+          identifier: item.identifier,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return {
+          type,
+          item,
+          properties: item.properties ?? {},
+          readFailed: true,
+        };
+      }
+    },
+  );
+
+  const { keys: managed, unscoped, unmatchable, unidentified } = managedKeys(
+    (args.managed ?? []) as ManagedRecord[],
+    scope,
+    new Set(selected.map((t) => t.swampType)),
+  );
+  if (unscoped > 0) {
+    warnings.push(
+      `${unscoped} stored swamp records were not matched: they carry no ARN ` +
+        "or other account and region. Run get or sync on those models to " +
+        "store the full state, then sweep again.",
+    );
+  }
+  if (unmatchable > 0) {
+    warnings.push(
+      `${unmatchable} stored swamp records were not matched: their type ` +
+        "(KMS alias, ElastiCache replication group) never stores an ARN or " +
+        "region, so swampManaged cannot be decided for it.",
+    );
+  }
+  if (unidentified > 0) {
+    warnings.push(
+      `${unidentified} stored swamp records were not matched: they carry no ` +
+        "primary identifier.",
+    );
+  }
+  const flagContext = { defaultVpcIds };
+  const usedNames = new Set<string>();
+
+  const drafts = resolved.map(({ type, item, properties, readFailed }) => {
+    const id = candidateId(type.cfnType, item.identifier);
+    const arn = arnFor(type, item.identifier, properties);
+    const tags = tagsFor(type, properties);
+    const flags = deterministicFlags(
+      type,
+      item.identifier,
+      properties,
+      tags,
+      flagContext,
+    );
+    if (readFailed) flags.push("read-failed");
+    const baseName = candidateModelName(
+      args.prefix ?? "adopt",
+      type,
+      item.identifier,
+      scope,
+    );
+    let modelName = baseName;
+    for (let n = 2; usedNames.has(modelName); n++) {
+      modelName = `${baseName}-${n}`;
+    }
+    usedNames.add(modelName);
+    const swampManaged = identityKeys(type.swampType, item.identifier, arn)
+      .some((key) => managed.has(key));
+    return {
+      id,
+      type,
+      identifier: item.identifier,
+      arn,
+      properties,
+      parentId: item.parentId,
+      candidate: {
+        id,
+        swampType: type.swampType,
+        cfnType: type.cfnType,
+        identifier: item.identifier,
+        ...(arn ? { arn } : {}),
+        region,
+        scope: "sweep" as const,
+        dependsOn: [] as string[],
+        tags,
+        modelName,
+        cfnStack: tags["aws:cloudformation:stack-name"] ?? null,
+        swampManaged,
+        flags,
+        judgeState: projectJudgeState(type, properties),
+      },
+    };
+  });
+
+  const dependsOn = resolveDependsOn(drafts);
+  const candidates = drafts.map((d) => ({
+    ...d.candidate,
+    dependsOn: dependsOn.get(d.id) ?? [],
+  }));
+
+  const gaps: z.infer<typeof CoverageGapSchema>[] = [];
+  const typesSwept: string[] = [];
+  const truncatedTypes: string[] = [];
+  for (const type of selected) {
+    const outcome = outcomes.get(type.cfnType);
+    if (!outcome) continue;
+    if (outcome.gap) gaps.push(outcome.gap);
+    else typesSwept.push(type.cfnType);
+    if (outcome.truncated) truncatedTypes.push(type.cfnType);
+  }
+
+  return {
+    candidates,
+    truncated: truncatedTypes.length > 0,
+    coverage: {
+      typesRequested: selected.map((t) => t.cfnType),
+      typesSwept,
+      gaps,
+      truncatedTypes,
+      readFailures,
+      warnings,
+    },
+  };
+}
+
+/** Summary counts for an adoption plan. */
+function summarizeCandidates(candidates: readonly AdoptionCandidate[]) {
+  const byCfnType: Record<string, number> = {};
+  const byTier: Record<string, number> = {};
+  let swampManaged = 0;
+  let flagged = 0;
+  for (const c of candidates) {
+    byCfnType[c.cfnType] = (byCfnType[c.cfnType] ?? 0) + 1;
+    const tier = ADOPTION_TYPES_BY_CFN.get(c.cfnType)?.tier ?? "unknown";
+    byTier[tier] = (byTier[tier] ?? 0) + 1;
+    if (c.swampManaged) swampManaged++;
+    if (c.flags.length > 0) flagged++;
+  }
+  return {
+    total: candidates.length,
+    swampManaged,
+    unmanaged: candidates.length - swampManaged,
+    flagged,
+    byCfnType,
+    byTier,
+  };
+}
+
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.09.24.1",
+  version: "2026.09.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1362,6 +1839,13 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.26.1",
+      description:
+        "Added plan_account_sweep and the adoptionPlan resource; global " +
+        "arguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -1382,6 +1866,13 @@ export const model = {
       description:
         "CloudFormation stack adoption plan with mapped/unmapped/skipped/orphan resources",
       schema: StackAdoptionPlanSchema,
+      lifetime: "7d" as const,
+      garbageCollection: 10,
+    },
+    adoptionPlan: {
+      description:
+        "Adoption candidates from a sweep or stack, with coverage and gaps",
+      schema: AdoptionPlanSchema,
       lifetime: "7d" as const,
       garbageCollection: 10,
     },
@@ -1960,6 +2451,83 @@ export const model = {
       },
     },
 
+    plan_account_sweep: {
+      description:
+        "Sweep every registry type in the region through Cloud Control and " +
+        "write adoption candidates, flags, and coverage gaps",
+      arguments: SweepArgsSchema,
+      execute: async (args: SweepArgs, context: MethodContext) => {
+        const startMs = Date.now();
+        const region = context.globalArgs.region ?? "us-east-1";
+        const globalArgs = { ...context.globalArgs, region };
+        const cc = new CloudControlClient({
+          ...makeClientConfig(globalArgs),
+          maxAttempts: 6,
+          retryMode: "adaptive",
+        });
+        const ec2 = new EC2Client(makeClientConfig(globalArgs));
+        const sts = new STSClient(makeClientConfig(globalArgs));
+        try {
+          // The account scopes model names and managed matching, so a sweep
+          // without it would not be deterministic. GetCallerIdentity needs
+          // no permissions; if it fails, the credentials are unusable.
+          const identity = await withAwsContext(
+            `GetCallerIdentity (region ${region})`,
+            () => sts.send(new GetCallerIdentityCommand({})),
+          );
+          if (!identity.Account) {
+            throw new Error("GetCallerIdentity returned no account");
+          }
+          const scope = { accountId: identity.Account, region };
+          context.logger.info(
+            "Sweeping account {accountId} in {region} through Cloud Control",
+            scope,
+          );
+          const { candidates, coverage, truncated } = await runAccountSweep(
+            cc,
+            ec2,
+            args,
+            scope,
+            context.logger,
+          );
+          const handle = await context.writeResource(
+            "adoptionPlan",
+            `sweep-${region}`,
+            {
+              scope: "sweep",
+              accountId: scope.accountId,
+              region,
+              stackName: null,
+              prefix: args.prefix ?? "adopt",
+              truncated,
+              candidates,
+              coverage,
+              summary: summarizeCandidates(candidates),
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+          context.logger.info(
+            "Sweep found {total} candidates across {types} types " +
+              "({gaps} gaps, truncated: {truncated})",
+            {
+              total: candidates.length,
+              types: coverage.typesSwept.length,
+              gaps: coverage.gaps.length,
+              truncated,
+              region,
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          cc.destroy();
+          ec2.destroy();
+          sts.destroy();
+        }
+      },
+    },
+
     plan_stack_adoption: {
       description:
         "Enumerate all resources in a CloudFormation stack, map to swamp types, and build an adoption plan",
@@ -2069,6 +2637,20 @@ export const model = {
               });
               continue;
             }
+            const unmappable = ADOPTION_TYPES_BY_CFN.get(r.cfnType);
+            const unmappableReason = unmappable &&
+              stackUnmappableReason(unmappable);
+            if (unmappableReason) {
+              unmapped.push({
+                logicalId: r.logicalId,
+                physicalId: r.physicalId,
+                cfnType: r.cfnType,
+                parentStackName: r.parentStackName,
+                depth: r.depth,
+                reason: unmappableReason,
+              });
+              continue;
+            }
             const swampType = CFN_TO_SWAMP_TYPE_MAP[r.cfnType];
             if (!swampType) {
               unmapped.push({
@@ -2081,7 +2663,7 @@ export const model = {
               });
               continue;
             }
-            const shortName = shortNameForCfnType(r.cfnType);
+            const shortName = stackShortName(r.cfnType);
             const suffix = modelNameSuffixFromPhysicalId(
               r.physicalId,
               r.logicalId,
@@ -2102,10 +2684,19 @@ export const model = {
           // Detect orphans: in previous plan but not in current.
           // Carry forward previously-flagged orphans that are still missing
           // so the operator sees them every run until acted upon.
-          const newOrphans = findOrphans(previousMapped, mapped);
+          // A resource that moved to unmapped[] (a type stack adoption can
+          // no longer address) is still in the stack, so it is not an orphan.
+          const stillInStack = new Set(
+            unmapped.map((r) => `${r.cfnType}|${r.physicalId}`),
+          );
+          const inStack = (o: { cfnType: string; physicalId: string }) =>
+            stillInStack.has(`${o.cfnType}|${o.physicalId}`);
+          const newOrphans = findOrphans(previousMapped, mapped).filter(
+            (o) => !inStack(o),
+          );
           const currentNames = new Set(mapped.map((r) => r.modelName));
           const carriedOrphans = (previousOrphans ?? []).filter(
-            (o) => !currentNames.has(o.modelName),
+            (o) => !currentNames.has(o.modelName) && !inStack(o),
           );
           // Merge by modelName, preferring the new orphan entry (fresher note).
           const orphanMap = new Map<

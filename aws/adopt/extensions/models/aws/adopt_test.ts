@@ -1421,3 +1421,835 @@ Deno.test("plan_stack_adoption schema accepts valid CFN stack name", () => {
   });
   assertEquals(result.success, true);
 });
+
+// =============================================================================
+// plan_account_sweep (Cloud Control)
+// =============================================================================
+
+import {
+  CloudControlClient,
+  GetResourceCommand,
+  ListResourcesCommand,
+} from "npm:@aws-sdk/client-cloudcontrol@3.1139.0";
+import { DescribeVpcsCommand } from "npm:@aws-sdk/client-ec2@3.1139.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1139.0";
+
+/** A fake Cloud Control account: type → listed resources, id → full model. */
+interface FakeAccount {
+  list: Record<
+    string,
+    | Array<{ id: string; props?: Record<string, unknown>; parent?: string }>
+    | Error
+  >;
+  get?: Record<string, Record<string, unknown> | Error>;
+  defaultVpcs?: string[];
+  pageSize?: number;
+  /** Failures for one parent of a child type, keyed `<cfnType>|<parent>`. */
+  listErrors?: Record<string, Error>;
+  /** Account GetCallerIdentity returns, or an error. */
+  account?: string | Error;
+}
+
+function namedError(name: string, message: string): Error {
+  const err = new Error(message);
+  err.name = name;
+  return err;
+}
+
+function mockCloudControl(account: FakeAccount): {
+  restore: () => void;
+  calls: Array<{ op: string; input: Record<string, unknown> }>;
+} {
+  const calls: Array<{ op: string; input: Record<string, unknown> }> = [];
+  const originals = {
+    ccSend: CloudControlClient.prototype.send,
+    ccDestroy: CloudControlClient.prototype.destroy,
+    ec2Send: EC2Client.prototype.send,
+    ec2Destroy: EC2Client.prototype.destroy,
+    stsSend: STSClient.prototype.send,
+    stsDestroy: STSClient.prototype.destroy,
+  };
+  STSClient.prototype.destroy = function () {};
+  STSClient.prototype.send = function () {
+    const acct = account.account ?? "111111111111";
+    if (acct instanceof Error) return Promise.reject(acct);
+    return Promise.resolve({ Account: acct });
+  } as typeof originals.stsSend;
+  CloudControlClient.prototype.destroy = function () {};
+  EC2Client.prototype.destroy = function () {};
+  // deno-lint-ignore no-explicit-any
+  CloudControlClient.prototype.send = function (cmd: any) {
+    const input = cmd.input as Record<string, unknown>;
+    if (cmd instanceof ListResourcesCommand) {
+      calls.push({ op: "list", input });
+      const entry = account.list[input.TypeName as string];
+      if (entry instanceof Error) return Promise.reject(entry);
+      const parent = input.ResourceModel
+        ? Object.values(JSON.parse(input.ResourceModel as string))[0]
+        : undefined;
+      const perParent = account.listErrors?.[`${input.TypeName}|${parent}`];
+      if (perParent) return Promise.reject(perParent);
+      const rows = (entry ?? []).filter((r) => r.parent === parent);
+      const size = account.pageSize ?? 100;
+      const start = input.NextToken ? Number(input.NextToken) : 0;
+      const page = rows.slice(start, start + size);
+      return Promise.resolve({
+        ResourceDescriptions: page.map((r) => ({
+          Identifier: r.id,
+          ...(r.props ? { Properties: JSON.stringify(r.props) } : {}),
+        })),
+        ...(start + size < rows.length
+          ? { NextToken: String(start + size) }
+          : {}),
+      });
+    }
+    if (cmd instanceof GetResourceCommand) {
+      calls.push({ op: "get", input });
+      const model = account.get?.[input.Identifier as string];
+      if (model instanceof Error) return Promise.reject(model);
+      if (!model) {
+        return Promise.reject(namedError("ResourceNotFoundException", "gone"));
+      }
+      return Promise.resolve({
+        ResourceDescription: {
+          Identifier: input.Identifier,
+          Properties: JSON.stringify(model),
+        },
+      });
+    }
+    return Promise.reject(new Error("unexpected Cloud Control command"));
+  } as typeof originals.ccSend;
+  // deno-lint-ignore no-explicit-any
+  EC2Client.prototype.send = function (cmd: any) {
+    if (cmd instanceof DescribeVpcsCommand) {
+      calls.push({
+        op: "describeVpcs",
+        input: cmd.input as Record<string, unknown>,
+      });
+      return Promise.resolve({
+        Vpcs: (account.defaultVpcs ?? []).map((VpcId) => ({ VpcId })),
+      });
+    }
+    return Promise.reject(new Error("unexpected EC2 command"));
+  } as typeof originals.ec2Send;
+  return {
+    calls,
+    restore: () => {
+      CloudControlClient.prototype.send = originals.ccSend;
+      CloudControlClient.prototype.destroy = originals.ccDestroy;
+      EC2Client.prototype.send = originals.ec2Send;
+      EC2Client.prototype.destroy = originals.ec2Destroy;
+      STSClient.prototype.send = originals.stsSend;
+      STSClient.prototype.destroy = originals.stsDestroy;
+    },
+  };
+}
+
+function makeSweepContext() {
+  return createModelTestContext({
+    globalArgs: { region: "us-east-1" },
+    definition: {
+      id: "test-sweep-id",
+      name: "adopt-sweep-test",
+      version: 1,
+      tags: {},
+    },
+  });
+}
+
+interface SweepPlan {
+  scope: string;
+  truncated: boolean;
+  candidates: Array<{
+    id: string;
+    cfnType: string;
+    swampType: string;
+    identifier: string;
+    arn?: string;
+    modelName: string;
+    dependsOn: string[];
+    flags: string[];
+    swampManaged: boolean;
+    cfnStack: string | null;
+    tags: Record<string, string>;
+    judgeState: Record<string, unknown>;
+  }>;
+  coverage: {
+    typesRequested: string[];
+    typesSwept: string[];
+    gaps: Array<{ cfnType: string; reason: string; detail: string }>;
+    truncatedTypes: string[];
+    readFailures: number;
+    warnings: string[];
+  };
+  summary: {
+    total: number;
+    swampManaged: number;
+    unmanaged: number;
+    flagged: number;
+    byTier: Record<string, number>;
+  };
+}
+
+const SERVICE_ARN = "arn:aws:ecs:us-east-1:111111111111:service/prod/web";
+const CLUSTER_ARN = "arn:aws:ecs:us-east-1:111111111111:cluster/prod";
+const SERVICE_ID = `${SERVICE_ARN}|${CLUSTER_ARN}`;
+
+function sweepAccount(): FakeAccount {
+  return {
+    defaultVpcs: ["vpc-default"],
+    list: {
+      "AWS::EC2::VPC": [{ id: "vpc-default" }, { id: "vpc-app" }],
+      "AWS::EC2::Subnet": [{ id: "subnet-app" }],
+      "AWS::RDS::DBCluster": namedError(
+        "UnsupportedActionException",
+        "Resource type AWS::RDS::DBCluster does not support LIST action",
+      ),
+      "AWS::ECS::Cluster": [{ id: "prod" }],
+      "AWS::ECS::Service": [{ id: SERVICE_ID, parent: "prod" }],
+      "AWS::S3::Bucket": [
+        { id: "cdk-hnb659fds-assets-111111111111-us-east-1" },
+        { id: "app-data" },
+      ],
+    },
+    get: {
+      "vpc-default": { VpcId: "vpc-default", CidrBlock: "172.31.0.0/16" },
+      "vpc-app": {
+        VpcId: "vpc-app",
+        CidrBlock: "10.0.0.0/16",
+        Tags: [{ Key: "aws:cloudformation:stack-name", Value: "network" }],
+      },
+      "subnet-app": {
+        SubnetId: "subnet-app",
+        VpcId: "vpc-app",
+        MapPublicIpOnLaunch: true,
+      },
+      prod: {
+        ClusterName: "prod",
+        Arn: "arn:aws:ecs:us-east-1:111111111111:cluster/prod",
+      },
+      [SERVICE_ID]: {
+        ServiceArn: SERVICE_ARN,
+        Cluster: CLUSTER_ARN,
+        ServiceName: "web",
+      },
+      "cdk-hnb659fds-assets-111111111111-us-east-1": {
+        BucketName: "cdk-hnb659fds-assets-111111111111-us-east-1",
+        Arn: "arn:aws:s3:::cdk-hnb659fds-assets-111111111111-us-east-1",
+      },
+      "app-data": namedError("AccessDeniedException", "not authorized"),
+    },
+  };
+}
+
+const SWEEP_TYPES = [
+  "AWS::EC2::VPC",
+  "AWS::EC2::Subnet",
+  "AWS::RDS::DBCluster",
+  "AWS::ECS::Cluster",
+  "AWS::ECS::Service",
+  "AWS::S3::Bucket",
+];
+
+async function runSweep(
+  account: FakeAccount,
+  args: Record<string, unknown>,
+): Promise<
+  {
+    plan: SweepPlan;
+    name: string;
+    calls: ReturnType<typeof mockCloudControl>["calls"];
+  }
+> {
+  const { restore, calls } = mockCloudControl(account);
+  try {
+    const { context, getWrittenResources } = makeSweepContext();
+    await model.methods.plan_account_sweep.execute(
+      // deno-lint-ignore no-explicit-any
+      { prefix: "adopt", ...args } as any,
+      context as ExecuteContext,
+    );
+    const written = getWrittenResources() as WrittenResource[];
+    assertEquals(written.length, 1);
+    assertEquals(written[0].specName, "adoptionPlan");
+    return { plan: written[0].data as SweepPlan, name: written[0].name, calls };
+  } finally {
+    restore();
+  }
+}
+
+Deno.test({
+  name: "plan_account_sweep writes candidates for every listed resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan, name } = await runSweep(sweepAccount(), {
+      types: SWEEP_TYPES,
+    });
+    assertEquals(name, "sweep-us-east-1");
+    assertEquals(plan.scope, "sweep");
+    assertEquals(
+      plan.candidates.map((c) => c.id).sort(),
+      [
+        "AWS::EC2::Subnet/subnet-app",
+        "AWS::EC2::VPC/vpc-app",
+        "AWS::EC2::VPC/vpc-default",
+        `AWS::ECS::Cluster/prod`,
+        `AWS::ECS::Service/${SERVICE_ID}`,
+        "AWS::S3::Bucket/app-data",
+        "AWS::S3::Bucket/cdk-hnb659fds-assets-111111111111-us-east-1",
+      ].sort(),
+    );
+    const subnet = plan.candidates.find((c) => c.identifier === "subnet-app")!;
+    assertEquals(subnet.swampType, "@swamp/aws/ec2/subnet");
+    assertEquals(subnet.modelName.startsWith("adopt-ec2-subnet-"), true);
+    assertEquals(subnet.judgeState.MapPublicIpOnLaunch, true);
+    assertEquals(plan.summary.total, 7);
+    assertEquals(plan.summary.byTier.network, 3);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep records a type without a list handler as a gap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    assertEquals(plan.coverage.gaps, [{
+      cfnType: "AWS::RDS::DBCluster",
+      reason: "no-list-handler",
+      detail: "Resource type AWS::RDS::DBCluster does not support LIST action",
+    }]);
+    assertEquals(
+      plan.coverage.typesSwept.includes("AWS::RDS::DBCluster"),
+      false,
+    );
+    assertEquals(plan.coverage.typesRequested.length, SWEEP_TYPES.length);
+    assertEquals(plan.truncated, false);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep lists child types once per parent",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan, calls } = await runSweep(sweepAccount(), {
+      types: SWEEP_TYPES,
+    });
+    const serviceList = calls.filter((c) =>
+      c.op === "list" && c.input.TypeName === "AWS::ECS::Service"
+    );
+    assertEquals(serviceList.length, 1);
+    assertEquals(
+      JSON.parse(serviceList[0].input.ResourceModel as string),
+      { Cluster: "prod" },
+    );
+    const service = plan.candidates.find((c) =>
+      c.cfnType === "AWS::ECS::Service"
+    )!;
+    assertEquals(service.dependsOn, ["AWS::ECS::Cluster/prod"]);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep resolves live references into dependsOn",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const subnet = plan.candidates.find((c) => c.identifier === "subnet-app")!;
+    assertEquals(subnet.dependsOn, ["AWS::EC2::VPC/vpc-app"]);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep sets deterministic flags and cfnStack",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const byId = (id: string) =>
+      plan.candidates.find((c) => c.identifier === id)!;
+    assertEquals(byId("vpc-default").flags, ["default-vpc"]);
+    assertEquals(byId("vpc-app").flags, ["cfn-stack"]);
+    assertEquals(byId("vpc-app").cfnStack, "network");
+    assertEquals(
+      byId("cdk-hnb659fds-assets-111111111111-us-east-1").flags,
+      ["cdk-assets"],
+    );
+    assertEquals(byId("subnet-app").cfnStack, null);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep keeps a resource whose read fails and flags it",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const bucket = plan.candidates.find((c) => c.identifier === "app-data")!;
+    assertEquals(bucket.flags, ["read-failed"]);
+    assertEquals(bucket.judgeState, {});
+    assertEquals(plan.coverage.readFailures, 1);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep matches stored swamp state to set swampManaged",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), {
+      types: SWEEP_TYPES,
+      managed: [
+        {
+          modelType: "@swamp/aws/ec2/subnet",
+          attributes: { SubnetId: "subnet-app" },
+        },
+        {
+          modelType: "@swamp/aws/ecs/service",
+          attributes: { ServiceArn: SERVICE_ARN, Cluster: "prod" },
+        },
+        // Same identifier, different type: must not match the VPC.
+        {
+          modelType: "@swamp/aws/ec2/subnet",
+          attributes: { SubnetId: "vpc-app" },
+        },
+      ],
+    });
+    const managed = plan.candidates.filter((c) => c.swampManaged).map((c) =>
+      c.cfnType
+    ).sort();
+    assertEquals(managed, ["AWS::EC2::Subnet", "AWS::ECS::Service"]);
+    assertEquals(plan.summary.swampManaged, 2);
+    assertEquals(plan.summary.unmanaged, 5);
+  },
+});
+
+Deno.test({
+  name:
+    "plan_account_sweep skips GetResource when the listing has every judge attribute",
+  sanitizeResources: false,
+  fn: async () => {
+    const alarm = {
+      AlarmName: "cpu",
+      Namespace: "AWS/EC2",
+      MetricName: "CPUUtilization",
+      ActionsEnabled: true,
+      AlarmActions: [],
+      Arn: "arn:aws:cloudwatch:us-east-1:111111111111:alarm:cpu",
+      Tags: [{ Key: "team", Value: "ops" }],
+    };
+    const { plan, calls } = await runSweep({
+      list: { "AWS::CloudWatch::Alarm": [{ id: "cpu", props: alarm }] },
+    }, { types: ["AWS::CloudWatch::Alarm"] });
+    assertEquals(calls.filter((c) => c.op === "get").length, 0);
+    assertEquals(plan.candidates[0].judgeState.MetricName, "CPUUtilization");
+    assertEquals(plan.candidates[0].tags, { team: "ops" });
+    assertEquals(
+      plan.candidates[0].arn,
+      "arn:aws:cloudwatch:us-east-1:111111111111:alarm:cpu",
+    );
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep marks a type truncated at the resource cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep({
+      list: {
+        "AWS::Logs::LogGroup": [{ id: "a" }, { id: "b" }, { id: "c" }],
+      },
+      get: {
+        a: { LogGroupName: "a" },
+        b: { LogGroupName: "b" },
+        c: { LogGroupName: "c" },
+      },
+    }, { types: ["AWS::Logs::LogGroup"], maxResourcesPerType: 2 });
+    assertEquals(plan.candidates.length, 2);
+    assertEquals(plan.truncated, true);
+    assertEquals(plan.coverage.truncatedTypes, ["AWS::Logs::LogGroup"]);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep marks a type truncated at the page cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan, calls } = await runSweep({
+      pageSize: 1,
+      list: { "AWS::Logs::LogGroup": [{ id: "a" }, { id: "b" }] },
+      get: { a: { LogGroupName: "a" }, b: { LogGroupName: "b" } },
+    }, { types: ["AWS::Logs::LogGroup"], maxPagesPerType: 1 });
+    assertEquals(calls.filter((c) => c.op === "list").length, 1);
+    assertEquals(plan.candidates.length, 1);
+    assertEquals(plan.truncated, true);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep reports a child type whose parent is not swept",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan, calls } = await runSweep({ list: {} }, {
+      types: ["AWS::ECS::Service"],
+    });
+    assertEquals(calls.filter((c) => c.op === "list").length, 0);
+    assertEquals(plan.coverage.gaps[0].reason, "parent-not-swept");
+    assertMatch(plan.coverage.gaps[0].detail, /AWS::ECS::Cluster/);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep classifies access-denied listings",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep({
+      list: {
+        "AWS::IAM::Role": namedError(
+          "AccessDeniedException",
+          "User is not authorized to perform iam:ListRoles",
+        ),
+      },
+    }, { types: ["AWS::IAM::Role"] });
+    assertEquals(plan.coverage.gaps[0].reason, "access-denied");
+    assertEquals(plan.candidates.length, 0);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep only looks up the default VPC when VPCs are swept",
+  sanitizeResources: false,
+  fn: async () => {
+    const { calls } = await runSweep({
+      list: { "AWS::SNS::Topic": [] },
+    }, { types: ["AWS::SNS::Topic"] });
+    assertEquals(calls.some((c) => c.op === "describeVpcs"), false);
+  },
+});
+
+Deno.test("plan_account_sweep rejects types outside the registry", () => {
+  const schema = model.methods.plan_account_sweep.arguments;
+  assertEquals(
+    schema.safeParse({ types: ["AWS::Kinesis::Stream"] }).success,
+    false,
+  );
+  assertEquals(schema.safeParse({ types: ["AWS::S3::Bucket"] }).success, true);
+});
+
+Deno.test("adoptionPlan resource is registered with a finite lifetime", () => {
+  assertEquals(model.resources.adoptionPlan.lifetime, "7d");
+  assertEquals(model.resources.adoptionPlan.garbageCollection, 10);
+});
+
+Deno.test({
+  name: "plan_account_sweep records the account and scopes model names by it",
+  sanitizeResources: false,
+  fn: async () => {
+    const list = { "AWS::Logs::LogGroup": [{ id: "app" }] };
+    const get = { app: { LogGroupName: "app" } };
+    const a = await runSweep({ list, get, account: "111111111111" }, {
+      types: ["AWS::Logs::LogGroup"],
+    });
+    const b = await runSweep({ list, get, account: "222222222222" }, {
+      types: ["AWS::Logs::LogGroup"],
+    });
+    assertEquals(
+      (a.plan as unknown as { accountId: string }).accountId,
+      "111111111111",
+    );
+    assertEquals(
+      a.plan.candidates[0].modelName === b.plan.candidates[0].modelName,
+      false,
+    );
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep fails when the account cannot be resolved",
+  sanitizeResources: false,
+  fn: async () => {
+    let message = "";
+    try {
+      await runSweep({
+        list: {},
+        account: namedError("ExpiredTokenException", "token expired"),
+      }, { types: ["AWS::SNS::Topic"] });
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+    }
+    assertMatch(message, /GetCallerIdentity/);
+    assertMatch(message, /token expired/);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep does not match stored state from another region",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep({
+      list: { "AWS::Lambda::Function": [{ id: "api" }] },
+      get: {
+        api: {
+          FunctionName: "api",
+          Arn: "arn:aws:lambda:us-east-1:111111111111:function:api",
+        },
+      },
+    }, {
+      types: ["AWS::Lambda::Function"],
+      managed: [{
+        modelType: "@swamp/aws/lambda/function",
+        attributes: {
+          FunctionName: "api",
+          Arn: "arn:aws:lambda:us-west-2:111111111111:function:api",
+        },
+      }],
+    });
+    assertEquals(plan.candidates[0].swampManaged, false);
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep records a gap when some parents fail to list",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep({
+      list: {
+        "AWS::ECS::Cluster": [{ id: "a" }, { id: "b" }],
+        "AWS::ECS::Service": [{ id: "svc-a|a", parent: "a" }],
+      },
+      listErrors: {
+        "AWS::ECS::Service|b": namedError(
+          "ThrottlingException",
+          "Rate exceeded",
+        ),
+      },
+      get: {
+        a: { ClusterName: "a" },
+        b: { ClusterName: "b" },
+        "svc-a|a": { ServiceName: "svc-a" },
+      },
+    }, { types: ["AWS::ECS::Cluster", "AWS::ECS::Service"] });
+    assertEquals(
+      plan.candidates.filter((c) => c.cfnType === "AWS::ECS::Service").length,
+      1,
+    );
+    assertEquals(plan.coverage.gaps.length, 1);
+    assertEquals(plan.coverage.gaps[0].reason, "throttled");
+    assertMatch(plan.coverage.gaps[0].detail, /1 of 2/);
+    assertEquals(plan.coverage.typesSwept.includes("AWS::ECS::Service"), false);
+  },
+});
+
+Deno.test({
+  name:
+    "plan_account_sweep does not mark a child type truncated when the cap is met exactly",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(capAccount(false), {
+      types: ["AWS::ECS::Cluster", "AWS::ECS::Service"],
+      maxResourcesPerType: 2,
+    });
+    assertEquals(plan.coverage.truncatedTypes, []);
+    assertEquals(plan.truncated, false);
+  },
+});
+
+Deno.test({
+  name:
+    "plan_account_sweep marks a child type truncated when a later parent has more",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(capAccount(true), {
+      types: ["AWS::ECS::Cluster", "AWS::ECS::Service"],
+      maxResourcesPerType: 2,
+    });
+    assertEquals(plan.coverage.truncatedTypes, ["AWS::ECS::Service"]);
+    assertEquals(
+      plan.candidates.filter((c) => c.cfnType === "AWS::ECS::Service").length,
+      2,
+    );
+  },
+});
+
+/** Two clusters; cluster `a` fills the cap of 2, `b` has one more or none. */
+function capAccount(laterParentHasMore: boolean): FakeAccount {
+  return {
+    list: {
+      "AWS::ECS::Cluster": [{ id: "a" }, { id: "b" }],
+      "AWS::ECS::Service": [
+        { id: "s1|a", parent: "a" },
+        { id: "s2|a", parent: "a" },
+        ...(laterParentHasMore ? [{ id: "s3|b", parent: "b" }] : []),
+      ],
+    },
+    get: {
+      a: { ClusterName: "a" },
+      b: { ClusterName: "b" },
+      "s1|a": { ServiceName: "s1" },
+      "s2|a": { ServiceName: "s2" },
+      "s3|b": { ServiceName: "s3" },
+    },
+  };
+}
+
+Deno.test({
+  name: "plan_stack_adoption leaves composite-identifier types unmapped",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient(() => ({
+      StackResourceSummaries: [{
+        LogicalResourceId: "Web",
+        PhysicalResourceId: SERVICE_ARN,
+        ResourceType: "AWS::ECS::Service",
+        ResourceStatus: "CREATE_COMPLETE",
+      }],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        { stackName: "app", includeNested: true, maxDepth: 3, prefix: "adopt" },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: unknown[];
+        unmapped: Array<{ cfnType: string; reason: string }>;
+      };
+      assertEquals(data.mapped.length, 0);
+      assertEquals(data.unmapped[0].cfnType, "AWS::ECS::Service");
+      assertMatch(data.unmapped[0].reason, /composite/);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption names same-named ECS and EKS clusters apart",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient(() => ({
+      StackResourceSummaries: [
+        {
+          LogicalResourceId: "Ecs",
+          PhysicalResourceId: "prod",
+          ResourceType: "AWS::ECS::Cluster",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+        {
+          LogicalResourceId: "Eks",
+          PhysicalResourceId: "prod",
+          ResourceType: "AWS::EKS::Cluster",
+          ResourceStatus: "CREATE_COMPLETE",
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        { stackName: "app", includeNested: true, maxDepth: 3, prefix: "adopt" },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        mapped: Array<{ modelName: string }>;
+      };
+      const names = data.mapped.map((m) => m.modelName).sort();
+      assertEquals(names.length, 2);
+      assertEquals(names[0].startsWith("adopt-ecs-cluster-"), true);
+      assertEquals(names[1].startsWith("adopt-eks-cluster-"), true);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_stack_adoption does not orphan a resource that moved to unmapped",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCfnClient(() => ({
+      StackResourceSummaries: [{
+        LogicalResourceId: "Ip",
+        PhysicalResourceId: "198.51.100.7",
+        ResourceType: "AWS::EC2::EIP",
+        ResourceStatus: "CREATE_COMPLETE",
+      }],
+    }));
+    try {
+      const { context, getWrittenResources } = makeCfnContext();
+      // A plan written before EIPs became unmapped.
+      const ctxAny = context as unknown as {
+        readResource: (i: string) => Promise<Record<string, unknown>>;
+      };
+      ctxAny.readResource = (_instance: string) =>
+        Promise.resolve({
+          mapped: [{
+            logicalId: "Ip",
+            physicalId: "198.51.100.7",
+            cfnType: "AWS::EC2::EIP",
+            swampType: "@swamp/aws/ec2/eip",
+            modelName: "adopt-eip-1234abcd",
+            parentStackName: "app",
+            depth: 0,
+            getCommand: "",
+          }],
+          orphans: [{
+            modelName: "adopt-eip-1234abcd",
+            cfnType: "AWS::EC2::EIP",
+            physicalId: "198.51.100.7",
+            note: "in previous plan but missing from current stack",
+          }],
+        });
+      await modelForCfn.methods.plan_stack_adoption.execute(
+        { stackName: "app", includeNested: true, maxDepth: 3, prefix: "adopt" },
+        context as ExecuteContext,
+      );
+      const data = (getWrittenResources() as WrittenResource[])[0].data as {
+        unmapped: Array<{ cfnType: string }>;
+        orphans: unknown[];
+      };
+      assertEquals(data.unmapped[0].cfnType, "AWS::EC2::EIP");
+      assertEquals(data.orphans, []);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "plan_account_sweep does not mark a sibling ECS service managed",
+  sanitizeResources: false,
+  fn: async () => {
+    const svc = (n: string) =>
+      `arn:aws:ecs:us-east-1:111111111111:service/prod/${n}`;
+    const { plan } = await runSweep({
+      list: {
+        "AWS::ECS::Cluster": [{ id: "prod" }],
+        "AWS::ECS::Service": [
+          { id: `${svc("web")}|${CLUSTER_ARN}`, parent: "prod" },
+          { id: `${svc("worker")}|${CLUSTER_ARN}`, parent: "prod" },
+        ],
+      },
+      get: {
+        prod: { ClusterName: "prod", Arn: CLUSTER_ARN },
+        [`${svc("web")}|${CLUSTER_ARN}`]: {
+          ServiceArn: svc("web"),
+          Cluster: CLUSTER_ARN,
+        },
+        [`${svc("worker")}|${CLUSTER_ARN}`]: {
+          ServiceArn: svc("worker"),
+          Cluster: CLUSTER_ARN,
+        },
+      },
+    }, {
+      types: ["AWS::ECS::Cluster", "AWS::ECS::Service"],
+      managed: [{
+        modelType: "@swamp/aws/ecs/service",
+        attributes: {
+          ServiceArn: svc("web"),
+          Cluster: CLUSTER_ARN,
+          _identifier: `${svc("web")}|${CLUSTER_ARN}`,
+        },
+      }],
+    });
+    const managed = plan.candidates.filter((c) => c.swampManaged).map((c) =>
+      c.identifier
+    );
+    assertEquals(managed, [`${svc("web")}|${CLUSTER_ARN}`]);
+  },
+});
