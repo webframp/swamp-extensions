@@ -1,23 +1,39 @@
 # @webframp/aws/adopt
 
-Brownfield adoption of existing AWS infrastructure into swamp models. Discovers
-VPCs, subnets, gateways, route tables, security groups, RDS clusters, RDS
-instances, DB subnet groups, and Secrets Manager secrets via native SDK calls,
-then generates the setup commands and workflow needed to bring them under
-management.
+Brownfield adoption of AWS resources into swamp models. adopt cares about what
+is running in an account and region, not what created it: Terraform,
+CloudFormation, the console, and scripts all look the same. The question it
+answers is whether swamp manages a resource yet.
+
+Three sources find resources:
+
+- `plan_account_sweep` enumerates every [registry type](#adoption-types) in the
+  region through Cloud Control and writes adoption candidates with flags,
+  dependencies, and coverage gaps.
+- `plan_stack_adoption` scopes the same question to one CloudFormation stack.
+- The `discover_*` methods keep the original VPC-centric SDK discovery.
 
 ## Authentication
 
-This extension uses the default AWS credential chain. Export `AWS_PROFILE` and
-`AWS_REGION` before running any discovery methods:
+This extension uses the default AWS credential chain, or the shared-config
+profile named by the optional `profile` global argument. Export `AWS_PROFILE`
+before running any method:
 
 ```bash
 export AWS_PROFILE=my-account-ReadOnlyPlus
-export AWS_REGION=us-east-1
 ```
 
-The profile must have read access to EC2, RDS, and Secrets Manager in the target
-region.
+The region comes from the `region` global argument, not `AWS_REGION` (see
+[Troubleshooting](#aws_region-environment-variable-has-no-effect)).
+
+The official `@swamp/aws/*` types that observe adopted resources take no
+`profile` argument. They always use the environment's credential chain, so set
+`AWS_PROFILE` in the shell that runs the workflow.
+
+The credentials need the read permissions listed under
+[IAM Permissions Required](#iam-permissions-required): Cloud Control and the
+underlying service reads for a sweep, CloudFormation for stack adoption, and
+EC2, RDS, and Secrets Manager for the `discover_*` methods.
 
 ## Quick Start
 
@@ -48,6 +64,172 @@ swamp workflow run @webframp/adopt-stack \
 # View the adoption report
 swamp report get @webframp/adopt-report --latest
 ```
+
+## Account Sweep
+
+`plan_account_sweep` lists every registry type in the region with Cloud Control
+`ListResources`, then calls `GetResource` for any resource whose listing lacks
+the attributes judgement needs. It resolves the account with STS
+`GetCallerIdentity` first and fails if it cannot, because the account scopes
+model names and managed matching. It writes one `adoptionPlan` resource named
+`sweep-<region>`, which records `accountId` and `region`.
+
+The sweep covers the whole region; the `vpcId` global argument applies only to
+the `discover_*` methods.
+
+A sweep limited with `types` or `tiers` writes the same `sweep-<region>`
+instance and replaces the previous plan; `coverage.typesRequested` records what
+it covered.
+
+Most listings return only identifier properties, so expect one `GetResource`
+call per resource. Keep `readConcurrency` low on large accounts.
+
+```bash
+swamp model create @webframp/aws/adopt acct --global-arg region=us-east-1
+swamp model method run acct plan_account_sweep
+swamp data get acct sweep-us-east-1 --json
+```
+
+### Arguments
+
+| Argument              | Default | Meaning                                                   |
+| --------------------- | ------- | --------------------------------------------------------- |
+| `prefix`              | `adopt` | Prefix for generated model names                          |
+| `types`               | all     | Limit to these CloudFormation types (must be in registry) |
+| `tiers`               | all     | Limit to these tiers (`network`, `identity`, `data`, …)   |
+| `maxPagesPerType`     | `5`     | `ListResources` page cap per type, and per parent         |
+| `maxResourcesPerType` | `200`   | Resource cap per type; the excess marks it truncated      |
+| `readConcurrency`     | `4`     | Concurrent `GetResource` calls                            |
+| `managed`             | `[]`    | Stored swamp state to match against (see below)           |
+
+### Candidates
+
+Each entry in `candidates[]` has the same shape whichever source produced it:
+
+| Field          | Meaning                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| `id`           | `<cfnType>/<identifier>`, stable across runs                          |
+| `swampType`    | The official type that manages the resource                           |
+| `identifier`   | Cloud Control primary identifier (`\|`-joined when composite)         |
+| `arn`          | The resource's own ARN, when it has one                               |
+| `dependsOn`    | Candidate ids this resource references live (subnet → vpc)            |
+| `tags`         | Resource tags as a map                                                |
+| `modelName`    | `<prefix>-<service>-<resource>-<hash>`, deterministic                 |
+| `cfnStack`     | The `aws:cloudformation:stack-name` tag, or `null`                    |
+| `swampManaged` | A swamp definition already observes the resource                      |
+| `flags`        | Deterministic findings, listed below                                  |
+| `judgeState`   | The type's judge attributes only; never environment variables or data |
+
+`modelName` hashes the account, region, type, and identifier together. An ECS
+cluster and an EKS cluster that are both named `prod` get different names, and
+so does a function named `api` in two regions. Global types (IAM, CloudFront,
+Route 53) hash without the region, so sweeps of two regions name the same role
+the same way.
+
+### Flags
+
+| Flag                  | Set when                                                  |
+| --------------------- | --------------------------------------------------------- |
+| `asg-managed`         | tagged `aws:autoscaling:groupName`                        |
+| `eks-managed`         | tagged `eks:cluster-name`                                 |
+| `service-linked-role` | IAM role under `/aws-service-role/`                       |
+| `cdk-assets`          | S3 bucket named `cdk-*-assets-*`                          |
+| `default-vpc`         | the region's default VPC                                  |
+| `control-tower`       | identifier or ARN contains `aws-controltower-`            |
+| `cfn-stack`           | tagged `aws:cloudformation:stack-name`                    |
+| `read-failed`         | listed, but `GetResource` failed; `judgeState` is partial |
+
+### Matching what swamp already manages
+
+The sweep does not query AWS to decide `swampManaged`. It matches identifiers
+against stored state from the official types, passed in through `managed`. From
+a workflow step:
+
+```yaml
+inputs:
+  managed: >-
+    ${{ data.query('modelType.startsWith("@swamp/aws/") && specName == "state"',
+    '{"modelType": modelType, "attributes": attributes}') }}
+```
+
+Each record matches on its type's primary identifier properties, the
+`_identifier` that an official `list` method stores, or its own ARN. The
+registry's `arnProperty` names where that ARN lives (`Arn`, `DBInstanceArn`,
+`ServiceArn`, …); ARNs of other resources a record references never count. A
+record whose type is not in the registry is ignored.
+
+Matching is scoped to the sweep's account and region. A record is scoped by its
+own ARN, or by an identifier that embeds account and region (an SQS queue URL),
+and never matches when that names another account or region: `api` in us-east-1
+does not mark `api` in us-west-2 as managed. A record with neither matches only
+when its type's identifier is unique everywhere (`uniqueIdentifier` in the
+registry: VPCs, subnets, security groups, S3 buckets, EFS file systems, hosted
+zones, and the like).
+
+Official `list` methods store only the listed properties and `_identifier`, so
+their records often lack an ARN. Such a record for a name-identified type (an
+EKS cluster, a Lambda function) cannot be scoped and is not matched: the
+resource shows as unmanaged rather than being hidden, and `coverage.warnings`
+counts the skipped records. Running `get` or `sync` on those models stores the
+full state, ARN included. KMS aliases and ElastiCache replication groups never
+store an ARN or region, so they are never matched; `coverage.warnings` counts
+those records separately.
+
+The sweep only considers stored records for the types it swept.
+
+### Coverage and gaps
+
+`coverage` says what the sweep looked at and what it could not see:
+
+- `typesRequested` and `typesSwept` list the registry types asked for and the
+  types that listed cleanly.
+- `gaps[]` records each type that could not be listed, with a `reason`:
+  `no-list-handler`, `unsupported-in-region`, `access-denied`, `throttled`,
+  `parent-not-swept`, or `error`. The sweep continues past every gap. A child
+  type that fails under some parents keeps the resources it did list and still
+  records a gap, with the count of failed parents in `detail`.
+- `truncatedTypes` names the types that hit a page or resource cap. The
+  top-level `truncated` is true when any did.
+- `readFailures` counts `GetResource` failures; those candidates carry
+  `read-failed`.
+
+Child types need a parent identifier to list. ECS services list per cluster, ELB
+listeners per load balancer, Route 53 record sets per hosted zone, and EKS
+nodegroups per cluster. A child type swept without its parent type records a
+`parent-not-swept` gap.
+
+## Adoption Types
+
+`ADOPTION_TYPES` in `extensions/models/aws/_lib/adoption.ts` is the registry.
+Each row names the CloudFormation type, the official swamp type and package, the
+tier, the dependency `rank` (lower adopts first), whether the resource is
+stateful, its primary identifier properties, an optional parent for child types,
+its live references, and the attributes projected into `judgeState`.
+
+| Tier          | Types                                                                                                                                           |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| network       | VPC, InternetGateway, EIP, Subnet, RouteTable, SecurityGroup, NatGateway, VPCEndpoint                                                           |
+| identity      | KMS Key, KMS Alias, IAM ManagedPolicy, IAM Role, SecretsManager Secret, SSM Parameter                                                           |
+| data          | S3 Bucket, EFS FileSystem, RDS DBSubnetGroup, RDS DBCluster, ElastiCache ReplicationGroup, RDS DBInstance                                       |
+| messaging     | SQS Queue, SNS Topic, Events Rule                                                                                                               |
+| compute       | ECR Repository, EC2 LaunchTemplate, Lambda Function, ECS Cluster, EKS Cluster, ECS TaskDefinition, ECS Service, EKS Nodegroup, AutoScalingGroup |
+| edge          | ELBv2 TargetGroup, LoadBalancer, Listener, Route53 HostedZone, Route53 RecordSet, CloudFront Distribution, ApiGatewayV2 Api                     |
+| observability | Logs LogGroup, CloudWatch Alarm                                                                                                                 |
+
+`AWS::DynamoDB::Table` is absent because no official swamp type manages it yet.
+
+To add a type, add a row and run the release check:
+
+```bash
+deno task check:registry
+```
+
+The check pulls every package in the registry into a throwaway swamp repo and
+fails when a type is missing, wraps a different CloudFormation type, or uses
+different identifier properties. It also fails when the ARN, tags, judge, or
+reference properties a row names are not top-level keys of the official
+`StateSchema`; nested paths such as `LaunchTemplateData.MetadataOptions` are not
+checked below the first segment. It needs the `swamp` CLI and network access.
 
 ## Discovery Methods
 
@@ -119,29 +301,29 @@ state is captured.
 
 ### Supported CloudFormation types
 
-| `AWS::*` type                 | Maps to `@swamp/*` type            |
-| ----------------------------- | ---------------------------------- |
-| `AWS::EC2::VPC`               | `@swamp/aws/ec2/vpc`               |
-| `AWS::EC2::Subnet`            | `@swamp/aws/ec2/subnet`            |
-| `AWS::EC2::InternetGateway`   | `@swamp/aws/ec2/internet-gateway`  |
-| `AWS::EC2::RouteTable`        | `@swamp/aws/ec2/route-table`       |
-| `AWS::EC2::SecurityGroup`     | `@swamp/aws/ec2/security-group`    |
-| `AWS::EC2::NatGateway`        | `@swamp/aws/ec2/nat-gateway`       |
-| `AWS::EC2::EIP`               | `@swamp/aws/ec2/eip`               |
-| `AWS::RDS::DBCluster`         | `@swamp/aws/rds/dbcluster`         |
-| `AWS::RDS::DBInstance`        | `@swamp/aws/rds/dbinstance`        |
-| `AWS::RDS::DBSubnetGroup`     | `@swamp/aws/rds/dbsubnet-group`    |
-| `AWS::SecretsManager::Secret` | `@swamp/aws/secretsmanager/secret` |
-| `AWS::S3::Bucket`             | `@swamp/aws/s3/bucket`             |
-| `AWS::Lambda::Function`       | `@swamp/aws/lambda/function`       |
-| `AWS::IAM::Role`              | `@swamp/aws/iam/role`              |
-| `AWS::CloudFormation::Stack`  | _recursed, not adopted as a model_ |
+Stack adoption maps 36 of the 41 [registry](#adoption-types) types. A `get`
+built from a stack's physical ID cannot address the other five, so they appear
+in `unmapped[]` with the reason:
 
-Adding a new type is a one-line PR to `CFN_TO_SWAMP_TYPE_MAP` in `adopt.ts`.
+- `AWS::EC2::EIP`, `AWS::ECS::Service`, and `AWS::Route53::RecordSet` have
+  composite Cloud Control identifiers.
+- `AWS::Events::Rule`: the physical ID is the rule name, but Cloud Control
+  identifies rules by ARN.
+- `AWS::EKS::Nodegroup`: the physical ID is not confirmed to equal the Cloud
+  Control `Id`.
+
+A resource that moves to `unmapped[]` this way is still in the stack, so it is
+not reported as an orphan. `CFN_TO_SWAMP_TYPE_MAP` is derived from
+`ADOPTION_TYPES` and stays exported. `AWS::CloudFormation::Stack` resources are
+recursed into, not adopted as models.
 
 ## Model Naming Convention
 
-Generated model names follow the pattern:
+`plan_account_sweep` names models `{prefix}-{service}-{resource}-{hash}` (see
+[Candidates](#candidates)). `plan_stack_adoption` uses
+`{prefix}-{type-short}-{hash}`, where `type-short` gains the service when two
+registry types share a name (`ecs-cluster`, `eks-cluster`). The `discover_*`
+methods name models this way:
 
 ```
 {prefix}-{type-short}-{identifier-suffix}
@@ -159,7 +341,23 @@ and Secrets Manager resources use the full identifier or name.
 
 ## IAM Permissions Required
 
-**Discovery (read-only):**
+**Account sweep (read-only):**
+
+- `cloudcontrol:ListResources`
+- `cloudcontrol:GetResource`
+- The read permissions Cloud Control uses for each registry type (for example
+  `s3:ListAllMyBuckets` and `s3:GetBucket*`, `iam:ListRoles` and `iam:GetRole`).
+  Cloud Control calls each service with the caller's credentials. The AWS
+  managed `ReadOnlyAccess` policy covers them. A missing permission becomes an
+  `access-denied` gap for that type, not a failed sweep.
+- `ec2:DescribeVpcs` (default VPC lookup)
+- `sts:GetCallerIdentity` (needs no grant)
+
+**CloudFormation stack adoption (read-only):**
+
+- `cloudformation:ListStackResources`
+
+**Discovery methods (read-only):**
 
 - `ec2:DescribeVpcs`
 - `ec2:DescribeSubnets`
@@ -170,7 +368,6 @@ and Secrets Manager resources use the full identifier or name.
 - `rds:DescribeDBInstances`
 - `rds:DescribeDBSubnetGroups`
 - `secretsmanager:ListSecrets`
-- `cloudformation:ListStackResources` (for `plan_stack_adoption` only)
 
 **Management (workflow adoption):**
 
@@ -216,11 +413,19 @@ If the AWS API returns a resource lacking its primary identifier field (e.g. a
 VPC with no `VpcId`), the resource is skipped without warning. The `count` field
 in the output reflects only resources that passed this filter.
 
-### Stale dependency versions in documentation
+### A sweep reports gaps
 
-The README lists dependency versions that may lag behind the manifest. Always
-check `manifest.yaml` for the actual pinned versions required by your installed
-copy.
+Read `coverage.gaps[]`. `access-denied` means the credentials lack the
+underlying service read for that type. `throttled` means Cloud Control kept
+throttling after the client's adaptive retries; lower `readConcurrency` or sweep
+fewer `types` at a time. `no-list-handler` and `unsupported-in-region` are
+properties of the type and region, not of the account.
+
+### A sweep is truncated
+
+`coverage.truncatedTypes` names the types that hit `maxPagesPerType` or
+`maxResourcesPerType`. Raise the cap, or sweep that type on its own with
+`types`.
 
 ### CloudFormation stack adoption and nested stacks
 
@@ -231,6 +436,11 @@ warning when truncated.
 
 ## Dependencies
 
-- `@swamp/aws/ec2@2026.08.20.1`
-- `@swamp/aws/rds@2026.08.19.1`
-- `@swamp/aws/secretsmanager@2026.08.20.1`
+`manifest.yaml` pins the packages the shipped workflows run:
+
+- `@swamp/aws/ec2@2026.09.24.1`
+- `@swamp/aws/rds@2026.09.25.1`
+- `@swamp/aws/secretsmanager@2026.09.25.1`
+
+Observing other registry types needs their packages installed:
+`swamp extension pull <swampPackage>`.

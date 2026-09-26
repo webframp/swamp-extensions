@@ -3,11 +3,12 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/models/aws/adopt.ts extensions/reports/adopt_report.ts",
-    "lint": "deno lint extensions/models/ extensions/reports/",
-    "fmt": "deno fmt extensions/models/ extensions/reports/",
-    "fmt:check": "deno fmt --check extensions/models/ extensions/reports/",
-    "test": "deno test --allow-env --allow-net --allow-sys --allow-read extensions/models/ extensions/reports/"
+    "check": "deno check extensions/models/aws/adopt.ts extensions/models/aws/_lib/adoption.ts extensions/reports/adopt_report.ts",
+    "lint": "deno lint extensions/models/ extensions/reports/ scripts/",
+    "fmt": "deno fmt extensions/models/ extensions/reports/ scripts/",
+    "fmt:check": "deno fmt --check extensions/models/ extensions/reports/ scripts/",
+    "test": "deno test --allow-env --allow-net --allow-sys --allow-read extensions/models/ extensions/reports/",
+    "check:registry": "deno run --allow-run --allow-read --allow-write --allow-env scripts/check_registry.ts"
   },
   "lint": {
     "rules": {

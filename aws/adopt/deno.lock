@@ -4,6 +4,7 @@
     "jsr:@std/assert@1.0.19": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@swamp-club/swamp-testing@0.20260923.37": "0.20260923.37",
+    "npm:@aws-sdk/client-cloudcontrol@3.1139.0": "3.1139.0",
     "npm:@aws-sdk/client-cloudformation@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/client-cloudformation@3.1121.0": "3.1121.0",
     "npm:@aws-sdk/client-cloudformation@3.1126.0": "3.1126.0",
@@ -28,6 +29,7 @@
     "npm:@aws-sdk/client-secrets-manager@3.1131.0": "3.1131.0",
     "npm:@aws-sdk/client-secrets-manager@3.1133.0": "3.1133.0",
     "npm:@aws-sdk/client-secrets-manager@3.1139.0": "3.1139.0",
+    "npm:@aws-sdk/client-sts@3.1139.0": "3.1139.0",
     "npm:@aws-sdk/credential-providers@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/credential-providers@3.1121.0": "3.1121.0",
     "npm:@aws-sdk/credential-providers@3.1126.0": "3.1126.0",
@@ -59,6 +61,19 @@
     }
   },
   "npm": {
+    "@aws-sdk/client-cloudcontrol@3.1139.0": {
+      "integrity": "sha512-5WN/bsiC3Fh0XSNxS8CptFU/W1o+JsD1LgbyEs59nbW3F8MF2V0aDHs4EknZ0n7rDBgNdAUCBFJxiOuBz/bjMA==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
     "@aws-sdk/client-cloudformation@3.1120.0": {
       "integrity": "sha512-JsC65+KhEe0Z0Em1lyLwNuvZG4ZLCit8oM352aX7BYnfmLW+yC6TsdtKZDPngYcLVCFBwhXFRli18mnn8FiaFg==",
       "dependencies": [
@@ -375,6 +390,20 @@
       "dependencies": [
         "@aws-sdk/core",
         "@aws-sdk/credential-provider-node",
+        "@aws-sdk/types",
+        "@smithy/core",
+        "@smithy/fetch-http-handler",
+        "@smithy/node-http-handler",
+        "@smithy/types",
+        "tslib"
+      ]
+    },
+    "@aws-sdk/client-sts@3.1139.0": {
+      "integrity": "sha512-n5WWPE4m46oJpDhp5LP7W1n9mbLNjcHTv3HH9JAkSmuV1mmjleyK9nLOmK9BJ5Ac86DcUFeLS+FZNDZQkNVi0g==",
+      "dependencies": [
+        "@aws-sdk/core",
+        "@aws-sdk/credential-provider-node",
+        "@aws-sdk/signature-v4-multi-region",
         "@aws-sdk/types",
         "@smithy/core",
         "@smithy/fetch-http-handler",
