@@ -299,10 +299,11 @@ export async function buildJudgeRequest(
     .filter((c) => !c.swampManaged && settle(c) === null)
     .sort((a, b) => rankOf(a) - rankOf(b) || a.id.localeCompare(b.id));
   const judged = unsettled.slice(0, cap);
-  const items = judged.map((c) => ({
-    id: c.modelName,
-    state: judgeItemState(c),
-  }));
+  // Round-trip through JSON so the items are exactly what the workflow
+  // transports to triage_batch: no undefined values, no Dates.
+  const items: JudgeItem[] = JSON.parse(JSON.stringify(
+    judged.map((c) => ({ id: c.modelName, state: judgeItemState(c) })),
+  ));
   const alreadyManaged = plan.candidates.filter((c) => c.swampManaged).length;
   return {
     planName,

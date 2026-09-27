@@ -228,6 +228,21 @@ Deno.test("the fingerprint survives a JSON round trip, as through a workflow", a
   assertEquals(await itemsFingerprint(transported), request.fingerprint);
 });
 
+Deno.test("undefined and Date values fingerprint as the workflow transports them", async () => {
+  const p = plan([
+    candidate("AWS::S3::Bucket", "odd", {
+      judgeState: {
+        Missing: undefined,
+        When: new Date("2026-01-01T00:00:00.000Z"),
+      } as Record<string, unknown>,
+    }),
+  ]);
+  const request = await buildJudgeRequest(p, "sweep-us-east-1", 100);
+  const transported = JSON.parse(JSON.stringify(request.items));
+  assertEquals(request.items, transported);
+  assertEquals(await itemsFingerprint(transported), request.fingerprint);
+});
+
 Deno.test("canonicalJson sorts keys at every depth", () => {
   assertEquals(
     canonicalJson({ b: 1, a: { d: 2, c: [3] } }),

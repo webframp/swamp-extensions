@@ -180,6 +180,22 @@ Deno.test("execute renders without the plan", async () => {
   assertStringIncludes(result.markdown, "The plan could not be read.");
 });
 
+Deno.test("a null judgement is not taken for a decision", async () => {
+  const result = await report.execute(
+    context(
+      {
+        "decision-sweep-us-east-1": {
+          decisions: [],
+          judgement: null,
+          waves: [],
+        },
+      },
+      ["decision-sweep-us-east-1"],
+    ),
+  );
+  assertEquals(result.json.available, false);
+});
+
 Deno.test("execute degrades on a malformed decision instead of throwing", async () => {
   const result = await report.execute(
     context(

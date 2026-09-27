@@ -119,7 +119,8 @@ async function readJson(
 
 function isDecision(value: Record<string, unknown> | null): boolean {
   return !!value && Array.isArray(value.decisions) &&
-    typeof value.judgement === "object" && Array.isArray(value.waves);
+    value.judgement !== null && typeof value.judgement === "object" &&
+    Array.isArray(value.waves);
 }
 
 const JUDGEMENT_TEXT: Record<string, string> = {
