@@ -1,3 +1,10 @@
+## 2026.09.26.1
+
+**Changed:** `triage_batch` moved to its own package,
+`@webframp/typesafe-batch` 2026.09.26.1, which this package now depends on.
+Pulling this version installs it, so `@webframp/daily-briefing-typesafe` and
+stored `triage-batch-*` resources work as before. The method is unchanged.
+
 ## 2026.09.25.1
 
 **Added:** The briefing contract now carries jev (`@swamp/typesafe-ai`)

@@ -3,7 +3,7 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/reports/*.ts extensions/models/metrics/metrics.ts",
+    "check": "deno check extensions/models/triage_batch.ts",
     "lint": "deno lint extensions/",
     "fmt": "deno fmt extensions/",
     "fmt:check": "deno fmt --check extensions/",
@@ -12,8 +12,7 @@
   "lint": {
     "rules": {
       "exclude": [
-        "no-import-prefix",
-        "no-explicit-any"
+        "no-import-prefix"
       ]
     }
   },

@@ -5,7 +5,7 @@ import {
   createModelTestContext,
   withMockedFetch,
 } from "@swamp-club/swamp-testing";
-import { extension } from "./typesafe_triage.ts";
+import { extension } from "./triage_batch.ts";
 
 type TriageContext = Parameters<
   (typeof extension.methods)[0]["triage_batch"]["execute"]

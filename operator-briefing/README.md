@@ -123,7 +123,8 @@ redacted CEL projection to `ask` or `triage_batch`; TypeSafe classifies that
 state and never writes to an external system. Every downstream action remains
 draft-first and requires human confirmation.
 
-`triage_batch` extends `@swamp/typesafe-ai` with bounded fan-out. It writes one
+`triage_batch` comes from `@webframp/typesafe-batch`, a dependency of this
+package, and extends `@swamp/typesafe-ai` with bounded fan-out. It writes one
 `triage-batch-<name>` resource containing only `{ id, answers }`, a SHA-256
 fingerprint of the compact queue, aggregate usage, and bounded failure
 records—never raw MR state or question text. The consumer must compare that

@@ -1,0 +1,43 @@
+manifestVersion: 1
+name: "@webframp/typesafe-batch"
+version: "2026.09.26.1"
+description: |
+  Bounded batch triage for `@swamp/typesafe-ai`. Adds one method,
+  `triage_batch`, that evaluates many compact `{id, state}` items against one
+  shared set of typed questions (noul, choice, score) while holding the model
+  lock once. It writes a single `triage-batch-<name>` resource with each item's
+  answers, a SHA-256 fingerprint of the input, aggregate token usage, and one
+  failure record per item that could not be evaluated. Raw item state and
+  question text are never stored.
+
+  ## Authentication
+
+  Uses the `@swamp/typesafe-ai` global arguments: `apiKey` (prefer a vault
+  reference), falling back to the `TYPESAFE_API_KEY` environment variable.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/typesafe-batch
+  swamp model create @swamp/typesafe-ai jev
+  swamp model method run jev triage_batch --input-file batch.yaml
+  swamp data get jev triage-batch-latest --json
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - triage_batch.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - ai
+  - typesafe
+  - triage
+  - batch
+dependencies:
+  - "@swamp/typesafe-ai@2026.09.15.1"

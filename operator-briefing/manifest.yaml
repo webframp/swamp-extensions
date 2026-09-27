@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/operator-briefing"
-version: "2026.09.25.1"
+version: "2026.09.26.1"
 description: |
   Unified daily operator briefing report. A workflow-scope report over the
   `daily-briefing` workflow that loops the run's step executions, dispatches
@@ -44,8 +44,9 @@ description: |
   - `@swamp/typesafe-ai` — the TypeSafe (System One) interpretation verdicts on
     the security, cost-anomaly, and GitLab-logs signals, graded from each
     evaluation's ordered score legend and accompanied by compact factual
-    evidence. This package adds `triage_batch`: one bounded, source-scoped
-    batch for review-queue triage that retains answers only, never raw MR state.
+    evidence. Review-queue triage uses `triage_batch` from
+    `@webframp/typesafe-batch`: one bounded, source-scoped batch that retains
+    answers only, never raw MR state.
   - `@webframp/redmine` — open issues assigned to the operator across all
     projects (equivalent to /my/page), surfaced as tier-1 queue items.
 
@@ -94,7 +95,6 @@ description: |
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - metrics/metrics.ts
-  - typesafe_triage.ts
 workflows:
   - workflow-daily-briefing-typesafe.yaml
 reports:
@@ -120,3 +120,4 @@ labels:
 dependencies:
   - "@webframp/gitlab@2026.09.23.1"
   - "@swamp/typesafe-ai@2026.09.15.1"
+  - "@webframp/typesafe-batch@2026.09.26.1"
