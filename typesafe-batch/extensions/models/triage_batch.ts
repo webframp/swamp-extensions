@@ -1,12 +1,12 @@
 /**
  * Bounded, privacy-preserving batch triage for `@swamp/typesafe-ai`.
  *
- * The upstream `ask` method evaluates one state. Daily queues contain many
- * independent items, so this extension fans them out while holding the Swamp
- * model lock once. It persists one batch resource with answers only: raw
- * states and questions are never retained. A fingerprint of the compact queue
- * is calculated before evaluation so a downstream board can reject a verdict
- * from another snapshot rather than silently reusing it.
+ * The upstream `ask` method evaluates one state. A review queue or a list of
+ * adoption candidates has many independent items, so this extension fans them
+ * out while holding the Swamp model lock once. It persists one batch resource
+ * with answers only: raw states and questions are never retained. A
+ * fingerprint of the items is calculated before evaluation so a consumer can
+ * reject answers from another snapshot rather than silently reusing them.
  *
  * SPDX-License-Identifier: Apache-2.0
  * @module
@@ -258,7 +258,7 @@ async function evaluate(
           Authorization: `Bearer ${apiKey(context)}`,
           Accept: "application/json",
           "Content-Type": "application/json",
-          "User-Agent": "webframp-operator-briefing-triage/1",
+          "User-Agent": "webframp-typesafe-batch/1",
         },
         body: JSON.stringify({ state, questions, model }),
         signal,

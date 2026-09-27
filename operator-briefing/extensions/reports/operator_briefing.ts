@@ -70,6 +70,11 @@ function canonicalJson(value: unknown): string {
   }}`;
 }
 
+/**
+ * SHA-256 of the compact review projection the TypeSafe workflow sends to
+ * `triage_batch`. A batch whose `sourceFingerprint` differs was computed from
+ * another queue snapshot and is not used.
+ */
 export async function queueFingerprint(reviewing: unknown[]): Promise<string> {
   const items = reviewing.flatMap((candidate) => {
     if (!candidate || typeof candidate !== "object") return [];
