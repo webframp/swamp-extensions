@@ -18,6 +18,7 @@ interface StepExecution {
   status: string;
   dataHandles: DataHandle[];
   error?: string;
+  errorMessage?: string;
 }
 
 /** Context provided to the report by the swamp workflow runtime. */
@@ -44,9 +45,10 @@ interface AdoptionSummary {
   totalAttempted: number;
   succeeded: number;
   failed: number;
+  skipped: number;
   byJob: Record<
     string,
-    { attempted: number; succeeded: number; failed: number }
+    { attempted: number; succeeded: number; failed: number; skipped: number }
   >;
 }
 
@@ -55,7 +57,7 @@ interface AdoptionResult {
   modelName: string;
   modelType: string;
   method: string;
-  status: "succeeded" | "failed";
+  status: "succeeded" | "failed" | "skipped";
   error?: string;
   job: string;
 }
@@ -114,7 +116,7 @@ export const report = {
 
     const byJob: Record<
       string,
-      { attempted: number; succeeded: number; failed: number }
+      { attempted: number; succeeded: number; failed: number; skipped: number }
     > = {};
 
     // =========================================================================
@@ -124,30 +126,32 @@ export const report = {
     for (const step of context.stepExecutions) {
       const job = step.jobName;
       if (!byJob[job]) {
-        byJob[job] = { attempted: 0, succeeded: 0, failed: 0 };
+        byJob[job] = { attempted: 0, succeeded: 0, failed: 0, skipped: 0 };
       }
-      byJob[job].attempted++;
 
-      const stepSucceeded = step.status === "succeeded";
-      if (stepSucceeded) {
-        byJob[job].succeeded++;
-      } else {
-        byJob[job].failed++;
-      }
+      // A guard-skipped step (jev with judge=false) did not fail.
+      const status = step.status === "succeeded"
+        ? "succeeded"
+        : step.status === "skipped"
+        ? "skipped"
+        : "failed";
+      byJob[job][status]++;
+      if (status !== "skipped") byJob[job].attempted++;
 
       results.push({
         modelName: step.modelName,
         modelType: step.modelType,
         method: step.methodName,
-        status: stepSucceeded ? "succeeded" : "failed",
-        error: step.error,
+        status,
+        error: step.errorMessage ?? step.error,
         job,
       });
     }
 
-    const totalAttempted = context.stepExecutions.length;
     const succeeded = results.filter((r) => r.status === "succeeded").length;
     const failed = results.filter((r) => r.status === "failed").length;
+    const skipped = results.filter((r) => r.status === "skipped").length;
+    const totalAttempted = succeeded + failed;
 
     const summary: AdoptionSummary = {
       timestamp,
@@ -155,6 +159,7 @@ export const report = {
       totalAttempted,
       succeeded,
       failed,
+      skipped,
       byJob,
     };
 
@@ -177,7 +182,8 @@ export const report = {
     sections.push("|--------|-------|");
     sections.push(`| Total attempted | ${totalAttempted} |`);
     sections.push(`| Succeeded | ${succeeded} |`);
-    sections.push(`| Failed | ${failed} |\n`);
+    sections.push(`| Failed | ${failed} |`);
+    sections.push(`| Skipped | ${skipped} |\n`);
 
     // =========================================================================
     // 3. Results by Job
@@ -195,7 +201,11 @@ export const report = {
       sections.push("| Model | Type | Method | Status |");
       sections.push("|-------|------|--------|--------|");
       for (const r of jobResults) {
-        const statusIcon = r.status === "succeeded" ? "✅" : "❌";
+        const statusIcon = r.status === "succeeded"
+          ? "✅"
+          : r.status === "skipped"
+          ? "⏭️"
+          : "❌";
         sections.push(
           `| ${escapeCell(r.modelName)} | ${escapeCell(r.modelType)} | ${
             escapeCell(r.method)

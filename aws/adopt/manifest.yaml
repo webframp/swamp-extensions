@@ -1,12 +1,17 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
-version: "2026.09.26.1"
+version: "2026.09.26.2"
 description: |
   Brownfield adoption of AWS resources into swamp models, whatever created
   them. plan_account_sweep enumerates about 40 resource types in a region
   through Cloud Control and writes adoption candidates with deterministic
   flags, live dependencies, swamp-managed matching, and coverage gaps.
-  plan_stack_adoption scopes the same question to one CloudFormation stack.
+  prepare_judgement and decide turn a plan into dispositions: flags settle
+  what they can, jev (@swamp/typesafe-ai) advises on the rest, fixed rules
+  have the last word, and the result is ordered into observe waves with
+  high-risk findings. The adopt-find-unmanaged workflow runs the pipeline
+  through an approval gate to read-only observation. plan_stack_adoption
+  scopes the question to one CloudFormation stack.
 
   ## Authentication
 
@@ -17,6 +22,12 @@ description: |
   CloudFormation (ListStackResources) for stack adoption; and EC2, RDS, and
   Secrets Manager for the discover_* methods.
 
+  The observe step runs the official @swamp/aws/* types, which take no
+  `profile` argument: they use the environment's credential chain, so set
+  AWS_PROFILE for the workflow run. Judgement needs a `@swamp/typesafe-ai`
+  model with a TypeSafe API key; `triage_batch` comes from
+  @webframp/typesafe-batch.
+
   ## Quick Start
 
   ```bash
@@ -24,16 +35,21 @@ description: |
   swamp model create @webframp/aws/adopt acct --global-arg region=us-east-1
   swamp model method run acct plan_account_sweep
   swamp data get acct sweep-us-east-1 --json
+
+  # Sweep, judge, decide, approve, observe:
+  swamp workflow run @webframp/adopt-find-unmanaged --input modelName=acct
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/adopt.ts
 workflows:
+  - adopt-find-unmanaged.yaml
   - adopt-stack.yaml
   - adopt-cfn-stack.yaml
   - adopt-drift-check.yaml
 reports:
   - adopt_report.ts
+  - adopt_decision_report.ts
   - adopt_drift_report.ts
 platforms:
   - linux-x86_64
@@ -51,6 +67,28 @@ labels:
   - infrastructure
   - iac
 dependencies:
+  - "@swamp/aws/apigatewayv2@2026.09.24.1"
+  - "@swamp/aws/autoscaling@2026.09.25.1"
+  - "@swamp/aws/cloudfront@2026.09.25.1"
+  - "@swamp/aws/cloudwatch@2026.09.25.1"
   - "@swamp/aws/ec2@2026.09.24.1"
+  - "@swamp/aws/ecr@2026.09.24.1"
+  - "@swamp/aws/ecs@2026.09.24.1"
+  - "@swamp/aws/efs@2026.09.24.1"
+  - "@swamp/aws/eks@2026.09.24.1"
+  - "@swamp/aws/elasticache@2026.09.24.1"
+  - "@swamp/aws/elasticloadbalancingv2@2026.09.25.1"
+  - "@swamp/aws/events@2026.09.25.1"
+  - "@swamp/aws/iam@2026.09.25.1"
+  - "@swamp/aws/kms@2026.09.25.1"
+  - "@swamp/aws/lambda@2026.09.25.1"
+  - "@swamp/aws/logs@2026.09.25.1"
   - "@swamp/aws/rds@2026.09.25.1"
+  - "@swamp/aws/route53@2026.09.25.1"
+  - "@swamp/aws/s3@2026.09.25.1"
   - "@swamp/aws/secretsmanager@2026.09.25.1"
+  - "@swamp/aws/sns@2026.09.25.1"
+  - "@swamp/aws/sqs@2026.09.25.1"
+  - "@swamp/aws/ssm@2026.09.25.1"
+  - "@swamp/typesafe-ai@2026.09.15.1"
+  - "@webframp/typesafe-batch@2026.09.26.1"

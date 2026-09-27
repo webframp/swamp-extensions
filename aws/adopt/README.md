@@ -13,6 +13,10 @@ Three sources find resources:
 - `plan_stack_adoption` scopes the same question to one CloudFormation stack.
 - The `discover_*` methods keep the original VPC-centric SDK discovery.
 
+`prepare_judgement` and `decide` turn a plan into dispositions, and the
+[`@webframp/adopt-find-unmanaged`](#judgement-and-decision) workflow runs the
+whole pipeline: sweep, judge, decide, approve, observe.
+
 ## Authentication
 
 This extension uses the default AWS credential chain, or the shared-config
@@ -63,6 +67,19 @@ swamp workflow run @webframp/adopt-stack \
 
 # View the adoption report
 swamp report get @webframp/adopt-report --latest
+```
+
+To find what swamp does not manage in a region and observe what it should:
+
+```bash
+swamp model create @webframp/aws/adopt acct --global-arg region=us-east-1
+swamp model create @swamp/typesafe-ai jev \
+  --global-arg 'apiKey=${{ vault.get("secrets", "TYPESAFE_API_KEY") }}'
+
+swamp workflow run @webframp/adopt-find-unmanaged --input modelName=acct
+swamp report get @webframp/adopt-decision-report --model acct --markdown
+swamp workflow approve @webframp/adopt-find-unmanaged approve-observe --run <run-id>
+swamp workflow resume @webframp/adopt-find-unmanaged --run <run-id>
 ```
 
 ## Account Sweep
@@ -197,6 +214,82 @@ Child types need a parent identifier to list. ECS services list per cluster, ELB
 listeners per load balancer, Route 53 record sets per hosted zone, and EKS
 nodegroups per cluster. A child type swept without its parent type records a
 `parent-not-swept` gap.
+
+## Judgement and Decision
+
+A plan becomes a decision in three steps, and only the middle one uses AI.
+
+1. **Flags settle what they can.** `asg-managed`, `eks-managed`,
+   `service-linked-role`, `cdk-assets`, and `control-tower` candidates are
+   `exclude`. The default VPC is `observe-only`. A `read-failed` candidate goes
+   to a human, because its attributes are incomplete. `cfn-stack` settles
+   nothing: CloudFormation is an IaC tool, not a controller. Candidates swamp
+   already manages are left out.
+2. **jev advises on the rest.** `prepare_judgement` writes a `judgeRequest`
+   (`judge-<plan>`) with the unsettled candidates in rank order, capped at
+   `maxItems` (at most 100), the four questions, and a fingerprint of the items.
+   The workflow sends them to `triage_batch` on a `@swamp/typesafe-ai` model.
+   Each candidate's state is its type, tier, statefulness, stack tag,
+   non-settling flags, and `judgeState`.
+3. **`decide` applies fixed rules.** It writes an `adoptionDecision`
+   (`decision-<plan>`) and changes nothing in AWS.
+
+The four questions:
+
+| Key                | Type   | Asks                                                                                |
+| ------------------ | ------ | ----------------------------------------------------------------------------------- |
+| `disposition`      | choice | manage, observe-only, exclude, retire-candidate, or needs-human                     |
+| `blast_radius`     | score  | How bad would it be if swamp misconfigured or replaced it?                          |
+| `controller_owned` | noul   | Does another controller create and reconcile it?                                    |
+| `risk`             | score  | How exposed is it now: exposure, protection, privilege, sensitivity, recoverability |
+
+The rules in `decide`:
+
+- A jev answer is used only when the batch's `sourceFingerprint` matches the
+  judge request. A batch from another run or candidate set is ignored and
+  reported as `mismatched`.
+- A disposition below `minConfidence` (default 0.7) goes to a human.
+- jev's `manage` goes to a human when it also rates the resource
+  controller-owned (0.5 or more), or when the type is stateful and the blast
+  radius is high (`highBlastRadius`, default two thirds of the scale).
+- With `judge=false`, a failed jev step, an item jev could not evaluate, or a
+  candidate over the cap, the candidate goes to a human, and the reason says
+  which. Nothing is guessed.
+- Risk at or above `highRisk` (default two thirds of the scale) is listed in
+  `findings[]` whatever the disposition. Adopting a risky resource is how swamp
+  can later fix it, so risk never blocks.
+
+Each decision records `disposition`, `decidedBy` (`rule`, `jev`, or `default`),
+`confidence`, `reason`, and jev's raw view. `manage` and `observe-only`
+candidates are ordered into `waves`: a candidate comes one wave after the latest
+of its dependencies in the same set, then by rank, then by ascending blast
+radius. `observe[]` is that order, ready for a `forEach`. Observing is
+read-only, so the workflow runs `observe[]` four at a time without waiting for
+each wave; the order matters once definitions are promoted.
+
+### `@webframp/adopt-find-unmanaged`
+
+| Job       | Steps                                                         |
+| --------- | ------------------------------------------------------------- |
+| `plan`    | `sweep`, `prepare`, `judge` (jev), `decide`                   |
+| `approve` | `approve-observe`, a manual approval                          |
+| `observe` | `get` on each `observe[]` candidate through its official type |
+
+The sweep's `managed` input comes from stored `@swamp/aws/*` state, so resources
+swamp already observes are not candidates. The `judge` step is skipped when
+`judge=false` or nothing needs judging, and `allowFailure` keeps a jev outage
+from stopping the run. The observe step creates one model per candidate
+(`modelType` plus `modelName`) and passes `name` and `region` as global
+arguments, so no two candidates share a lock.
+
+Inputs: `modelName` (required), `judgeModel` (default `jev`), `judge` (default
+true), `prefix`, `tiers`, `types`, `maxJudgeItems` (default 100), and
+`minConfidence` (default 0.7).
+
+`@webframp/adopt-decision-report`, a default report of the adopt model type,
+runs after `decide` and shows coverage and gaps, the jev outcome, dispositions
+and who decided them, the waves, high-risk findings, and why candidates went to
+a human. Read it before approving.
 
 ## Adoption Types
 
@@ -427,6 +520,19 @@ properties of the type and region, not of the account.
 `maxResourcesPerType`. Raise the cap, or sweep that type on its own with
 `types`.
 
+### jev sends almost everything to a human
+
+The decision report counts the answers that fell below the confidence gate. A
+five-way disposition often lands between 0.3 and 0.6 when `judgeState` is
+sparse, as it is for EIPs, internet gateways, and subnets. Lower `minConfidence`
+for a first pass, or read the jev suggestion in each decision's
+`jev.disposition`; the gate only decides who acts on it.
+
+### Every candidate is `not judged: the jev batch was computed from a different candidate set`
+
+The `judgeRequest` and the jev batch come from different runs. Run the whole
+workflow again rather than `decide` on its own after a new sweep.
+
 ### CloudFormation stack adoption and nested stacks
 
 `plan_stack_adoption` recurses into nested stacks using
@@ -436,11 +542,7 @@ warning when truncated.
 
 ## Dependencies
 
-`manifest.yaml` pins the packages the shipped workflows run:
-
-- `@swamp/aws/ec2@2026.09.24.1`
-- `@swamp/aws/rds@2026.09.25.1`
-- `@swamp/aws/secretsmanager@2026.09.25.1`
-
-Observing other registry types needs their packages installed:
-`swamp extension pull <swampPackage>`.
+`manifest.yaml` pins the official `@swamp/aws/*` package for every registry
+type, so the observe step can run any of them, plus `@swamp/typesafe-ai` and
+`@webframp/typesafe-batch` for judgement. `deno task check:registry` checks the
+registry against the published packages.

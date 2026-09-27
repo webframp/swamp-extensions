@@ -162,11 +162,13 @@ Deno.test("byJob stats calculated correctly", async () => {
     attempted: 2,
     succeeded: 1,
     failed: 1,
+    skipped: 0,
   });
   assertEquals(result.json.summary.byJob["database"], {
     attempted: 1,
     succeeded: 1,
     failed: 0,
+    skipped: 0,
   });
 });
 
@@ -182,4 +184,50 @@ Deno.test("empty step executions", async () => {
     result.markdown,
     "No adoption steps were executed. Verify workflow configuration and inputs.",
   );
+});
+
+Deno.test("a guard-skipped step is counted as skipped, not failed", async () => {
+  const ctx = makeContext([
+    {
+      jobName: "plan",
+      stepName: "judge",
+      modelName: "jev",
+      modelType: "@swamp/typesafe-ai",
+      modelId: "m-jev",
+      methodName: "triage_batch",
+      status: "skipped",
+    },
+    {
+      jobName: "plan",
+      stepName: "decide",
+      modelName: "acct",
+      modelType: "@webframp/aws/adopt",
+      modelId: "m-acct",
+      methodName: "decide",
+      status: "succeeded",
+    },
+  ]);
+  const result = await report.execute(ctx);
+  assertEquals(result.json.summary.failed, 0);
+  assertEquals(result.json.summary.skipped, 1);
+  assertEquals(result.json.summary.totalAttempted, 1);
+  assertEquals(result.json.summary.byJob.plan.skipped, 1);
+  assertStringIncludes(result.markdown, "| Skipped | 1 |");
+});
+
+Deno.test("a failed step's errorMessage is shown", async () => {
+  const ctx = makeContext([{
+    jobName: "observe",
+    stepName: "get-x",
+    modelName: "adopt-x",
+    modelType: "@swamp/aws/ec2/vpc",
+    modelId: "m-x",
+    methodName: "get",
+    status: "failed",
+  }]);
+  // swamp supplies errorMessage, not error.
+  (ctx.stepExecutions[0] as Record<string, unknown>).errorMessage =
+    "AccessDenied: not authorized";
+  const result = await report.execute(ctx);
+  assertStringIncludes(result.markdown, "AccessDenied: not authorized");
 });

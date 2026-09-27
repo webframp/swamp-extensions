@@ -3,7 +3,7 @@
     "strict": true
   },
   "tasks": {
-    "check": "deno check extensions/models/aws/adopt.ts extensions/models/aws/_lib/adoption.ts extensions/reports/adopt_report.ts",
+    "check": "deno check extensions/models/aws/adopt.ts extensions/models/aws/_lib/adoption.ts extensions/models/aws/_lib/judgement.ts extensions/reports/adopt_report.ts extensions/reports/adopt_decision_report.ts",
     "lint": "deno lint extensions/models/ extensions/reports/ scripts/",
     "fmt": "deno fmt extensions/models/ extensions/reports/ scripts/",
     "fmt:check": "deno fmt --check extensions/models/ extensions/reports/ scripts/",

@@ -2253,3 +2253,207 @@ Deno.test({
     assertEquals(managed, [`${svc("web")}|${CLUSTER_ARN}`]);
   },
 });
+
+// =============================================================================
+// prepare_judgement and decide
+// =============================================================================
+
+function makeStoredContext(stored: Record<string, unknown>) {
+  return createModelTestContext({
+    globalArgs: { region: "us-east-1" },
+    definition: {
+      id: "test-sweep-id",
+      name: "adopt-sweep-test",
+      version: 1,
+      tags: {},
+    },
+    // deno-lint-ignore no-explicit-any
+    storedResources: stored as any,
+  });
+}
+
+async function prepare(
+  stored: Record<string, unknown>,
+  args: Record<string, unknown> = {},
+) {
+  const { context, getWrittenResources } = makeStoredContext(stored);
+  await model.methods.prepare_judgement.execute(
+    // deno-lint-ignore no-explicit-any
+    args as any,
+    context as ExecuteContext,
+  );
+  const written = getWrittenResources() as WrittenResource[];
+  assertEquals(written.length, 1);
+  return written[0];
+}
+
+async function runDecide(
+  stored: Record<string, unknown>,
+  args: Record<string, unknown>,
+) {
+  const { context, getWrittenResources } = makeStoredContext(stored);
+  await model.methods.decide.execute(
+    // deno-lint-ignore no-explicit-any
+    { judge: true, judgement: null, ...args } as any,
+    context as ExecuteContext,
+  );
+  const written = getWrittenResources() as WrittenResource[];
+  assertEquals(written.length, 1);
+  return written[0];
+}
+
+Deno.test({
+  name: "prepare_judgement sends the unsettled sweep candidates to jev",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const written = await prepare({ "sweep-us-east-1": plan });
+    assertEquals(written.specName, "judgeRequest");
+    assertEquals(written.name, "judge-sweep-us-east-1");
+    const request = written.data;
+    const judged = Object.values(request.itemCandidates as object).sort();
+    assertEquals(judged, [
+      "AWS::EC2::Subnet/subnet-app",
+      "AWS::EC2::VPC/vpc-app",
+      "AWS::ECS::Cluster/prod",
+      `AWS::ECS::Service/${SERVICE_ID}`,
+    ]);
+    // Default VPC and CDK bucket by flag; app-data because GetResource failed.
+    assertEquals(request.counts.settled, 3);
+    assertEquals(Object.keys(request.questions).length, 4);
+    assertMatch(request.fingerprint, /^sha256-[0-9a-f]{64}$/);
+  },
+});
+
+Deno.test({
+  name: "prepare_judgement fails clearly when the plan is missing",
+  sanitizeResources: false,
+  fn: async () => {
+    const { context } = makeStoredContext({});
+    let message = "";
+    try {
+      await model.methods.prepare_judgement.execute(
+        // deno-lint-ignore no-explicit-any
+        {} as any,
+        context as ExecuteContext,
+      );
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    assertMatch(message, /No adoptionPlan named sweep-us-east-1/);
+  },
+});
+
+Deno.test({
+  name: "decide uses jev answers that match the stored judge request",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const request = (await prepare({ "sweep-us-east-1": plan })).data;
+    const itemFor = (candidateId: string) =>
+      Object.entries(request.itemCandidates as Record<string, string>)
+        .find(([, c]) => c === candidateId)![0];
+    const legend = {
+      "0": "low",
+      "1": "moderate",
+      "2": "high",
+      "3": "critical",
+    };
+    const judgement = {
+      sourceFingerprint: request.fingerprint,
+      results: [{
+        id: itemFor("AWS::EC2::Subnet/subnet-app"),
+        answers: {
+          disposition: {
+            type: "choice",
+            choice: "observe-only",
+            probabilities: {},
+            confidence: 0.95,
+          },
+          blast_radius: {
+            type: "score",
+            score: 1,
+            legend,
+            probabilities: {},
+            confidence: 0.9,
+          },
+          controller_owned: { type: "noul", noul: 0.05 },
+          risk: {
+            type: "score",
+            score: 3,
+            legend,
+            probabilities: {},
+            confidence: 0.9,
+          },
+        },
+      }],
+      failures: [],
+      model: "jev-latest",
+      evaluatedAt: "2026-09-26T00:00:00.000Z",
+      totalInputTokens: 10,
+      totalOutputTokens: 2,
+    };
+    const written = await runDecide(
+      { "sweep-us-east-1": plan, "judge-sweep-us-east-1": request },
+      { judgement },
+    );
+    assertEquals(written.specName, "adoptionDecision");
+    assertEquals(written.name, "decision-sweep-us-east-1");
+    const d = written.data;
+    assertEquals(d.judgement.status, "used");
+    const subnet = d.decisions.find((x: { id: string }) =>
+      x.id === "AWS::EC2::Subnet/subnet-app"
+    );
+    assertEquals(subnet.disposition, "observe-only");
+    assertEquals(subnet.decidedBy, "jev");
+    const bucket = d.decisions.find((x: { id: string }) =>
+      x.id === "AWS::S3::Bucket/app-data"
+    );
+    assertEquals(bucket.decidedBy, "rule");
+    assertMatch(bucket.reason, /^read-failed/);
+    assertEquals(d.findings.length, 1);
+    assertEquals(d.findings[0].riskLevel, "critical");
+    // The default VPC is observe-only by rule, so it is observed too.
+    assertEquals(
+      d.observe.map((o: { id: string }) => o.id).sort(),
+      ["AWS::EC2::Subnet/subnet-app", "AWS::EC2::VPC/vpc-default"],
+    );
+    const unanswered = d.decisions.find((x: { id: string }) =>
+      x.id === "AWS::EC2::VPC/vpc-app"
+    );
+    assertEquals(unanswered.disposition, "needs-human");
+    assertEquals(unanswered.decidedBy, "default");
+  },
+});
+
+Deno.test({
+  name: "decide rebuilds a judge request built from an older plan",
+  sanitizeResources: false,
+  fn: async () => {
+    const { plan } = await runSweep(sweepAccount(), { types: SWEEP_TYPES });
+    const request = (await prepare({ "sweep-us-east-1": plan })).data;
+    const stale = { ...request, planFetchedAt: "2020-01-01T00:00:00.000Z" };
+    const written = await runDecide(
+      { "sweep-us-east-1": plan, "judge-sweep-us-east-1": stale },
+      { judge: false },
+    );
+    assertEquals(written.data.judgement.status, "disabled");
+    assertMatch(written.data.warnings[0], /built from an older plan/);
+  },
+});
+
+Deno.test("decide rejects a malformed judgement argument", () => {
+  const parsed = model.methods.decide.arguments.safeParse({
+    judgement: { results: "nope" },
+  });
+  assertEquals(parsed.success, false);
+});
+
+Deno.test("judgeRequest and adoptionDecision resources have finite lifetimes", () => {
+  assertEquals(model.resources.judgeRequest.lifetime, "7d");
+  assertEquals(model.resources.adoptionDecision.lifetime, "7d");
+});
+
+Deno.test("the decision report is a default report of the model type", () => {
+  assertEquals(model.reports, ["@webframp/adopt-decision-report"]);
+});
