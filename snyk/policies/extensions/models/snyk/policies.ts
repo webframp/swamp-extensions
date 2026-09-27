@@ -166,7 +166,7 @@ const GetOrgPolicyEventsSchema = z.object({
 /** Snyk Policies — security policy management and rule configuration */
 export const model = {
   type: "@webframp/snyk/policies",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -220,6 +220,11 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -248,7 +253,7 @@ export const model = {
       description: "Get org-level policies",
       arguments: z.object({
         search: z.string().optional().describe(
-          "Search keyword for searching fields ignored_by.name, ignored_by.email, ignore...",
+          "Search keyword for searching fields ignored_by.name, ignored_by.",
         ),
         order_by: z.enum(["created", "expires", "ignore-type", "requested-by"])
           .optional().describe("The column name to sort on"),
@@ -292,7 +297,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/policies`,
+          `/orgs/${encodeURIComponent(orgId)}/policies`,
           version,
           params,
         );
@@ -351,7 +356,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/policies`,
+          `/orgs/${encodeURIComponent(orgId)}/policies`,
           version,
           body,
         );
@@ -387,7 +392,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/policies/${args.policy_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           version,
         );
 
@@ -435,7 +442,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/policies/${args.policy_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           version,
           body,
         );
@@ -472,7 +481,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/policies/${args.policy_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           version,
         );
 
@@ -509,7 +520,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/policies/${args.policy_id}/events`,
+          `/orgs/${encodeURIComponent(orgId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }/events`,
           version,
           params,
         );

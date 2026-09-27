@@ -222,7 +222,7 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -277,6 +277,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -408,7 +413,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/container_images`,
+          `/orgs/${encodeURIComponent(orgId)}/container_images`,
           version,
           params,
         );
@@ -457,7 +462,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/container_images/${args.image_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/container_images/${
+            encodeURIComponent(String(args.image_id))
+          }`,
           version,
         );
 
@@ -500,7 +507,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/container_images/${args.image_id}/relationships/image_target_refs`,
+          `/orgs/${encodeURIComponent(orgId)}/container_images/${
+            encodeURIComponent(String(args.image_id))
+          }/relationships/image_target_refs`,
           version,
           params,
         );

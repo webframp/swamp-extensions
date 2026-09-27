@@ -334,7 +334,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
 /** Snyk Groups — group management, orgs, members, and audit */
 export const model = {
   type: "@webframp/snyk/groups",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -394,6 +394,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -553,7 +558,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}`,
+          `/groups/${encodeURIComponent(groupId)}`,
           version,
         );
 
@@ -569,10 +574,10 @@ export const model = {
           "The ID for the next page of results.",
         ),
         from: z.string().optional().describe(
-          "The start date (inclusive) of the audit logs search. If not specified, the st...",
+          "The start date (inclusive) of the audit logs search.",
         ),
         to: z.string().optional().describe(
-          "The end date (exclusive) of the audit logs search. Dates should be formatted ...",
+          "The end date (exclusive) of the audit logs search.",
         ),
         size: z.number().optional().describe(
           "Number of results to return per page.",
@@ -588,7 +593,7 @@ export const model = {
           "Filter logs by event types, cannot be used in conjunction with exclude_events...",
         ),
         exclude_events: z.string().optional().describe(
-          "Exclude event types from results, cannot be used in conjunctions with events ...",
+          "Exclude event types from results, cannot be used in conjunctions with events...",
         ),
       }),
       execute: async (
@@ -620,7 +625,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/audit_logs/search${qs}`,
+          `/groups/${encodeURIComponent(groupId)}/audit_logs/search${qs}`,
           version,
         );
 
@@ -672,7 +677,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/export${qs}`,
+          `/groups/${encodeURIComponent(groupId)}/export${qs}`,
           version,
         );
 
@@ -708,7 +713,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/export/${args.export_id}`,
+          `/groups/${encodeURIComponent(groupId)}/export/${
+            encodeURIComponent(String(args.export_id))
+          }`,
           version,
         );
 
@@ -744,7 +751,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/jobs/export/${args.export_id}`,
+          `/groups/${encodeURIComponent(groupId)}/jobs/export/${
+            encodeURIComponent(String(args.export_id))
+          }`,
           version,
         );
 
@@ -790,7 +799,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/org_memberships`,
+          `/groups/${encodeURIComponent(groupId)}/org_memberships`,
           version,
           params,
         );
@@ -830,7 +839,7 @@ export const model = {
           "Only return organizations whose slug exactly matches this value. Case sensitive.",
         ),
         expand: z.enum(["count"]).optional().describe(
-          "Expand the response with additional fields. When set to `count`, the response...",
+          "Expand the response with additional fields.",
         ),
       }),
       execute: async (
@@ -857,7 +866,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/orgs`,
+          `/groups/${encodeURIComponent(groupId)}/orgs`,
           version,
           params,
         );
@@ -910,7 +919,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/policies`,
+          `/groups/${encodeURIComponent(groupId)}/policies`,
           version,
           params,
         );
@@ -968,7 +977,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/policies`,
+          `/groups/${encodeURIComponent(groupId)}/policies`,
           version,
           body,
         );
@@ -1015,7 +1024,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${groupId}/policies/${args.policy_id}`,
+          `/groups/${encodeURIComponent(groupId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           version,
           body,
         );
@@ -1052,7 +1063,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${groupId}/policies/${args.policy_id}`,
+          `/groups/${encodeURIComponent(groupId)}/policies/${
+            encodeURIComponent(String(args.policy_id))
+          }`,
           version,
         );
 
@@ -1093,7 +1106,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/rule_extensions/assignments`,
+          `/groups/${encodeURIComponent(groupId)}/rule_extensions/assignments`,
           version,
           params,
         );
@@ -1148,7 +1161,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/rule_extensions/assignments`,
+          `/groups/${encodeURIComponent(groupId)}/rule_extensions/assignments`,
           version,
           body,
         );
@@ -1198,7 +1211,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${groupId}/rule_extensions/assignments${qs}`,
+          `/groups/${
+            encodeURIComponent(groupId)
+          }/rule_extensions/assignments${qs}`,
           version,
         );
 
@@ -1234,7 +1249,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/secrets/rule_extensions`,
+          `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions`,
           version,
           params,
         );
@@ -1293,7 +1308,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/secrets/rule_extensions`,
+          `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions`,
           version,
           body,
         );
@@ -1335,7 +1350,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/secrets/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
         );
 
@@ -1380,7 +1397,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${groupId}/secrets/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
           body,
         );
@@ -1419,7 +1438,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${groupId}/secrets/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
         );
 
@@ -1459,7 +1480,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${groupId}/users/${args.id}`,
+          `/groups/${encodeURIComponent(groupId)}/users/${
+            encodeURIComponent(String(args.id))
+          }`,
           version,
           body,
         );

@@ -113,7 +113,7 @@ const GetChannelNameByIdSchema = z.object({
 /** Snyk Slack Integration — Slack app configuration and channel management */
 export const model = {
   type: "@webframp/snyk/slack",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -160,6 +160,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -221,7 +226,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/slack_app/${args.bot_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }`,
           version,
         );
 
@@ -267,7 +274,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/slack_app/${args.bot_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }`,
           version,
           body,
         );
@@ -307,7 +316,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/slack_app/${args.bot_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }`,
           version,
         );
 
@@ -344,7 +355,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/slack_app/${args.bot_id}/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }/projects`,
           version,
           params,
         );
@@ -409,7 +422,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/slack_app/${args.bot_id}/projects/${args.project_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }/projects/${encodeURIComponent(String(args.project_id))}`,
           version,
           body,
         );
@@ -465,7 +480,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/slack_app/${args.bot_id}/projects/${args.project_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }/projects/${encodeURIComponent(String(args.project_id))}`,
           version,
           body,
         );
@@ -503,7 +520,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/slack_app/${args.bot_id}/projects/${args.project_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.bot_id))
+          }/projects/${encodeURIComponent(String(args.project_id))}`,
           version,
         );
 
@@ -540,7 +559,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/slack_app/${args.tenant_id}/channels`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.tenant_id))
+          }/channels`,
           version,
           params,
         );
@@ -590,7 +611,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/slack_app/${args.tenant_id}/channels/${args.channel_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/slack_app/${
+            encodeURIComponent(String(args.tenant_id))
+          }/channels/${encodeURIComponent(String(args.channel_id))}`,
           version,
         );
 

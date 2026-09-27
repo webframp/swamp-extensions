@@ -5,6 +5,7 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@swamp-club/swamp-testing@0.20260917.35": "0.20260917.35",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
+    "npm:zod@4.6.5": "4.6.5",
     "npm:zod@^4.3.6": "4.6.5"
   },
   "jsr": {
@@ -22,7 +23,7 @@
       "dependencies": [
         "jsr:@std/assert",
         "npm:@marcbachmann/cel-js",
-        "npm:zod"
+        "npm:zod@^4.3.6"
       ]
     }
   },

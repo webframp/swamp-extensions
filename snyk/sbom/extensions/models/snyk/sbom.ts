@@ -49,7 +49,7 @@ const GetSbomTestResultSchema = z.object({
 /** Snyk SBOM — software bill of materials testing and analysis */
 export const model = {
   type: "@webframp/snyk/sbom",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -96,6 +96,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -154,7 +159,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/sbom_tests`,
+          `/orgs/${encodeURIComponent(orgId)}/sbom_tests`,
           version,
           body,
         );
@@ -190,7 +195,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/sbom_tests/${args.job_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/sbom_tests/${
+            encodeURIComponent(String(args.job_id))
+          }`,
           version,
         );
 
@@ -226,7 +233,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/sbom_tests/${args.job_id}/results`,
+          `/orgs/${encodeURIComponent(orgId)}/sbom_tests/${
+            encodeURIComponent(String(args.job_id))
+          }/results`,
           version,
         );
 

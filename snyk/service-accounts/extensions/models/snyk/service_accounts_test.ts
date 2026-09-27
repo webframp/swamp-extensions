@@ -527,6 +527,84 @@ Deno.test({
 
 Deno.test({
   name:
+    "service-accounts model: get_many_org_service_accounts fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "access_token": "test-value",
+        "access_token_expires_at": "2025-08-16T00:00:00Z",
+        "access_token_ttl_seconds": 1,
+        "api_key": "test-value",
+        "auth_type": "api_key",
+        "client_id": "test-value",
+        "client_secret": "test-value",
+        "created_at": "2025-08-16T00:00:00Z",
+        "jwks_url": "test-value",
+        "level": "Group",
+        "name": "test-value",
+        "role_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/service_accounts": { data: [mockItem], isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-service-accounts",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_many_org_service_accounts.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/service_accounts");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "get_many_org_service_accounts");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "service-accounts model: get_many_group_service_account surfaces API errors",
   sanitizeResources: false,
   fn: async () => {

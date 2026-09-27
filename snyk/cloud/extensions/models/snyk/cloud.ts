@@ -180,7 +180,7 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -240,6 +240,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -334,7 +339,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/cloud/environments`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/environments`,
           version,
           params,
         );
@@ -392,7 +397,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/cloud/environments`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/environments`,
           version,
           body,
         );
@@ -441,7 +446,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/cloud/environments/${args.environment_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/environments/${
+            encodeURIComponent(String(args.environment_id))
+          }`,
           version,
           body,
         );
@@ -480,7 +487,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/cloud/environments/${args.environment_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/environments/${
+            encodeURIComponent(String(args.environment_id))
+          }`,
           version,
         );
 
@@ -522,7 +531,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/cloud/permissions`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/permissions`,
           version,
           body,
         );
@@ -597,7 +606,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/cloud/resources`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/resources`,
           version,
           params,
         );
@@ -650,7 +659,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/cloud/scans`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/scans`,
           version,
           params,
         );
@@ -707,7 +716,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/cloud/scans`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/scans`,
           version,
           body,
         );
@@ -743,7 +752,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/cloud/scans/${args.scan_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/cloud/scans/${
+            encodeURIComponent(String(args.scan_id))
+          }`,
           version,
         );
 

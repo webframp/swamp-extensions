@@ -302,7 +302,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -362,6 +362,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -469,7 +474,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/apps/installs`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/apps/installs`,
           version,
           params,
         );
@@ -539,7 +544,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/apps/installs`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/apps/installs`,
           version,
           body,
         );
@@ -580,7 +585,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${args.group_id}/apps/installs/${args.install_id}`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/apps/installs/${
+            encodeURIComponent(String(args.install_id))
+          }`,
           version,
         );
 
@@ -626,7 +633,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/apps/installs/${args.install_id}/secrets`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/apps/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/secrets`,
           version,
           body,
         );
@@ -672,7 +681,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/apps/creations`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations`,
           version,
           params,
         );
@@ -736,7 +745,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/apps/creations`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations`,
           version,
           body,
         );
@@ -772,7 +781,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/apps/creations/${args.app_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations/${
+            encodeURIComponent(String(args.app_id))
+          }`,
           version,
         );
 
@@ -823,7 +834,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/apps/creations/${args.app_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations/${
+            encodeURIComponent(String(args.app_id))
+          }`,
           version,
           body,
         );
@@ -860,7 +873,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/apps/creations/${args.app_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations/${
+            encodeURIComponent(String(args.app_id))
+          }`,
           version,
         );
 
@@ -904,7 +919,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/apps/creations/${args.app_id}/secrets`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/creations/${
+            encodeURIComponent(String(args.app_id))
+          }/secrets`,
           version,
           body,
         );
@@ -950,7 +967,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/apps/installs`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/installs`,
           version,
           params,
         );
@@ -1019,7 +1036,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/apps/installs`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/installs`,
           version,
           body,
         );
@@ -1060,7 +1077,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/apps/installs/${args.install_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/installs/${
+            encodeURIComponent(String(args.install_id))
+          }`,
           version,
         );
 
@@ -1105,7 +1124,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/apps/installs/${args.install_id}/secrets`,
+          `/orgs/${encodeURIComponent(orgId)}/apps/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/secrets`,
           version,
           body,
         );

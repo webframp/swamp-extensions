@@ -27,7 +27,7 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -69,6 +69,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -164,7 +169,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/issues${qs}`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/issues${qs}`,
           version,
         );
 
@@ -215,7 +220,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/issues/${args.issue_id}${qs}`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/issues/${
+            encodeURIComponent(String(args.issue_id))
+          }${qs}`,
           version,
         );
 
@@ -290,7 +297,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/issues${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/issues${qs}`,
           version,
         );
 
@@ -340,7 +347,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/issues/${args.issue_id}${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/issues/${
+            encodeURIComponent(String(args.issue_id))
+          }${qs}`,
           version,
         );
 

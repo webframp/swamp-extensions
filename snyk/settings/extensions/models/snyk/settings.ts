@@ -157,7 +157,7 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -209,6 +209,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -340,7 +345,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/settings/iac`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/settings/iac`,
           version,
         );
 
@@ -385,7 +390,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${args.group_id}/settings/iac`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/settings/iac`,
           version,
           body,
         );
@@ -422,7 +427,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/settings/opensource/broker`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/opensource/broker`,
           version,
         );
 
@@ -459,7 +466,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/settings/opensource/broker`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/opensource/broker`,
           version,
         );
 
@@ -495,7 +504,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${args.group_id}/settings/opensource/broker`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/opensource/broker`,
           version,
         );
 
@@ -526,7 +537,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/settings/pull_request_template`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/pull_request_template`,
           version,
         );
 
@@ -572,7 +585,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/settings/pull_request_template`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/pull_request_template`,
           version,
           body,
         );
@@ -614,7 +629,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${args.group_id}/settings/pull_request_template`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/settings/pull_request_template`,
           version,
         );
 
@@ -643,7 +660,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/iac`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/iac`,
           version,
         );
 
@@ -685,7 +702,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/iac`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/iac`,
           version,
           body,
         );
@@ -720,7 +737,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/open_source/languages`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/open_source/languages`,
           version,
         );
 
@@ -766,7 +783,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/open_source/languages/${args.language}`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/open_source/languages/${
+            encodeURIComponent(String(args.language))
+          }`,
           version,
           body,
         );
@@ -801,7 +820,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/opensource`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource`,
           version,
         );
 
@@ -835,7 +854,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/opensource/broker`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/broker`,
           version,
         );
 
@@ -870,7 +889,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/settings/opensource/broker`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/broker`,
           version,
         );
 
@@ -904,7 +923,7 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/settings/opensource/broker`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/broker`,
           version,
         );
 
@@ -936,7 +955,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/opensource/${args.ecosystem}/broker`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/${
+            encodeURIComponent(String(args.ecosystem))
+          }/broker`,
           version,
         );
 
@@ -983,7 +1004,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/opensource/${args.ecosystem}/broker`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/${
+            encodeURIComponent(String(args.ecosystem))
+          }/broker`,
           version,
           body,
         );
@@ -1024,7 +1047,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/opensource/${args.ecosystem}/private-registries`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/${
+            encodeURIComponent(String(args.ecosystem))
+          }/private-registries`,
           version,
         );
 
@@ -1071,7 +1096,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/opensource/${args.ecosystem}/private-registries`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/opensource/${
+            encodeURIComponent(String(args.ecosystem))
+          }/private-registries`,
           version,
           body,
         );
@@ -1109,7 +1136,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/sast`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/sast`,
           version,
         );
 
@@ -1157,7 +1184,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/sast`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/sast`,
           version,
           body,
         );
@@ -1192,7 +1219,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/settings/secrets`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/secrets`,
           version,
         );
 
@@ -1240,7 +1267,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/settings/secrets`,
+          `/orgs/${encodeURIComponent(orgId)}/settings/secrets`,
           version,
           body,
         );
