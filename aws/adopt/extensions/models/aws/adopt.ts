@@ -69,9 +69,21 @@ import {
   type SweepScope,
   tagsFor,
 } from "./_lib/adoption.ts";
+import {
+  AdoptionDecisionSchema,
+  buildJudgeRequest,
+  decideCandidates,
+  DEFAULT_DECIDE_OPTIONS,
+  JudgementSchema,
+  type JudgeRequest,
+  JudgeRequestSchema,
+  MAX_JUDGE_ITEMS,
+  type PlanView,
+} from "./_lib/judgement.ts";
 
 export { ADOPTION_TIERS, ADOPTION_TYPES } from "./_lib/adoption.ts";
 export type { AdoptionCandidate, AdoptionType } from "./_lib/adoption.ts";
+export { DISPOSITIONS, JUDGE_QUESTIONS } from "./_lib/judgement.ts";
 
 const EXTENSION_NAME = "@webframp/aws/adopt";
 
@@ -1274,6 +1286,7 @@ const SweepArgsSchema = z.object({
       /^[a-z0-9][a-z0-9-]*$/,
       "prefix must be lowercase alphanumeric and hyphens only",
     )
+    .max(64)
     .default("adopt")
     .describe("Prefix for generated swamp model names"),
   types: z.array(
@@ -1725,11 +1738,125 @@ function summarizeCandidates(candidates: readonly AdoptionCandidate[]) {
   };
 }
 
+// =============================================================================
+// Judgement and decision
+// =============================================================================
+
+/** An adoptionPlan instance name; today only sweeps write one (`sweep-<region>`). */
+const PlanNameSchema = z.string()
+  .regex(
+    /^[a-z0-9][a-z0-9-]*$/,
+    "planName must be lowercase alphanumeric and hyphens only",
+  )
+  .optional()
+  .describe("adoptionPlan instance to read (default: sweep-<region>)");
+
+const PrepareJudgementArgsSchema = z.object({
+  planName: PlanNameSchema,
+  maxItems: z.number().int().min(0).max(MAX_JUDGE_ITEMS).default(
+    MAX_JUDGE_ITEMS,
+  ).describe(
+    "Most candidates to send to jev; the rest go to a human, never dropped",
+  ),
+});
+
+/** Parsed `prepare_judgement` arguments. */
+type PrepareJudgementArgs = z.infer<typeof PrepareJudgementArgsSchema>;
+
+const fraction = z.number().min(0).max(1);
+
+const DecideArgsSchema = z.object({
+  planName: PlanNameSchema,
+  judge: z.boolean().default(true).describe(
+    "False when the workflow did not ask jev; unsettled candidates go to a " +
+      "human",
+  ),
+  judgement: JudgementSchema.nullable().default(null).describe(
+    "The triageBatch resource from triage_batch, or null",
+  ),
+  minConfidence: fraction.default(DEFAULT_DECIDE_OPTIONS.minConfidence)
+    .describe("A jev disposition below this confidence goes to a human"),
+  highBlastRadius: fraction.default(DEFAULT_DECIDE_OPTIONS.highBlastRadius)
+    .describe(
+      "0–1 blast radius from which a stateful manage needs a human",
+    ),
+  highRisk: fraction.default(DEFAULT_DECIDE_OPTIONS.highRisk).describe(
+    "0–1 risk from which a candidate is listed in findings",
+  ),
+});
+
+/** Parsed `decide` arguments. */
+type DecideArgs = z.infer<typeof DecideArgsSchema>;
+
+/** Resolve the plan instance name for a method call. */
+function resolvePlanName(
+  planName: string | undefined,
+  context: MethodContext,
+): string {
+  return planName ?? `sweep-${context.globalArgs.region ?? "us-east-1"}`;
+}
+
+/** Read and validate an adoptionPlan written by this model. */
+async function readPlan(
+  planName: string,
+  context: MethodContext,
+): Promise<PlanView> {
+  const raw = context.readResource
+    ? await context.readResource(planName)
+    : null;
+  if (!raw) {
+    throw new Error(
+      `No adoptionPlan named ${planName} on this model. Run ` +
+        "plan_account_sweep first, or pass planName.",
+    );
+  }
+  const parsed = AdoptionPlanSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(
+      `${planName} is not an adoptionPlan: ${parsed.error.message}`,
+    );
+  }
+  return parsed.data;
+}
+
+/**
+ * Read the judge request `prepare_judgement` wrote for this plan. A request
+ * built from an older plan is ignored, and decide rebuilds it with the
+ * default cap, so its answers can never be matched to the wrong candidates.
+ */
+async function readJudgeRequest(
+  plan: PlanView,
+  planName: string,
+  context: MethodContext,
+): Promise<
+  { request: Omit<JudgeRequest, "fetchedAt" | "collectedBy">; note?: string }
+> {
+  let stored: unknown = null;
+  try {
+    stored = context.readResource
+      ? await context.readResource(`judge-${planName}`)
+      : null;
+  } catch {
+    stored = null;
+  }
+  const parsed = stored ? JudgeRequestSchema.safeParse(stored) : null;
+  if (parsed?.success && parsed.data.planFetchedAt === plan.fetchedAt) {
+    return { request: parsed.data };
+  }
+  return {
+    request: await buildJudgeRequest(plan, planName, MAX_JUDGE_ITEMS),
+    note: parsed?.success
+      ? `judge-${planName} was built from an older plan; rebuilt it`
+      : `no judge-${planName} request found; built one`,
+  };
+}
+
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.09.26.1",
+  version: "2026.09.26.2",
   globalArguments: GlobalArgsSchema,
+  reports: ["@webframp/adopt-decision-report"],
 
   upgrades: [
     {
@@ -1846,6 +1973,13 @@ export const model = {
         "arguments unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.26.2",
+      description:
+        "Added prepare_judgement and decide with the judgeRequest and " +
+        "adoptionDecision resources; global arguments unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -1873,6 +2007,22 @@ export const model = {
       description:
         "Adoption candidates from a sweep or stack, with coverage and gaps",
       schema: AdoptionPlanSchema,
+      lifetime: "7d" as const,
+      garbageCollection: 10,
+    },
+    judgeRequest: {
+      description:
+        "The candidates and questions sent to jev for one plan, with the " +
+        "fingerprint decide checks the answers against",
+      schema: JudgeRequestSchema,
+      lifetime: "7d" as const,
+      garbageCollection: 10,
+    },
+    adoptionDecision: {
+      description:
+        "Per-candidate dispositions with provenance, observe waves, and " +
+        "high-risk findings",
+      schema: AdoptionDecisionSchema,
       lifetime: "7d" as const,
       garbageCollection: 10,
     },
@@ -2239,6 +2389,7 @@ export const model = {
             /^[a-z0-9][a-z0-9-]*$/,
             "prefix must be lowercase alphanumeric and hyphens only",
           )
+          .max(64)
           .default("adopt")
           .describe("Prefix for generated model names"),
       }),
@@ -2528,6 +2679,94 @@ export const model = {
       },
     },
 
+    prepare_judgement: {
+      description:
+        "Select the plan candidates the flags did not settle and write the " +
+        "batch and questions to send to jev's triage_batch",
+      arguments: PrepareJudgementArgsSchema,
+      execute: async (args: PrepareJudgementArgs, context: MethodContext) => {
+        const planName = resolvePlanName(args.planName, context);
+        const plan = await readPlan(planName, context);
+        const request = await buildJudgeRequest(
+          plan,
+          planName,
+          args.maxItems ?? MAX_JUDGE_ITEMS,
+        );
+        const handle = await context.writeResource(
+          "judgeRequest",
+          `judge-${planName}`,
+          {
+            ...request,
+            fetchedAt: new Date().toISOString(),
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        context.logger.info(
+          "Judge request for {planName}: {judged} to jev, {settled} settled " +
+            "by flags, {overflow} over the cap, {managed} already managed",
+          {
+            planName,
+            judged: request.counts.judged,
+            settled: request.counts.settled,
+            overflow: request.counts.overflow,
+            managed: request.counts.alreadyManaged,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    decide: {
+      description:
+        "Decide each candidate's disposition from flags, rules, and jev's " +
+        "answers; order manage and observe-only candidates into waves and " +
+        "list high-risk findings",
+      arguments: DecideArgsSchema,
+      execute: async (args: DecideArgs, context: MethodContext) => {
+        const startMs = Date.now();
+        const planName = resolvePlanName(args.planName, context);
+        const plan = await readPlan(planName, context);
+        const { request, note } = await readJudgeRequest(
+          plan,
+          planName,
+          context,
+        );
+        const decision = decideCandidates(plan, request, args.judgement, {
+          judge: args.judge ?? true,
+          minConfidence: args.minConfidence ??
+            DEFAULT_DECIDE_OPTIONS.minConfidence,
+          highBlastRadius: args.highBlastRadius ??
+            DEFAULT_DECIDE_OPTIONS.highBlastRadius,
+          highRisk: args.highRisk ?? DEFAULT_DECIDE_OPTIONS.highRisk,
+          controllerOwnedAt: DEFAULT_DECIDE_OPTIONS.controllerOwnedAt,
+        });
+        if (note) decision.warnings.unshift(note);
+        const handle = await context.writeResource(
+          "adoptionDecision",
+          `decision-${planName}`,
+          {
+            ...decision,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        context.logger.info(
+          "Decided {total} candidates for {planName}: {observe} to observe " +
+            "in {waves} waves, {findings} high-risk findings (jev: {status})",
+          {
+            planName,
+            total: decision.decisions.length,
+            observe: decision.observe.length,
+            waves: decision.waves.length,
+            findings: decision.findings.length,
+            status: decision.judgement.status,
+          },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
     plan_stack_adoption: {
       description:
         "Enumerate all resources in a CloudFormation stack, map to swamp types, and build an adoption plan",
@@ -2556,6 +2795,7 @@ export const model = {
             /^[a-z0-9][a-z0-9-]*$/,
             "prefix must be lowercase alphanumeric and hyphens only",
           )
+          .max(64)
           .default("adopt")
           .describe("Prefix for generated swamp model names"),
       }),

@@ -1,0 +1,189 @@
+id: 9201d472-e19a-4ab5-867b-4d3e8c081470
+name: "@webframp/adopt-find-unmanaged"
+description: |
+  Sweep one region for resources swamp does not manage yet, judge them, decide
+  what to do with each, and, after approval, observe the ones to manage or
+  watch. Nothing in AWS is changed.
+
+  How it works:
+  - plan: plan_account_sweep lists every registry type through Cloud Control
+    and matches the results against stored swamp state. prepare_judgement
+    picks the unmanaged candidates the deterministic flags did not settle.
+    jev's triage_batch answers four questions about each (disposition, blast
+    radius, controller ownership, risk). decide applies fixed rules over the
+    flags and answers, orders the result into waves, and lists high-risk
+    findings.
+  - approve: a manual approval. Read the decision first:
+      swamp report get @webframp/adopt-decision-report --model <modelName> --markdown
+      swamp data get <modelName> decision-sweep-<region> --json
+  - observe: runs `get` on each manage and observe-only candidate through its
+    official @swamp/aws/* type, one model per candidate.
+
+  With judge=false, or when jev fails, every unsettled candidate goes to a
+  human and no risk is reported. jev is advisory: rules beat the model, and a
+  jev answer below minConfidence goes to a human.
+
+  Usage:
+    AWS_PROFILE=my-account/ReadOnlyPlus \
+      swamp workflow run @webframp/adopt-find-unmanaged \
+        --input modelName=acct
+
+    # One tier, without jev:
+    swamp workflow run @webframp/adopt-find-unmanaged \
+      --input modelName=acct --input judge=false \
+      --input 'tiers=["network"]'
+tags:
+  aws: "true"
+  adoption: "true"
+  brownfield: "true"
+reports:
+  require:
+    - "@webframp/adopt-report"
+inputs:
+  properties:
+    modelName:
+      type: string
+      description: Name of the @webframp/aws/adopt model instance; its region global argument sets the region swept
+    judgeModel:
+      type: string
+      default: jev
+      description: Name of the @swamp/typesafe-ai model instance that runs triage_batch
+    judge:
+      type: boolean
+      default: true
+      description: Ask jev about candidates the flags did not settle; false sends them all to a human
+    prefix:
+      type: string
+      default: adopt
+      description: Prefix for generated swamp model names
+    tiers:
+      type: array
+      items:
+        type: string
+      default: []
+      description: Limit the sweep to these tiers (default all)
+    types:
+      type: array
+      items:
+        type: string
+      default: []
+      description: Limit the sweep to these CloudFormation types (default all)
+    maxJudgeItems:
+      type: integer
+      default: 100
+      description: Most candidates sent to jev (at most 100); the rest go to a human
+    minConfidence:
+      type: number
+      default: 0.7
+      description: A jev disposition below this confidence goes to a human
+  required:
+    - modelName
+jobs:
+  - name: plan
+    description: Sweep, judge, and decide
+    steps:
+      - name: sweep
+        description: List every registry type and match against stored swamp state
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: plan_account_sweep
+          inputs:
+            prefix: ${{ inputs.prefix }}
+            tiers: ${{ inputs.tiers }}
+            types: ${{ inputs.types }}
+            managed: "${{ data.query('modelType.startsWith(\"@swamp/aws/\") && specName == \"state\"', '{\"modelType\": modelType, \"attributes\": attributes}') }}"
+      - name: prepare
+        description: Pick the candidates for jev and write the questions
+        dependsOn:
+          - step: sweep
+            condition:
+              type: succeeded
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: prepare_judgement
+          inputs:
+            maxItems: ${{ inputs.maxJudgeItems }}
+      - name: judge
+        description: Ask jev the four questions about each unsettled candidate
+        dependsOn:
+          - step: prepare
+            condition:
+              type: succeeded
+        guard: '${{ !inputs.judge || size(steps.prepare.outputs.items) == 0 }}'
+        allowFailure: true
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.judgeModel }}
+          methodName: triage_batch
+          inputs:
+            name: ${{ steps.prepare.outputs.batchName }}
+            concurrency: 4
+            items: ${{ steps.prepare.outputs.items }}
+            questions: ${{ steps.prepare.outputs.questions }}
+      - name: decide
+        description: Apply the rules, order waves, and list high-risk findings
+        dependsOn:
+          - step: prepare
+            condition:
+              type: succeeded
+          - step: judge
+            condition:
+              type: always
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.modelName }}
+          methodName: decide
+          inputs:
+            judge: ${{ inputs.judge }}
+            minConfidence: ${{ inputs.minConfidence }}
+            judgement: '${{ has(steps.judge) && has(steps.judge.outputs) ? steps.judge.outputs : null }}'
+
+  - name: approve
+    description: Review the decision before observing
+    dependsOn:
+      - job: plan
+        condition:
+          type: succeeded
+    steps:
+      - name: approve-observe
+        task:
+          type: manual_approval
+          prompt: >-
+            Review the adoption decision before observing: swamp report get
+            @webframp/adopt-decision-report --model <modelName> --markdown.
+            Check the waves, the needs-human candidates, and the high-risk
+            findings. The report shows the newest decision; if another run of
+            this workflow has decided since, cancel this run and review that
+            one. Approving observes the list this run decided. Approving runs
+            read-only get calls through the official @swamp/aws/* types.
+
+  - name: observe
+    description: Read each manage and observe-only candidate through its official type
+    dependsOn:
+      - job: plan
+        condition:
+          type: succeeded
+      - job: approve
+        condition:
+          type: succeeded
+    steps:
+      - name: get-${{ self.c.modelName }}
+        description: Observe ${{ self.c.id }}
+        forEach:
+          item: c
+          in: ${{ steps.decide.outputs.observe }}
+        concurrency: 4
+        allowFailure: true
+        task:
+          type: model_method
+          modelType: ${{ self.c.swampType }}
+          modelName: ${{ self.c.modelName }}
+          methodName: get
+          globalArgs:
+            name: ${{ self.c.modelName }}
+            region: ${{ self.c.region }}
+          inputs:
+            identifier: ${{ self.c.identifier }}
+version: 1
