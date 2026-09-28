@@ -74,7 +74,7 @@ const ListGroupSsoConnectionUsersSchema = z.object({
 /** Snyk SSO — single sign-on connection management for groups */
 export const model = {
   type: "@webframp/snyk/sso",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -123,6 +123,11 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -168,7 +173,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/sso_connections`,
+          `/groups/${encodeURIComponent(groupId)}/sso_connections`,
           version,
           params,
         );
@@ -227,7 +232,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/sso_connections/${args.sso_id}/users`,
+          `/groups/${encodeURIComponent(groupId)}/sso_connections/${
+            encodeURIComponent(String(args.sso_id))
+          }/users`,
           version,
           params,
         );
@@ -281,7 +288,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${groupId}/sso_connections/${args.sso_id}/users/${args.user_id}`,
+          `/groups/${encodeURIComponent(groupId)}/sso_connections/${
+            encodeURIComponent(String(args.sso_id))
+          }/users/${encodeURIComponent(String(args.user_id))}`,
           version,
         );
 

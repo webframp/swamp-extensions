@@ -265,6 +265,84 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "container-images model: list_image_target_refs fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "platform": "linux/amd64",
+        "target_id": "test-value",
+        "target_reference": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/container_images/test-id-123/relationships/image_target_refs": {
+        data: [mockItem],
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-container-images",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_image_target_refs.execute(
+        { "image_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(
+        req0.path,
+        "/container_images/test-id-123/relationships/image_target_refs",
+      );
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "image_target_refs");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "container-images model: list_container_image surfaces API errors",
   sanitizeResources: false,
   fn: async () => {

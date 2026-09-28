@@ -165,7 +165,7 @@ const GetSbomSchema = z.object({
 /** Snyk Projects — project listing, attributes, relationships, and target management */
 export const model = {
   type: "@webframp/snyk/projects",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -212,6 +212,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -279,10 +284,10 @@ export const model = {
         ),
         expand: z.string().optional().describe("Expand relationships."),
         meta_latest_issue_counts: z.boolean().optional().describe(
-          "Include a summary count for the issues found in the most recent scan of this ...",
+          "Include a summary count for the issues found in the most recent scan of this...",
         ),
         meta_latest_dependency_total: z.boolean().optional().describe(
-          "Include the total number of dependencies found in the most recent scan of thi...",
+          "Include the total number of dependencies found in the most recent scan of this...",
         ),
         cli_monitored_before: z.string().optional().describe(
           "Filter projects uploaded and monitored before this date (encoded value)",
@@ -330,7 +335,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/projects`,
           version,
           params,
         );
@@ -390,7 +395,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/projects/bulk-delete`,
+          `/orgs/${encodeURIComponent(orgId)}/projects/bulk-delete`,
           version,
           body,
         );
@@ -413,10 +418,10 @@ export const model = {
         project_id: z.string().describe("The ID of the project."),
         expand: z.string().optional().describe("Expand relationships."),
         meta_latest_issue_counts: z.boolean().optional().describe(
-          "Include a summary count for the issues found in the most recent scan of this ...",
+          "Include a summary count for the issues found in the most recent scan of this...",
         ),
         meta_latest_dependency_total: z.boolean().optional().describe(
-          "Include the total number of dependencies found in the most recent scan of thi...",
+          "Include the total number of dependencies found in the most recent scan of this...",
         ),
       }),
       execute: async (
@@ -448,7 +453,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/projects/${args.project_id}${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/projects/${
+            encodeURIComponent(String(args.project_id))
+          }${qs}`,
           version,
         );
 
@@ -528,7 +535,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/projects/${args.project_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/projects/${
+            encodeURIComponent(String(args.project_id))
+          }`,
           version,
           body,
         );
@@ -565,7 +574,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/projects/${args.project_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/projects/${
+            encodeURIComponent(String(args.project_id))
+          }`,
           version,
         );
 
@@ -590,7 +601,7 @@ export const model = {
           "An array of features to be excluded from the generated SBOM.",
         ),
         go_module_level: z.boolean().optional().describe(
-          "When true, consolidate Go package-level dependencies into module-level compon...",
+          "When true, consolidate Go package-level dependencies into module-level...",
         ),
       }),
       execute: async (
@@ -622,7 +633,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/projects/${args.project_id}/sbom${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/projects/${
+            encodeURIComponent(String(args.project_id))
+          }/sbom${qs}`,
           version,
         );
 

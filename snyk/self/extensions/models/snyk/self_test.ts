@@ -245,6 +245,66 @@ Deno.test({
 });
 
 Deno.test({
+  name: "self model: get_user_installed_apps fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
+        "context": "tenant",
+        "name": "My App",
+        "scopes": [],
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/self/apps": { data: [mockItem], isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: { id: "test-id", name: "test-self", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_user_installed_apps.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/self/apps");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "get_user_installed_apps");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "self model: delete_user_app_install_by_id executes successfully",
   sanitizeResources: false,
   fn: async () => {

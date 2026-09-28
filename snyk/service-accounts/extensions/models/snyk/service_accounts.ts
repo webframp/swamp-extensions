@@ -405,7 +405,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -457,6 +457,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -544,7 +549,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/service_accounts`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts`,
           version,
           params,
         );
@@ -622,7 +629,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/service_accounts`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts`,
           version,
           body,
         );
@@ -667,7 +676,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/service_accounts/${args.serviceaccount_id}`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
         );
 
@@ -721,7 +734,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${args.group_id}/service_accounts/${args.serviceaccount_id}`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
           body,
         );
@@ -763,7 +780,11 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${args.group_id}/service_accounts/${args.serviceaccount_id}`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
         );
 
@@ -814,7 +835,11 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/service_accounts/${args.serviceaccount_id}/secrets`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }/secrets`,
           version,
           body,
         );
@@ -860,7 +885,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/service_accounts`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts`,
           version,
           params,
         );
@@ -935,7 +960,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/service_accounts`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts`,
           version,
           body,
         );
@@ -977,7 +1002,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/service_accounts/${args.serviceaccount_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
         );
 
@@ -1028,7 +1055,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/service_accounts/${args.serviceaccount_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
           body,
         );
@@ -1067,7 +1096,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/service_accounts/${args.serviceaccount_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }`,
           version,
         );
 
@@ -1115,7 +1146,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/service_accounts/${args.serviceaccount_id}/secrets`,
+          `/orgs/${encodeURIComponent(orgId)}/service_accounts/${
+            encodeURIComponent(String(args.serviceaccount_id))
+          }/secrets`,
           version,
           body,
         );

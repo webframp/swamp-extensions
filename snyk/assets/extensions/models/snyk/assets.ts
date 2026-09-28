@@ -290,7 +290,7 @@ const ListAssetProjectsSchema = z.object({
 /** Snyk Assets — asset discovery and classification across the group */
 export const model = {
   type: "@webframp/snyk/assets",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -345,6 +345,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -404,7 +409,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/assets/search`,
+          `/groups/${encodeURIComponent(groupId)}/assets/search`,
           version,
           body,
         );
@@ -441,7 +446,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/assets/${args.asset_id}`,
+          `/groups/${encodeURIComponent(groupId)}/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }`,
           version,
         );
 
@@ -486,7 +493,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/assets/${args.asset_id}/relationships/assets`,
+          `/groups/${encodeURIComponent(groupId)}/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/assets`,
           version,
           params,
         );
@@ -541,7 +550,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/assets/${args.asset_id}/relationships/projects`,
+          `/groups/${encodeURIComponent(groupId)}/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/projects`,
           version,
           params,
         );

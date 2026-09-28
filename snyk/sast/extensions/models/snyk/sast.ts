@@ -195,7 +195,7 @@ const GetSastImpactTestResultSchema = z.object({
 /** Snyk SAST — static application security testing results and management */
 export const model = {
   type: "@webframp/snyk/sast",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -242,6 +242,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -309,7 +314,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${groupId}/sast/rule_extensions`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions`,
           version,
           params,
         );
@@ -368,7 +373,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/sast/rule_extensions`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions`,
           version,
           body,
         );
@@ -414,7 +419,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${groupId}/sast/rule_extensions/tests`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/tests`,
           version,
           body,
         );
@@ -454,7 +459,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/sast/rule_extensions/tests/${args.test_id}`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/tests/${
+            encodeURIComponent(String(args.test_id))
+          }`,
           version,
         );
 
@@ -490,7 +497,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/sast/rule_extensions/tests/${args.test_id}/results`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/tests/${
+            encodeURIComponent(String(args.test_id))
+          }/results`,
           version,
         );
 
@@ -528,7 +537,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${groupId}/sast/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
         );
 
@@ -573,7 +584,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${groupId}/sast/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
           body,
         );
@@ -612,7 +625,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/groups/${groupId}/sast/rule_extensions/${args.rule_extension_id}`,
+          `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions/${
+            encodeURIComponent(String(args.rule_extension_id))
+          }`,
           version,
         );
 

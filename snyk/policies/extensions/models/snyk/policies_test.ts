@@ -497,6 +497,94 @@ Deno.test({
 });
 
 Deno.test({
+  name: "policies model: get_org_policy_events fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "changes": {
+          "new_action": null,
+          "new_conditions_group": null,
+          "new_name": "test-value",
+          "new_review": null,
+          "old_action": null,
+          "old_conditions_group": null,
+          "old_name": "test-value",
+          "old_review": null,
+        },
+        "comment": "test-value",
+        "created_at": "2024-03-16T00:00:00Z",
+        "created_by": {
+          "actor_source": "snyk_user",
+          "email": "test-value",
+          "external_id": "test-value",
+          "id": "test-value",
+          "name": "test-value",
+          "origin": "bitbucket_cloud",
+        },
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/policies/test-id-123/events": { data: [mockItem], isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-policies",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_org_policy_events.execute(
+        { "policy_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/policies/test-id-123/events");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "get_org_policy_events");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "policies model: get_org_policies surfaces API errors",
   sanitizeResources: false,
   fn: async () => {

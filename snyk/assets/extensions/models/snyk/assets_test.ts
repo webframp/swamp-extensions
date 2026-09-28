@@ -403,6 +403,88 @@ Deno.test({
 });
 
 Deno.test({
+  name: "assets model: list_asset_projects fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "issues_counts": { "critical": 1, "high": 1, "low": 1, "medium": 1 },
+        "last_scan": "test-value",
+        "name": "test-value",
+        "organization_id": "test-value",
+        "organization_name": "test-value",
+        "project_type": "test-value",
+        "target_file": "test-value",
+        "target_id": "test-value",
+        "target_reference": "test-value",
+        "test_surface": "test-value",
+        "url": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/assets/test-id-123/relationships/projects": {
+        data: [mockItem],
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "groupId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_projects.execute({ "asset_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(
+        req0.path,
+        "/assets/test-id-123/relationships/projects",
+      );
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_projects");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "assets model: list_assets surfaces API errors",
   sanitizeResources: false,
   fn: async () => {

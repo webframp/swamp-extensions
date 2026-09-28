@@ -84,7 +84,7 @@ const GetProjectsOfCollectionSchema = z.object({
 /** Snyk Collections — project collection groupings and management */
 export const model = {
   type: "@webframp/snyk/collections",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -144,6 +144,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -216,7 +221,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/collections`,
+          `/orgs/${encodeURIComponent(orgId)}/collections`,
           version,
           params,
         );
@@ -276,7 +281,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/collections`,
+          `/orgs/${encodeURIComponent(orgId)}/collections`,
           version,
           body,
         );
@@ -314,7 +319,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/collections/${args.collection_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
           version,
         );
 
@@ -365,7 +372,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/collections/${args.collection_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
           version,
           body,
         );
@@ -404,7 +413,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/collections/${args.collection_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }`,
           version,
         );
 
@@ -459,7 +470,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/collections/${args.collection_id}/relationships/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/relationships/projects`,
           version,
           params,
         );
@@ -524,7 +537,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/collections/${args.collection_id}/relationships/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/relationships/projects`,
           version,
           body,
         );
@@ -572,7 +587,9 @@ export const model = {
         await snykApi(
           apiToken,
           "DELETE",
-          `/orgs/${orgId}/collections/${args.collection_id}/relationships/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/collections/${
+            encodeURIComponent(String(args.collection_id))
+          }/relationships/projects`,
           version,
         );
 

@@ -388,6 +388,87 @@ Deno.test({
 });
 
 Deno.test({
+  name: "cloud model: list_resources fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "created_at": "2022-08-10T17:19:33.14749Z",
+        "deleted_at": "2024-01-01T00:00:00Z",
+        "hash":
+          "3333342563a86c675333de5848c9220a7bb35c039e7b9c0688c10f72b4666666",
+        "is_managed": true,
+        "kind": "cloud - cloud - iac",
+        "location": "us-west-2",
+        "name": "example-bucket",
+        "namespace": "us-west-2",
+        "native_id": "arn:aws:s3:::example-bucket",
+        "platform": "aws",
+        "relationships": {},
+        "removed_at": "2024-01-01T00:00:00Z",
+        "resource_id": "4a662442-7445-55c3-adcc-cbbbdd99999",
+        "resource_type": "aws_s3_bucket",
+        "revision": 2,
+        "schema_version": "test-value",
+        "source_location": [],
+        "state": {},
+        "tags": { "stage": "prod" },
+        "updated_at": "2022-08-10T17:19:33.14749Z",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "/cloud/resources": { data: [mockItem], isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: { id: "test-id", name: "test-cloud", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_resources.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/cloud/resources");
+      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.headers["authorization"], "token test-token");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "resources");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "cloud model: get_scan fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {

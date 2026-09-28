@@ -587,7 +587,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.09.18.1",
+  version: "2026.09.27.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -647,6 +647,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -807,10 +812,10 @@ export const model = {
           "Comma-separated sort fields. Prefix with `-` for descending order.",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
         meta_count: z.enum(["with", "only"]).optional().describe(
-          "Provide summary count in the response meta object when requested. When `with`...",
+          "Provide summary count in the response meta object when requested.",
         ),
       }),
       execute: async (
@@ -837,7 +842,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets`,
           version,
           params,
         );
@@ -893,7 +900,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${args.group_id}/inventory/assets`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets`,
           version,
           body,
         );
@@ -939,7 +948,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/filters`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/filters`,
           version,
           params,
         );
@@ -975,10 +986,10 @@ export const model = {
       arguments: z.object({
         group_id: z.string().describe("The unique identifier of the group"),
         filter_id: z.string().describe(
-          "The UUID of the filter field to get values for (from the filter fields list e...",
+          "The UUID of the filter field to get values for (from the filter fields list...",
         ),
         q: z.string().optional().describe(
-          "Full text search term to filter the list of values. If keys_only is true, thi...",
+          "Full text search term to filter the list of values.",
         ),
         keys_only: z.boolean().optional().describe(
           "Return only the keys of the object filter values",
@@ -1011,7 +1022,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/filters/${args.filter_id}/values`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/filters/${
+            encodeURIComponent(String(args.filter_id))
+          }/values`,
           version,
           params,
         );
@@ -1073,7 +1088,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/groups`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/groups`,
           version,
           params,
         );
@@ -1108,22 +1125,22 @@ export const model = {
       arguments: z.object({
         group_id: z.string().describe("The unique identifier of the group"),
         group_field_id: z.string().describe(
-          "The UUID of the group field to get values for (from the group fields list end...",
+          "The UUID of the group field to get values for (from the group fields list...",
         ),
         asset_types: z.string().optional().describe(
           "Comma-separated list of asset types to filter the aggregation",
         ),
         filter: z.string().optional().describe(
-          "RSQL filter expression for filtering which assets are included in aggregation...",
+          "RSQL filter expression for filtering which assets are included in aggregation.",
         ),
         sort: z.string().optional().describe(
-          "Comma-separated sort fields for group values. Prefix with `-` for descending ...",
+          "Comma-separated sort fields for group values.",
         ),
         meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified. Ava...",
+          "Meta fields to include in the response. Multiple fields can be specified.",
         ),
         aggregate: z.string().optional().describe(
-          "Per-field aggregate function override for meta fields. All fields default to ...",
+          "Per-field aggregate function override for meta fields.",
         ),
       }),
       execute: async (
@@ -1150,7 +1167,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/groups/${args.group_field_id}/values`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/groups/${
+            encodeURIComponent(String(args.group_field_id))
+          }/values`,
           version,
           params,
         );
@@ -1219,7 +1240,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/groups/${args.group_id}/inventory/assets/searches`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/searches`,
           version,
           body,
         );
@@ -1248,7 +1271,7 @@ export const model = {
           "Sort order for results (e.g., -created_at for descending)",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -1275,7 +1298,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/searches/${args.search_id}/results`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/searches/${
+            encodeURIComponent(String(args.search_id))
+          }/results`,
           version,
           params,
         );
@@ -1311,7 +1338,7 @@ export const model = {
         group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -1343,7 +1370,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/groups/${args.group_id}/inventory/assets/${args.asset_id}${qs}`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/${encodeURIComponent(String(args.asset_id))}${qs}`,
           version,
         );
 
@@ -1387,7 +1416,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/groups/${args.group_id}/inventory/assets/${args.asset_id}`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/${encodeURIComponent(String(args.asset_id))}`,
           version,
           body,
         );
@@ -1407,10 +1438,10 @@ export const model = {
         group_id: z.string().describe("The unique identifier of the group"),
         asset_id: z.string().describe("The unique identifier of the asset"),
         canonical: z.enum(["with", "only", "none"]).optional().describe(
-          "Filter projects by canonical status. - `with`: Returns all projects (canonica...",
+          "Filter projects by canonical status.",
         ),
         target_id: z.string().optional().describe(
-          "Filter projects by target ID. When provided, returns only projects that belon...",
+          "Filter projects by target ID.",
         ),
         sort: z.enum([
           "snapshot_created_at",
@@ -1418,7 +1449,7 @@ export const model = {
           "issues",
           "-issues",
         ]).optional().describe(
-          "Sort field with optional direction prefix. Prefix with `-` for descending ord...",
+          "Sort field with optional direction prefix. Prefix with `-` for descending order.",
         ),
       }),
       execute: async (
@@ -1445,7 +1476,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/${args.asset_id}/relationships/projects`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/projects`,
           version,
           params,
         );
@@ -1505,7 +1540,11 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/groups/${args.group_id}/inventory/assets/${args.asset_id}/relationships/targets`,
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/targets`,
           version,
           params,
         );
@@ -1546,10 +1585,10 @@ export const model = {
           "Comma-separated sort fields. Prefix with `-` for descending order.",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
         meta_count: z.enum(["with", "only"]).optional().describe(
-          "Provide summary count in the response meta object when requested. When `with`...",
+          "Provide summary count in the response meta object when requested.",
         ),
       }),
       execute: async (
@@ -1576,7 +1615,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets`,
           version,
           params,
         );
@@ -1631,7 +1670,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/inventory/assets`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets`,
           version,
           body,
         );
@@ -1676,7 +1715,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/filters`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/filters`,
           version,
           params,
         );
@@ -1711,10 +1750,10 @@ export const model = {
         "Get filter value suggestions (autocomplete) - Org scope (Early Access)",
       arguments: z.object({
         filter_id: z.string().describe(
-          "The UUID of the filter field to get values for (from the filter fields list e...",
+          "The UUID of the filter field to get values for (from the filter fields list...",
         ),
         q: z.string().optional().describe(
-          "Full text search term to filter the list of values. If keys_only is true, thi...",
+          "Full text search term to filter the list of values.",
         ),
         keys_only: z.boolean().optional().describe(
           "Return only the keys of the object filter values",
@@ -1747,7 +1786,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/filters/${args.filter_id}/values`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/filters/${
+            encodeURIComponent(String(args.filter_id))
+          }/values`,
           version,
           params,
         );
@@ -1808,7 +1849,7 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/groups`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/groups`,
           version,
           params,
         );
@@ -1842,22 +1883,22 @@ export const model = {
       description: "Get group value aggregation - Org scope (Early Access)",
       arguments: z.object({
         group_field_id: z.string().describe(
-          "The UUID of the group field to get values for (from the group fields list end...",
+          "The UUID of the group field to get values for (from the group fields list...",
         ),
         asset_types: z.string().optional().describe(
           "Comma-separated list of asset types to filter the aggregation",
         ),
         filter: z.string().optional().describe(
-          "RSQL filter expression for filtering which assets are included in aggregation...",
+          "RSQL filter expression for filtering which assets are included in aggregation.",
         ),
         sort: z.string().optional().describe(
-          "Comma-separated sort fields for group values. Prefix with `-` for descending ...",
+          "Comma-separated sort fields for group values.",
         ),
         meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified. Ava...",
+          "Meta fields to include in the response. Multiple fields can be specified.",
         ),
         aggregate: z.string().optional().describe(
-          "Per-field aggregate function override for meta fields. All fields default to ...",
+          "Per-field aggregate function override for meta fields.",
         ),
       }),
       execute: async (
@@ -1884,7 +1925,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/groups/${args.group_field_id}/values`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/groups/${
+            encodeURIComponent(String(args.group_field_id))
+          }/values`,
           version,
           params,
         );
@@ -1952,7 +1995,7 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "POST",
-          `/orgs/${orgId}/inventory/assets/searches`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/searches`,
           version,
           body,
         );
@@ -1980,7 +2023,7 @@ export const model = {
           "Sort order for results (e.g., -created_at for descending)",
         ),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -2007,7 +2050,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/searches/${args.search_id}/results`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/searches/${
+            encodeURIComponent(String(args.search_id))
+          }/results`,
           version,
           params,
         );
@@ -2042,7 +2087,7 @@ export const model = {
       arguments: z.object({
         asset_id: z.string().describe("The unique identifier of the asset"),
         fields: z.string().optional().describe(
-          "Sparse fieldsets allow clients to request only specific fields for a given re...",
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
         ),
       }),
       execute: async (
@@ -2074,7 +2119,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "GET",
-          `/orgs/${orgId}/inventory/assets/${args.asset_id}${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }${qs}`,
           version,
         );
 
@@ -2117,7 +2164,9 @@ export const model = {
         const result = await snykApi(
           apiToken,
           "PATCH",
-          `/orgs/${orgId}/inventory/assets/${args.asset_id}`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }`,
           version,
           body,
         );
@@ -2136,10 +2185,10 @@ export const model = {
       arguments: z.object({
         asset_id: z.string().describe("The unique identifier of the asset"),
         canonical: z.enum(["with", "only", "none"]).optional().describe(
-          "Filter projects by canonical status. - `with`: Returns all projects (canonica...",
+          "Filter projects by canonical status.",
         ),
         target_id: z.string().optional().describe(
-          "Filter projects by target ID. When provided, returns only projects that belon...",
+          "Filter projects by target ID.",
         ),
         sort: z.enum([
           "snapshot_created_at",
@@ -2147,7 +2196,7 @@ export const model = {
           "issues",
           "-issues",
         ]).optional().describe(
-          "Sort field with optional direction prefix. Prefix with `-` for descending ord...",
+          "Sort field with optional direction prefix. Prefix with `-` for descending order.",
         ),
       }),
       execute: async (
@@ -2174,7 +2223,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/${args.asset_id}/relationships/projects`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/projects`,
           version,
           params,
         );
@@ -2233,7 +2284,9 @@ export const model = {
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
-          `/orgs/${orgId}/inventory/assets/${args.asset_id}/relationships/targets`,
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/${
+            encodeURIComponent(String(args.asset_id))
+          }/relationships/targets`,
           version,
           params,
         );
