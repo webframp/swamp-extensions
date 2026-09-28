@@ -28,6 +28,45 @@ swamp model method run mod-drongo get_chatters --json
 swamp workflow run @webframp/twitch-mod-audit
 ```
 
+## Jev moderation analysis
+
+The extension also includes `@webframp/twitch-character-analysis`. It combines
+one channel's observable Twitch facts with typed rankings from an existing
+`@swamp/typesafe-ai` model. It intentionally does **not** infer personality,
+protected traits, intent, or off-platform identity.
+
+Install the supporting models:
+
+```bash
+swamp extension pull @swamp/typesafe-ai
+swamp extension pull @keeb/discord
+
+swamp model create @swamp/typesafe-ai jev \
+  --global-arg 'apiKey=${{ vault.get("typesafe", "TYPESAFE_API_KEY") }}'
+
+swamp model create @keeb/discord/webhook discord \
+  --global-arg 'webhookUrl=${{ vault.get("discord", "DISCORD_WEBHOOK_URL") }}'
+```
+
+Run it manually:
+
+```bash
+swamp workflow run @webframp/twitch-character-analysis \
+  --input twitchModel=mod-drongo \
+  --input username=someviewer \
+  --input moderatorNotes="Observed repeated link spam in the last stream" \
+  --input postToDiscord=true
+```
+
+The workflow stores an `evaluation-character-<username>` resource on the Jev
+model and the `@webframp/twitch-character-analysis-report` renders the scores,
+confidence, evidence availability, recommended posture, and human-review flag.
+
+For Discord ingress, configure `swamp serve` with a signed webhook route and
+have a small Discord bot adapter POST `{ "username": "...",
+"moderatorNotes": "..." }` to it. The bundled `@keeb/discord` integration is
+outbound webhook delivery; it does not implement a Discord Gateway listener.
+
 ## Authentication
 
 Requires a Twitch application with OAuth2 user tokens. Register an app at

@@ -234,6 +234,25 @@ const ModEventsSchema = z.object({
   ),
 });
 
+const UserModerationContextSchema = z.object({
+  channel: z.string(),
+  user: UserSchema,
+  isCurrentChatter: z.boolean().nullable(),
+  ban: BanEntrySchema.nullable(),
+  availability: z.object({
+    profile: z.literal(true),
+    chatterStatus: z.literal(true),
+    banStatus: z.boolean(),
+  }),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -241,7 +260,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.09.18.1",
+  version: "2026.09.28.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -310,6 +329,11 @@ export const model = {
         "Normalized zod dependency version and applied pagination truncation fixes where applicable",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.09.28.1",
+      description: "Add compact per-user moderation context for Jev analysis",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -354,6 +378,13 @@ export const model = {
       schema: ModEventsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "user-moderation-context": {
+      description:
+        "Observable, channel-scoped moderation facts for one Twitch user",
+      schema: UserModerationContextSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
   },
 
@@ -507,6 +538,117 @@ export const model = {
           login: u.login,
           days: accountAgeDays,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_user_context: {
+      description:
+        "Collect compact, observable moderation facts for one user in the configured channel",
+      arguments: z.object({
+        login: z.string().min(1).describe("Twitch login name to inspect"),
+      }),
+      execute: async (args: { login: string }, context: MethodContext) => {
+        const startMs = Date.now();
+        const { channel, moderatorId, hasBroadcasterAuth } = context.globalArgs;
+        const creds = credsFrom(context.globalArgs);
+
+        const userResponse = await helixApi<{
+          id: string;
+          login: string;
+          display_name: string;
+          created_at: string;
+          profile_image_url: string;
+          broadcaster_type: string;
+        }>(creds, `/users?login=${encodeURIComponent(args.login)}`);
+
+        if (userResponse.data.length === 0) {
+          throw new Error(`Twitch user not found: ${args.login}`);
+        }
+
+        const rawUser = userResponse.data[0];
+        const createdDate = new Date(rawUser.created_at);
+        const user: z.infer<typeof UserSchema> = {
+          userId: rawUser.id,
+          login: rawUser.login,
+          displayName: rawUser.display_name,
+          accountCreatedAt: rawUser.created_at,
+          accountAgeDays: Math.floor(
+            (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
+          ),
+          profileImageUrl: rawUser.profile_image_url,
+          broadcasterType: rawUser.broadcaster_type,
+          fetchedAt: new Date().toISOString(),
+        };
+
+        const broadcasterId = await getBroadcasterId(creds, channel);
+        const chatterResponse = await helixApi<{
+          user_id: string;
+          user_login: string;
+          user_name: string;
+        }>(
+          creds,
+          `/chat/chatters?broadcaster_id=${broadcasterId}&moderator_id=${
+            encodeURIComponent(moderatorId)
+          }&first=100`,
+        );
+        const isCurrentChatter = chatterResponse.pagination?.cursor
+          ? null
+          : chatterResponse.data.some((chatter) =>
+            chatter.user_id === user.userId
+          );
+
+        let ban: z.infer<typeof BanEntrySchema> | null = null;
+        if (hasBroadcasterAuth) {
+          const banResponse = await helixApi<{
+            user_id: string;
+            user_login: string;
+            reason: string;
+            moderator_login: string;
+            created_at: string;
+            expires_at: string;
+          }>(
+            creds,
+            `/moderation/banned?broadcaster_id=${broadcasterId}&user_id=${
+              encodeURIComponent(user.userId)
+            }`,
+          );
+          const rawBan = banResponse.data[0];
+          if (rawBan) {
+            ban = {
+              userId: rawBan.user_id,
+              login: rawBan.user_login,
+              reason: rawBan.reason,
+              moderatorLogin: rawBan.moderator_login,
+              createdAt: rawBan.created_at,
+              expiresAt: rawBan.expires_at === "" ? null : rawBan.expires_at,
+            };
+          }
+        }
+
+        const handle = await context.writeResource(
+          "user-moderation-context",
+          args.login,
+          {
+            channel,
+            user,
+            isCurrentChatter,
+            ban,
+            availability: {
+              profile: true,
+              chatterStatus: true,
+              banStatus: hasBroadcasterAuth,
+            },
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info(
+          "Collected moderation context for {login} in {channel}",
+          { login: user.login, channel },
+        );
         return { dataHandles: [handle] };
       },
     },
