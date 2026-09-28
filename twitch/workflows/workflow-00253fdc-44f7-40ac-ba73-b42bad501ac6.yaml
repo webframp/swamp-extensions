@@ -5,6 +5,9 @@ description: |
   Twitch facts plus typed Jev rankings. This is not a personality, protected
   trait, or off-platform identity assessment.
 version: 1
+reports:
+  require:
+    - "@webframp/twitch-character-analysis-report"
 trigger:
   inputs:
     username: '${{ webhook.body.username }}'
@@ -121,7 +124,7 @@ jobs:
     steps:
       - name: discord
         description: Send rankings and the human-review flag to a Discord webhook
-        guard: ${{ inputs.postToDiscord }}
+        guard: '${{ inputs.postToDiscord == true }}'
         task:
           type: model_method
           modelIdOrName: ${{ inputs.discordModel }}
