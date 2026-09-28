@@ -1,0 +1,131 @@
+id: 00253fdc-44f7-40ac-ba73-b42bad501ac6
+name: "@webframp/twitch-character-analysis"
+description: |
+  Analyze one Twitch user's observable moderation-relevant behavior using
+  Twitch facts plus typed Jev rankings. This is not a personality, protected
+  trait, or off-platform identity assessment.
+version: 1
+trigger:
+  inputs:
+    username: '${{ webhook.body.username }}'
+    moderatorNotes: '${{ has(webhook.body.moderatorNotes) ? webhook.body.moderatorNotes : "" }}'
+inputs:
+  properties:
+    twitchModel:
+      type: string
+      description: Existing @webframp/twitch model instance for the moderated channel
+    jevModel:
+      type: string
+      default: jev
+      description: Existing @swamp/typesafe-ai model instance configured with a vault-backed API key
+    username:
+      type: string
+      description: Twitch login to inspect
+    moderatorNotes:
+      type: string
+      default: ""
+      description: Optional moderator-provided, observable context; do not include sensitive traits
+    postToDiscord:
+      type: boolean
+      default: false
+      description: Post a compact result through @keeb/discord/webhook
+    discordModel:
+      type: string
+      default: discord
+      description: Existing @keeb/discord/webhook model instance
+  required:
+    - twitchModel
+    - username
+jobs:
+  - name: collect
+    description: Collect a compact, channel-scoped moderation context
+    steps:
+      - name: user-context
+        description: Fetch public profile, chatter presence, and optional current ban status
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.twitchModel }}
+          methodName: get_user_context
+          inputs:
+            login: ${{ inputs.username }}
+
+  - name: evaluate
+    description: Ask Jev for typed moderation-relevant rankings
+    dependsOn:
+      - job: collect
+        condition:
+          type: succeeded
+    steps:
+      - name: jev-character-analysis
+        description: Produce independent scores and a recommended moderation posture
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.jevModel }}
+          methodName: ask
+          inputs:
+            state:
+              targetUsername: ${{ inputs.username }}
+              moderationContext: ${{ data.latest(inputs.twitchModel, "user-moderation-context-" + inputs.username).attributes }}
+              moderatorNotes: ${{ inputs.moderatorNotes }}
+              guardrails: "Judge only observable, channel-scoped moderation behavior. Do not infer personality, protected traits, health, age, location, or off-platform identity. Missing evidence must lower confidence, not become a negative signal."
+            questions:
+              moderationRisk:
+                type: score
+                instructions: "How much observable moderation risk is evidenced by the supplied facts?"
+                criteria:
+                  - "No evidenced risk"
+                  - "Low risk"
+                  - "Watch"
+                  - "Elevated risk"
+                  - "High risk"
+              ruleAdherence:
+                type: score
+                instructions: "How consistent is the evidence with following this channel's stated rules?"
+                criteria:
+                  - "No evidence available"
+                  - "Mostly adherent"
+                  - "Mixed or unclear"
+                  - "Repeated friction"
+                  - "Clear rule violation evidence"
+              disruption:
+                type: score
+                instructions: "How much disruption to normal chat operations is evidenced?"
+                criteria:
+                  - "No disruption evidenced"
+                  - "Minimal"
+                  - "Manageable"
+                  - "Significant"
+                  - "Severe"
+              recommendedAction:
+                type: choice
+                instructions: "What is the least severe reasonable moderator posture based on the evidence?"
+                criteria:
+                  monitor: "No action beyond ordinary observation"
+                  engage: "Engage or clarify the rule"
+                  timeout: "Consider a temporary timeout if confirmed by a human moderator"
+                  escalate: "Escalate for human review before action"
+              humanReview:
+                type: noul
+                instructions: "Does the evidence warrant human moderator review before any punitive action?"
+                criteria:
+                  true: "Evidence is incomplete, ambiguous, or high-impact enough for human review"
+                  false: "Evidence is sufficiently clear for routine handling"
+            name: ${{ "character-" + inputs.username }}
+
+  - name: notify
+    description: Optionally post a compact result to Discord
+    dependsOn:
+      - job: evaluate
+        condition:
+          type: succeeded
+    steps:
+      - name: discord
+        description: Send rankings and the human-review flag to a Discord webhook
+        guard: ${{ inputs.postToDiscord }}
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.discordModel }}
+          methodName: send
+          inputs:
+            username: Jev moderation analyst
+            content: '${{ "Twitch moderation analysis for @" + inputs.username + "\nRisk: " + string(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.moderationRisk.score) + "/4\nRule adherence: " + string(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.ruleAdherence.score) + "/4\nDisruption: " + string(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.disruption.score) + "/4\nRecommended posture: " + data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.recommendedAction.choice + "\nHuman review needed: " + string(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.humanReview.noul > 0.5) + "\nThese are evidence-based moderation signals, not personality or protected-trait judgments." }}'
