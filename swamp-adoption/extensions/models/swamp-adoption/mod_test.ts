@@ -496,6 +496,39 @@ Deno.test("scaffold writes scaffold resource with files array", async () => {
   );
 });
 
+Deno.test("scaffold deno.json pins an exact @swamp-club/swamp-testing release", async () => {
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: "@webframp/my-service",
+      description: "Manages my-service resources",
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: ["my-service"],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const data = getWrittenResources()[0].data as {
+    files: Array<{ path: string; content: string }>;
+  };
+  const denoJson = JSON.parse(
+    data.files.find((f) => f.path === "deno.json")!.content,
+  );
+  assertMatch(
+    denoJson.imports["@swamp-club/swamp-testing"],
+    /^jsr:@swamp-club\/swamp-testing@\d+\.\d{8}\.\d+$/,
+  );
+});
+
 Deno.test("scaffold stdout format returns empty dataHandles", async () => {
   const { context, getWrittenResources, getLogsByLevel } =
     createAdoptionContext({
