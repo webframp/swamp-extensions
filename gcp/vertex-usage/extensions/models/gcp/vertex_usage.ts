@@ -437,6 +437,9 @@ const GeminiUsageSchema = z.object({
     }),
   ),
   totals: GeminiTotalsSchema,
+  requestsAvailable: z.boolean().describe(
+    "False when the API-wide request-count metric could not be read; requestRows and request totals are then empty",
+  ),
   truncated: z.boolean(),
   warnings: z.array(z.string()),
   ...MetaFields,
@@ -1090,13 +1093,24 @@ function pointValue(
 function pointDay(
   p: { interval?: { startTime?: string; endTime?: string } },
 ): string | undefined {
-  const start = p.interval?.startTime;
-  if (start) return start.slice(0, 10);
-  const end = p.interval?.endTime;
-  // A point with only an end time covers the day ending there.
-  return end
-    ? new Date(Date.parse(end) - 1).toISOString().slice(0, 10)
-    : undefined;
+  const start = Date.parse(p.interval?.startTime ?? "");
+  const end = Date.parse(p.interval?.endTime ?? "");
+  // The midpoint of a daily interval lies inside its day whether the API
+  // reports endTime as exclusive (next midnight) or inclusive (23:59:59).
+  if (end > start) {
+    return new Date((start + end) / 2).toISOString().slice(0, 10);
+  }
+  if (!Number.isNaN(end)) {
+    // No usable start (gauge points repeat the end as the start). A point ending
+    // exactly at UTC midnight closes the previous day; otherwise end is inside it.
+    const atMidnight = end % 86_400_000 === 0;
+    return new Date(atMidnight ? end - 1 : end).toISOString().slice(0, 10);
+  }
+  // Start-only is not produced by the API (endTime is always present); take the
+  // start's own day rather than guess at an interval.
+  return Number.isNaN(start)
+    ? undefined
+    : new Date(start).toISOString().slice(0, 10);
 }
 
 type UsageRow = z.infer<typeof UsageRowSchema>;
@@ -1325,6 +1339,7 @@ async function scanProjectGemini(
     series: [],
     truncated: false,
   };
+  let requestsAvailable = true;
   try {
     requests = await listTimeSeries(
       project,
@@ -1337,6 +1352,7 @@ async function scanProjectGemini(
       `resource.labels.service = "${GEMINI_SERVICE}"`,
     );
   } catch (err) {
+    requestsAvailable = false;
     warnings.push(`Request counts unavailable: ${errMessage(err)}`);
   }
 
@@ -1452,6 +1468,7 @@ async function scanProjectGemini(
       ...c,
     })).sort((a, b) => b.requests - a.requests),
     totals,
+    requestsAvailable,
     truncated: tokens.truncated || requests.truncated,
     warnings,
   };
@@ -2001,7 +2018,7 @@ export const model = {
     {
       toVersion: "2026.10.01.1",
       description:
-        "projects is now optional (runtime discovery); added optional billingTable and billingQueryProject. Existing definitions are unchanged.",
+        "projects is now optional (runtime discovery); added optional billingTable and billingQueryProject, and new usage, Gemini and billing resources. Existing definitions are unchanged.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2246,7 +2263,7 @@ export const model = {
             continue;
           }
           const u = r.usage;
-          if (u.truncated || u.warnings.length > 0) anyTruncated = true;
+          if (u.truncated || !u.requestsAvailable) anyTruncated = true;
           totals.outputTokens += u.totals.outputTokens;
           totals.requests += u.totals.requests;
           totals.errorRequests += u.totals.errorRequests;

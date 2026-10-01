@@ -18,7 +18,11 @@ longer reads as a valid empty result.
 - `scan_gemini_api_usage` does the same for the Gemini API: daily output tokens
   by model, and API-wide request counts by method, response code and API key.
   Monitoring has no input-token metric for this API, so input volume comes from
-  billing.
+  billing. `gemini_usage.requestsAvailable` is false when request counts could
+  not be read, and the scan's `complete` follows it.
+- Daily Monitoring points are assigned to a day by the midpoint of their
+  interval, so an inclusive or missing `endTime` cannot shift a point to the
+  neighbouring day.
 - `discover_billing_services` and `get_billing_costs` read the Cloud Billing
   export in BigQuery. Gross cost, credits and net cost are reported per day,
   project and SKU, never mixing currencies or cost types. Both the standard and
@@ -35,10 +39,10 @@ Monitoring calls with `maxRequestsPerMinute` (default 120) to stay under the
 default quota of 180 requests per minute per user. A `GCP_ACCESS_TOKEN`
 environment variable now takes precedence over `GOOGLE_APPLICATION_CREDENTIALS`
 when both are set, so unset a stale token if a host exports one for another
-tool. `maxRequestsPerMinute` paces first attempts only: a retry no longer
-takes a limiter slot, but retries still count against Google's quota, so leave
-headroom below the real limit. A BigQuery response with no job id now fails
-with its own message instead of reporting a timeout or a page-cap error.
+tool. `maxRequestsPerMinute` paces first attempts only: a retry no longer takes
+a limiter slot, but retries still count against Google's quota, so leave
+headroom below the real limit. A BigQuery response with no job id now fails with
+its own message instead of reporting a timeout or a page-cap error.
 
 **Upgrade note:** Existing definitions keep working without changes, and
 `@webframp/ai-usage` needs no co-upgrade. The billing methods need

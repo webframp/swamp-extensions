@@ -1962,13 +1962,71 @@ Deno.test("scan_gemini_api_usage keeps tokens when request counts fail", async (
     ctx,
   );
   const u = getWrittenResources().find((w) => w.specName === "gemini_usage")!
-    .data as { totals: { outputTokens: number }; warnings: string[] };
+    .data as {
+      totals: { outputTokens: number };
+      warnings: string[];
+      requestsAvailable: boolean;
+    };
   assertEquals(u.totals.outputTokens, 9);
+  assertEquals(u.requestsAvailable, false);
   assertMatch(u.warnings[0], /Request counts unavailable/);
   const gsum = getWrittenResources().find((w) =>
     w.specName === "gemini_scan_summary"
   )!.data as { complete: boolean };
   assertEquals(gsum.complete, false);
+});
+
+Deno.test("daily points land on their own day whatever the interval shape", async () => {
+  const point = (
+    startTime: string | undefined,
+    endTime: string,
+    v: string,
+  ) => ({
+    interval: startTime ? { startTime, endTime } : { endTime },
+    value: { int64Value: v },
+  });
+  const f = createMockFetchFn((u) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("request_count")) return monitoringResponse([]);
+    const ts = geminiTokenSeries("m", []);
+    return monitoringResponse([{
+      ...ts,
+      points: [
+        // start..next midnight (exclusive end)
+        point("2026-09-20T00:00:00Z", "2026-09-21T00:00:00Z", "1"),
+        // start..23:59:59 (inclusive end)
+        point("2026-09-21T00:00:00Z", "2026-09-21T23:59:59Z", "2"),
+        // end only, at midnight: closes the previous day
+        point(undefined, "2026-09-23T00:00:00Z", "4"),
+        // end only, inside the day
+        point(undefined, "2026-09-23T23:59:59Z", "8"),
+        // gauge-style zero-length interval at midnight: previous day
+        point("2026-09-25T00:00:00Z", "2026-09-25T00:00:00Z", "16"),
+        // Interval opening late the previous evening: the midpoint, not the
+        // start, decides the day.
+        point("2026-09-26T20:00:00Z", "2026-09-27T23:59:59Z", "32"),
+      ],
+    }]);
+  });
+  const { ctx, getWrittenResources } = ctxFor({ projects: ["p"] }, f);
+  await model.methods.scan_gemini_api_usage.execute(
+    { days: 7, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const u = getWrittenResources().find((w) => w.specName === "gemini_usage")!
+    .data as { tokenRows: Array<{ date: string; outputTokens: number }> };
+  assertEquals(
+    Object.fromEntries(u.tokenRows.map((r) => [r.date, r.outputTokens])),
+    {
+      "2026-09-20": 1,
+      "2026-09-21": 2,
+      "2026-09-22": 4,
+      "2026-09-23": 8,
+      "2026-09-24": 16,
+      "2026-09-27": 32,
+    },
+  );
 });
 
 Deno.test("scan_gemini_api_usage reports an errored project as incomplete", async () => {
