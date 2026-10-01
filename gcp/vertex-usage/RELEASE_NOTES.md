@@ -3,7 +3,9 @@
 **Fixed:** `scan_projects` set no flag when a project failed to scan, so a
 partial scan looked complete. A failed project now sets `truncated: true`.
 Monitoring requests that hit a 429 or 5xx are retried with backoff instead of
-failing the project on the first response.
+failing the project on the first response. `billing_summary.complete` is now
+`false` when no billing rows match the filters, so a wrong service name no
+longer reads as a valid empty result.
 
 **Added:** Gemini API coverage and cost analysis alongside Vertex AI.
 
@@ -33,7 +35,10 @@ Monitoring calls with `maxRequestsPerMinute` (default 120) to stay under the
 default quota of 180 requests per minute per user. A `GCP_ACCESS_TOKEN`
 environment variable now takes precedence over `GOOGLE_APPLICATION_CREDENTIALS`
 when both are set, so unset a stale token if a host exports one for another
-tool.
+tool. `maxRequestsPerMinute` paces first attempts only: a retry no longer
+takes a limiter slot, but retries still count against Google's quota, so leave
+headroom below the real limit. A BigQuery response with no job id now fails
+with its own message instead of reporting a timeout or a page-cap error.
 
 **Upgrade note:** Existing definitions keep working without changes, and
 `@webframp/ai-usage` needs no co-upgrade. The billing methods need

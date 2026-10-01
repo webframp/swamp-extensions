@@ -1344,8 +1344,13 @@ Deno.test("get_billing_costs warns when no rows match", async () => {
   );
   const summary = getWrittenResources().find((w) =>
     w.specName === "billing_summary"
-  )!.data as { dataThrough: string | null; warnings: string[] };
+  )!.data as {
+    dataThrough: string | null;
+    complete: boolean;
+    warnings: string[];
+  };
   assertEquals(summary.dataThrough, null);
+  assertEquals(summary.complete, false);
   assertMatch(summary.warnings[0], /discover_billing_services/);
 });
 
@@ -2078,6 +2083,141 @@ Deno.test("429 backs off for longer than a 5xx and honors Retry-After", async ()
   assertEquals(sleeps[0], 7000);
   assertEquals(sleeps[1], 10_000);
   assertEquals(sleeps[2], 2000);
+});
+
+Deno.test("retries do not consume rate limiter slots", async () => {
+  const scan = async (limit: number, failFirst: boolean) => {
+    let monitoring = 0;
+    const sleeps: number[] = [];
+    const f = createMockFetchFn((u) => {
+      if (url(u).includes("oauth2.googleapis.com/token")) {
+        return tokenResponse();
+      }
+      monitoring++;
+      if (failFirst && monitoring === 1) {
+        return new Response("quota", { status: 429 });
+      }
+      return monitoringResponse([]);
+    });
+    const tc = createModelTestContext({
+      globalArgs: { serviceAccountJson: FAKE_SA_JSON, projects: ["p1"] },
+      definition: { id: "t", name: "v", version: 1, tags: {} },
+    });
+    await model.methods.scan_usage.execute(
+      // execute() skips schema validation, so limits below the schema's
+      // minimum are fine here.
+      { days: 1, parents: [], concurrency: 1, maxRequestsPerMinute: limit },
+      {
+        ...tc.context,
+        fetchFn: f,
+        // A frozen clock keeps every slot inside one window, so a limiter
+        // wait shows up as a 60s sleep, longer than any 429 backoff here.
+        nowFn: () => 0,
+        sleepFn: (ms: number) => {
+          sleeps.push(ms);
+          return Promise.resolve();
+        },
+      } as unknown as Ctx,
+    );
+    return { monitoring, sleeps };
+  };
+  const baseline = await scan(1000, false);
+  // Limit equals the first-attempt count: any slot spent on the retry would
+  // push the limiter into a 60s wait.
+  const withRetry = await scan(baseline.monitoring, true);
+  assertEquals(withRetry.monitoring, baseline.monitoring + 1);
+  assertEquals(withRetry.sleeps.some((ms) => ms >= 60_000), false);
+});
+
+Deno.test("BigQuery response without a job id is not reported as a timeout", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("/tables/")) {
+      return tableSchemaResponse(["service", "usage_start_time", "cost"]);
+    }
+    if (init?.method === "POST") {
+      return new Response(JSON.stringify({ jobComplete: false }), {
+        status: 200,
+      });
+    }
+    return bqResponse(COST_FIELDS, []);
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "no jobReference.jobId",
+  );
+});
+
+Deno.test("BigQuery job that never completes still reports a timeout", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("/tables/")) {
+      return tableSchemaResponse(["service", "usage_start_time", "cost"]);
+    }
+    if (init?.method === "POST") {
+      return bqResponse(["o_data_through"], [], { jobComplete: false });
+    }
+    return bqResponse(["o_data_through"], [], { jobComplete: false });
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "did not complete in time",
+  );
+});
+
+Deno.test("BigQuery pageToken without a job id is not reported as a page cap", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("/tables/")) {
+      return tableSchemaResponse(["service", "usage_start_time", "cost"]);
+    }
+    if (init?.method === "POST") {
+      return new Response(
+        JSON.stringify({
+          jobComplete: true,
+          schema: { fields: [{ name: "o_data_through" }] },
+          rows: [],
+          pageToken: "next",
+        }),
+        { status: 200 },
+      );
+    }
+    return bqResponse(["o_data_through"], []);
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "no jobReference.jobId",
+  );
 });
 
 Deno.test("domain-scoped billing projects are parsed from the right", async () => {

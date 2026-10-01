@@ -358,7 +358,7 @@ const BillingSummarySchema = z.object({
     "Latest usage_end_time in the export for the window; null if the window has no rows",
   ),
   complete: z.boolean().describe(
-    "False when the export has not caught up to the window end, so recent days may be understated",
+    "False when the export has not caught up to the window end or no rows matched the filters, so totals may be understated or empty",
   ),
   warnings: z.array(z.string()),
   ...MetaFields,
@@ -495,7 +495,7 @@ interface Http {
   fetchFn: typeof fetch;
   sleepFn: (ms: number) => Promise<void>;
   nowFn: () => number;
-  /** Awaited before every request when set; see makeRateLimiter. */
+  /** Awaited before each first attempt when set; see makeRateLimiter. */
   limit?: () => Promise<void>;
 }
 
@@ -547,7 +547,11 @@ async function gcpFetch(
 ): Promise<Response> {
   for (let attempt = 0;; attempt++) {
     let resp: Response | undefined;
-    await http.limit?.();
+    // The limiter paces first attempts. Retries are not counted: each one
+    // already waits out a backoff and is capped at MAX_RETRIES per request, but
+    // they still count against Google's quota, so keep maxRequestsPerMinute
+    // below the real limit with headroom for retry bursts.
+    if (attempt === 0) await http.limit?.();
     try {
       resp = await http.fetchFn(url, init);
     } catch (err) {
@@ -1634,7 +1638,10 @@ async function runBigQuery(
 
   const ref = page.jobReference;
   for (let polls = 0; page.jobComplete === false; polls++) {
-    if (polls >= MAX_POLLS || !ref?.jobId) {
+    if (!ref?.jobId) {
+      throw new Error("BigQuery response has no jobReference.jobId to poll");
+    }
+    if (polls >= MAX_POLLS) {
       throw new Error("BigQuery job did not complete in time");
     }
     const loc = ref.location
@@ -1663,7 +1670,12 @@ async function runBigQuery(
   collect(page);
 
   for (let pages = 0; page.pageToken; pages++) {
-    if (pages >= MAX_RESULT_PAGES || !ref?.jobId) {
+    if (!ref?.jobId) {
+      throw new Error(
+        "BigQuery response has a pageToken but no jobReference.jobId",
+      );
+    }
+    if (pages >= MAX_RESULT_PAGES) {
       throw new Error(
         "BigQuery result exceeded the page cap; narrow the window or filters",
       );
@@ -2485,6 +2497,7 @@ FROM \`${table}\` WHERE ${where}`,
         const warnings: string[] = [];
         let complete = true;
         if (dataThrough === null) {
+          complete = false;
           warnings.push(
             "No billing rows matched the filters in this window. Confirm the " +
               "service names with discover_billing_services.",

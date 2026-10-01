@@ -211,8 +211,9 @@ only.
   count metric failed; `warnings` has the error. Token totals are still valid.
 - **`truncated: true`.** Pagination hit its cap (50 pages per metric), so rows
   are a lower bound. Lower `days` or scan fewer projects per run.
-- **`billing_summary.complete` is false.** The export lags usage by hours. Rerun
-  later, or exclude the most recent day.
+- **`billing_summary.complete` is false.** Either the export lags usage by hours
+  (rerun later, or exclude the most recent day) or no rows matched the filters
+  (check the service names with `discover_billing_services`).
 - **No billing rows.** Run `discover_billing_services` and pass the exact
   service name it reports.
 - **`GCP token exchange failed`.** The OAuth endpoint rejected the credential,
