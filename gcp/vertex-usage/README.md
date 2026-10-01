@@ -1,123 +1,220 @@
 # @webframp/gcp/vertex-usage
 
-GCP Vertex AI token usage monitoring — multi-project scanning of token_count
-metrics via the Cloud Monitoring API. Provides per-model breakdowns with
-input/output direction split and tokens-per-minute rates.
+GCP generative-AI usage and cost analysis, covering both Vertex AI and the
+Gemini API (the Gemini Developer API, `generativelanguage.googleapis.com`).
+Reads token and request volume from Cloud Monitoring and dollar cost from the
+Cloud Billing export in BigQuery, over the same complete UTC days, so the two
+can be reconciled.
+
+Results are written as one resource instance per project (`usage-<project>`,
+`billing-<project>`). Filter by project, model, publisher, region or date with
+CEL / `swamp data query` instead of re-running with different arguments.
+
+## Setup
+
+```bash
+swamp model create @webframp/gcp/vertex-usage vertex-usage \
+  --global-arg 'serviceAccountJson=<vault:gcp/sa-key>' \
+  --global-arg 'billingTable=<billing-project>.<dataset>.gcp_billing_export_v1_<ID>'
+```
+
+`projects` is optional. When omitted, every ACTIVE project the credential can
+see is discovered. `billingTable` is only needed for the billing methods.
+`billingQueryProject` sets the project that runs (and is billed for) BigQuery
+jobs; it defaults to the project in `billingTable`.
+
+`billingSchema` is `auto` by default: the table's schema is read to tell the
+**standard** usage-cost export (`gcp_billing_export_v1_*`) from the **FOCUS**
+export (`gcp_billing_export_focus_*`). Set it to `standard` or `focus` to skip
+detection. Both exports are supported, but only the FOCUS path has been verified
+against live data; the standard path is covered by unit tests.
 
 ## Authentication
 
-Uses a GCP service account JSON key (signed JWT exchanged for an access token
-with scope `https://www.googleapis.com/auth/monitoring.read`). No `gcloud` CLI
-dependency.
+In order of precedence:
 
-Provide the key contents via:
+1. `serviceAccountJson` global argument (service account key, signed-JWT
+   exchange). Store it in a swamp vault.
+2. `GCP_ACCESS_TOKEN` environment variable (a pre-obtained OAuth2 token, for
+   example from CI or `gcloud auth print-access-token`).
+3. The file named by `GOOGLE_APPLICATION_CREDENTIALS`, either a service account
+   key or an `authorized_user` file from
+   `gcloud auth application-default login`.
 
-1. The `serviceAccountJson` global argument (preferred — stored in swamp vault),
-   or
-2. The `GOOGLE_APPLICATION_CREDENTIALS` environment variable pointing to the key
-   file on disk.
+No `gcloud` CLI dependency. Requested scopes are the minimum for each method:
+`monitoring.read`, `cloudplatformprojects.readonly`, `bigquery`.
 
-## Required Permissions
+## Required permissions
 
-The service account needs only:
+| Method                                                   | Grant                                                                                             |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `scan_usage`, legacy scans                               | `roles/monitoring.viewer` (`monitoring.timeSeries.list`) on each target project                   |
+| `discover_projects`, `scan_usage` without a project list | `resourcemanager.projects.get`, for example via `roles/browser` at the organization or a folder   |
+| `get_billing_costs`, `discover_billing_services`         | `roles/bigquery.dataViewer` on the export dataset and `roles/bigquery.jobUser` on the job project |
 
-- **Role:** `roles/monitoring.viewer` (Monitoring Viewer) on each target project
-- **Permission:** `monitoring.timeSeries.list`
-
-This is the minimum required. Do not grant broader roles like Editor or Owner.
-
-## Usage
-
-```bash
-# With service account JSON inline (or reference a vault secret)
-swamp model create @webframp/gcp/vertex-usage vertex-usage \
-  --global-arg 'projects=["my-project","my-other-project"]' \
-  --global-arg 'serviceAccountJson=<contents of service-account.json>'
-
-# Or rely on GOOGLE_APPLICATION_CREDENTIALS env var
-swamp model create @webframp/gcp/vertex-usage vertex-usage \
-  --global-arg 'projects=["my-project","my-other-project"]'
-
-# Scan all projects
-swamp model method run vertex-usage scan_projects
-
-# Single project
-swamp model method run vertex-usage get_token_usage --input project=my-project
-```
+Granting Monitoring Viewer at the organization or folder level covers every
+project beneath it with one binding.
 
 ## Methods
 
-- **scan_projects** — Fan-out across all `projects` configured in `globalArgs`.
-  Queries each project's `token_count` metrics independently; if one project's
-  query throws (auth, permissions, malformed response), that project is dropped
-  from the output and a warning is logged, but the scan continues for the
-  remaining projects. Writes the `scan_results` resource.
-- **get_token_usage** — Single project with model breakdown. Unlike
-  `scan_projects`, this method does **not** catch per-project errors — an auth
-  failure or Monitoring API error for the requested project fails the whole
-  method call. Writes the `single_scan` resource, keyed by project ID.
+### `discover_projects`
+
+Lists ACTIVE projects through Cloud Resource Manager `projects:search`. Optional
+`parents` (`organizations/N`, `folders/N`) limits it to **direct children** of
+those resources. Nested folders are not traversed, so for an account-wide view
+omit `parents` and grant access at the organization level.
+
+### `scan_usage`
+
+Fan-out scan over the last `days` complete UTC days (default 30, max 90).
+Project list precedence: method `projects` argument, then the `projects` global
+argument, then runtime discovery. Scans run with bounded `concurrency`
+(default 4) and retry 429 and 5xx responses with backoff.
+
+Writes:
+
+- `usage-<project>` per project with usage. `rows` are flat daily records of
+  `date, location, publisher, modelId, requestType, sharedRequestType,
+  inputTokens, outputTokens, otherTokens, totalTokens, requests, errorRequests,
+  rateLimitedRequests`.
+  `errorRequests` counts non-2xx `response_code`s (and includes the 429s in
+  `rateLimitedRequests`). `byModel` and `totals` are precomputed.
+- `scan_summary/current` with the status of **every** scanned project: `ok`,
+  `no_data` (metric empty for the window) or `error` (with the message).
+  `complete` is `false` if any project errored or was truncated, so a partial
+  scan cannot pass for a full one. The method fails outright only if every
+  project fails.
+
+Cloud Monitoring keeps these metrics for a limited time, so use
+`get_billing_costs` for older history.
+
+Instances are written only for projects that have data and are not removed
+later, so a project that errors or goes quiet keeps its previous instance.
+`scan_summary` is the authoritative index for the latest run, and every instance
+carries the `window` it covers, so check it before comparing instances from
+different runs. `complete` is also false when request counts could not be read
+for a project.
+
+One run uses a single access token, which lasts about an hour. A scan that
+outlives it (thousands of projects at the default pacing) reports the remaining
+projects as `error`; narrow it with `projects` or `parents` and run it in parts.
+
+`maxRequestsPerMinute` (default 120) paces Monitoring calls. The default
+Monitoring quota is 180 requests per minute per user, and a scan makes two
+requests per project, so an unpaced scan of ~100 projects trips it. Requests
+that still hit a 429 are retried with a longer backoff (and `Retry-After` when
+sent) rather than failing the project.
+
+### `scan_gemini_api_usage`
+
+The same fan-out for the Gemini API, which bills as its own service and does not
+appear in Vertex's Monitoring metrics. Takes the same `days`, `projects`,
+`parents`, `concurrency` and `maxRequestsPerMinute` arguments.
+
+Writes `gemini-usage-<project>` per project with usage and
+`gemini_scan_summary/current` with per-project status (`ok`, `no_data`, `error`)
+and `complete`.
+
+Cloud Monitoring is thinner here than for Vertex:
+
+- **Output tokens only.** There is no input-token metric (`inputTokensAvailable`
+  is always `false`). Get input volume from `get_billing_costs`.
+- `tokenRows` carry `modelId`, `outputModality` and `thinkingEnabled`.
+- `requestRows` come from the API-wide `request_count` metric (scoped to the
+  Gemini API service), so they cover **every** API method, not only generation.
+  Each row has the `method`, `responseCode` and `credentialId`, which is the API
+  key behind the call and makes it possible to attribute traffic to a key.
+  Request counts are not split by model.
+
+### `discover_billing_services`
+
+Lists billing services and SKUs in the export that match an AI-related regex,
+with cost. Run it once to confirm which `service.description` values to filter
+on, because partner models can bill under a different service than Google's own.
+
+### `get_billing_costs`
+
+Queries the billing export for the last `days` complete UTC days (max 365) for
+the given `services` (default `["Vertex AI", "Gemini API"]`), optionally
+narrowed by `skuPattern` and `projects`. All filters are bound query parameters.
+Cost is summed as `NUMERIC`, then reported per `currency` and `costType`, which
+are never mixed. `cost` is the gross before credits, `credits` is negative, and
+`netCost` is the export's own net figure (FOCUS `BilledCost`); a warning is
+raised if gross plus credits does not reproduce it.
+
+**Pick the services deliberately.** Gemini spend bills under more than one
+service. In one validated account, `Vertex AI` and `Gemini API` each carried
+roughly half of the AI cost. Both are included by default; each row keeps its
+`service`, so CEL can split them. Other AI products bill separately (for example
+Vertex AI Search) and are not included unless you add them. Run
+`discover_billing_services` to see what your export contains.
+
+Writes `billing-<project>` per project (`billing-unassigned` for charges with no
+project) and `billing_summary/current`. Each row has gross `cost`, `credits`
+(negative) and `netCost`. The summary's `complete` is `false` and `warnings`
+explains why when the export has not yet caught up to the window end, or when no
+rows matched.
+
+### Legacy: `scan_projects`, `get_token_usage`
+
+Single-bucket totals per model with no daily detail, kept for existing
+workflows. Prefer `scan_usage`. A project that fails in `scan_projects` now sets
+`truncated: true`.
+
+## Querying
 
 ```bash
-# 90-day lookback for one project instead of the 30-day default
-swamp model method run vertex-usage get_token_usage \
-  --input project=my-project --input days=90
+# Everything for one project
+swamp data query 'modelName == "vertex-usage" && name == "usage-my-project"'
+
+# Daily rows for one model across all projects
+swamp data query 'modelName == "vertex-usage" && dataType == "resource"' \
+  --select '{"project": attributes.project, "rows": attributes.rows}'
+
+# Which projects failed the last scan
+swamp data query 'modelName == "vertex-usage" && name == "scan_summary"' \
+  --select 'attributes.projects'
 ```
 
-## Output
+In CEL expressions:
 
-```json
-{
-  "totals": {
-    "inputTokens": 500000,
-    "outputTokens": 120000,
-    "totalTokens": 620000,
-    "inputTokensPerMinute": 11.6,
-    "outputTokensPerMinute": 2.8
-  }
-}
 ```
+data.latest("vertex-usage", "usage-my-project").attributes.totals.totalTokens
+data.latest("vertex-usage", "billing_summary").attributes.totals
+```
+
+## Reconciling tokens with cost
+
+`scan_usage` and `get_billing_costs` use the same complete UTC days. Check
+`billing_summary.complete` and `scan_summary.complete` before trusting a
+comparison. Billing is the source of record for money; Monitoring explains
+volume by model, region and request type.
+
+For token SKUs the billed quantity is a token count even though the FOCUS export
+labels the unit `requests`. In a validated account it agreed with Monitoring to
+within about 0.1% for Gemini API output tokens and about 0.3% for Vertex text
+models. Media models (image, video) diverged by up to roughly 10%, so treat
+those as approximate. Compare by project, day and model, and expect small
+differences near the window edges.
+
+Monitoring cannot see everything billing charges for: the Gemini API has no
+input-token metric, and other services or unmetered models appear in billing
+only.
 
 ## Troubleshooting
 
-- **A configured project is missing from `scan_projects` output, with no
-  error.** `queryTokenMetrics` treats a Monitoring API error body containing
-  `"Cannot find metric"` as "no data" — it returns an empty result set rather
-  than throwing (`vertex_usage.ts`, `queryTokenMetrics`). `scan_projects` then
-  does `if (data.length === 0) continue;`, silently skipping the project with no
-  log line at all. This is the normal outcome for a project that has never
-  called Vertex AI, but it looks identical to a misconfigured project. Run
-  `get_token_usage` against that specific project — it surfaces the same empty
-  result but at least confirms the query ran without an auth error.
-- **`scan_projects` succeeds but one project is missing and a warning was
-  logged.** Any other failure while querying a project (403 from a missing
-  `roles/monitoring.viewer` binding, a network error, malformed JSON from the
-  Monitoring API) is caught per-project and logged as
-  `"Failed to scan
-  project"` with the raw error string, then that project is
-  dropped from the output. Check the model's logs (`context.logger.warn`) for
-  the specific project and error — the resource data itself won't tell you why a
-  project is absent.
-- **`get_token_usage` throws instead of returning an empty result.** This method
-  has no per-project try/catch, so the same 403/network/malformed-JSON failures
-  that `scan_projects` swallows into a warning will fail the whole method call
-  here. This is expected — it's the tradeoff for single-project precision — but
-  it means transient Monitoring API errors are more visible on this path than on
-  `scan_projects`.
-- **`truncated: true` in the output.** `queryTokenMetrics` caps pagination at
-  `MAX_PAGES = 50`. If a project's time series still has a `nextPageToken` after
-  50 pages, the loop stops and `truncated` is set `true` for that project (and
-  propagates to `anyTruncated` in `scan_projects`). Token totals and per-model
-  breakdowns are then a lower bound, not the full period — narrow the `days`
-  argument to reduce the number of series/pages returned.
-- **Auth errors on startup.** `resolveServiceAccount` throws a specific message
-  for each failure mode: no `serviceAccountJson` and no
-  `GOOGLE_APPLICATION_CREDENTIALS` set; a `GOOGLE_APPLICATION_CREDENTIALS` path
-  that can't be read; JSON that fails to parse; or JSON missing
-  `client_email`/`private_key`. Read the thrown message directly — it identifies
-  which of these four cases occurred rather than a generic "auth failed".
-- **`GCP token exchange failed` error.** The signed JWT was rejected by Google's
-  OAuth endpoint (`getAccessToken`). The error includes the HTTP status and
-  response body from `https://oauth2.googleapis.com/token` — common causes are a
-  revoked/deleted service account key, or a `token_uri` in the key JSON that no
-  longer matches Google's endpoint. This happens before any per-project logic
-  runs, so it fails both methods identically.
+- **A project shows `no_data`.** Its Vertex metric is empty for the window,
+  which is normal for a project that never called Vertex AI.
+- **A project shows `error`.** The message is in `scan_summary`. A 403 usually
+  means a missing `roles/monitoring.viewer` binding.
+- **`requestsAvailable: false`.** Token counts were read but the invocation
+  count metric failed; `warnings` has the error. Token totals are still valid.
+- **`truncated: true`.** Pagination hit its cap (50 pages per metric), so rows
+  are a lower bound. Lower `days` or scan fewer projects per run.
+- **`billing_summary.complete` is false.** The export lags usage by hours. Rerun
+  later, or exclude the most recent day.
+- **No billing rows.** Run `discover_billing_services` and pass the exact
+  service name it reports.
+- **`GCP token exchange failed`.** The OAuth endpoint rejected the credential,
+  most often a revoked service account key. The error includes the HTTP status
+  and body.

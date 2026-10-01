@@ -35,7 +35,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/twitch`](twitch/) | Twitch Moderation — cross-channel moderation visibility, suspicious user detection, ban overlap analysis | None (uses fetch) |
 | [`@webframp/ai-usage`](ai-usage/) | Cross-provider AI token usage model aggregating Bedrock, Vertex AI, and Azure OpenAI usage data | `@webframp/aws/bedrock-usage`, `@webframp/gcp/vertex-usage`, `@webframp/azure/openai-usage` |
 | [`@webframp/azure/openai-usage`](azure/openai-usage/) | Monitors Azure OpenAI / AI Services token usage across subscriptions via Azure Monitor, with per-deployment breakdowns | None (uses fetch) |
-| [`@webframp/gcp/vertex-usage`](gcp/vertex-usage/) | Multi-project GCP Vertex AI token-usage monitor via Cloud Monitoring API, with per-model input/output breakdowns | None (uses fetch) |
+| [`@webframp/gcp/vertex-usage`](gcp/vertex-usage/) | GCP Vertex AI and Gemini API usage and cost: runtime project discovery, daily token and request usage from Cloud Monitoring, and cost from the Cloud Billing export in BigQuery | None (uses fetch) |
 | [`@webframp/anthropic/compliance`](anthropic/compliance/) | Syncs a Claude Enterprise account's org directory, effective runtime settings, and 6-year audit activity feed via the Compliance API | None (uses fetch) |
 | [`@webframp/anthropic/analytics`](anthropic/analytics/) | Pulls Claude Enterprise seat, adoption, and cost/usage analytics (DAU/WAU/MAU, feature adoption, token cost) via the Enterprise Analytics API | None (uses fetch) |
 | [`@webframp/microsoft/teams`](microsoft/teams/) | Read-only Microsoft Teams integration (channels, chats, mentions) via the Graph API using device-code auth | None (uses fetch) |
