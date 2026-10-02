@@ -1,39 +1,52 @@
 manifestVersion: 1
 name: "@webframp/gcp/vertex-usage"
-version: "2026.09.18.1"
+version: "2026.10.01.1"
 description: |
-  GCP Vertex AI token usage monitoring — multi-project scanning of
-  token_count metrics via the Cloud Monitoring API. Provides per-model
-  breakdowns with input/output direction split and tokens-per-minute rates.
+  GCP Vertex AI and Gemini API usage and cost analysis. Reads token and request
+  volume from Cloud Monitoring and dollar cost from the Cloud Billing export in
+  BigQuery, over the same complete UTC days (standard and FOCUS exports are
+  both supported). Projects are listed explicitly or discovered
+  at runtime through Cloud Resource Manager. Results are one resource instance
+  per project, filterable with CEL.
 
   ## Authentication
 
-  Uses a GCP service account JSON key (signed JWT exchange). Provide via
-  `serviceAccountJson` global arg or set `GOOGLE_APPLICATION_CREDENTIALS`
-  env var pointing to a key file. No `gcloud` CLI dependency.
+  Service account JSON key (`serviceAccountJson` arg), a `GCP_ACCESS_TOKEN`
+  env var, or the file named by `GOOGLE_APPLICATION_CREDENTIALS` (service
+  account or `authorized_user`). No `gcloud` CLI dependency.
 
   ## Required Permissions
 
-  - `monitoring.timeSeries.list` on each project
+  - `monitoring.timeSeries.list` on each project (Monitoring Viewer)
+  - `resourcemanager.projects.get` for project discovery
+  - BigQuery Data Viewer on the export dataset and BigQuery Job User for the
+    billing methods
 
   ## Usage
 
   ```bash
   swamp model create @webframp/gcp/vertex-usage vertex-usage \
-    --global-arg 'projects=["my-project","my-other-project"]' \
-    --global-arg 'serviceAccountJson=<vault:gcp/sa-key>'
+    --global-arg 'serviceAccountJson=<vault:gcp/sa-key>' \
+    --global-arg 'billingTable=my-billing.billing.gcp_billing_export_v1_XXXXXX'
 
-  # Scan all projects
-  swamp model method run vertex-usage scan_projects
+  # Daily token/request usage for every discovered project
+  swamp model method run vertex-usage scan_usage
 
-  # Single project
-  swamp model method run vertex-usage get_token_usage --input project=my-project
+  # Confirm which billing services to filter on, then pull cost
+  swamp model method run vertex-usage discover_billing_services
+  swamp model method run vertex-usage get_billing_costs
   ```
 
   ## Methods
 
-  - **scan_projects** — Fan-out across all configured projects, per-model breakdown
-  - **get_token_usage** — Single project with model breakdown
+  - **discover_projects** — List ACTIVE projects via Cloud Resource Manager
+  - **scan_usage** — Daily rows per project/location/publisher/model/request type,
+    with per-project status so failures are never mistaken for zero usage
+  - **scan_gemini_api_usage** — Gemini API (generativelanguage) daily output
+    tokens and request counts by method and API key
+  - **discover_billing_services** — AI-related billing services and SKUs with cost
+  - **get_billing_costs** — Gross cost, credits and net cost per day, project and SKU
+  - **scan_projects**, **get_token_usage** — Legacy single-bucket scans
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - gcp/vertex_usage.ts
