@@ -1586,17 +1586,34 @@ query members($fullPath: ID!, $first: Int!) {
   }
 }`;
 
-const CREATE_ISSUE_MUTATION = `
-mutation createIssue(
-  $projectPath: ID!, $title: String!, $description: String, $labels: [String!],
-  $assigneeUsernames: [String!], $milestoneId: MilestoneID, $dueDate: ISO8601Date,
-  $confidential: Boolean, $weight: Int
-) {
-  createIssue(input: {
-    projectPath: $projectPath, title: $title, description: $description, labels: $labels,
-    assigneeUsernames: $assigneeUsernames, milestoneId: $milestoneId, dueDate: $dueDate,
-    confidential: $confidential, weight: $weight
-  }) {
+// Only declare/pass the optional input fields the caller supplied. GitLab
+// rejects the whole mutation if CreateIssueInput lacks a declared field, and
+// `weight` exists only on EE. CreateIssueInput has no assigneeUsernames, so
+// assignees are applied afterwards via issueSetAssignees.
+function buildCreateIssueMutation(optional: {
+  description: boolean;
+  labels: boolean;
+  milestoneId: boolean;
+  dueDate: boolean;
+  confidential: boolean;
+  weight: boolean;
+}): string {
+  const decls = ["$projectPath: ID!", "$title: String!"];
+  const inputs = ["projectPath: $projectPath", "title: $title"];
+  const add = (on: boolean, name: string, type: string) => {
+    if (!on) return;
+    decls.push(`$${name}: ${type}`);
+    inputs.push(`${name}: $${name}`);
+  };
+  add(optional.description, "description", "String");
+  add(optional.labels, "labels", "[String!]");
+  add(optional.milestoneId, "milestoneId", "MilestoneID");
+  add(optional.dueDate, "dueDate", "ISO8601Date");
+  add(optional.confidential, "confidential", "Boolean");
+  add(optional.weight, "weight", "Int");
+  return `
+mutation createIssue(${decls.join(", ")}) {
+  createIssue(input: { ${inputs.join(", ")} }) {
     issue {
       iid title description state webUrl labels { nodes { title } } createdAt updatedAt
       assignees { nodes { username } }
@@ -1604,6 +1621,7 @@ mutation createIssue(
     errors
   }
 }`;
+}
 
 const CREATE_NOTE_MUTATION = `
 mutation createNote($noteableId: NoteableID!, $body: String!) {
@@ -2512,7 +2530,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.09.23.1",
+  version: "2026.10.01.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2685,6 +2703,14 @@ export const model = {
         "because `--arg body=@...` reads a leading @ as a file path. Method " +
         "descriptions and the body argument .describe() only; no schema, " +
         "resource, or globalArguments change.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.01.1",
+      description:
+        "Fixed create_issue failing on GitLab CE: the mutation now declares " +
+        "only the optional fields supplied, and assignees are applied via " +
+        "issueSetAssignees. No schema or globalArguments change.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3561,21 +3587,39 @@ export const model = {
         const milestoneId = args.milestone !== undefined
           ? await resolveMilestoneId(host, token, args.project, args.milestone)
           : undefined;
-        const data = await graphqlRequest(host, token, CREATE_ISSUE_MUTATION, {
+        const vars: Record<string, unknown> = {
           projectPath: args.project,
           title: args.title,
-          description: args.description || undefined,
-          labels: args.labels.length ? args.labels : undefined,
-          assigneeUsernames: args.assignees?.length
-            ? args.assignees
-            : undefined,
-          milestoneId: milestoneId !== undefined
-            ? `gid://gitlab/Milestone/${milestoneId}`
-            : undefined,
-          dueDate: args.dueDate,
+        };
+        const description = args.description || undefined;
+        const labels = args.labels.length ? args.labels : undefined;
+        const gidMilestone = milestoneId !== undefined
+          ? `gid://gitlab/Milestone/${milestoneId}`
+          : undefined;
+        const optional = {
+          description,
+          labels,
+          milestoneId: gidMilestone,
+          dueDate: args.dueDate || undefined,
           confidential: args.confidential,
           weight: args.weight,
-        });
+        };
+        for (const [k, v] of Object.entries(optional)) {
+          if (v !== undefined) vars[k] = v;
+        }
+        const data = await graphqlRequest(
+          host,
+          token,
+          buildCreateIssueMutation({
+            description: description !== undefined,
+            labels: labels !== undefined,
+            milestoneId: gidMilestone !== undefined,
+            dueDate: optional.dueDate !== undefined,
+            confidential: args.confidential !== undefined,
+            weight: args.weight !== undefined,
+          }),
+          vars,
+        );
         const result = data.createIssue;
         if (result.errors?.length) {
           throw new Error(`createIssue failed: ${result.errors.join("; ")}`);
@@ -3590,6 +3634,45 @@ export const model = {
         // omits it. Fail loudly so an assign to a typo'd user isn't reported as
         // success (mirrors set_mr_assignees/set_issue_assignees).
         if (args.assignees?.length) {
+          // CreateIssueInput takes only assigneeIds, so apply usernames in a
+          // follow-up issueSetAssignees call and verify its result.
+          const created = `issue was already created as #${issue.iid} (${
+            issue.webUrl ?? "no webUrl available"
+          })`;
+          let assigned;
+          try {
+            assigned = await graphqlRequest(
+              host,
+              token,
+              SET_ISSUE_ASSIGNEES_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(issue.iid),
+                usernames: args.assignees,
+              },
+            );
+          } catch (e) {
+            throw new Error(
+              `create_issue: ${created} but assigning failed: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            );
+          }
+          const setResult = assigned.issueSetAssignees;
+          if (!setResult) {
+            throw new Error(
+              `create_issue: ${created} but issueSetAssignees returned null ` +
+                `(permission denied or issue not found)`,
+            );
+          }
+          if (setResult.errors?.length) {
+            throw new Error(
+              `create_issue: ${created} but assigning failed: ${
+                setResult.errors.join("; ")
+              }`,
+            );
+          }
+          issue.assignees = setResult.issue?.assignees ?? { nodes: [] };
           const got = new Set(
             (issue.assignees?.nodes ?? []).map((n: any) =>
               n.username.toLowerCase()

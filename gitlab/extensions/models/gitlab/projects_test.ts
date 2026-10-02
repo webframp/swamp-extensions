@@ -973,7 +973,7 @@ Deno.test("list_issue_notes writes notes resource via GraphQL", async () => {
 // Issue Parity Tests (assignees, note edit/delete, field parity, discussions)
 // =============================================================================
 
-Deno.test("create_issue passes assigneeUsernames/milestoneId/dueDate/confidential/weight through", async () => {
+Deno.test("create_issue passes milestoneId/dueDate/confidential/weight through and sets assignees in a follow-up call", async () => {
   const cap = mockGraphqlCapture({
     data: {
       createIssue: {
@@ -986,8 +986,12 @@ Deno.test("create_issue passes assigneeUsernames/milestoneId/dueDate/confidentia
           labels: { nodes: [] },
           createdAt: "2026-06-10T00:00:00Z",
           updatedAt: "2026-06-10T00:00:00Z",
-          assignees: { nodes: [{ username: "operator" }] },
+          assignees: { nodes: [] },
         },
+        errors: [],
+      },
+      issueSetAssignees: {
+        issue: { iid: 99, assignees: { nodes: [{ username: "operator" }] } },
         errors: [],
       },
     },
@@ -1010,27 +1014,31 @@ Deno.test("create_issue passes assigneeUsernames/milestoneId/dueDate/confidentia
       },
       context as any,
     );
-    assertEquals(cap.vars().assigneeUsernames, ["operator"]);
-    assertEquals(cap.vars().milestoneId, "gid://gitlab/Milestone/42");
-    assertEquals(cap.vars().dueDate, "2026-12-01");
-    assertEquals(cap.vars().confidential, true);
-    assertEquals(cap.vars().weight, 3);
+    const [create, assign] = cap.bodies();
+    assertEquals(create.variables.milestoneId, "gid://gitlab/Milestone/42");
+    assertEquals(create.variables.dueDate, "2026-12-01");
+    assertEquals(create.variables.confidential, true);
+    assertEquals(create.variables.weight, 3);
+    assertEquals(create.variables.assigneeUsernames, undefined);
+    assertEquals(create.query.includes("assigneeUsernames"), false);
+    assertEquals(assign.variables.usernames, ["operator"]);
+    assertEquals(assign.variables.iid, "99");
   } finally {
     cap.restore();
   }
 });
 
-Deno.test("create_issue throws when GitLab did not assign a requested username", async () => {
-  const restore = mockGraphqlFetch({
+Deno.test("create_issue omits assignee/weight/optional fields from the mutation when not supplied (GitLab CE)", async () => {
+  const cap = mockGraphqlCapture({
     data: {
       createIssue: {
         issue: {
-          iid: 99,
-          title: "New issue",
-          description: "",
+          iid: 7,
+          title: "T",
+          description: "D",
           state: "opened",
-          webUrl: "https://git.example.org/org/repo/-/issues/99",
-          labels: { nodes: [] },
+          webUrl: "https://git.example.org/org/repo/-/issues/7",
+          labels: { nodes: [{ title: "some-label" }] },
           createdAt: "2026-06-10T00:00:00Z",
           updatedAt: "2026-06-10T00:00:00Z",
           assignees: { nodes: [] },
@@ -1039,6 +1047,174 @@ Deno.test("create_issue throws when GitLab did not assign a requested username",
       },
     },
   });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_issue.execute(
+      {
+        project: "org/repo",
+        title: "T",
+        description: "D",
+        labels: ["some-label"],
+      },
+      context as any,
+    );
+    const bodies = cap.bodies();
+    assertEquals(bodies.length, 1);
+    for (
+      const f of [
+        "assigneeUsernames",
+        "assigneeIds",
+        "weight",
+        "milestoneId",
+        "dueDate",
+        "confidential",
+      ]
+    ) {
+      assertEquals(bodies[0].query.includes(f), false, f);
+    }
+    assertEquals(bodies[0].query.includes("$labels: [String!]"), true);
+  } finally {
+    cap.restore();
+  }
+});
+
+const ISSUE = {
+  iid: 99,
+  title: "x",
+  description: "",
+  state: "opened",
+  webUrl: "https://git.example.org/org/repo/-/issues/99",
+  labels: { nodes: [] },
+  createdAt: "2026-06-10T00:00:00Z",
+  updatedAt: "2026-06-10T00:00:00Z",
+  assignees: { nodes: [] },
+};
+
+function mockGraphqlSequence(responses: unknown[]): () => void {
+  const original = globalThis.fetch;
+  let i = 0;
+  globalThis.fetch = () => {
+    const r = responses[Math.min(i++, responses.length - 1)];
+    if (r instanceof Error) return Promise.reject(r);
+    return Promise.resolve(
+      new Response(JSON.stringify(r), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  return () => {
+    globalThis.fetch = original;
+  };
+}
+
+const CREATED_ISSUE_RESPONSE = {
+  data: { createIssue: { issue: ISSUE, errors: [] } },
+};
+
+async function createWithAssignee(
+  followUp: unknown,
+  match: string,
+): Promise<void> {
+  const restore = mockGraphqlSequence([CREATED_ISSUE_RESPONSE, followUp]);
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.create_issue.execute(
+          {
+            project: "org/repo",
+            title: "x",
+            description: "",
+            labels: [],
+            assignees: ["alice"],
+          },
+          context as any,
+        ),
+      Error,
+      match,
+    );
+  } finally {
+    restore();
+  }
+}
+
+Deno.test("create_issue names the created issue when issueSetAssignees returns errors", async () => {
+  await createWithAssignee(
+    { data: { issueSetAssignees: { issue: null, errors: ["nope"] } } },
+    "issue was already created as #99",
+  );
+});
+
+Deno.test("create_issue names the created issue when issueSetAssignees returns null", async () => {
+  await createWithAssignee(
+    { data: { issueSetAssignees: null } },
+    "issueSetAssignees returned null",
+  );
+});
+
+Deno.test("create_issue names the created issue when the assignee request itself fails", async () => {
+  await createWithAssignee(
+    new Error("network down"),
+    "issue was already created as #99",
+  );
+});
+
+Deno.test("create_issue matches assignees case-insensitively and sends confidential:false / weight:0", async () => {
+  const cap = mockGraphqlCapture({
+    data: {
+      createIssue: { issue: ISSUE, errors: [] },
+      issueSetAssignees: {
+        issue: { iid: 99, assignees: { nodes: [{ username: "Alice" }] } },
+        errors: [],
+      },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.create_issue.execute(
+      {
+        project: "org/repo",
+        title: "x",
+        description: "",
+        labels: [],
+        assignees: ["alice"],
+        confidential: false,
+        weight: 0,
+        dueDate: "",
+      },
+      context as any,
+    );
+    const create = cap.bodies()[0];
+    assertEquals(create.variables.confidential, false);
+    assertEquals(create.variables.weight, 0);
+    assertEquals(create.query.includes("$confidential: Boolean"), true);
+    assertEquals(create.query.includes("$weight: Int"), true);
+    assertEquals("dueDate" in create.variables, false);
+    assertEquals(create.query.includes("dueDate"), false);
+  } finally {
+    cap.restore();
+  }
+});
+
+Deno.test("create_issue throws when GitLab did not assign a requested username", async () => {
+  const restore = mockGraphqlSequence([
+    CREATED_ISSUE_RESPONSE,
+    {
+      data: {
+        issueSetAssignees: {
+          issue: { iid: 99, assignees: { nodes: [] } },
+          errors: [],
+        },
+      },
+    },
+  ]);
   try {
     const { context } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -1064,24 +1240,27 @@ Deno.test("create_issue throws when GitLab did not assign a requested username",
 });
 
 Deno.test("create_issue's assignee-mismatch error includes the orphaned issue's iid and webUrl", async () => {
-  const restore = mockGraphqlFetch({
-    data: {
-      createIssue: {
-        issue: {
-          iid: 99,
-          title: "New issue",
-          description: "",
-          state: "opened",
-          webUrl: "https://git.example.org/org/repo/-/issues/99",
-          labels: { nodes: [] },
-          createdAt: "2026-06-10T00:00:00Z",
-          updatedAt: "2026-06-10T00:00:00Z",
-          assignees: { nodes: [] },
+  const restore = mockGraphqlSequence([
+    CREATED_ISSUE_RESPONSE,
+    {
+      data: {
+        issueSetAssignees: {
+          issue: { iid: 99, assignees: { nodes: [] } },
+          errors: [],
         },
-        errors: [],
       },
     },
-  });
+
+    CREATED_ISSUE_RESPONSE,
+    {
+      data: {
+        issueSetAssignees: {
+          issue: { iid: 99, assignees: { nodes: [] } },
+          errors: [],
+        },
+      },
+    },
+  ]);
   try {
     const { context } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -4892,9 +5071,10 @@ const MOCK_GRAPHQL_RESPONSE = {
 // so tests can assert what the method actually requested (not just echo output).
 function mockGraphqlCapture(
   responseBody: unknown,
-): { restore: () => void; vars: () => any } {
+): { restore: () => void; vars: () => any; bodies: () => any[] } {
   const original = globalThis.fetch;
   let sent: any = null;
+  const all: any[] = [];
   globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === "string"
       ? input
@@ -4904,6 +5084,7 @@ function mockGraphqlCapture(
     if ((init?.method ?? "GET") === "POST" && url.includes("/api/graphql")) {
       const body = init?.body ? JSON.parse(init.body as string) : {};
       sent = body.variables ?? null;
+      all.push(body);
       return Promise.resolve(
         new Response(JSON.stringify(responseBody), {
           status: 200,
@@ -4918,6 +5099,7 @@ function mockGraphqlCapture(
       globalThis.fetch = original;
     },
     vars: () => sent,
+    bodies: () => all,
   };
 }
 

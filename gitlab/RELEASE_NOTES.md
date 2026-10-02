@@ -1,3 +1,17 @@
+## 2026.10.01.1
+
+**Fixed:** `create_issue` failed on every call against GitLab CE (and any
+instance without `weight` on `CreateIssueInput`). The mutation always declared
+`$assigneeUsernames` and `$weight`, but `CreateIssueInput` has no
+`assigneeUsernames` field and `weight` is EE-only. Closes #464.
+
+**Changed:** `create_issue` now declares and sends only the optional fields you
+supply (`description`, `labels`, `milestone`, `dueDate`, `confidential`,
+`weight`). `assignees` are applied with a second `issueSetAssignees` call after
+the issue is created, then verified as before. If assigning fails, the error
+names the already-created issue. `weight` still requires GitLab EE when passed.
+No schema or `globalArguments` change.
+
 ## 2026.09.23.1
 
 **Changed:** Documented `@`-mention escaping on `add_issue_note` and
