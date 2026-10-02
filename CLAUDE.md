@@ -363,6 +363,30 @@ Two skills are available for guidance when working on extensions:
 - `swamp` — Unified skill covering the full CLI: models, workflows, data, vaults, extensions, publishing, repos, reports, issues, and troubleshooting. Contains a routing table that dispatches to sub-guides by topic (e.g., `references/model/guide.md`, `references/extension/guide.md`, `references/workflow/guide.md`). Load the skill, then follow the routing table to the relevant guide.
 - `swamp-getting-started` — Interactive onboarding walkthrough for new swamp users (state-machine checklist with verification at each step).
 
+### Swamp CLI-first investigation
+
+Use the `swamp` CLI as the authoritative interface for swamp state and
+operations. Prefer CLI commands over reading generated or declarative files
+directly:
+
+- Inspect models with `swamp model list`, `swamp model get`, and
+  `swamp model type search`.
+- Inspect workflows with `swamp workflow list`, `swamp workflow get`, and
+  `swamp workflow validate`.
+- Inspect outputs with `swamp data get`, `swamp data list`, and
+  `swamp data query`.
+- Inspect runs with `swamp run history`, `swamp run doctor`, and workflow
+  history commands.
+- Inspect extensions with `swamp extension info`, `swamp extension search`,
+  `swamp extension quality`, and `swamp extension fmt`.
+
+Do not `cat` a workflow YAML or grep `.swamp/` to determine current swamp
+state. Manual YAML inspection is a fallback for implementation context,
+discovery, or debugging when the CLI does not expose the needed detail. After
+manual inspection or edits, verify the result through the appropriate `swamp`
+command. Follow the routing table in the `swamp` skill and load the relevant
+guide before using unfamiliar command families.
+
 ## Project Skills
 
 Project-level skills in `skills/` at the repo root:
