@@ -20,6 +20,8 @@ longer reads as a valid empty result.
   Monitoring has no input-token metric for this API, so input volume comes from
   billing. `gemini_usage.requestsAvailable` is false when request counts could
   not be read, and the scan's `complete` follows it.
+- BigQuery queries fail with the job's error when the response carries an
+  `errors` array, instead of returning zero rows.
 - Daily Monitoring points are assigned to a day by the midpoint of their
   interval, so an inclusive or missing `endTime` cannot shift a point to the
   neighbouring day.

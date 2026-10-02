@@ -671,7 +671,7 @@ async function getServiceAccountToken(
   scopes: string[],
   http: Http,
 ): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
+  const now = Math.floor(http.nowFn() / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = base64url(
     JSON.stringify({
@@ -1672,6 +1672,14 @@ async function runBigQuery(
         }?timeoutMs=30000&maxResults=10000${loc}`,
         { headers },
       ),
+    );
+  }
+
+  // A job-level failure can arrive as HTTP 200 with errors and no rows; that
+  // must not read as an empty result.
+  if (Array.isArray(page.errors) && page.errors.length > 0) {
+    throw new Error(
+      `BigQuery job reported errors: ${JSON.stringify(page.errors)}`,
     );
   }
 

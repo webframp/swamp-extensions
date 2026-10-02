@@ -169,7 +169,9 @@ Deno.test("get_token_usage accepts valid input", () => {
 
 Deno.test("scan_projects fails without credentials", async () => {
   const originalEnv = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS");
+  const originalToken = Deno.env.get("GCP_ACCESS_TOKEN");
   Deno.env.delete("GOOGLE_APPLICATION_CREDENTIALS");
+  Deno.env.delete("GCP_ACCESS_TOKEN");
   try {
     const { context } = createModelTestContext({
       globalArgs: { projects: ["test-project"] },
@@ -189,6 +191,7 @@ Deno.test("scan_projects fails without credentials", async () => {
     if (originalEnv) {
       Deno.env.set("GOOGLE_APPLICATION_CREDENTIALS", originalEnv);
     }
+    if (originalToken) Deno.env.set("GCP_ACCESS_TOKEN", originalToken);
   }
 });
 
@@ -2213,6 +2216,35 @@ Deno.test("BigQuery response without a job id is not reported as a timeout", asy
       ),
     Error,
     "no jobReference.jobId",
+  );
+});
+
+Deno.test("BigQuery HTTP 200 with errors fails instead of returning zero rows", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("/tables/")) {
+      return tableSchemaResponse(["service", "usage_start_time", "cost"]);
+    }
+    if (init?.method === "POST") {
+      return bqResponse(["o_data_through"], [], {
+        errors: [{ reason: "billingTierLimitExceeded" }],
+      });
+    }
+    return bqResponse(["o_data_through"], []);
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "billingTierLimitExceeded",
   );
 });
 
