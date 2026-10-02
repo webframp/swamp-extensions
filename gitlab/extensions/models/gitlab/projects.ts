@@ -3600,7 +3600,7 @@ export const model = {
           description,
           labels,
           milestoneId: gidMilestone,
-          dueDate: args.dueDate,
+          dueDate: args.dueDate || undefined,
           confidential: args.confidential,
           weight: args.weight,
         };
@@ -3614,7 +3614,7 @@ export const model = {
             description: description !== undefined,
             labels: labels !== undefined,
             milestoneId: gidMilestone !== undefined,
-            dueDate: args.dueDate !== undefined,
+            dueDate: optional.dueDate !== undefined,
             confidential: args.confidential !== undefined,
             weight: args.weight !== undefined,
           }),
@@ -3636,25 +3636,43 @@ export const model = {
         if (args.assignees?.length) {
           // CreateIssueInput takes only assigneeIds, so apply usernames in a
           // follow-up issueSetAssignees call and verify its result.
-          const assigned = await graphqlRequest(
-            host,
-            token,
-            SET_ISSUE_ASSIGNEES_MUTATION,
-            {
-              projectPath: args.project,
-              iid: String(issue.iid),
-              usernames: args.assignees,
-            },
-          );
-          const setResult = assigned.issueSetAssignees;
-          if (setResult?.errors?.length) {
+          const created = `issue was already created as #${issue.iid} (${
+            issue.webUrl ?? "no webUrl available"
+          })`;
+          let assigned;
+          try {
+            assigned = await graphqlRequest(
+              host,
+              token,
+              SET_ISSUE_ASSIGNEES_MUTATION,
+              {
+                projectPath: args.project,
+                iid: String(issue.iid),
+                usernames: args.assignees,
+              },
+            );
+          } catch (e) {
             throw new Error(
-              `create_issue: issue was already created as #${issue.iid} (${
-                issue.webUrl ?? "no webUrl available"
-              }) but assigning failed: ${setResult.errors.join("; ")}`,
+              `create_issue: ${created} but assigning failed: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
             );
           }
-          issue.assignees = setResult?.issue?.assignees ?? { nodes: [] };
+          const setResult = assigned.issueSetAssignees;
+          if (!setResult) {
+            throw new Error(
+              `create_issue: ${created} but issueSetAssignees returned null ` +
+                `(permission denied or issue not found)`,
+            );
+          }
+          if (setResult.errors?.length) {
+            throw new Error(
+              `create_issue: ${created} but assigning failed: ${
+                setResult.errors.join("; ")
+              }`,
+            );
+          }
+          issue.assignees = setResult.issue?.assignees ?? { nodes: [] };
           const got = new Set(
             (issue.assignees?.nodes ?? []).map((n: any) =>
               n.username.toLowerCase()
