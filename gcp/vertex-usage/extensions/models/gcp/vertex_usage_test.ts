@@ -191,7 +191,9 @@ Deno.test("scan_projects fails without credentials", async () => {
     if (originalEnv) {
       Deno.env.set("GOOGLE_APPLICATION_CREDENTIALS", originalEnv);
     }
-    if (originalToken) Deno.env.set("GCP_ACCESS_TOKEN", originalToken);
+    if (originalToken !== undefined) {
+      Deno.env.set("GCP_ACCESS_TOKEN", originalToken);
+    }
   }
 });
 
