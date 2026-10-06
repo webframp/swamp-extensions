@@ -38,7 +38,7 @@ jobs:
         dependsOn: []
         weight: 0
         allowFailure: false
-      - name: triage_reviews
+      - name: triage-reviews
         description: >-
           Classify a compact review projection in one bounded batch. Raw MR
           state and questions are not retained; individual failures degrade to

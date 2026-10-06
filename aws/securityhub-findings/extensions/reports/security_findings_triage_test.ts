@@ -67,7 +67,7 @@ Deno.test("report produces No Data section when all steps are empty", async () =
 Deno.test("report renders severity dashboard from summary step", async () => {
   const ctx = createMockContext([
     {
-      stepName: "severity_summary",
+      stepName: "severity-summary",
       methodName: "get_severity_summary",
       data: {
         critical: 3,
@@ -109,7 +109,7 @@ Deno.test("report renders severity dashboard from summary step", async () => {
 Deno.test("report renders truncation warning for summary", async () => {
   const ctx = createMockContext([
     {
-      stepName: "severity_summary",
+      stepName: "severity-summary",
       methodName: "get_severity_summary",
       data: {
         critical: 0,
@@ -130,7 +130,7 @@ Deno.test("report renders truncation warning for summary", async () => {
 Deno.test("report merges critical and high findings", async () => {
   const ctx = createMockContext([
     {
-      stepName: "critical_findings",
+      stepName: "critical-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -146,7 +146,7 @@ Deno.test("report merges critical and high findings", async () => {
       },
     },
     {
-      stepName: "high_findings",
+      stepName: "high-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -172,7 +172,7 @@ Deno.test("report merges critical and high findings", async () => {
 Deno.test("report renders diff with truncation warning", async () => {
   const ctx = createMockContext([
     {
-      stepName: "diff_findings",
+      stepName: "diff-findings",
       methodName: "diff_findings",
       data: {
         newFindings: [{
@@ -198,7 +198,7 @@ Deno.test("report renders diff with truncation warning", async () => {
 Deno.test("report renders top finding types", async () => {
   const ctx = createMockContext([
     {
-      stepName: "by_type",
+      stepName: "by-type",
       methodName: "list_findings_by_type",
       data: {
         groups: [
@@ -230,7 +230,7 @@ Deno.test("report renders top finding types", async () => {
 Deno.test("report escapes pipe characters in titles", async () => {
   const ctx = createMockContext([
     {
-      stepName: "critical_findings",
+      stepName: "critical-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -260,7 +260,7 @@ Deno.test("report handles malformed step data gracefully", async () => {
   // Inject a step with corrupt data
   ctx.stepExecutions.push({
     jobName: "collect",
-    stepName: "severity_summary",
+    stepName: "severity-summary",
     modelName: "sh-findings",
     modelType: "@webframp/aws/securityhub-findings",
     modelId: "test-id",
@@ -273,4 +273,145 @@ Deno.test("report handles malformed step data gracefully", async () => {
   const result = await report.execute(ctx);
   // Should not throw, should produce No Data
   assertEquals(result.markdown.includes("## No Data"), true);
+});
+
+const legacyFinding = (title: string, severity: string) => ({
+  severity,
+  title,
+  accountId: "111",
+  region: "us-east-1",
+  productName: "GuardDuty",
+  type: "TTPs/Impact",
+});
+
+const stepFixtures = (names: {
+  summary: string;
+  critical: string;
+  high: string;
+  diff: string;
+  byType: string;
+}) => [
+  {
+    stepName: names.summary,
+    methodName: "get_severity_summary",
+    data: {
+      critical: 1,
+      high: 1,
+      medium: 0,
+      low: 0,
+      informational: 0,
+      total: 2,
+      truncated: false,
+      accountBreakdown: [],
+    },
+  },
+  {
+    stepName: names.critical,
+    methodName: "list_findings",
+    data: {
+      findings: [legacyFinding("CritTitle", "CRITICAL")],
+      count: 1,
+      truncated: false,
+    },
+  },
+  {
+    stepName: names.high,
+    methodName: "list_findings",
+    data: {
+      findings: [legacyFinding("HighTitle", "HIGH")],
+      count: 1,
+      truncated: false,
+    },
+  },
+  {
+    stepName: names.diff,
+    methodName: "diff_findings",
+    data: {
+      newFindings: [legacyFinding("DiffTitle", "HIGH")],
+      resolvedFindings: [],
+      newCount: 1,
+      resolvedCount: 0,
+      truncated: false,
+    },
+  },
+  {
+    stepName: names.byType,
+    methodName: "list_findings_by_type",
+    data: {
+      groups: [{
+        type: "TTPs/ByTypeMarker",
+        count: 2,
+        severities: {
+          critical: 1,
+          high: 1,
+          medium: 0,
+          low: 0,
+          informational: 0,
+        },
+        accounts: ["111"],
+      }],
+      totalTypes: 1,
+      totalFindings: 2,
+      truncated: false,
+    },
+  },
+];
+
+const assertAllSections = (
+  result: { markdown: string },
+) => {
+  for (
+    const marker of ["CritTitle", "HighTitle", "DiffTitle", "ByTypeMarker"]
+  ) {
+    assertEquals(result.markdown.includes(marker), true, `missing ${marker}`);
+  }
+  assertEquals(result.markdown.includes("## Severity"), true);
+};
+
+Deno.test("report matches all five legacy snake_case step names", async () => {
+  const ctx = createMockContext(stepFixtures({
+    summary: "severity_summary",
+    critical: "critical_findings",
+    high: "high_findings",
+    diff: "diff_findings",
+    byType: "by_type",
+  }));
+  assertAllSections(await report.execute(ctx));
+});
+
+Deno.test("report matches all five kebab-case step names", async () => {
+  const ctx = createMockContext(stepFixtures({
+    summary: "severity-summary",
+    critical: "critical-findings",
+    high: "high-findings",
+    diff: "diff-findings",
+    byType: "by-type",
+  }));
+  assertAllSections(await report.execute(ctx));
+});
+
+Deno.test("report prefers the first matching step in a mixed legacy/kebab run", async () => {
+  const ctx = createMockContext([
+    {
+      stepName: "critical-findings",
+      methodName: "list_findings",
+      data: {
+        findings: [legacyFinding("NewName", "CRITICAL")],
+        count: 1,
+        truncated: false,
+      },
+    },
+    {
+      stepName: "critical_findings",
+      methodName: "list_findings",
+      data: {
+        findings: [legacyFinding("OldName", "CRITICAL")],
+        count: 1,
+        truncated: false,
+      },
+    },
+  ]);
+  const result = await report.execute(ctx);
+  assertEquals(result.markdown.includes("NewName"), true);
+  assertEquals(result.markdown.includes("OldName"), false);
 });

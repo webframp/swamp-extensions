@@ -57,7 +57,7 @@ export interface QueueItem {
    * metadata into the judgment.
    */
   jev?: {
-    /** MR review recommendation (from `triage_reviews`). */
+    /** MR review recommendation (from `triage-reviews`). */
     recommendation?: { choice: string; confidence: number };
     /** Renovate held-back bump-risk grade (from `renovate_grade`). */
     bumpRisk?: { score: number; confidence: number };

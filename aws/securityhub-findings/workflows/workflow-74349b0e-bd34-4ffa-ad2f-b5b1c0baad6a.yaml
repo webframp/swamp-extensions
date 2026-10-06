@@ -33,7 +33,7 @@ jobs:
   - name: collect
     description: Collect findings data from Security Hub
     steps:
-      - name: severity_summary
+      - name: severity-summary
         description: Get severity counts across all accounts
         task:
           type: model_method
@@ -41,7 +41,7 @@ jobs:
           methodName: get_severity_summary
           inputs:
             startTime: ${{ inputs.startTime }}
-      - name: critical_findings
+      - name: critical-findings
         description: List CRITICAL severity findings
         task:
           type: model_method
@@ -51,7 +51,7 @@ jobs:
             severityLabel: CRITICAL
             startTime: ${{ inputs.startTime }}
             limit: 50
-      - name: high_findings
+      - name: high-findings
         description: List HIGH severity findings
         task:
           type: model_method
@@ -61,7 +61,7 @@ jobs:
             severityLabel: HIGH
             startTime: ${{ inputs.startTime }}
             limit: 50
-      - name: diff_findings
+      - name: diff-findings
         allowFailure: true
         description: Identify new and resolved findings since last run
         task:
@@ -71,7 +71,7 @@ jobs:
           inputs:
             startTime: ${{ inputs.startTime }}
             limit: 100
-      - name: by_type
+      - name: by-type
         description: Group findings by type for pattern analysis
         allowFailure: true
         task:
