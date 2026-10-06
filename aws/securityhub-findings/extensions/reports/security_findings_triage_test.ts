@@ -67,7 +67,7 @@ Deno.test("report produces No Data section when all steps are empty", async () =
 Deno.test("report renders severity dashboard from summary step", async () => {
   const ctx = createMockContext([
     {
-      stepName: "severity_summary",
+      stepName: "severity-summary",
       methodName: "get_severity_summary",
       data: {
         critical: 3,
@@ -130,7 +130,7 @@ Deno.test("report renders truncation warning for summary", async () => {
 Deno.test("report merges critical and high findings", async () => {
   const ctx = createMockContext([
     {
-      stepName: "critical_findings",
+      stepName: "critical-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -146,7 +146,7 @@ Deno.test("report merges critical and high findings", async () => {
       },
     },
     {
-      stepName: "high_findings",
+      stepName: "high-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -198,7 +198,7 @@ Deno.test("report renders diff with truncation warning", async () => {
 Deno.test("report renders top finding types", async () => {
   const ctx = createMockContext([
     {
-      stepName: "by_type",
+      stepName: "by-type",
       methodName: "list_findings_by_type",
       data: {
         groups: [
@@ -230,7 +230,7 @@ Deno.test("report renders top finding types", async () => {
 Deno.test("report escapes pipe characters in titles", async () => {
   const ctx = createMockContext([
     {
-      stepName: "critical_findings",
+      stepName: "critical-findings",
       methodName: "list_findings",
       data: {
         findings: [{
@@ -273,4 +273,27 @@ Deno.test("report handles malformed step data gracefully", async () => {
   const result = await report.execute(ctx);
   // Should not throw, should produce No Data
   assertEquals(result.markdown.includes("## No Data"), true);
+});
+
+Deno.test("report matches legacy snake_case step names from older runs", async () => {
+  const ctx = createMockContext([
+    {
+      stepName: "critical_findings",
+      methodName: "list_findings",
+      data: {
+        findings: [{
+          severity: "CRITICAL",
+          title: "LegacyCrit",
+          accountId: "111",
+          region: "us-east-1",
+          productName: "GuardDuty",
+          type: "TTPs/Impact",
+        }],
+        total: 1,
+        truncated: false,
+      },
+    },
+  ]);
+  const result = await report.execute(ctx);
+  assertEquals(result.markdown.includes("LegacyCrit"), true);
 });

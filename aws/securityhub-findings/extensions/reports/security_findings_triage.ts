@@ -158,15 +158,20 @@ export const report = {
       steps: context.stepExecutions.length,
     });
 
-    // Find step data by step name
+    // Find step data by step name. Steps are now kebab-case; the legacy
+    // snake_case names are still matched so runs recorded before the rename
+    // keep reporting. TODO: drop the snake_case fallback in a future version.
     const findStep = (stepName: string) =>
-      context.stepExecutions.find((s) => s.stepName === stepName);
+      context.stepExecutions.find((s) =>
+        s.stepName === stepName ||
+        s.stepName === stepName.replaceAll("-", "_")
+      );
 
-    const summaryStep = findStep("severity_summary");
-    const criticalStep = findStep("critical_findings");
-    const highStep = findStep("high_findings");
-    const diffStep = findStep("diff_findings");
-    const byTypeStep = findStep("by_type");
+    const summaryStep = findStep("severity-summary");
+    const criticalStep = findStep("critical-findings");
+    const highStep = findStep("high-findings");
+    const diffStep = findStep("diff-findings");
+    const byTypeStep = findStep("by-type");
 
     // Read data from each step
     const summary = summaryStep
