@@ -698,10 +698,14 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const captured: Record<string, string> = {};
+    let capturedTypes: string[] = [];
+    let sawBareTypes = true;
     const server = Deno.serve({ port: 0, onListen() {} }, (req: Request) => {
       const url = new URL(req.url);
       if (url.pathname === "/v1/compliance/activities") {
         for (const [k, v] of url.searchParams) captured[k] = v;
+        capturedTypes = url.searchParams.getAll("activity_types[]");
+        sawBareTypes = url.searchParams.has("activity_types");
         return Response.json({ data: MOCK_ACTIVITIES, has_more: false });
       }
       return new Response("Not found", { status: 404 });
@@ -721,7 +725,7 @@ Deno.test({
       });
       await model.methods.collect_activities.execute(
         {
-          activity_types: "user.login,conversation.create",
+          activity_types: "claude_chat_created, github_integration_updated,,",
           since: "2026-07-01T00:00:00Z",
           limit: "500",
         },
@@ -729,12 +733,60 @@ Deno.test({
           typeof model.methods.collect_activities.execute
         >[1],
       );
-      assertEquals(
-        captured["activity_types"],
-        "user.login,conversation.create",
-      );
+      // Repeated `activity_types[]` keys, trimmed, with empties dropped; the
+      // bare `activity_types` key is what the API rejects with HTTP 400.
+      assertEquals(capturedTypes, [
+        "claude_chat_created",
+        "github_integration_updated",
+      ]);
+      assertEquals(sawBareTypes, false);
       assertEquals(captured["created_at.gte"], "2026-07-01T00:00:00Z");
       assertEquals(captured["limit"], "500");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "compliance: collect_activities omits activity_types[] when unset or blank",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const server = Deno.serve({ port: 0, onListen() {} }, (req: Request) => {
+      const url = new URL(req.url);
+      if (url.pathname === "/v1/compliance/activities") {
+        seen.push(url.search);
+        return Response.json({ data: MOCK_ACTIVITIES, has_more: false });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const addr = server.addr as Deno.NetAddr;
+    const uninstall = installFetchMock(`http://localhost:${addr.port}`);
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { complianceKey: "sk-ant-api01-test" },
+        definition: {
+          id: "test-id",
+          name: "test-compliance",
+          version: 1,
+          tags: {},
+        },
+      });
+      const ctx = context as unknown as Parameters<
+        typeof model.methods.collect_activities.execute
+      >[1];
+      await model.methods.collect_activities.execute({}, ctx);
+      await model.methods.collect_activities.execute(
+        { activity_types: " , " },
+        ctx,
+      );
+      assertEquals(seen.length, 2);
+      for (const search of seen) {
+        assertEquals(search.includes("activity_types"), false);
+      }
     } finally {
       uninstall();
       await server.shutdown();

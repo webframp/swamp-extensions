@@ -46,7 +46,7 @@ const ActivityActorSchema = z.object({
 const ActivitySchema = z.object({
   id: z.string().describe("Unique activity identifier"),
   type: z.string().describe(
-    "Activity type (e.g. user.login, conversation.create)",
+    "Activity type (e.g. claude_chat_created, github_integration_updated)",
   ),
   created_at: z.string().describe("ISO 8601 timestamp the activity occurred"),
   actor: ActivityActorSchema.describe("Who or what performed the activity"),
@@ -241,12 +241,20 @@ const API_VERSION = "2023-06-01";
 async function complianceRequest(
   key: string,
   path: string,
-  params?: Record<string, string>,
+  params?: Record<string, string | string[]>,
 ): Promise<any> {
   const url = new URL(`${BASE}${path}`);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== "") url.searchParams.set(k, v);
+      // Array values repeat the key (k=a&k=b), the form the API expects for
+      // bracketed list filters such as `activity_types[]`.
+      if (Array.isArray(v)) {
+        for (const item of v) {
+          if (item !== "") url.searchParams.append(k, item);
+        }
+      } else if (v !== undefined && v !== "") {
+        url.searchParams.set(k, v);
+      }
     }
   }
   const resp = await fetch(url.toString(), {
@@ -339,7 +347,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.09.18.1",
+  version: "2026.10.06.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -405,6 +413,12 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.06.1",
+      description:
+        "Fixed collect_activities activity_types filter; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/compliance-config-snapshot"],
 
@@ -457,10 +471,10 @@ export const model = {
   methods: {
     collect_activities: {
       description:
-        "Collect recent compliance activities. Use activity_types to filter (e.g. 'user.login', 'conversation.create').",
+        "Collect recent compliance activities. Use activity_types to filter (e.g. 'claude_chat_created', 'github_integration_updated').",
       arguments: z.object({
         activity_types: z.string().optional().describe(
-          "Comma-separated activity type filter (e.g. 'user.login,conversation.create')",
+          "Comma-separated activity type filter (e.g. 'claude_chat_created,github_integration_updated')",
         ),
         since: z.string().optional().describe(
           "ISO-8601 timestamp — collect activities created after this time",
@@ -475,9 +489,15 @@ export const model = {
       ) => {
         const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
-        const params: Record<string, string> = {};
-        if (args.activity_types) {
-          params.activity_types = args.activity_types;
+        const params: Record<string, string | string[]> = {};
+        // The API takes a repeated `activity_types[]` list; a bare
+        // `activity_types` key returns HTTP 400.
+        const activityTypes = (args.activity_types ?? "")
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t !== "");
+        if (activityTypes.length > 0) {
+          params["activity_types[]"] = activityTypes;
         }
         // The Compliance API expects dotted range filters (created_at.gte),
         // not bracketed ones (created_at[gte]) — the latter returns HTTP 400.
