@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anthropic/compliance"
-version: "2026.09.18.1"
+version: "2026.10.06.1"
 description: |
   Observe a Claude Enterprise account via the Compliance API. Covers the
   6-year activity audit feed, organization directory (users, roles, groups
@@ -32,7 +32,7 @@ description: |
   # Audit feed
   swamp model method run claude-compliance collect_activities
   swamp model method run claude-compliance collect_activities \
-    --input activity_types=user.login,conversation.create
+    --input activity_types=claude_chat_created,github_integration_updated
   ```
 
   ## Methods
