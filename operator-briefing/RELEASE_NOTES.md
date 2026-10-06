@@ -2,7 +2,7 @@
 
 **Changed:** The `daily-briefing-typesafe` workflow step `triage_reviews` is now `triage-reviews`, following the direction of swamp-club lab #3060 (kebab-case step names). Anything that references the step by name, such as `steps.triage_reviews` expressions or `workflow resume --from triage_reviews`, must use the new name.
 
-**Upgrade note:** The report does not look the step up by name, so no data migration is needed. In a future version the report will be updated to use only the new-format names.
+**Upgrade note:** The briefing report does not look this step up by name, so stored data and report output are unaffected and no migration is needed.
 
 ## 2026.09.26.1
 
