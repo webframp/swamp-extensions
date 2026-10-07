@@ -232,6 +232,12 @@ export async function shortHash(input: string): Promise<string> {
 
 const MAX_RETRIES = 3;
 
+/** Hard deadline for a single HTTP attempt, including draining the body. */
+const REQUEST_TIMEOUT_MS = 60_000;
+
+/** Upper bound on any single 429 back-off, however large Retry-After is. */
+const MAX_RETRY_DELAY_MS = 30_000;
+
 /**
  * Result of a fetch, with the body already drained to text exactly once —
  * Response.text()/.json() can only be called once per response, so every
@@ -243,34 +249,79 @@ interface FalFetchResult {
 }
 
 /**
+ * One HTTP attempt under a hard deadline. The abort signal covers both the
+ * request and the body drain, so a server that sends headers and then stalls
+ * cannot hang the caller. A timeout surfaces as a descriptive error naming the
+ * method, URL and deadline rather than a bare DOMException.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+): Promise<FalFetchResult> {
+  const method = init.method ?? "GET";
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    return { response, body: await response.text() };
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new Error(
+        \`fal.ai API request timed out after \${REQUEST_TIMEOUT_MS / 1000}s: \${method} \${url}\`,
+      );
+    }
+    throw err;
+  }
+}
+
+/**
  * Perform a fetch with bounded retry on HTTP 429. Honors the \`Retry-After\`
- * header when present (seconds), otherwise backs off linearly. Returns the
- * final response with its body pre-drained to text; does not throw on
- * non-429 statuses.
+ * header when present (seconds, capped at MAX_RETRY_DELAY_MS), otherwise backs
+ * off linearly. Every attempt has its own timeout. Returns the final response
+ * with its body pre-drained to text; does not throw on non-429 statuses.
  */
 async function falFetch(
   url: string,
   init: RequestInit,
 ): Promise<FalFetchResult> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch(url, init);
-    if (response.status !== 429) {
-      return { response, body: await response.text() };
-    }
+    const result = await fetchWithTimeout(url, init);
+    if (result.response.status !== 429) return result;
+    if (attempt === MAX_RETRIES) return result;
 
-    const retryAfter = response.headers.get("Retry-After");
+    const retryAfter = result.response.headers.get("Retry-After");
     const parsed = retryAfter ? Number(retryAfter) : NaN;
-    const delayMs = Number.isFinite(parsed) ? parsed * 1000 : 1000 * (attempt + 1);
-    // Drain the body so the connection can be reused.
-    const body = await response.text();
-    if (attempt < MAX_RETRIES) {
-      await new Promise((r) => setTimeout(r, delayMs));
-      continue;
-    }
-    return { response, body };
+    const delayMs = Math.min(
+      Number.isFinite(parsed) && parsed >= 0 ? parsed * 1000 : 1000 * (attempt + 1),
+      MAX_RETRY_DELAY_MS,
+    );
+    await new Promise((r) => setTimeout(r, delayMs));
   }
   // Unreachable: the loop returns on the final attempt.
   throw new Error(\`fal.ai API request failed: \${url}\`);
+}
+
+/**
+ * Parse a successful response body as JSON. An empty or whitespace-only body
+ * (a 200/202/204 with no content) is "no content" and yields undefined; a
+ * malformed body throws an error carrying the method, path and status instead
+ * of a bare SyntaxError with no context.
+ */
+function parseJsonBody<T>(
+  body: string,
+  method: string,
+  path: string,
+  status: number,
+): T | undefined {
+  if (body.trim() === "") return undefined;
+  try {
+    return JSON.parse(body) as T;
+  } catch (err) {
+    throw new Error(
+      \`fal.ai API returned malformed JSON: \${method} \${path} (status \${status}): \${(err as Error).message}; body starts: \${body.slice(0, 200)}\`,
+    );
+  }
 }
 
 /** Extract a human-readable error message from a fal.ai error response body. */
@@ -314,11 +365,28 @@ export async function falApi<T>(
     throw new Error(\`fal.ai API error: \${method} \${path} returned \${response.status} \${response.statusText}: \${message}\`);
   }
 
-  if (response.status === 204 || responseBody === "") {
-    return undefined as T;
-  }
+  return parseJsonBody<T>(responseBody, method, path, response.status) as T;
+}
 
-  return JSON.parse(responseBody) as T;
+/**
+ * Like falApi, for endpoints whose response body IS the data the caller
+ * stores. An empty 2xx body there is a gateway or server fault, not "no
+ * content", so it raises a clear error instead of returning undefined for the
+ * caller to trip over.
+ */
+export async function falApiData<T>(
+  apiToken: string,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const result = await falApi<T>(apiToken, method, path, body);
+  if (result === undefined || result === null) {
+    throw new Error(
+      \`fal.ai API returned an empty response body: \${method} \${path}\`,
+    );
+  }
+  return result;
 }
 
 const MAX_PAGES = 20;
@@ -394,7 +462,13 @@ export async function falApiPaginated<T>(
       throw new Error(\`fal.ai API error: GET \${path} returned \${response.status} \${response.statusText}: \${message}\`);
     }
 
-    const data = JSON.parse(responseBody) as Record<string, unknown>;
+    // An empty 2xx body is an empty page, not an error.
+    const data = parseJsonBody<Record<string, unknown>>(
+      responseBody,
+      "GET",
+      path,
+      response.status,
+    ) ?? {};
     const items = (data[resultsField] as T[] | undefined) ?? [];
     allResults.push(...items);
 

@@ -48,10 +48,12 @@ Deno.test("storage model: has expected resources", () => {
 
 function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -66,7 +68,7 @@ function startMockFalServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -252,6 +254,59 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).get_storage_settings.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "storage model: update_storage_settings executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "expiration_duration_seconds": 86400,
+      "initial_acl": {
+        "default": "allow",
+        "rules": [{ "user": "some-user", "decision": "allow" }],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/storage/settings": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-storage",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_storage_settings.execute({
+        "expiration_duration_seconds": 86400,
+        "initial_acl": {
+          "default": "allow",
+          "rules": [{ "user": "some-user", "decision": "allow" }],
+        },
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

@@ -44,10 +44,12 @@ Deno.test("keys model: has expected resources", () => {
 
 function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -62,7 +64,7 @@ function startMockFalServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {

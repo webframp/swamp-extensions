@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { falApi, falApiPaginated } from "./_lib/api.ts";
+import { falApi, falApiData, falApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/models";
 
@@ -403,7 +403,7 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.09.25.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -455,6 +455,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -569,7 +574,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/models/insights?${qs}` : `/models/insights`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -621,6 +626,9 @@ export const model = {
         ),
         status: z.enum(["active", "deprecated"]).optional().describe(
           "Filter models by status - omit to include all statuses",
+        ),
+        sort: z.enum(["relevant", "recent"]).optional().describe(
+          "List/search ordering: relevant uses Explore's shared Trending browse order or keyword relevance; recent sorts by publication date (creation date when the publication date is missing). Defaults to relevant. Ignored in endpoint_id find mode, which preserves input order. Keep sort, filters and limit unchanged when following a cursor.",
         ),
         expand: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Fields to expand in the response. Supported values: 'openapi-3.0' (includes full OpenAPI 3.0 schema in 'openapi' field), 'enterprise_status' (includes enterprise readiness status)",
@@ -723,7 +731,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/models/pricing?${qs}` : `/models/pricing`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,

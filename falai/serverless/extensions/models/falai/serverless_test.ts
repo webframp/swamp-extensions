@@ -64,10 +64,12 @@ Deno.test("serverless model: has expected resources", () => {
 
 function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -82,7 +84,7 @@ function startMockFalServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -133,7 +135,7 @@ Deno.test({
         }],
       }],
     };
-    const { url, server } = startMockFalServer({
+    const { url, server, requests } = startMockFalServer({
       "/serverless/analytics": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -157,7 +159,81 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_analytics.execute({}, context);
+      >).get_analytics.execute({
+        "timeframe": "minute",
+        "bound_to_timeframe": "true",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("timeframe") === "minute"),
+        true,
+        "query argument timeframe was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) =>
+          u.searchParams.get("bound_to_timeframe") === "true"
+        ),
+        true,
+        "query argument bound_to_timeframe was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: list_apps fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "apps": [{
+        "endpoint_id": "user_123/my-app",
+        "name": "my-app",
+        "owner": "user_123",
+        "environment": "main",
+        "machine_type": "GPU-H100",
+        "auth_mode": "private",
+        "keep_alive": 300,
+        "min_concurrency": 0,
+        "max_concurrency": 2,
+        "request_timeout": 600,
+        "startup_timeout": 300,
+        "valid_regions": ["us"],
+        "updated_at": "2026-07-01T12:00:00Z",
+        "endpoints": ["user_123/my-app", "user_123/my-app/turbo"],
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/serverless/apps": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_apps.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -257,6 +333,292 @@ Deno.test({
 });
 
 Deno.test({
+  name: "serverless model: get_runner_history fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "history": [{
+        "timestamp": "2026-07-01T12:00:00Z",
+        "running": 2,
+        "idle": 1,
+        "pending": 0,
+        "draining": 0,
+      }],
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/serverless/apps/test-id-123/test-id-123/runners/history": {
+        body: mockBody,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_runner_history.execute({
+        "timeframe": "minute",
+        "aggregation": "max",
+        "owner": "test-id-123",
+        "name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("timeframe") === "minute"),
+        true,
+        "query argument timeframe was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) => u.searchParams.get("aggregation") === "max"),
+        true,
+        "query argument aggregation was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: list_app_events fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "events": [{
+        "event_id": "a1b2c3d4-0000-0000-0000-000000000000",
+        "category": "deployment_started",
+        "created_at": "2026-07-01T12:00:00Z",
+        "payload": {
+          "job_id": "5f8e9c2a",
+          "machine_type": "GPU-H100",
+          "reason": "test-value",
+          "state": "RUNNING",
+          "new_application_id": "test-value",
+          "old_application_id": "test-value",
+          "old_config": {},
+          "new_config": {},
+          "old_app_auth_mode": "test-value",
+          "new_app_auth_mode": "test-value",
+          "actor": { "nickname": "user_123", "full_name": "Ada Lovelace" },
+        },
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/serverless/apps/test-id-123/test-id-123/events": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_app_events.execute({
+        "owner": "test-id-123",
+        "name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: list_app_revisions fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "revisions": [{
+        "revision_id": "my-app-a1b2c3d4",
+        "created_at": "2026-07-01T12:00:00Z",
+        "is_current": true,
+        "message": "a1b2c3d fix cold-start",
+        "annotations": { "GIT_SHA": "a1b2c3d4" },
+        "status": "deployed",
+        "deployed_by": "user_123",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/serverless/apps/test-id-123/test-id-123/revisions": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_app_revisions.execute({
+        "owner": "test-id-123",
+        "name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: list_root fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = [{
+      "path": "datasets/images/cat.jpg",
+      "name": "cat.jpg",
+      "created_time": "2024-11-08T00:00:00.000Z",
+      "updated_time": "2024-11-09T00:00:00.000Z",
+      "is_file": true,
+      "size": 1250023,
+      "checksum_sha256":
+        "b1946ac92492d2347c6235b4d2611184d5c3f1f0f44aa7b27d3b1d5b0f5a6a11",
+      "checksum_md5": "9e107d9d372bb6826bd81d3542a419d6",
+    }];
+    const { url, server } = startMockFalServer({
+      "/serverless/files/list": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_root.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: list_directory fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = [{
+      "path": "datasets/images/cat.jpg",
+      "name": "cat.jpg",
+      "created_time": "2024-11-08T00:00:00.000Z",
+      "updated_time": "2024-11-09T00:00:00.000Z",
+      "is_file": true,
+      "size": 1250023,
+      "checksum_sha256":
+        "b1946ac92492d2347c6235b4d2611184d5c3f1f0f44aa7b27d3b1d5b0f5a6a11",
+      "checksum_md5": "9e107d9d372bb6826bd81d3542a419d6",
+    }];
+    const { url, server } = startMockFalServer({
+      "/serverless/files/list/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_directory.execute({ "dir": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "serverless model: upload_from_url executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
@@ -293,6 +655,215 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "serverless model: serverless_logs_history executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "timestamp": "test-value",
+      "level": "test-value",
+      "message": "test-value",
+      "app": "test-value",
+      "revision": "test-value",
+      "labels": {},
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/serverless/logs/history": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).serverless_logs_history.execute({
+        "items": [{
+          "key": "test-value",
+          "value": "test-value",
+          "condition_type": "equals",
+        }],
+        "run_source": "grpc-run",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("run_source") === "grpc-run"),
+        true,
+        "query argument run_source was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "serverless model: list_requests_by_endpoint fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "items": [{
+        "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        "endpoint_id": "fal-ai/flux/dev",
+        "started_at": "2025-01-01T00:00:05Z",
+        "sent_at": "2025-01-01T00:00:01Z",
+        "ended_at": "2025-01-01T00:00:08Z",
+        "status_code": 200,
+        "duration": 7.8,
+        "json_input": null,
+        "json_output": null,
+        "runner_id": "f1e2d3c4-b5a6-7890-dcba-0987654321fe",
+        "billable_units": 1.5,
+      }],
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/serverless/requests/by-endpoint": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_requests_by_endpoint.execute({
+        "status": "success",
+        "sort_by": "ended_at",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("status") === "success"),
+        true,
+        "query argument status was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) => u.searchParams.get("sort_by") === "ended_at"),
+        true,
+        "query argument sort_by was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: get_usage fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "time_series": [{
+        "bucket": "test-value",
+        "results": [{
+          "app": "test-value",
+          "environment": "test-value",
+          "machine_type": "test-value",
+          "unit": "test-value",
+          "quantity": 0,
+          "unit_price": 0,
+          "net_unit_price": 0,
+          "percent_discount": 0,
+          "cost_subtotal": 0,
+          "cost_discount": 0,
+          "cost_total": 0,
+          "cost": 0,
+          "currency": "test-value",
+          "is_surge": true,
+        }],
+      }],
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/serverless/usage": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_usage.execute({
+        "timeframe": "minute",
+        "bound_to_timeframe": "true",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("timeframe") === "minute"),
+        true,
+        "query argument timeframe was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) =>
+          u.searchParams.get("bound_to_timeframe") === "true"
+        ),
+        true,
+        "query argument bound_to_timeframe was not sent to the API",
+      );
     } finally {
       uninstall();
       await server.shutdown();

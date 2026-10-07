@@ -199,14 +199,18 @@ export function generateModelSource(
   lines.push(``);
   lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
 
+  // falApiData (throws on an empty body) backs every method that must return
+  // data; falApi (empty body allowed) backs delete and action methods.
+  const usesFalApiData = methods.some((m) => returnsData(m));
   const usesFalApi = methods.some((m) =>
-    m.type !== "list" || !m.operation.pagination.paginated
+    m.type === "delete" || m.type === "action"
   );
   const usesFalApiPaginated = methods.some((m) =>
     m.type === "list" && m.operation.pagination.paginated
   );
   const apiImports: string[] = [];
   if (usesFalApi) apiImports.push("falApi");
+  if (usesFalApiData) apiImports.push("falApiData");
   if (usesFalApiPaginated) apiImports.push("falApiPaginated");
   const usesSanitize = methods.some(methodEmitsSanitize);
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
@@ -442,6 +446,24 @@ function generateExecuteBody(
   return lines;
 }
 
+/**
+ * True when a method's response body is the resource it stores, so an empty
+ * 2xx body is an error rather than "no content": get, create, update and
+ * unpaginated list. Delete and action methods may legitimately return nothing.
+ */
+function returnsData(method: ClassifiedMethod): boolean {
+  switch (method.type) {
+    case "get":
+    case "create":
+    case "update":
+      return true;
+    case "list":
+      return !method.operation.pagination.paginated;
+    default:
+      return false;
+  }
+}
+
 /** Generate the arguments schema for a method */
 function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
@@ -600,7 +622,7 @@ ${indent}    }
 ${indent}    const qs = params.toString();
 ${indent}    const url = qs ? \`${apiPath}?\${qs}\` : \`${apiPath}\`;
 ${indent}
-${indent}    const result = await falApi<Record<string, unknown>>(apiToken, "GET", url);
+${indent}    const result = await falApiData<Record<string, unknown>>(apiToken, "GET", url);
 ${indent}    const items = ((result as Record<string, unknown>)["${resultsField}"] ?? []) as unknown[];
 ${indent}${
     hasLimit
@@ -641,7 +663,7 @@ function generateGetBody(
   const { queryBuild, pathSuffix } = buildQueryString(method, indent);
 
   return `${queryBuild}
-${indent}    const result = await falApi<Record<string, unknown>>(
+${indent}    const result = await falApiData<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "GET",
 ${indent}      \`${apiPath}${pathSuffix}\`,
@@ -885,7 +907,7 @@ ${indent}    }\n`
 
   return `${bodySetup}${queryBuild}
 ${indent}
-${indent}    const result = await falApi<Record<string, unknown>>(
+${indent}    const result = await falApiData<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "POST",
 ${indent}      \`${apiPath}${pathSuffix}\`,
@@ -917,7 +939,7 @@ function generateUpdateBody(
 
   return `${bodySetup}${queryBuild}
 ${indent}
-${indent}    const result = await falApi<Record<string, unknown>>(
+${indent}    const result = await falApiData<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,
@@ -998,7 +1020,7 @@ function buildApiPath(path: string): string {
   );
 }
 
-function sanitizeFieldName(name: string): string {
+export function sanitizeFieldName(name: string): string {
   return name
     .replace(/[^a-zA-Z0-9_]/g, "_")
     .replace(/_+/g, "_")

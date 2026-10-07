@@ -10,6 +10,7 @@
 import { z } from "npm:zod@4.6.5";
 import {
   falApi,
+  falApiData,
   falApiPaginated,
   sanitizeInstanceName,
   shortHash,
@@ -623,7 +624,7 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -671,6 +672,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -964,7 +970,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/assets/collections?${qs}` : `/assets/collections`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -1032,7 +1038,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/collections`,
@@ -1076,7 +1082,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/assets/collections/${
@@ -1136,7 +1142,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/assets/collections/${
@@ -1229,7 +1235,7 @@ export const model = {
             encodeURIComponent(String(args.collection_id))
           }/hierarchy`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -1362,7 +1368,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/collections/${
@@ -1529,7 +1535,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/collections/${
@@ -1641,7 +1647,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/assets/characters?${qs}` : `/assets/characters`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -1701,7 +1707,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/characters`,
@@ -1745,7 +1751,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/assets/characters/${encodeURIComponent(String(args.character_id))}`,
@@ -1799,7 +1805,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/assets/characters/${encodeURIComponent(String(args.character_id))}`,
@@ -1966,7 +1972,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/assets/entities?${qs}` : `/assets/entities`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -2028,7 +2034,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/entities`,
@@ -2068,7 +2074,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/assets/entities/${encodeURIComponent(String(args.entity_id))}`,
@@ -2125,7 +2131,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/assets/entities/${encodeURIComponent(String(args.entity_id))}`,
@@ -2204,7 +2210,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/assets/tags?${qs}` : `/assets/tags`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -2248,7 +2254,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/tags`,
@@ -2299,7 +2305,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/assets/tags`,
@@ -2343,7 +2349,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PATCH",
           `/assets/tags/${encodeURIComponent(String(args.tag_id))}`,
@@ -2428,7 +2434,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/uploads`,
@@ -2468,7 +2474,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/assets/${encodeURIComponent(String(args.asset_id))}`,
@@ -2520,7 +2526,7 @@ export const model = {
           }
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/assets/${encodeURIComponent(String(args.asset_id))}/lineage${qs}`,
@@ -2564,7 +2570,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/favorite`,
@@ -2613,7 +2619,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/unfavorite`,
@@ -2669,7 +2675,7 @@ export const model = {
           ? `/assets/${encodeURIComponent(String(args.asset_id))}/tags?${qs}`
           : `/assets/${encodeURIComponent(String(args.asset_id))}/tags`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -2732,7 +2738,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/assets/tags/${encodeURIComponent(String(args.tag_id))}/assign`,

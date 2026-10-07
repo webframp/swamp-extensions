@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { falApi, sanitizeInstanceName, shortHash } from "./_lib/api.ts";
+import { falApiData, sanitizeInstanceName, shortHash } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/storage";
 
@@ -80,7 +80,7 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -123,6 +123,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -191,7 +196,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/storage/files/acl?${qs}` : `/storage/files/acl`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -270,7 +275,7 @@ export const model = {
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/storage/files/acl${qs}`,
@@ -332,7 +337,7 @@ export const model = {
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/storage/files/sign${qs}`,
@@ -371,7 +376,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/storage/settings`,
@@ -419,7 +424,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "PUT",
           `/storage/settings`,

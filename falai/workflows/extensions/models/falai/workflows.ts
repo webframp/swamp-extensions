@@ -9,7 +9,7 @@
 
 import { z } from "npm:zod@4.6.5";
 import {
-  falApi,
+  falApiData,
   falApiPaginated,
   sanitizeInstanceName,
   shortHash,
@@ -82,7 +82,7 @@ const CreateWorkflowSchema = z.object({
 /** fal.ai Workflows — workflow definitions */
 export const model = {
   type: "@webframp/falai/workflows",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -125,6 +125,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -261,7 +266,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "POST",
           `/workflows`,
@@ -302,7 +307,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/workflows/${encodeURIComponent(String(args.username))}/${

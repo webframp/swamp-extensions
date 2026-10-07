@@ -102,10 +102,12 @@ Deno.test("assets model: has expected resources", () => {
 
 function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -120,7 +122,7 @@ function startMockFalServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -165,7 +167,7 @@ Deno.test({
         "similarity": 0.92,
       }],
     };
-    const { url, server } = startMockFalServer({
+    const { url, server, requests } = startMockFalServer({
       "/assets": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -189,7 +191,79 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_assets.execute({}, context);
+      >).list_assets.execute(
+        { "section": "all-media", "tag_mode": "any" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("section") === "all-media"),
+        true,
+        "query argument section was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) => u.searchParams.get("tag_mode") === "any"),
+        true,
+        "query argument tag_mode was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: list_asset_collections fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "collections": [{
+        "id": "test-value",
+        "type": "manual",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "filters": null,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/collections": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_collections.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -436,6 +510,56 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "assets model: get_asset_collection_hierarchy fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "ancestors": [{
+        "id": "d8b6elcregj72v34jr8g",
+        "name": "Campaign concepts",
+        "type": "manual",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/collections/test-id-123/hierarchy": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_collection_hierarchy.execute({
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "assets model: favorite_asset_collection executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
@@ -489,6 +613,1631 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "assets model: unfavorite_asset_collection executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "collection": {
+        "id": "test-value",
+        "type": "manual",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "filters": null,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/collections/test-id-123/unfavorite": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).unfavorite_asset_collection.execute({
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: move_asset_collection creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "new-123",
+      "collection": {
+        "id": "test-value",
+        "type": "manual",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "filters": null,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/collections/test-id-123/move": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).move_asset_collection.execute({
+        "parent_collection_id": "test-value",
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "assets model: list_asset_collection_assets fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "assets": [{
+        "asset_id": "d8b6elcregj72v34jr8g",
+        "vector_id": "b1a2b4a5-cb89-51dc-a108-6dbfd8e742fc",
+        "request_id": "019e6d0a-e5be-7b82-b329-35ae64296902",
+        "url":
+          "https://v3b.fal.media/files/b/0a9b4900/PDbTGyzqRh1aijW2WQiY9_opengraph-1%20%281%29.png",
+        "type": "image",
+        "title": "Portrait",
+        "endpoint": "fal-ai/flux/dev",
+        "created_at": "2026-05-23T20:00:00.000Z",
+        "source": "upload",
+        "prompt": "cinematic portrait",
+        "width": 1024,
+        "height": 1024,
+        "content_type": "image/png",
+        "is_favorited": false,
+        "collection_ids": ["d8b6elcregj72v34jr8g"],
+        "tags": [{
+          "id": "d9k7q2m4n6p8r1s3t5uv",
+          "name": "moodboard",
+          "created_at": "2026-05-23T20:00:00.000Z",
+        }],
+        "similarity": 0.92,
+      }],
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/assets/collections/test-id-123/assets": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_collection_assets.execute({
+        "section": "all-media",
+        "tag_mode": "any",
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("section") === "all-media"),
+        true,
+        "query argument section was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) => u.searchParams.get("tag_mode") === "any"),
+        true,
+        "query argument tag_mode was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: add_asset_to_collection creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = { "id": "new-123", "success": true };
+    const { url, server } = startMockFalServer({
+      "/assets/collections/test-id-123/assets": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).add_asset_to_collection.execute({
+        "asset_id": "test-value",
+        "request_id": "test-value",
+        "vector_id": "test-value",
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: remove_asset_from_collection executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockFalServer({
+      "/assets/collections/test-id-123/assets": { body: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).remove_asset_from_collection.execute({
+        "collection_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: list_asset_characters fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "characters": [{
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_characters.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: create_asset_character creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "new-123",
+      "character": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_asset_character.execute({
+        "name": "test-value",
+        "identifier": "test-value",
+        "description": "test-value",
+        "reference_images": ["test-value"],
+        "cover_image_url": "https://example.com",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: get_asset_character fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "character": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_character.execute(
+        { "character_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: update_asset_character executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "character": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_asset_character.execute({
+        "name": "test-value",
+        "description": "test-value",
+        "reference_images": ["test-value"],
+        "cover_image_url": "https://example.com",
+        "character_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: delete_asset_character executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockFalServer({
+      "/assets/characters/test-id-123": { body: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_asset_character.execute(
+        { "character_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: favorite_asset_character executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "character": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters/test-id-123/favorite": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).favorite_asset_character.execute(
+        { "character_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: unfavorite_asset_character executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "character": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "description": "test-value",
+        "icon": "test-value",
+        "color": "test-value",
+        "cover_image_url": "test-value",
+        "character_identifier": "test-value",
+        "parent_collection_id": "test-value",
+        "is_favorited": true,
+        "asset_count": 1,
+        "created_at": "test-value",
+        "updated_at": "test-value",
+        "reference_images": ["test-value"],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/characters/test-id-123/unfavorite": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).unfavorite_asset_character.execute(
+        { "character_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: list_asset_entities fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "entities": [{
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "cover_image_url": "test-value",
+        "reference_images": ["test-value"],
+        "is_favorited": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/entities": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_entities.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: create_asset_entity creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "new-123",
+      "entity": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "cover_image_url": "test-value",
+        "reference_images": ["test-value"],
+        "is_favorited": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/entities": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_asset_entity.execute({
+        "type": "character",
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "reference_images": ["test-value"],
+        "cover_image_url": "https://example.com",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: get_asset_entity fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "entity": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "cover_image_url": "test-value",
+        "reference_images": ["test-value"],
+        "is_favorited": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/entities/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_entity.execute({ "entity_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: update_asset_entity executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "entity": {
+        "id": "test-value",
+        "type": "character",
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "cover_image_url": "test-value",
+        "reference_images": ["test-value"],
+        "is_favorited": true,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/entities/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_asset_entity.execute({
+        "name": "test-value",
+        "handle": "test-value",
+        "description": "test-value",
+        "reference_images": ["test-value"],
+        "cover_image_url": "https://example.com",
+        "entity_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: delete_asset_entity executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockFalServer({
+      "/assets/entities/test-id-123": { body: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_asset_entity.execute({ "entity_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: list_asset_tags fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "tags": [{
+        "id": "d9k7q2m4n6p8r1s3t5uv",
+        "name": "moodboard",
+        "created_at": "2026-05-23T20:00:00.000Z",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/tags": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_tags.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: create_asset_tag creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "new-123",
+      "tag": {
+        "id": "d9k7q2m4n6p8r1s3t5uv",
+        "name": "moodboard",
+        "created_at": "2026-05-23T20:00:00.000Z",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/tags": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_asset_tag.execute({ "name": "test-value" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: set_asset_tags_for_asset executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "d9k7q2m4n6p8r1s3t5uv",
+      "name": "moodboard",
+      "created_at": "2026-05-23T20:00:00.000Z",
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/tags": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).set_asset_tags_for_asset.execute({
+        "asset_id": "test-value",
+        "request_id": "test-value",
+        "vector_id": "test-value",
+        "tag_ids": ["test-value"],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: update_asset_tag executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "tag": {
+        "id": "d9k7q2m4n6p8r1s3t5uv",
+        "name": "moodboard",
+        "created_at": "2026-05-23T20:00:00.000Z",
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/tags/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_asset_tag.execute({
+        "name": "test-value",
+        "tag_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: delete_asset_tag executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockFalServer({
+      "/assets/tags/test-id-123": { body: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_asset_tag.execute({ "tag_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: upload_asset creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "id": "new-123",
+      "asset": {
+        "asset_id": "d8b6elcregj72v34jr8g",
+        "vector_id": "b1a2b4a5-cb89-51dc-a108-6dbfd8e742fc",
+        "request_id": "019e6d0a-e5be-7b82-b329-35ae64296902",
+        "url":
+          "https://v3b.fal.media/files/b/0a9b4900/PDbTGyzqRh1aijW2WQiY9_opengraph-1%20%281%29.png",
+        "type": "image",
+        "title": "Portrait",
+        "endpoint": "fal-ai/flux/dev",
+        "created_at": "2026-05-23T20:00:00.000Z",
+        "source": "upload",
+        "prompt": "cinematic portrait",
+        "width": 1024,
+        "height": 1024,
+        "content_type": "image/png",
+        "is_favorited": false,
+        "collection_ids": ["d8b6elcregj72v34jr8g"],
+        "tags": [{
+          "id": "d9k7q2m4n6p8r1s3t5uv",
+          "name": "moodboard",
+          "created_at": "2026-05-23T20:00:00.000Z",
+        }],
+        "similarity": 0.92,
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/uploads": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).upload_asset.execute({
+        "url": "https://example.com",
+        "type": "image",
+        "prompt": "test-value",
+        "collection_id": "test-value",
+        "favorite": true,
+        "tag_ids": ["test-value"],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: get_asset fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "asset": {
+        "asset_id": "d8b6elcregj72v34jr8g",
+        "vector_id": "b1a2b4a5-cb89-51dc-a108-6dbfd8e742fc",
+        "request_id": "019e6d0a-e5be-7b82-b329-35ae64296902",
+        "url":
+          "https://v3b.fal.media/files/b/0a9b4900/PDbTGyzqRh1aijW2WQiY9_opengraph-1%20%281%29.png",
+        "type": "image",
+        "title": "Portrait",
+        "endpoint": "fal-ai/flux/dev",
+        "created_at": "2026-05-23T20:00:00.000Z",
+        "source": "upload",
+        "prompt": "cinematic portrait",
+        "width": 1024,
+        "height": 1024,
+        "content_type": "image/png",
+        "is_favorited": false,
+        "collection_ids": ["d8b6elcregj72v34jr8g"],
+        "tags": [{
+          "id": "d9k7q2m4n6p8r1s3t5uv",
+          "name": "moodboard",
+          "created_at": "2026-05-23T20:00:00.000Z",
+        }],
+        "similarity": 0.92,
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/test-id-123": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset.execute({ "asset_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: get_asset_lineage fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "lineage": {
+        "focus": "asset:0f343b0931126a20f133d67c2b018a3b",
+        "nodes": [{
+          "kind": null,
+          "id": null,
+          "output_key": null,
+          "url": null,
+          "type": null,
+          "request_id": null,
+          "asset_id": null,
+          "tombstone": null,
+        }],
+        "edges": [{
+          "from": "external:9e107d9d372bb6826bd81d3542a419d6",
+          "to": "request:019e6d0a-e5be-7b82-b329-35ae64296902",
+          "kind": "input_to",
+          "role": null,
+          "entities": [null],
+        }],
+      },
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/test-id-123/lineage": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_lineage.execute({ "asset_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: favorite_asset creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = { "id": "new-123", "is_favorited": true };
+    const { url, server } = startMockFalServer({
+      "/assets/favorite": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).favorite_asset.execute({
+        "asset_id": "test-value",
+        "request_id": "test-value",
+        "vector_id": "test-value",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: unfavorite_asset creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = { "id": "new-123", "is_favorited": true };
+    const { url, server } = startMockFalServer({
+      "/assets/unfavorite": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).unfavorite_asset.execute({
+        "asset_id": "test-value",
+        "request_id": "test-value",
+        "vector_id": "test-value",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: list_asset_tags_for_asset fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "tags": [{
+        "id": "d9k7q2m4n6p8r1s3t5uv",
+        "name": "moodboard",
+        "created_at": "2026-05-23T20:00:00.000Z",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/assets/test-id-123/tags": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_asset_tags_for_asset.execute(
+        { "asset_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: assign_asset_tag creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = { "id": "new-123", "success": true };
+    const { url, server } = startMockFalServer({
+      "/assets/tags/test-id-123/assign": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).assign_asset_tag.execute({
+        "asset_id": "test-value",
+        "request_id": "test-value",
+        "vector_id": "test-value",
+        "tag_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "assets model: unassign_asset_tag executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockFalServer({
+      "/assets/tags/test-id-123/assign": { body: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-assets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).unassign_asset_tag.execute({ "tag_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

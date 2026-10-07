@@ -12,7 +12,10 @@
  * Test fixtures are synthesized from the OpenAPI response schemas.
  */
 
-import type { ClassifiedMethod } from "./method_classifier.ts";
+import {
+  type ClassifiedMethod,
+  sanitizeFieldName,
+} from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -116,10 +119,10 @@ export function generateTestSource(
   lines.push(generateMockServer());
   lines.push(``);
 
-  const testedTypes = new Set<string>();
+  // One execution test per method. Keying on method type would let the first
+  // method of a type displace every later one, leaving them (and their query
+  // arguments) untested.
   for (const method of methods) {
-    if (testedTypes.has(method.type)) continue;
-    testedTypes.add(method.type);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);
   }
@@ -131,10 +134,12 @@ export function generateTestSource(
 function generateMockServer(): string {
   return `function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -149,7 +154,7 @@ function generateMockServer(): string {
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: \`http://localhost:\${addr.port}\`, server };
+  return { url: \`http://localhost:\${addr.port}\`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -189,7 +194,7 @@ function generateExecutionTest(
     const mockBody = { ${JSON.stringify(resultsField)}: [${
       JSON.stringify(fixture)
     }] };
-    const { url, server } = startMockFalServer({
+    const { url, server${requestsBinding(method)} } = startMockFalServer({
       "${pathPattern}": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -205,7 +210,7 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-    } finally {
+${enumQueryAssertions(method)}    } finally {
       uninstall();
       await server.shutdown();
     }
@@ -219,7 +224,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const mockBody = ${JSON.stringify(fixture)};
-    const { url, server } = startMockFalServer({
+    const { url, server${requestsBinding(method)} } = startMockFalServer({
       "${pathPattern}": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -237,7 +242,7 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-    } finally {
+${enumQueryAssertions(method)}    } finally {
       uninstall();
       await server.shutdown();
     }
@@ -255,7 +260,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const mockBody = ${JSON.stringify({ id: "new-123", ...fixture })};
-    const { url, server } = startMockFalServer({
+    const { url, server${requestsBinding(method)} } = startMockFalServer({
       "${pathPattern}": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -273,7 +278,7 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-    } finally {
+${enumQueryAssertions(method)}    } finally {
       uninstall();
       await server.shutdown();
     }
@@ -286,7 +291,7 @@ function generateExecutionTest(
   name: "${config.name} model: ${method.name} executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockFalServer({
+    const { url, server${requestsBinding(method)} } = startMockFalServer({
       "${pathPattern}": { body: { id: "${PATH_PARAM_TEST_VALUE}" } },
     });
     const uninstall = installFetchMock(url);
@@ -301,7 +306,7 @@ function generateExecutionTest(
       JSON.stringify(testArgs)
     }, context);
       assertEquals(result.dataHandles.length, 0);
-    } finally {
+${enumQueryAssertions(method)}    } finally {
       uninstall();
       await server.shutdown();
     }
@@ -316,7 +321,7 @@ function generateExecutionTest(
   sanitizeResources: false,
   fn: async () => {
     const mockBody = ${JSON.stringify(fixture)};
-    const { url, server } = startMockFalServer({
+    const { url, server${requestsBinding(method)} } = startMockFalServer({
       "${pathPattern}": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
@@ -334,7 +339,7 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-    } finally {
+${enumQueryAssertions(method)}    } finally {
       uninstall();
       await server.shutdown();
     }
@@ -453,9 +458,65 @@ export function extractPathPattern(path: string): string {
   return result;
 }
 
+/**
+ * Query parameters constrained to a fixed set of scalar values (e.g. a
+ * `sort` of "relevant" | "recent"). Each is exercised with its first value so
+ * the generated test can prove the argument reaches the request URL.
+ */
+export function enumQueryParams(
+  method: ClassifiedMethod,
+): { argName: string; queryName: string; value: string | number | boolean }[] {
+  const pathNames = new Set(
+    method.operation.pathParams.map((p) => sanitizeFieldName(p.name)),
+  );
+  const out: ReturnType<typeof enumQueryParams> = [];
+  for (const p of method.operation.queryParams) {
+    const argName = sanitizeFieldName(p.name);
+    // limit/cursor are consumed by pagination, not forwarded verbatim; path
+    // params are substituted into the path.
+    if (argName === "limit" || argName === "cursor" || pathNames.has(argName)) {
+      continue;
+    }
+    const values = (p.schema?.enum ?? []).filter(
+      (v): v is string | number | boolean => v !== null,
+    );
+    if (values.length === 0) continue;
+    out.push({ argName, queryName: p.name, value: values[0] });
+  }
+  return out;
+}
+
+/**
+ * Bind the recorded requests only when the test asserts on them; an unused
+ * binding fails lint in the generated extension.
+ */
+function requestsBinding(method: ClassifiedMethod): string {
+  return enumQueryParams(method).length > 0 ? ", requests" : "";
+}
+
+/**
+ * Assertions, emitted inside a generated test's `try` block, that every enum
+ * query argument arrived in the request URL under the API's own parameter name.
+ */
+function enumQueryAssertions(method: ClassifiedMethod): string {
+  const params = enumQueryParams(method);
+  if (params.length === 0) return "";
+  const checks = params.map((p) =>
+    `      assertEquals(\n` +
+    `        requests.some((u) => u.searchParams.get(${
+      JSON.stringify(p.queryName)
+    }) === ${JSON.stringify(String(p.value))}),\n` +
+    `        true,\n` +
+    `        "query argument ${p.queryName} was not sent to the API",\n` +
+    `      );\n`
+  );
+  return `\n${checks.join("")}`;
+}
+
 /** Build test args that include path param values matching the mock pattern */
 function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
   const args: Record<string, unknown> = {};
+  for (const q of enumQueryParams(method)) args[q.argName] = q.value;
   for (const p of method.operation.pathParams) {
     args[p.name.replace(/-/g, "_")] = PATH_PARAM_TEST_VALUE;
   }

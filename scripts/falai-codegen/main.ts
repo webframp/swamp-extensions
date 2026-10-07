@@ -17,7 +17,13 @@ import {
   generateModelSource,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
-import { computeModelVersion, computeUpgradesBlock } from "./lib/upgrades.ts";
+import {
+  bumpVersion,
+  changedFiles,
+  computeModelVersion,
+  computeUpgradesBlock,
+} from "./lib/upgrades.ts";
+import type { ComparedFile } from "./lib/upgrades.ts";
 import {
   generateApiLib,
   generateDenoJson,
@@ -146,6 +152,8 @@ async function main() {
     methods: any[];
     version: string;
     status: "new" | "changed" | "unchanged";
+    /** Generated test file differs on disk (tests are not shipped). */
+    testsChanged: boolean;
     upgradesBlock: string;
     existingContent?: string;
   }
@@ -185,12 +193,72 @@ async function main() {
       candidateSource,
       PLACEHOLDER,
     );
-    const version = opts.version ?? versionResult.version;
+    let status = versionResult.status;
+    let version = versionResult.version;
+
+    // The model source is only one of the files the generator writes. When it
+    // is unchanged, a change to the shared helper, README, LICENSE, deno.json
+    // or manifest must still count as a change (a bump and release notes), or
+    // the regenerated output would be silently skipped.
+    const extDirPlan = join(outputBase, config.name);
+    const testFileNamePlan = `${config.name.replace(/-/g, "_")}_test.ts`;
+    const testPathPlan = join(modelDir, testFileNamePlan);
+    const testCandidate = generateTestSource(
+      config,
+      methods,
+      modelFileName.replace(".ts", ""),
+    );
+    let testsChanged = false;
+    if (status === "unchanged") {
+      const shipped: ComparedFile[] = [
+        {
+          path: join(modelDir, "_lib", "api.ts"),
+          candidate: generateApiLib(),
+          suffix: ".ts",
+        },
+        {
+          path: join(extDirPlan, "manifest.yaml"),
+          candidate: generateManifest(config, version, modelFileName),
+          suffix: ".yaml",
+        },
+        {
+          path: join(extDirPlan, "deno.json"),
+          candidate: generateDenoJson(),
+          suffix: ".json",
+        },
+        {
+          path: join(extDirPlan, "README.md"),
+          candidate: generateReadme(config, methods),
+          suffix: ".md",
+        },
+        {
+          path: join(extDirPlan, "LICENSE.md"),
+          candidate: generateLicense(),
+          suffix: ".md",
+        },
+      ];
+      const shippedChanged = await changedFiles(shipped);
+      if (shippedChanged.length > 0) {
+        status = "changed";
+        version = bumpVersion(version, datePrefix);
+        console.log(
+          `   ℹ️  ${config.name}: model source unchanged but ${
+            shippedChanged.map((p) => p.split("/").pop()).join(", ")
+          } changed`,
+        );
+      }
+    }
+    if (status === "unchanged") {
+      testsChanged = (await changedFiles([
+        { path: testPathPlan, candidate: testCandidate, suffix: ".ts" },
+      ])).length > 0;
+    }
+    if (opts.version) version = opts.version;
 
     let upgradesBlock: string;
     try {
       upgradesBlock = computeUpgradesBlock(
-        versionResult.status,
+        status,
         version,
         versionResult.existingContent,
       );
@@ -203,7 +271,8 @@ async function main() {
       group,
       methods,
       version,
-      status: versionResult.status,
+      status,
+      testsChanged,
       upgradesBlock,
       existingContent: versionResult.existingContent,
     });
@@ -220,7 +289,7 @@ async function main() {
   let totalExtensions = 0;
 
   for (const planned of plan) {
-    const { group, methods, version, status } = planned;
+    const { group, methods, version, status, testsChanged } = planned;
     const { config } = group;
 
     totalMethods += methods.length;
@@ -235,7 +304,25 @@ async function main() {
     console.log(`   🔨 ${config.name}: ${methods.length} methods`);
 
     if (status === "unchanged" && !opts.version) {
-      console.log(`      ↳ unchanged (${version}) — no write needed`);
+      if (testsChanged) {
+        // Tests are not shipped, so a test-only change needs no version bump
+        // and no release notes — refresh the file and leave the rest alone.
+        console.log(
+          `      ↳ unchanged (${version}) — refreshing generated tests only`,
+        );
+        if (!opts.dryRun) {
+          await Deno.writeTextFile(
+            join(modelDir, testFileName),
+            generateTestSource(
+              config,
+              methods,
+              modelFileName.replace(".ts", ""),
+            ),
+          );
+        }
+      } else {
+        console.log(`      ↳ unchanged (${version}) — no write needed`);
+      }
       continue;
     }
     console.log(`      ↳ ${status} → ${version}`);
