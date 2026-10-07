@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { falApi, falApiPaginated } from "./_lib/api.ts";
+import { falApiData, falApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/organization";
 
@@ -158,7 +158,7 @@ const GetOrganizationUsageSchema = z.object({
 /** fal.ai Organization — teams, usage, billing events, focus reports */
 export const model = {
   type: "@webframp/falai/organization",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -206,6 +206,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -369,7 +374,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/organization/teams?${qs}` : `/organization/teams`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,

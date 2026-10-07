@@ -45,10 +45,12 @@ Deno.test("organization model: has expected resources", () => {
 
 function startMockFalServer(
   responses: Record<string, { body: unknown }>,
-): { url: string; server: Deno.HttpServer } {
+): { url: string; server: Deno.HttpServer; requests: URL[] } {
+  const requests: URL[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
     const url = new URL(req.url);
     const path = url.pathname;
+    requests.push(url);
 
     for (const [pattern, { body }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
@@ -63,7 +65,7 @@ function startMockFalServer(
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: `http://localhost:${addr.port}`, server };
+  return { url: `http://localhost:${addr.port}`, server, requests };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -135,6 +137,137 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "organization model: get_organization_teams fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "teams": [{
+        "username": "acme-corp",
+        "name": "Acme Corporation",
+        "is_org_root": true,
+        "created_at": "2024-01-15T10:30:00Z",
+      }],
+    };
+    const { url, server } = startMockFalServer({
+      "/organization/teams": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-organization",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_organization_teams.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "organization model: get_organization_usage fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = {
+      "time_series": [{
+        "bucket": "2025-01-15T00:00:00-05:00",
+        "results": [{
+          "username": "acme-ml-team",
+          "product": "model_apis",
+          "endpoint_id": "fal-ai/flux/dev",
+          "unit": "image",
+          "quantity": 4,
+          "unit_price": 0.1,
+          "percent_discount": 20,
+          "cost_subtotal": 0.4,
+          "cost_discount": 0.08,
+          "cost_total": 0.32,
+          "cost": 0.32,
+          "currency": "USD",
+          "auth_method": "production-key (owner: acme-ml-team)",
+          "auth_method_structured": {
+            "detail": "test-value",
+            "api_key_id": "test-value",
+            "login_username": "test-value",
+          },
+        }],
+      }],
+    };
+    const { url, server, requests } = startMockFalServer({
+      "/organization/usage": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-organization",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_organization_usage.execute({
+        "timeframe": "minute",
+        "bound_to_timeframe": "true",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("timeframe") === "minute"),
+        true,
+        "query argument timeframe was not sent to the API",
+      );
+      assertEquals(
+        requests.some((u) =>
+          u.searchParams.get("bound_to_timeframe") === "true"
+        ),
+        true,
+        "query argument bound_to_timeframe was not sent to the API",
+      );
     } finally {
       uninstall();
       await server.shutdown();

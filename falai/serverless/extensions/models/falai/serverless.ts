@@ -10,6 +10,7 @@
 import { z } from "npm:zod@4.6.5";
 import {
   falApi,
+  falApiData,
   falApiPaginated,
   sanitizeInstanceName,
   shortHash,
@@ -368,7 +369,7 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -416,6 +417,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -637,7 +643,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/serverless/apps?${qs}` : `/serverless/apps`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -680,7 +686,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/serverless/apps/${encodeURIComponent(String(args.owner))}/${
@@ -795,7 +801,7 @@ export const model = {
             encodeURIComponent(String(args.name))
           }/runners/history`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,
@@ -1055,7 +1061,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/serverless/files/list`,
@@ -1091,7 +1097,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/serverless/files/list/${encodeURIComponent(String(args.dir))}`,

@@ -217,8 +217,11 @@ export function computeUpgradesBlock(
 /** Format TypeScript via `deno fmt` in a temp file, so a candidate and the
  * on-disk file are compared in the same normalized state. Returns the original
  * content if formatting fails. */
-export async function formatCode(code: string): Promise<string> {
-  const tmpFile = await Deno.makeTempFile({ suffix: ".ts" });
+export async function formatCode(
+  code: string,
+  suffix = ".ts",
+): Promise<string> {
+  const tmpFile = await Deno.makeTempFile({ suffix });
   try {
     await Deno.writeTextFile(tmpFile, code);
     const result = await new Deno.Command("deno", {
@@ -289,8 +292,64 @@ export async function computeModelVersion(
     return { version: existingVersion, status: "unchanged", existingContent };
   }
 
-  const version = existingDate === datePrefix
+  return {
+    version: bumpVersion(existingVersion, datePrefix),
+    status: "changed",
+    existingContent,
+  };
+}
+
+/**
+ * Next CalVer after `existingVersion`: bump the micro segment on the same date,
+ * start at `.1` on a new date.
+ */
+export function bumpVersion(
+  existingVersion: string,
+  datePrefix: string,
+): string {
+  const idx = existingVersion.lastIndexOf(".");
+  const existingDate = existingVersion.slice(0, idx);
+  const existingMicro = parseInt(existingVersion.slice(idx + 1), 10);
+  return existingDate === datePrefix
     ? `${existingDate}.${existingMicro + 1}`
     : `${datePrefix}.1`;
-  return { version, status: "changed", existingContent };
+}
+
+/** A generated file compared against what is on disk. */
+export interface ComparedFile {
+  /** Absolute or relative path of the on-disk file. */
+  path: string;
+  /** Freshly generated content. */
+  candidate: string;
+  /**
+   * File extension (e.g. ".ts", ".md", ".json", ".yaml"). The generator runs
+   * `deno fmt` over its output after writing, so both sides are normalized
+   * through `deno fmt` before comparing.
+   */
+  suffix: string;
+}
+
+/**
+ * Return the paths of `files` whose generated content differs from disk. A
+ * missing file counts as changed. The model source is compared separately by
+ * computeModelVersion; this covers everything else the generator writes
+ * (the shared api.ts helper, README, LICENSE, deno.json, manifest, tests), so
+ * a change that touches none of the model source still registers as a change
+ * instead of being skipped as "unchanged".
+ */
+export async function changedFiles(files: ComparedFile[]): Promise<string[]> {
+  const changed: string[] = [];
+  for (const f of files) {
+    let existing: string;
+    try {
+      existing = await Deno.readTextFile(f.path);
+    } catch {
+      changed.push(f.path);
+      continue;
+    }
+    const a = await formatCode(existing, f.suffix);
+    const b = await formatCode(f.candidate, f.suffix);
+    if (a.trim() !== b.trim()) changed.push(f.path);
+  }
+  return changed;
 }

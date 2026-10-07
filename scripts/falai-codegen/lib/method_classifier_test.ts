@@ -244,8 +244,63 @@ Deno.test("generateModelSource: unpaginated list uses falApi with the detected r
   };
   const methods = classifyServiceMethods(group);
   const source = generateModelSource(group, methods, "2026.01.01.1");
-  assertStringIncludes(source, "falApi<Record<string, unknown>>");
+  assertStringIncludes(source, "falApiData<Record<string, unknown>>");
   assertStringIncludes(source, '["apps"]');
+});
+
+Deno.test("generateModelSource: data-returning methods use falApiData, delete/action use falApi, imports match", () => {
+  const group: ServiceGroup = {
+    config: {
+      name: "serverless",
+      description: "d",
+      pathPrefixes: ["/serverless"],
+      labels: [],
+    },
+    operations: [
+      op({
+        operationId: "getThing",
+        path: "/serverless/things/{id}",
+        pathParams: [{
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        }],
+      }),
+    ],
+  };
+  const getOnly = generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+  assertStringIncludes(getOnly, "import { falApiData,");
+  assertEquals(getOnly.includes("import { falApi,"), false);
+  assertEquals(getOnly.includes("await falApi<"), false);
+
+  const withDelete: ServiceGroup = {
+    ...group,
+    operations: [
+      ...group.operations,
+      op({
+        operationId: "deleteThing",
+        httpMethod: "delete",
+        path: "/serverless/things/{id}",
+        pathParams: [{
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "string" },
+        }],
+      }),
+    ],
+  };
+  const both = generateModelSource(
+    withDelete,
+    classifyServiceMethods(withDelete),
+    "2026.01.01.1",
+  );
+  assertStringIncludes(both, "import { falApi, falApiData,");
 });
 
 Deno.test("generateModelSource: create method sanitizes the returned id into the instance name", () => {

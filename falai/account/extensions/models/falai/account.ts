@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { falApi } from "./_lib/api.ts";
+import { falApiData } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/account";
 
@@ -53,7 +53,7 @@ const GetMetaSchema = z.object({
 /** fal.ai Account — billing, focus reports, model access controls, and account metadata */
 export const model = {
   type: "@webframp/falai/account",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -96,6 +96,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -152,7 +157,7 @@ export const model = {
           }
         }
         const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/account/billing${qs}`,
@@ -199,7 +204,7 @@ export const model = {
         const qs = params.toString();
         const url = qs ? `/meta?${qs}` : `/meta`;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           url,

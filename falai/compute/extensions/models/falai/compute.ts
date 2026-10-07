@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { falApi, falApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  falApi,
+  falApiData,
+  falApiPaginated,
+  sanitizeInstanceName,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/falai/compute";
 
@@ -107,7 +112,7 @@ const GetComputeInstanceSchema = z.object({
 /** fal.ai Compute — dedicated GPU compute instances */
 export const model = {
   type: "@webframp/falai/compute",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -156,6 +161,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -271,7 +281,7 @@ export const model = {
       ) => {
         const { apiToken } = context.globalArgs;
 
-        const result = await falApi<Record<string, unknown>>(
+        const result = await falApiData<Record<string, unknown>>(
           apiToken,
           "GET",
           `/compute/instances/${encodeURIComponent(String(args.id))}`,
