@@ -30,22 +30,18 @@ const GlobalArgsSchema = z.object({
 });
 
 const ModelsItemSchema = z.looseObject({
-  active: z.boolean().optional(),
-  auth_config: z.unknown().optional(),
-  created_at: z.string().nullable(),
-  default: z.boolean(),
-  description: z.string().optional(),
-  editable: z.boolean().optional(),
-  kwargs: z.unknown().optional(),
-  model_config_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  model_name: z.string(),
-  model_type: z.unknown(),
-  source: z.string().optional(),
-  updated_at: z.string().nullable(),
+  active: z.boolean().nullish(),
+  auth_config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  default: z.boolean().nullish(),
+  description: z.string().nullish(),
+  editable: z.boolean().nullish(),
+  kwargs: z.unknown().nullish(),
+  model_config_id: z.string().nullish(),
+  model_name: z.string().nullish(),
+  model_type: z.unknown().nullish(),
+  source: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListModelsSchema = z.object({
@@ -61,40 +57,28 @@ const ListModelsSchema = z.object({
 });
 
 const CreateModelSchema = z.looseObject({
-  active: z.boolean().optional(),
-  auth_config: z.unknown().optional(),
-  created_at: z.string().nullable(),
-  default: z.boolean(),
-  description: z.string().optional(),
-  editable: z.boolean().optional(),
-  kwargs: z.unknown().optional(),
-  model_config_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  model_name: z.string(),
-  model_type: z.unknown(),
-  source: z.string().optional(),
-  updated_at: z.string().nullable(),
+  active: z.boolean().nullish(),
+  auth_config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  default: z.boolean().nullish(),
+  description: z.string().nullish(),
+  editable: z.boolean().nullish(),
+  kwargs: z.unknown().nullish(),
+  model_config_id: z.string().nullish(),
+  model_name: z.string().nullish(),
+  model_type: z.unknown().nullish(),
+  source: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const AuthConfigsItemSchema = z.looseObject({
-  api_key_secret_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  auth_config_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  base_url: z.string(),
-  created_at: z.string().nullable(),
-  kwargs: z.unknown().optional(),
-  name: z.string().min(1).max(200),
-  updated_at: z.string().nullable(),
+  api_key_secret_id: z.string().nullish(),
+  auth_config_id: z.string().nullish(),
+  base_url: z.string().nullish(),
+  created_at: z.string().nullish(),
+  kwargs: z.unknown().nullish(),
+  name: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListAuthConfigsSchema = z.object({
@@ -110,21 +94,13 @@ const ListAuthConfigsSchema = z.object({
 });
 
 const CreateAuthConfigSchema = z.looseObject({
-  api_key_secret_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  auth_config_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  base_url: z.string(),
-  created_at: z.string().nullable(),
-  kwargs: z.unknown().optional(),
-  name: z.string().min(1).max(200),
-  updated_at: z.string().nullable(),
+  api_key_secret_id: z.string().nullish(),
+  auth_config_id: z.string().nullish(),
+  base_url: z.string().nullish(),
+  created_at: z.string().nullish(),
+  kwargs: z.unknown().nullish(),
+  name: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 // =============================================================================
@@ -134,7 +110,7 @@ const CreateAuthConfigSchema = z.looseObject({
 /** Griptape Cloud Models — model configurations and provider auth configs */
 export const model = {
   type: "@webframp/griptape/models",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -152,6 +128,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

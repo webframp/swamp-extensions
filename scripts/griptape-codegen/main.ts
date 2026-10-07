@@ -18,7 +18,11 @@ import {
   generateModelSource,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
-import { computeModelVersion, computeUpgradesBlock } from "./lib/upgrades.ts";
+import {
+  type ArtifactCandidate,
+  computeModelVersion,
+  computeUpgradesBlock,
+} from "./lib/upgrades.ts";
 import {
   generateApiLib,
   generateDenoJson,
@@ -183,11 +187,40 @@ async function main() {
       PLACEHOLDER,
       "  upgrades: [],",
     );
+    // Every generated file participates in change detection, not just the model
+    // source: a change to the API helper or tests must bump the version too.
+    const extDir = join(outputBase, config.name);
+    const artifacts: ArtifactCandidate[] = [
+      {
+        path: join(modelDir, "_lib", "api.ts"),
+        candidate: generateApiLib(),
+      },
+      {
+        path: join(modelDir, `${config.name.replace(/-/g, "_")}_test.ts`),
+        candidate: generateTestSource(
+          config,
+          methods,
+          modelFileName.replace(".ts", ""),
+        ),
+      },
+      {
+        path: join(extDir, "manifest.yaml"),
+        candidate: generateManifest(config, PLACEHOLDER, modelFileName),
+      },
+      { path: join(extDir, "deno.json"), candidate: generateDenoJson() },
+      {
+        path: join(extDir, "README.md"),
+        candidate: generateReadme(config, methods),
+      },
+      { path: join(extDir, "LICENSE.md"), candidate: generateLicense() },
+      { path: join(extDir, ".gitignore"), candidate: generateGitignore() },
+    ];
     const versionResult = await computeModelVersion(
       modelPath,
       datePrefix,
       candidateSource,
       PLACEHOLDER,
+      artifacts,
     );
     const version = opts.version ?? versionResult.version;
 

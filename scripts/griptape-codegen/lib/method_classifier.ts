@@ -14,7 +14,7 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import { schemaToZod } from "./type_mapper.ts";
+import { schemaToZod, truncateAtWord } from "./type_mapper.ts";
 import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -35,6 +35,12 @@ export interface ClassifiedMethod {
   description: string;
   /** The original operation. */
   operation: GroupedOperation;
+  /**
+   * Explicit resource name, set when the derived name would collide with a
+   * list method's resource (see classifyServiceMethods). When unset the name is
+   * derived from the method name.
+   */
+  resourceName?: string;
 }
 
 /**
@@ -184,7 +190,34 @@ export function classifyServiceMethods(
     });
   }
 
+  separateListResourceCollisions(methods);
   return methods;
+}
+
+/**
+ * A list method stores a `{ items, truncated, ... }` envelope; any other method
+ * stores a single entity. When both derive the SAME resource name (CreateEvents
+ * next to ListEvents, both -> "events"), the resource slot takes the list
+ * envelope's schema, so writing the other method's entity fails validation, and
+ * under a shared instance name it would overwrite the list snapshot. Give the
+ * non-list method its own resource: `<name>_result`.
+ */
+function separateListResourceCollisions(methods: ClassifiedMethod[]): void {
+  const listNames = new Set(
+    methods.filter((m) => m.type === "list").map(baseResourceNameFor),
+  );
+  const taken = new Set(methods.map(baseResourceNameFor));
+  for (const m of methods) {
+    if (m.type === "list" || m.type === "delete") continue;
+    const base = baseResourceNameFor(m);
+    if (!listNames.has(base)) continue;
+    let candidate = `${base}_result`;
+    for (let i = 2; taken.has(candidate); i++) {
+      candidate = `${base}_result_${i}`;
+    }
+    taken.add(candidate);
+    m.resourceName = candidate;
+  }
 }
 
 /** Action verbs that PRODUCE a distinct sub-resource result (named
@@ -193,9 +226,20 @@ export function classifyServiceMethods(
  * refresh, run — the result is the acted-on resource). */
 const RESULT_PRODUCING_VERBS = new Set(["query", "search"]);
 
+/**
+ * Schema for a resource whose operation declares no response body. Loose, so
+ * whatever the API returns is stored rather than stripped to `{}`.
+ */
+const NO_SCHEMA_ZOD = "z.looseObject({})";
+
 /** The type of the swamp resource each method's data is written under.
  * Exported so the test generator shares one definition (no drift). */
 export function resourceNameFor(method: ClassifiedMethod): string {
+  if (method.resourceName) return method.resourceName;
+  return baseResourceNameFor(method);
+}
+
+function baseResourceNameFor(method: ClassifiedMethod): string {
   const { name, type } = method;
   if (type === "list") return name.replace(/^list_/, "");
 
@@ -301,7 +345,7 @@ export function generateModelSource(
     lines.push(`    "${resourceName}": {`);
     lines.push(`      description: "${escapeStr(method.description)}",`);
     lines.push(
-      `      schema: ${schemaNames.get(method.name) ?? "z.object({})"},`,
+      `      schema: ${schemaNames.get(method.name) ?? NO_SCHEMA_ZOD},`,
     );
     lines.push(`      lifetime: "infinite" as const,`);
     lines.push(
@@ -355,7 +399,7 @@ function generateResponseSchemas(
   for (const method of methodsWithResources) {
     const schema = method.operation.responseSchema;
     if (!schema) {
-      schemaNames.set(method.name, "z.object({})");
+      schemaNames.set(method.name, NO_SCHEMA_ZOD);
       continue;
     }
 
@@ -364,7 +408,9 @@ function generateResponseSchemas(
 
     if (method.type === "list") {
       const itemVarName = toPascalCase(resourceNameFor(method)) + "ItemSchema";
-      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const itemZod = withPassthrough(
+        schemaToZod(schema, { indent: 2, mode: "response" }, 1),
+      );
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -379,7 +425,9 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const zodStr = withPassthrough(
+        schemaToZod(schema, { indent: 2, mode: "response" }, 1),
+      );
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
@@ -396,8 +444,8 @@ function generateResponseSchemas(
     schemaNames.set(
       method.name,
       primary
-        ? (schemaNames.get(primary.name) ?? "z.object({})")
-        : "z.object({})",
+        ? (schemaNames.get(primary.name) ?? NO_SCHEMA_ZOD)
+        : NO_SCHEMA_ZOD,
     );
   }
 
@@ -713,12 +761,14 @@ function generateCreateBody(
     `String(args.${sanitizeFieldName(p.name)})`
   );
 
-  return `${bodyFilter}
+  const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
+
+  return `${bodyFilter}${qsStmt}
 ${indent}
 ${indent}    const result = await griptapeApi<Record<string, unknown>>(
 ${indent}      apiKey,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      body,
 ${indent}      baseUrl,
 ${indent}    );
@@ -771,13 +821,14 @@ function generateUpdateBody(
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"updated"';
   const bodyFilter = buildBodyFilter(method, indent);
+  const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
 
-  return `${bodyFilter}
+  return `${bodyFilter}${qsStmt}
 ${indent}
 ${indent}    const result = await griptapeApi<Record<string, unknown>>(
 ${indent}      apiKey,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      body,
 ${indent}      baseUrl,
 ${indent}    );
@@ -804,10 +855,14 @@ function generateDeleteBody(
     ? `args.${sanitizeFieldName(idParam.name)}`
     : '"unknown"';
 
-  return `${indent}    await griptapeApi<Record<string, unknown>>(
+  const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
+
+  return `${
+    qsStmt ? qsStmt.replace(/^\n/, "") + "\n" : ""
+  }${indent}    await griptapeApi<Record<string, unknown>>(
 ${indent}      apiKey,
 ${indent}      "DELETE",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      undefined,
 ${indent}      baseUrl,
 ${indent}    );
@@ -901,7 +956,7 @@ ${indent}    }`;
  * resource). Keying the instance name on the parent collides every asset in a
  * bucket under one instance. The final URL segment placeholder is the resource.
  */
-function lastPathParam(method: ClassifiedMethod) {
+export function lastPathParam(method: ClassifiedMethod) {
   const params = method.operation.pathParams;
   const matches = [...method.operation.path.matchAll(/\{([^}]+)\}/g)];
   const lastTemplateName = matches.length > 0
@@ -1022,6 +1077,5 @@ function withPassthrough(zod: string): string {
 
 /** Truncate a long description for a .describe() argument. */
 function truncateStr(desc: string): string {
-  const oneLine = desc.replace(/\s+/g, " ").trim();
-  return oneLine.length <= 100 ? oneLine : oneLine.slice(0, 97) + "...";
+  return truncateAtWord(desc, 100);
 }

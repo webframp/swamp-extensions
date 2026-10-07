@@ -21,11 +21,25 @@ export interface TypeMapperOptions {
   indent?: number;
   /** Maximum depth before collapsing to z.unknown() */
   maxDepth?: number;
+  /**
+   * "request" (default) keeps the spec's constraints so bad input fails fast
+   * before it reaches the API. "response" is deliberately tolerant: observed
+   * data must never be rejected because the server returned a value the spec
+   * did not anticipate. Response mode
+   *   - maps enums to their base type (a new enum member must not fail a page),
+   *   - drops pattern / length / range constraints,
+   *   - treats every object field as nullish (one item missing a "required"
+   *     field must not fail a whole page of results), and
+   *   - keeps unknown keys on every object (z.looseObject), and
+   *   - omits spec defaults (observed data is not fabricated).
+   */
+  mode?: "request" | "response";
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   indent: 2,
   maxDepth: 8,
+  mode: "request",
 };
 
 /**
@@ -60,7 +74,9 @@ function schemaToZodInner(
 ): string {
   // Enum takes priority
   if (schema.enum) {
-    return enumToZod(schema.enum);
+    return opts.mode === "response"
+      ? enumBaseToZod(schema.enum)
+      : enumToZod(schema.enum);
   }
 
   // Union types
@@ -75,10 +91,10 @@ function schemaToZodInner(
 
   switch (schema.type) {
     case "string":
-      return stringToZod(schema);
+      return stringToZod(schema, opts.mode);
     case "number":
     case "integer":
-      return numberToZod(schema);
+      return numberToZod(schema, opts.mode);
     case "boolean":
       return "z.boolean()";
     case "array":
@@ -94,8 +110,13 @@ function schemaToZodInner(
   }
 }
 
-function stringToZod(schema: SchemaObject): string {
+function stringToZod(
+  schema: SchemaObject,
+  mode: "request" | "response" = "request",
+): string {
   let s = "z.string()";
+  // Response fields are nullish at the object level; no constraints apply.
+  if (mode === "response") return s;
   if (schema.format === "date-time" && schema.nullable !== true) {
     // Lifecycle timestamp fields (last_used, deleted_at, started_at, ...) are
     // routinely null before the event occurs, and the Griptape spec is
@@ -123,8 +144,12 @@ function stringToZod(schema: SchemaObject): string {
   return s;
 }
 
-function numberToZod(schema: SchemaObject): string {
+function numberToZod(
+  schema: SchemaObject,
+  mode: "request" | "response" = "request",
+): string {
   let s = "z.number()";
+  if (mode === "response") return s;
   if (schema.type === "integer") {
     s += ".int()";
   }
@@ -151,6 +176,20 @@ function enumToZod(values: (string | number | boolean)[]): string {
     return `z.literal(${v})`;
   });
   return `z.union([${literals.join(", ")}])`;
+}
+
+/**
+ * Response-side enum: the enum's base type, so an unexpected member still
+ * validates. Mixed or empty enums fall back to z.unknown().
+ */
+function enumBaseToZod(values: (string | number | boolean)[]): string {
+  const kinds = new Set(values.map((v) => typeof v));
+  if (kinds.size !== 1) return "z.unknown()";
+  const kind = [...kinds][0];
+  if (kind === "string") return "z.string()";
+  if (kind === "number") return "z.number()";
+  if (kind === "boolean") return "z.boolean()";
+  return "z.unknown()";
 }
 
 function arrayToZod(
@@ -185,8 +224,11 @@ function objectToZod(
     return `z.record(z.string(), ${valueType})`;
   }
 
+  const response = opts.mode === "response";
+  const objectFn = response ? "z.looseObject" : "z.object";
+
   if (!schema.properties) {
-    return "z.object({})";
+    return `${objectFn}({})`;
   }
 
   const required = new Set(schema.required ?? []);
@@ -198,13 +240,16 @@ function objectToZod(
     const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
     let fieldType = schemaToZod(prop, opts, depth + 1);
 
-    // Add .optional() for non-required fields
-    if (!required.has(name)) {
+    if (response) {
+      // Tolerant: absent or null never fails validation, required or not.
+      fieldType = fieldType.replace(/\.nullable\(\)$/, "") + ".nullish()";
+    } else if (!required.has(name)) {
+      // Add .optional() for non-required fields
       fieldType += ".optional()";
     }
 
     // Add .default() if the schema declares a default value
-    if (prop.default !== undefined) {
+    if (!response && prop.default !== undefined) {
       fieldType += `.default(${JSON.stringify(prop.default)})`;
     }
 
@@ -219,10 +264,10 @@ function objectToZod(
   }
 
   if (fields.length === 0) {
-    return "z.object({})";
+    return `${objectFn}({})`;
   }
 
-  return `z.object({\n${fields.join("\n")}\n${closingIndent}})`;
+  return `${objectFn}({\n${fields.join("\n")}\n${closingIndent}})`;
 }
 
 /** Generate a Zod schema variable name from an operation/resource name */
@@ -244,11 +289,28 @@ function escapeString(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
 }
 
-/** Truncate long descriptions for .describe() calls */
-function truncateDescription(desc: string): string {
+/**
+ * Collapse whitespace and shorten `desc` to at most `max` characters
+ * (including the trailing "..."), cutting at a word boundary so the text never
+ * ends mid-word. A single word longer than the limit is hard-cut.
+ */
+export function truncateAtWord(desc: string, max = 100): string {
   const oneLine = desc.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= 100) return oneLine;
-  return oneLine.slice(0, 97) + "...";
+  if (oneLine.length <= max) return oneLine;
+  const budget = max - 3;
+  const window = oneLine.slice(0, budget + 1);
+  // Cut at the last space within the budget (the +1 char lets a word that ends
+  // exactly at the budget survive).
+  const lastSpace = window.lastIndexOf(" ");
+  let cut = lastSpace > 0
+    ? window.slice(0, lastSpace)
+    : oneLine.slice(0, budget);
+  cut = cut.replace(/[\s,;:.\-]+$/, "");
+  return cut + "...";
+}
+
+function truncateDescription(desc: string): string {
+  return truncateAtWord(desc, 100);
 }
 
 /**

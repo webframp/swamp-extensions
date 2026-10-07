@@ -30,85 +30,35 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetAssistantRunSchema = z.looseObject({
-  args: z.array(z.string()),
-  assistant_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  assistant_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  input: z.string().optional(),
-  knowledge_base_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  model: z.string().optional(),
-  output: z.unknown().optional(),
-  retriever_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  stream: z.boolean(),
-  structure_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  tool_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  args: z.array(z.string()).nullish(),
+  assistant_id: z.string().nullish(),
+  assistant_run_id: z.string().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  input: z.string().nullish(),
+  knowledge_base_ids: z.array(z.string()).nullish(),
+  model: z.string().nullish(),
+  output: z.unknown().nullish(),
+  retriever_ids: z.array(z.string()).nullish(),
+  ruleset_ids: z.array(z.string()).nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  stream: z.boolean().nullish(),
+  structure_ids: z.array(z.string()).nullish(),
+  thread_id: z.string().nullish(),
+  tool_ids: z.array(z.string()).nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const AssistantEventsItemSchema = z.looseObject({
-  assistant_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  created_at: z.string().nullable(),
-  event_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  origin: z.string(),
-  payload: z.unknown(),
-  timestamp: z.number(),
-  type: z.string(),
+  assistant_run_id: z.string().nullish(),
+  created_at: z.string().nullish(),
+  event_id: z.string().nullish(),
+  origin: z.string().nullish(),
+  payload: z.unknown().nullish(),
+  timestamp: z.number().nullish(),
+  type: z.string().nullish(),
 });
 
 const ListAssistantEventsSchema = z.object({
@@ -124,58 +74,20 @@ const ListAssistantEventsSchema = z.object({
 });
 
 const AssistantsItemSchema = z.looseObject({
-  assistant_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  input: z.string().optional(),
-  knowledge_base_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  model: z.string().optional(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  retriever_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  structure_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  tool_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  assistant_id: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  input: z.string().nullish(),
+  knowledge_base_ids: z.array(z.string()).nullish(),
+  model: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  retriever_ids: z.array(z.string()).nullish(),
+  ruleset_ids: z.array(z.string()).nullish(),
+  structure_ids: z.array(z.string()).nullish(),
+  tool_ids: z.array(z.string()).nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListAssistantsSchema = z.object({
@@ -191,122 +103,42 @@ const ListAssistantsSchema = z.object({
 });
 
 const CreateAssistantSchema = z.looseObject({
-  assistant_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  input: z.string().optional(),
-  knowledge_base_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  model: z.string().optional(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  retriever_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  structure_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  tool_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  assistant_id: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  input: z.string().nullish(),
+  knowledge_base_ids: z.array(z.string()).nullish(),
+  model: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  retriever_ids: z.array(z.string()).nullish(),
+  ruleset_ids: z.array(z.string()).nullish(),
+  structure_ids: z.array(z.string()).nullish(),
+  tool_ids: z.array(z.string()).nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const AssistantRunsItemSchema = z.looseObject({
-  args: z.array(z.string()),
-  assistant_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  assistant_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  input: z.string().optional(),
-  knowledge_base_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  model: z.string().optional(),
-  output: z.unknown().optional(),
-  retriever_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  stream: z.boolean(),
-  structure_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  tool_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  args: z.array(z.string()).nullish(),
+  assistant_id: z.string().nullish(),
+  assistant_run_id: z.string().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  input: z.string().nullish(),
+  knowledge_base_ids: z.array(z.string()).nullish(),
+  model: z.string().nullish(),
+  output: z.unknown().nullish(),
+  retriever_ids: z.array(z.string()).nullish(),
+  ruleset_ids: z.array(z.string()).nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  stream: z.boolean().nullish(),
+  structure_ids: z.array(z.string()).nullish(),
+  thread_id: z.string().nullish(),
+  tool_ids: z.array(z.string()).nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListAssistantRunsSchema = z.object({
@@ -328,7 +160,7 @@ const ListAssistantRunsSchema = z.object({
 /** Griptape Cloud Assistants — assistant definitions and assistant runs */
 export const model = {
   type: "@webframp/griptape/assistants",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -346,6 +178,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1017,7 +855,7 @@ export const model = {
             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
           ),
         ).optional().describe(
-          "If provided, the run will be associated with the given thread. This takes precedence over new_thr...",
+          "If provided, the run will be associated with the given thread. This takes precedence over...",
         ),
         tool_ids: z.array(
           z.string().regex(

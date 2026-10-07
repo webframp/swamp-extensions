@@ -30,24 +30,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const ThreadsItemSchema = z.looseObject({
-  alias: z.string(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  message_count: z.number(),
-  messages_length: z.number(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  alias: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  message_count: z.number().nullish(),
+  messages_length: z.number().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  thread_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListThreadsSchema = z.object({
@@ -63,44 +55,28 @@ const ListThreadsSchema = z.object({
 });
 
 const CreateThreadSchema = z.looseObject({
-  alias: z.string(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  message_count: z.number(),
-  messages_length: z.number(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  alias: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  message_count: z.number().nullish(),
+  messages_length: z.number().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  thread_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const MessagesItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  index: z.number(),
-  input: z.string(),
-  message_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  metadata: z.unknown(),
-  output: z.string(),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  index: z.number().nullish(),
+  input: z.string().nullish(),
+  message_id: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  output: z.string().nullish(),
+  thread_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListMessagesSchema = z.object({
@@ -116,23 +92,15 @@ const ListMessagesSchema = z.object({
 });
 
 const CreateMessageSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  index: z.number(),
-  input: z.string(),
-  message_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  metadata: z.unknown(),
-  output: z.string(),
-  thread_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  index: z.number().nullish(),
+  input: z.string().nullish(),
+  message_id: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  output: z.string().nullish(),
+  thread_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 // =============================================================================
@@ -142,7 +110,7 @@ const CreateMessageSchema = z.looseObject({
 /** Griptape Cloud Threads — conversation threads and their messages */
 export const model = {
   type: "@webframp/griptape/threads",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -160,6 +128,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

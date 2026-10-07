@@ -30,22 +30,14 @@ const GlobalArgsSchema = z.object({
 });
 
 const RulesItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  rule: z.string(),
-  rule_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  rule: z.string().nullish(),
+  rule_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListRulesSchema = z.object({
@@ -61,49 +53,27 @@ const ListRulesSchema = z.object({
 });
 
 const CreateRuleSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  rule: z.string(),
-  rule_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  rule: z.string().nullish(),
+  rule_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const RulesetsItemSchema = z.looseObject({
-  alias: z.string(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  rule_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  alias: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  rule_ids: z.array(z.string()).nullish(),
+  ruleset_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListRulesetsSchema = z.object({
@@ -119,30 +89,16 @@ const ListRulesetsSchema = z.object({
 });
 
 const CreateRulesetSchema = z.looseObject({
-  alias: z.string(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  metadata: z.unknown(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  rule_ids: z.array(
-    z.string().regex(
-      new RegExp(
-        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-      ),
-    ),
-  ),
-  ruleset_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  alias: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  rule_ids: z.array(z.string()).nullish(),
+  ruleset_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 // =============================================================================
@@ -152,7 +108,7 @@ const CreateRulesetSchema = z.looseObject({
 /** Griptape Cloud Rulesets — behavioral rulesets and their rules */
 export const model = {
   type: "@webframp/griptape/rulesets",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -170,6 +126,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
