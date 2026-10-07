@@ -41,6 +41,12 @@ const ActivityActorSchema = z.object({
   name: z.string().nullable().optional().describe(
     "Actor's display name, if known",
   ),
+  user_id: z.string().nullable().optional().describe(
+    "User ID for user_actor activities (matches the directory user ID)",
+  ),
+  email_address: z.string().nullable().optional().describe(
+    "Actor's email address for user_actor activities",
+  ),
 });
 
 const ActivitySchema = z.object({
@@ -71,6 +77,16 @@ const ActivityFeedSchema = z.object({
   ),
   newest_id: z.string().nullable().describe(
     "ID of the newest activity in this page, or null if empty",
+  ),
+  next_cursor: z.string().nullable().optional().describe(
+    "Pass as after_id to continue to older activities; null when exhausted",
+  ),
+  pages: z.number().optional().describe("Number of API pages fetched"),
+  stalled: z.boolean().optional().describe(
+    "True when the API reported more data but returned no cursor that advances; has_more is then true and next_cursor null",
+  ),
+  filters: z.record(z.string(), z.unknown()).optional().describe(
+    "Filters that produced this feed; next_cursor is only valid for the same filters",
   ),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when the feed was fetched",
@@ -195,6 +211,9 @@ const GroupDetailSchema = z.object({
     "Group members with SCIM source attribution",
   ),
   count: z.number().describe("Number of members returned"),
+  has_more: z.boolean().optional().describe(
+    "Whether more members exist beyond those returned (page cap reached)",
+  ),
   fetchedAt: z.string().describe(
     "ISO 8601 timestamp when membership was fetched",
   ),
@@ -289,7 +308,15 @@ async function resolveOrgId(
   );
 }
 
-/** Paginate a compliance list endpoint, collecting all pages. */
+/**
+ * Paginate a directory list endpoint (users, roles, groups, group members),
+ * collecting all pages. These endpoints page with an opaque `next_page` token
+ * passed back unchanged as `page`; they reject the activity feed's `after_id`.
+ *
+ * `hasMore` is true whenever data may remain unread: the page cap was hit,
+ * the API said `has_more` without giving a usable `next_page`, or the token
+ * stopped advancing.
+ */
 async function paginateAll(
   key: string,
   path: string,
@@ -298,32 +325,90 @@ async function paginateAll(
   limit = 1000,
 ): Promise<{ items: any[]; hasMore: boolean }> {
   const items: any[] = [];
-  let afterId: string | undefined;
-  let hasMore = true;
+  const seen = new Set<string>();
+  let pageToken: string | undefined;
+  let hasMore = false;
   const maxPages = 20;
-  let page = 0;
 
-  while (hasMore && page < maxPages) {
-    const p: Record<string, string> = {
-      ...params,
-      limit: String(limit),
-    };
-    if (afterId) p.after_id = afterId;
+  for (let page = 0; page < maxPages; page++) {
+    const p: Record<string, string> = { ...params, limit: String(limit) };
+    if (pageToken) p.page = pageToken;
     const data = await complianceRequest(key, path, p);
-    const results = data[dataKey] ?? data.data ?? [];
-    items.push(...results);
-    hasMore = data.has_more ?? false;
-    const lastId = results.length > 0
-      ? results[results.length - 1].id
+    items.push(...(data[dataKey] ?? data.data ?? []));
+    const next = typeof data.next_page === "string" && data.next_page !== ""
+      ? data.next_page
       : undefined;
-    if (lastId !== undefined && lastId !== null) {
-      afterId = String(lastId);
-    } else {
+    // Trust an explicit has_more; otherwise a next_page token means more.
+    const more = data.has_more ?? next !== undefined;
+    if (!more) {
       hasMore = false;
+      break;
     }
-    page++;
+    if (next === undefined || seen.has(next)) {
+      // More data is claimed but we cannot advance: report it, don't loop.
+      hasMore = true;
+      break;
+    }
+    seen.add(next);
+    pageToken = next;
+    hasMore = true; // stays true if the page cap ends the loop
   }
   return { items, hasMore };
+}
+
+/** Parse an optional positive-integer argument, clamped to `max`. */
+function positiveInt(
+  name: string,
+  value: string | undefined,
+  def: number,
+  max: number,
+): number {
+  if (value === undefined || value.trim() === "") return def;
+  if (!/^\d+$/.test(value.trim()) || parseInt(value, 10) < 1) {
+    throw new Error(`${name} (${value}) must be a positive integer`);
+  }
+  return Math.min(parseInt(value, 10), max);
+}
+
+/**
+ * Validate and normalize an ISO-8601 timestamp argument to UTC. A date-only
+ * value means 00:00:00Z of that day. A value with a time part must carry `Z`
+ * or a UTC offset: without one the result would depend on the host's timezone.
+ * Impossible calendar dates (2026-02-31) are rejected rather than rolled over.
+ */
+function isoTimestamp(name: string, value: string): string {
+  const v = value.trim();
+  const m =
+    /^(\d{4}-\d{2}-\d{2})(?:[Tt ]((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?)(Z|z|[+-]\d{2}:?\d{2})?)?$/
+      .exec(v);
+  if (!m) {
+    throw new Error(`${name} (${value}) is not a valid ISO-8601 timestamp`);
+  }
+  if (m[2] !== undefined && m[3] === undefined) {
+    throw new Error(
+      `${name} (${value}) has a time but no timezone; add Z or an offset such as +00:00`,
+    );
+  }
+  const [y, mo, d] = m[1].split("-").map(Number);
+  // The feed is a recent audit trail, and years outside this range either
+  // misparse (Date.UTC maps 0-99 to 19xx) or serialize as extended years.
+  if (y < 1970 || y > 9998) {
+    throw new Error(`${name} (${value}) year must be between 1970 and 9998`);
+  }
+  const day = new Date(Date.UTC(y, mo - 1, d));
+  if (
+    day.getUTCFullYear() !== y || day.getUTCMonth() !== mo - 1 ||
+    day.getUTCDate() !== d
+  ) {
+    throw new Error(`${name} (${value}) is not a real calendar date`);
+  }
+  const parsed = new Date(
+    m[2] === undefined ? `${m[1]}T00:00:00Z` : v.replace(" ", "T"),
+  );
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${name} (${value}) is not a valid ISO-8601 timestamp`);
+  }
+  return parsed.toISOString();
 }
 
 // =============================================================================
@@ -347,7 +432,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.10.06.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -419,6 +504,12 @@ export const model = {
         "Fixed collect_activities activity_types filter; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Fixed directory pagination (page/next_page) and user field mapping; collect_activities gains actor_ids/until/after_id/max_pages; additive schema fields only",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/compliance-config-snapshot"],
 
@@ -471,61 +562,128 @@ export const model = {
   methods: {
     collect_activities: {
       description:
-        "Collect recent compliance activities. Use activity_types to filter (e.g. 'claude_chat_created', 'github_integration_updated').",
+        "Collect compliance activities, newest first. Filter by activity_types, actor_ids (directory user IDs) and a created_at window (since/until). Follow older pages with max_pages or resume from a previous next_cursor via after_id.",
       arguments: z.object({
         activity_types: z.string().optional().describe(
           "Comma-separated activity type filter (e.g. 'claude_chat_created,github_integration_updated')",
         ),
+        actor_ids: z.string().optional().describe(
+          "Comma-separated user IDs to filter by actor (e.g. 'user_01abc,user_01def'); IDs come from sync_users",
+        ),
         since: z.string().optional().describe(
-          "ISO-8601 timestamp — collect activities created after this time",
+          "ISO-8601 timestamp — collect activities created at or after this time",
+        ),
+        until: z.string().optional().describe(
+          "ISO-8601 timestamp — collect activities created at or before this time",
         ),
         limit: z.string().optional().describe(
           "Max activities to collect per page (default 100, max 5000)",
         ),
+        after_id: z.string().optional().describe(
+          "Cursor from a previous run's next_cursor; resumes at the next older page",
+        ),
+        max_pages: z.string().optional().describe(
+          "Max pages to fetch while has_more is true (default 1, max 50)",
+        ),
       }),
       execute: async (
-        args: { activity_types?: string; since?: string; limit?: string },
+        args: {
+          activity_types?: string;
+          actor_ids?: string;
+          since?: string;
+          until?: string;
+          limit?: string;
+          after_id?: string;
+          max_pages?: string;
+        },
         ctx: ModelContext,
       ) => {
         const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const params: Record<string, string | string[]> = {};
-        // The API takes a repeated `activity_types[]` list; a bare
-        // `activity_types` key returns HTTP 400.
-        const activityTypes = (args.activity_types ?? "")
-          .split(",")
-          .map((t) => t.trim())
-          .filter((t) => t !== "");
+        const splitList = (v?: string) =>
+          (v ?? "").split(",").map((t) => t.trim()).filter((t) => t !== "");
+        // The API takes repeated `activity_types[]` / `actor_ids[]` lists; a
+        // bare key returns HTTP 400.
+        const activityTypes = splitList(args.activity_types);
         if (activityTypes.length > 0) {
           params["activity_types[]"] = activityTypes;
         }
+        const actorIds = splitList(args.actor_ids);
+        if (actorIds.length > 0) {
+          params["actor_ids[]"] = actorIds;
+        }
         // The Compliance API expects dotted range filters (created_at.gte),
         // not bracketed ones (created_at[gte]) — the latter returns HTTP 400.
-        if (args.since) {
-          if (Number.isNaN(new Date(args.since).getTime())) {
-            throw new Error(
-              `since (${args.since}) is not a valid ISO-8601 timestamp`,
+        const since = args.since
+          ? isoTimestamp("since", args.since)
+          : undefined;
+        const until = args.until
+          ? isoTimestamp("until", args.until)
+          : undefined;
+        if (since && until && until < since) {
+          throw new Error(`until (${until}) is earlier than since (${since})`);
+        }
+        if (since) params["created_at.gte"] = since;
+        if (until) params["created_at.lte"] = until;
+        params.limit = String(positiveInt("limit", args.limit, 100, 5000));
+        const maxPages = positiveInt("max_pages", args.max_pages, 1, 50);
+
+        // Activities page newest -> oldest; `last_id` as `after_id` yields the
+        // next older page.
+        const activities: any[] = [];
+        let cursor: string | undefined = args.after_id?.trim() || undefined;
+        let hasMore = true; // loop control: more pages worth fetching
+        let moreRemains = false; // honest answer: API says data is unread
+        let stalled = false;
+        let pages = 0;
+        while (hasMore && pages < maxPages) {
+          const pageParams = cursor ? { ...params, after_id: cursor } : params;
+          const data = await complianceRequest(
+            key,
+            "/v1/compliance/activities",
+            pageParams,
+          );
+          const batch = data.data ?? [];
+          activities.push(...batch);
+          pages++;
+          const tail = batch.length > 0 ? batch[batch.length - 1].id : null;
+          const candidates = [data.last_id, tail];
+          const lastId: string | null = candidates.find((c) =>
+            typeof c === "string" && c !== ""
+          ) ?? null;
+          moreRemains = data.has_more ?? false;
+          const advanced = lastId !== null && lastId !== cursor;
+          hasMore = moreRemains && advanced;
+          if (moreRemains && !advanced) {
+            // The API claims more data but gave no cursor that moves us on.
+            // Say so in the output instead of reporting a complete feed.
+            stalled = true;
+            ctx.logger.info(
+              "Activity cursor did not advance (last_id {lastId}); stopping",
+              { lastId },
             );
           }
-          params["created_at.gte"] = args.since;
+          cursor = lastId ?? cursor;
         }
-        const pageLimit = args.limit ? parseInt(args.limit, 10) || 100 : 100;
-        params.limit = String(Math.min(pageLimit, 5000));
-
-        const data = await complianceRequest(
-          key,
-          "/v1/compliance/activities",
-          params,
-        );
-        const activities = data.data ?? [];
         const result = {
           activities,
           count: activities.length,
-          has_more: data.has_more ?? false,
+          has_more: moreRemains,
           oldest_id: activities.length > 0
             ? activities[activities.length - 1].id
             : null,
           newest_id: activities.length > 0 ? activities[0].id : null,
+          next_cursor: moreRemains && !stalled ? cursor ?? null : null,
+          stalled,
+          pages,
+          filters: {
+            activity_types: activityTypes,
+            actor_ids: actorIds,
+            since: since ?? null,
+            until: until ?? null,
+            after_id: args.after_id?.trim() || null,
+          },
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource(
@@ -538,8 +696,9 @@ export const model = {
             collectedBy: EXTENSION_NAME,
           },
         );
-        ctx.logger.info("Collected {count} activities", {
+        ctx.logger.info("Collected {count} activities in {pages} page(s)", {
           count: result.count,
+          pages,
         });
         return { dataHandles: [handle] };
       },
@@ -599,8 +758,8 @@ export const model = {
         const users = items.map((u: any) => ({
           id: u.id ?? "",
           email: u.email ?? "",
-          name: u.name ?? null,
-          role: u.role ?? "",
+          name: u.full_name ?? u.name ?? null,
+          role: u.organization_role ?? u.role ?? "",
           created_at: u.created_at ?? null,
         }));
         const result = {
@@ -631,11 +790,13 @@ export const model = {
         const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
-        const data = await complianceRequest(
+        const { items: roleItems, hasMore: rolesHasMore } = await paginateAll(
           key,
           `/v1/compliance/organizations/${orgId}/roles`,
+          {},
+          "data",
         );
-        const roles = (data.data ?? []).map((r: any) => ({
+        const roles = roleItems.map((r: any) => ({
           id: r.id ?? "",
           name: r.name ?? "",
           description: r.description ?? null,
@@ -644,7 +805,7 @@ export const model = {
           orgId,
           roles,
           count: roles.length,
-          has_more: data.has_more ?? false,
+          has_more: rolesHasMore,
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource("roles", "roles", {
@@ -672,11 +833,13 @@ export const model = {
         // Groups endpoint is top-level, not org-scoped — the org-scoped path
         // (/v1/compliance/organizations/{orgId}/groups) returns 404 as of
         // July 2026. See: https://github.com/webframp/swamp-extensions/issues/270
-        const data = await complianceRequest(
+        const { items: groupItems, hasMore: groupsHasMore } = await paginateAll(
           key,
           `/v1/compliance/groups`,
+          {},
+          "data",
         );
-        const groups = (data.data ?? []).map((g: any) => ({
+        const groups = groupItems.map((g: any) => ({
           id: g.id ?? "",
           name: g.name ?? "",
           description: g.description ?? null,
@@ -686,7 +849,7 @@ export const model = {
           orgId,
           groups,
           count: groups.length,
-          has_more: data.has_more ?? false,
+          has_more: groupsHasMore,
           fetchedAt: new Date().toISOString(),
         };
         const handle = await ctx.writeResource("groups", "groups", {
@@ -716,30 +879,40 @@ export const model = {
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
         // Groups are globally addressable by ID, not org-scoped like /organizations/{orgId}/users
-        const { items } = await paginateAll(
+        const { items, hasMore: membersHasMore } = await paginateAll(
           key,
-          `/v1/compliance/groups/${args.groupId}/members`,
+          `/v1/compliance/groups/${encodeURIComponent(args.groupId)}/members`,
           {},
           "data",
         );
         const members = items.map((m: any) => ({
-          id: m.id ?? "",
+          id: m.user_id ?? m.id ?? "",
           email: m.email ?? "",
-          name: m.name ?? null,
+          name: m.full_name ?? m.name ?? null,
           source_type: m.source_type ?? "direct",
         }));
 
         let groupName = args.groupId;
         try {
           // Groups listing is top-level, not org-scoped (see issue #270)
-          const groupsData = await complianceRequest(
-            key,
-            `/v1/compliance/groups`,
-          );
-          const match = (groupsData.data ?? []).find(
+          const { items: allGroups, hasMore: groupsHasMore } =
+            await paginateAll(
+              key,
+              `/v1/compliance/groups`,
+              {},
+              "data",
+            );
+          const match = allGroups.find(
             (g: any) => g.id === args.groupId,
           );
-          if (match) groupName = match.name;
+          if (match) {
+            groupName = match.name;
+          } else if (groupsHasMore) {
+            ctx.logger.info(
+              "Group {groupId} not found in a truncated group list; using ID as name",
+              { groupId: args.groupId },
+            );
+          }
         } catch (err) {
           // Non-fatal — use groupId as name, but surface why the lookup
           // failed so a persistent auth/permissions issue isn't silently
@@ -756,6 +929,7 @@ export const model = {
           groupName,
           members,
           count: members.length,
+          has_more: membersHasMore,
           fetchedAt: new Date().toISOString(),
         };
         // Namespaced so a groupId can never collide with another spec's
@@ -830,8 +1004,8 @@ export const model = {
         const startMs = Date.now();
         const key = ctx.globalArgs.complianceKey;
         const orgId = await resolveOrgId(key, ctx.globalArgs);
-        const handles: { name: string }[] = [];
-
+        // Fetch everything before writing anything, so a failure on a later
+        // endpoint (429, 5xx) cannot leave users written but roles/groups stale.
         // Users and roles remain org-scoped as of July 2026; only groups
         // moved to the top-level path (see issue #270).
         const { items: userItems, hasMore: usersHasMore } = await paginateAll(
@@ -840,68 +1014,66 @@ export const model = {
           {},
           "data",
         );
+        const { items: roleItems, hasMore: rolesHasMore } = await paginateAll(
+          key,
+          `/v1/compliance/organizations/${orgId}/roles`,
+          {},
+          "data",
+        );
+        // Groups endpoint is top-level, not org-scoped (see issue #270)
+        const { items: groupItems, hasMore: groupsHasMore } = await paginateAll(
+          key,
+          `/v1/compliance/groups`,
+          {},
+          "data",
+        );
+
         const users = userItems.map((u: any) => ({
           id: u.id ?? "",
           email: u.email ?? "",
-          name: u.name ?? null,
-          role: u.role ?? "",
+          name: u.full_name ?? u.name ?? null,
+          role: u.organization_role ?? u.role ?? "",
           created_at: u.created_at ?? null,
         }));
-        handles.push(
-          await ctx.writeResource("users", "users", {
-            orgId,
-            users,
-            count: users.length,
-            has_more: usersHasMore,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          }),
-        );
-
-        const rolesData = await complianceRequest(
-          key,
-          `/v1/compliance/organizations/${orgId}/roles`,
-        );
-        const roles = (rolesData.data ?? []).map((r: any) => ({
+        const roles = roleItems.map((r: any) => ({
           id: r.id ?? "",
           name: r.name ?? "",
           description: r.description ?? null,
         }));
-        handles.push(
-          await ctx.writeResource("roles", "roles", {
-            orgId,
-            roles,
-            count: roles.length,
-            has_more: rolesData.has_more ?? false,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          }),
-        );
-
-        // Groups endpoint is top-level, not org-scoped (see issue #270)
-        const groupsData = await complianceRequest(
-          key,
-          `/v1/compliance/groups`,
-        );
-        const groups = (groupsData.data ?? []).map((g: any) => ({
+        const groups = groupItems.map((g: any) => ({
           id: g.id ?? "",
           name: g.name ?? "",
           description: g.description ?? null,
           member_count: g.member_count ?? null,
         }));
-        handles.push(
+        const meta = () => ({
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+        const handles = [
+          await ctx.writeResource("users", "users", {
+            orgId,
+            users,
+            count: users.length,
+            has_more: usersHasMore,
+            ...meta(),
+          }),
+          await ctx.writeResource("roles", "roles", {
+            orgId,
+            roles,
+            count: roles.length,
+            has_more: rolesHasMore,
+            ...meta(),
+          }),
           await ctx.writeResource("groups", "groups", {
             orgId,
             groups,
             count: groups.length,
-            has_more: groupsData.has_more ?? false,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
+            has_more: groupsHasMore,
+            ...meta(),
           }),
-        );
+        ];
 
         ctx.logger.info(
           "Synced directory: {users} users, {roles} roles, {groups} groups",

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anthropic/compliance"
-version: "2026.10.06.1"
+version: "2026.10.07.1"
 description: |
   Observe a Claude Enterprise account via the Compliance API. Covers the
   6-year activity audit feed, organization directory (users, roles, groups
@@ -33,6 +33,9 @@ description: |
   swamp model method run claude-compliance collect_activities
   swamp model method run claude-compliance collect_activities \
     --input activity_types=claude_chat_created,github_integration_updated
+  # One user's history, walking back through older pages
+  swamp model method run claude-compliance collect_activities \
+    --input actor_ids=user_01abc --input limit=1000 --input max_pages=10
   ```
 
   ## Methods
@@ -44,7 +47,8 @@ description: |
   - get_group_members — members with SCIM source attribution
   - sync_directory — fan-out: users + roles + groups in one call
   - sync_effective_settings — observe runtime config
-  - collect_activities — filterable audit feed (6-year retention)
+  - collect_activities — audit feed (6-year retention); filter by type,
+    actor, time window; page back with max_pages / after_id
 
   ## Reports
 

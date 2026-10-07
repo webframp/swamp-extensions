@@ -184,12 +184,18 @@ export const report = {
     if (rolesData && Array.isArray(rolesData.roles)) {
       const roles = [...(rolesData.roles as RoleEntry[])].sort(byName);
       json.roles = roles;
+      // Sibling flag (not a wrapper) so the array shape stays stable; set only
+      // when the read was cut short, so a partial list isn't diffed as deletions.
+      if (rolesData.has_more === true) json.rolesTruncated = true;
       markNoteTimestamp(rolesData);
     }
 
     if (groupsData && Array.isArray(groupsData.groups)) {
       const groups = [...(groupsData.groups as GroupEntry[])].sort(byName);
       json.groups = groups;
+      // Sibling flag (not a wrapper) so the array shape stays stable; set only
+      // when the read was cut short, so a partial list isn't diffed as deletions.
+      if (groupsData.has_more === true) json.groupsTruncated = true;
       markNoteTimestamp(groupsData);
     }
 
@@ -211,6 +217,9 @@ export const report = {
         asOf: typeof usersData.fetchedAt === "string"
           ? usersData.fetchedAt
           : null,
+        // Only present when the directory read was truncated, so a capped
+        // count is not mistaken for a real drop in users.
+        ...(usersData.has_more === true ? { truncated: true } : {}),
       };
       markNoteTimestamp(usersData);
     }
