@@ -4177,7 +4177,6 @@ Deno.test("get_pipeline_by_iid resolves the global id from a gid", async () => {
         pipeline: {
           id: "gid://gitlab/Ci::Pipeline/456",
           status: "SUCCESS",
-          webUrl: "https://git.example.org/group/proj/-/pipelines/456",
         },
       },
     },
@@ -4195,6 +4194,11 @@ Deno.test("get_pipeline_by_iid resolves the global id from a gid", async () => {
       .data as any;
     assertEquals(d.id, 456);
     assertEquals(d.status, "success");
+    assertEquals(
+      d.webUrl,
+      `https://${TEST_GLOBAL_ARGS.host}/group/proj/-/pipelines/456`,
+    );
+    assertEquals(m.bodies()[0].query.includes("webUrl"), false);
   } finally {
     m.restore();
   }
