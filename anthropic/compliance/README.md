@@ -58,17 +58,35 @@ consumers. This extension has no rate-limit detection or retry logic. A 429
 response throws like any other non-2xx error. Space out invocations of
 `sync_directory` (which makes 3+ API calls internally) to stay within budget.
 
-### `paginateAll` caps at 20,000 items
+### Directory reads cap at 20,000 items
 
-The paginated helper fetches up to 20 pages of 1,000 items each. Organizations
-with more than 20,000 users or group members will receive truncated results. The
-`hasMore` field in the output is honest when this cap is reached.
+The directory endpoints (users, roles, groups, group members) page with an
+opaque `next_page` token passed back as `page`. The helper reads up to 20 pages
+of 1,000 items each, so organizations with more than 20,000 users or group
+members get truncated results. The `has_more` field in the output is true
+whenever data may remain unread: the cap was reached, or the API reported more
+data without a usable `next_page` token. The config-snapshot report marks the
+directory user count `truncated` in that case, and adds `rolesTruncated` or
+`groupsTruncated` when those lists were cut short.
 
-### `collect_activities` does not paginate
+### `collect_activities` pages on request
 
-The activities method fetches a single page (up to 5,000 entries). The
-`has_more` field indicates whether more data exists, but follow-up pagination is
-the caller's responsibility (adjust `since` for the next window).
+By default `collect_activities` fetches one page (up to 5,000 entries, newest
+first). Set `max_pages` (1–50) to follow `has_more` through older pages; each
+page passes the previous `last_id` as `after_id`. When data remains, the output
+carries `next_cursor`: pass it as `after_id` to resume. A cursor is only valid
+for the same filters, so the output records them under `filters`. If the API
+returns a cursor that does not advance, the method stops instead of looping and
+reports `has_more: true` with `stalled: true`, so a truncated feed is never
+shown as complete. Timestamps need `Z` or an offset when they include a time;
+a date-only value means 00:00Z that day.
+
+`actor_ids` takes directory user IDs (from `sync_users`); a user whose account
+was deleted and recreated has a different ID, so look up each ID separately.
+`since` and `until` bound the window. `limit` and `max_pages` must be positive
+integers. The `recent` resource is overwritten on every run, and a 50-page run
+at 5,000 entries per page can hold up to 250,000 records, so prefer filters
+over very deep unfiltered walks.
 
 ### Group name resolution is best-effort
 

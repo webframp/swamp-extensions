@@ -196,6 +196,54 @@ Deno.test("never includes the raw users array, only the count", async () => {
   assertEquals(result.markdown.includes("Alice"), false);
 });
 
+Deno.test("marks the directory user count truncated when more users remain", async () => {
+  const context = createContext([
+    artifact("users", {
+      orgId: "org-123",
+      users: [],
+      count: 20000,
+      has_more: true,
+      fetchedAt: "2026-07-16T00:00:00.000Z",
+    }),
+  ]);
+
+  // deno-lint-ignore no-explicit-any
+  const result = await report.execute(context as any);
+
+  assertEquals(result.json.directoryUserCount, {
+    count: 20000,
+    asOf: "2026-07-16T00:00:00.000Z",
+    truncated: true,
+  });
+});
+
+Deno.test("flags roles and groups truncated only when has_more is true", async () => {
+  const context = createContext([
+    artifact("roles", {
+      orgId: "org-123",
+      roles: [{ id: "r1", name: "A" }],
+      count: 1,
+      has_more: true,
+      fetchedAt: "2026-07-16T00:00:00.000Z",
+    }),
+    artifact("groups", {
+      orgId: "org-123",
+      groups: [{ id: "g1", name: "A" }],
+      count: 1,
+      has_more: false,
+      fetchedAt: "2026-07-16T00:00:00.000Z",
+    }),
+  ]);
+
+  // deno-lint-ignore no-explicit-any
+  const result = await report.execute(context as any);
+
+  assertEquals(Array.isArray(result.json.roles), true);
+  assertEquals(result.json.rolesTruncated, true);
+  assertEquals(Array.isArray(result.json.groups), true);
+  assertEquals(result.json.groupsTruncated, undefined);
+});
+
 // ============================================================
 // Resilience: malformed spec data doesn't crash the whole report
 // ============================================================
