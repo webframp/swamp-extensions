@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
-version: "2026.09.18.1"
+version: "2026.10.07.1"
 description: |
   Observe Claude Enterprise analytics via the Enterprise Analytics API
   (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending
@@ -41,6 +41,10 @@ description: |
   - collect_user_usage — per-user token usage + cost from
     /user_usage_report and /user_cost_report, grouped by product (Claude Code
     broken out); optionally filtered to one email. Writes a userUsage resource
+  - collect_cost_by_model — per-model cost over a window from /cost_report
+    (group_by=model), reporting list vs. paid per model, optional token-type
+    detail, and an ungrouped reconciliation total so group-cap truncation is
+    detectable. Window spans at most 31 days. Writes a costByModel resource
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - anthropic/analytics.ts
