@@ -250,12 +250,106 @@ const UserUsageSchema = z.object({
   ),
 });
 
+// --- Per-model cost breakdown (/analytics/cost_report group_by=model) ---
+
+/**
+ * One model's cost over the window, aggregated across daily buckets. `paidUsd`
+ * is the API's post-discount `amount`; `listUsd` is the pre-discount
+ * `list_amount`. `byTokenType` (paid USD) is populated only when "token_type"
+ * is requested in `groupBy`.
+ */
+const CostByModelRowSchema = z.object({
+  model: z.string().describe(
+    'Model name as the API reports it (e.g. "claude-opus-5")',
+  ),
+  paidUsd: z.number().describe("Post-discount, pre-credit cost in USD"),
+  listUsd: z.number().describe("List-price (pre-discount) cost in USD"),
+  discountUsd: z.number().describe("listUsd - paidUsd (>= 0)"),
+  discountPct: z.number().describe(
+    "discountUsd / listUsd as a percentage, or 0 when listUsd is 0",
+  ),
+  byTokenType: z.record(z.string(), z.number()).nullable().describe(
+    'Paid USD per token_type (e.g. "output_tokens", ' +
+      '"cache_read_input_tokens"), or null when token_type was not grouped',
+  ),
+});
+
+const CostByModelSchema = z.object({
+  startDate: z.string().describe("Window start (YYYY-MM-DD, UTC, inclusive)"),
+  endDate: z.string().describe("Window end (YYYY-MM-DD, UTC, exclusive)"),
+  groupBy: z.array(z.string()).describe(
+    "Dimensions the grouped query broke buckets out by (always includes model)",
+  ),
+  modelsFilter: z.array(z.string()).nullable().describe(
+    "models[] filter applied to BOTH queries, or null when unfiltered. When " +
+      "set, every total below is scoped to these models, NOT the org total",
+  ),
+  models: z.array(CostByModelRowSchema).describe(
+    "Per-model rows, sorted by paidUsd descending. Each row's USD is rounded " +
+      "independently, so summing them may differ from totalPaidUsd by a few " +
+      "cents — reconcile against totalPaidCents (exact) if needed",
+  ),
+  totalPaidUsd: z.number().describe(
+    "Post-discount total from the ungrouped query, scoped to modelsFilter " +
+      "when set (otherwise all models + unattributed). Zero when " +
+      "reconciliationChecked is false — the anchor was untrustworthy",
+  ),
+  totalPaidCents: z.number().describe(
+    "Exact post-discount total in integer-ish cents (no USD rounding) — the " +
+      "authoritative anchor for reconciliation. Zero when reconciliationChecked " +
+      "is false",
+  ),
+  totalListUsd: z.number().describe(
+    "List-price total from the ungrouped query, scoped to modelsFilter when " +
+      "set. Zero when reconciliationChecked is false",
+  ),
+  totalDiscountUsd: z.number().describe("totalListUsd - totalPaidUsd"),
+  unattributedUsd: z.number().describe(
+    "Paid USD not attributed to any model (model==null rows, e.g. code execution)",
+  ),
+  truncated: z.boolean().describe(
+    "True if the summed grouped rows fall short of the ungrouped total beyond " +
+      "a 1-cent tolerance — i.e. the per-bucket 100-group cap dropped rows",
+  ),
+  reconciliationChecked: z.boolean().describe(
+    "True when the ungrouped query returned the expected one-combined-row-" +
+      "per-bucket shape, so totalPaid* is a trustworthy reconciliation anchor. " +
+      "False means the ungrouped shape was unexpected and truncated cannot be " +
+      "relied upon",
+  ),
+  dataRefreshedAt: z.string().nullable().describe(
+    "Export watermark (ISO 8601); buckets after this are incomplete. Null when " +
+      "no export yet covers the range",
+  ),
+  rangeExceedsWatermark: z.boolean().describe(
+    "True if endDate is at or beyond the export watermark (or the watermark is " +
+      "null) — totals are not yet final",
+  ),
+  discountRate: z.number().describe(
+    "discountRate global arg at collection time (fallback for discountUsd only)",
+  ),
+  collected: z.boolean().describe(
+    "Whether the cost_report query succeeded (false distinguishes an error " +
+      "from a genuinely zero-cost window)",
+  ),
+  fetchedAt: z.string().describe("ISO 8601 timestamp when collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // API Client
 // =============================================================================
 
 const BASE = "https://api.anthropic.com";
 const API_VERSION = "2023-06-01";
+
+/** Enterprise Analytics cost report endpoint. */
+const COST_REPORT_PATH = "/v1/organizations/analytics/cost_report";
 
 type QueryParams = Record<string, string | string[]>;
 
@@ -284,7 +378,7 @@ async function analyticsRequest(
     },
   });
   if (!resp.ok) {
-    const body = await resp.text();
+    const body = (await resp.text()).slice(0, 500);
     throw new Error(`Analytics API ${path}: ${resp.status} ${body}`);
   }
   return resp.json();
@@ -414,7 +508,7 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -472,6 +566,14 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Add collect_cost_by_model method and costByModel spec for per-model " +
+        "cost/usage breakdown with list-vs-paid and token-type detail. " +
+        "Additive — existing resources are unaffected.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -507,6 +609,13 @@ export const model = {
       description:
         "Per-user token usage + cost across products (incl. claude_code) from /analytics/user_usage_report and /user_cost_report; optionally filtered to one email.",
       schema: UserUsageSchema,
+      lifetime: "6h" as const,
+      garbageCollection: 10,
+    },
+    costByModel: {
+      description:
+        "Per-model cost over a window from /analytics/cost_report (group_by=model), with list-vs-paid, optional token-type detail, and an ungrouped reconciliation total.",
+      schema: CostByModelSchema,
       lifetime: "6h" as const,
       garbageCollection: 10,
     },
@@ -992,6 +1101,295 @@ export const model = {
           { count: users.length, start: startingAt, end: endingAt },
         );
         return { dataHandles: [handle] };
+      },
+    },
+
+    collect_cost_by_model: {
+      description:
+        "Per-model token cost over a window from /analytics/cost_report " +
+        "(group_by=model). Reports list vs. paid cost per model, optional " +
+        "token-type detail, and an ungrouped reconciliation total that makes " +
+        "any per-bucket group-cap truncation detectable. Window spans at most " +
+        "31 days (the API max); for longer ranges call once per month.",
+      arguments: z.object({
+        startDate: z.string().describe(
+          "Start date (YYYY-MM-DD, UTC, inclusive; no earlier than 2026-01-01)",
+        ),
+        endDate: z.string().optional().describe(
+          "End date (YYYY-MM-DD, UTC, exclusive). Defaults to today. The " +
+            "window must span at most 31 days.",
+        ),
+        groupBy: z
+          .array(
+            z.enum([
+              "model",
+              "token_type",
+              "cost_type",
+              "context_window",
+              "speed",
+            ]),
+          )
+          .optional()
+          .describe(
+            'Extra dimensions to break out by. "model" is always included. ' +
+              'Add "token_type" for a per-model token-type cost split.',
+          ),
+        models: z.array(z.string()).optional().describe(
+          "Optional models[] filter (defaults to all models)",
+        ),
+      }),
+      execute: async (
+        args: {
+          startDate: string;
+          endDate?: string;
+          groupBy?: string[];
+          models?: string[];
+        },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const key = ctx.globalArgs.analyticsKey;
+        const nowIso = new Date().toISOString();
+
+        // --- validate dates + enforce the API's 31-day window cap ----------
+        assertYmd(args.startDate, "startDate");
+        const endDate = args.endDate ?? toYmd(new Date());
+        assertYmd(endDate, "endDate");
+        const startingAt = `${args.startDate}T00:00:00Z`;
+        const endingAt = `${endDate}T00:00:00Z`;
+        assertRange(startingAt, endingAt);
+        const spanDays = (new Date(endingAt).getTime() -
+          new Date(startingAt).getTime()) / 86400000;
+        if (spanDays > 31) {
+          throw new Error(
+            `window ${args.startDate}..${endDate} spans ${spanDays} days; ` +
+              `the Analytics cost_report maximum is 31 days — call once per month`,
+          );
+        }
+
+        // "model" is always part of the grouped query; dedupe any extras.
+        const groupBy = [
+          "model",
+          ...(args.groupBy ?? []).filter((d) => d !== "model"),
+        ];
+        const wantTokenType = groupBy.includes("token_type");
+        const discountRate = ctx.globalArgs.discountRate ?? 0;
+        const r2 = (cents: number) => Math.round(cents) / 100; // cents -> USD, 2dp
+        const baseParams: QueryParams = {
+          starting_at: startingAt,
+          ending_at: endingAt,
+          bucket_width: "1d",
+          ...(args.models && args.models.length > 0
+            ? { "models[]": args.models }
+            : {}),
+        };
+
+        try {
+          // --- grouped query (per-model, optional extra dims) --------------
+          const grouped = await paginateAll(key, COST_REPORT_PATH, {
+            ...baseParams,
+            "group_by[]": groupBy,
+          });
+
+          // --- ungrouped query = authoritative totals per DR-1 -------------
+          const ungrouped = await paginateAll(key, COST_REPORT_PATH, {
+            ...baseParams,
+          });
+
+          // Aggregate ungrouped buckets into authoritative paid/list totals.
+          // H1: the reconciliation anchor is only trustworthy if the ungrouped
+          // query really returns one combined, dimensionless row per bucket.
+          // Verify that invariant rather than assuming it; if the API ever
+          // returns per-dimension rows here, totalPaid* would itself be an
+          // under-count and `truncated` could not be trusted.
+          let totalPaidCents = 0;
+          let totalListCents = 0;
+          let reconciliationChecked = true;
+          for (const bucket of ungrouped.items) {
+            const rows = bucket.results ?? [];
+            if (
+              rows.length > 1 ||
+              rows.some((r: any) =>
+                r && (r.model != null || r.token_type != null ||
+                  r.cost_type != null)
+              )
+            ) {
+              // Unexpected shape: the ungrouped call came back dimensioned.
+              reconciliationChecked = false;
+            }
+            for (const row of rows) {
+              totalPaidCents += num(row.amount) ?? 0;
+              totalListCents += num(row.list_amount) ?? num(row.amount) ?? 0;
+            }
+          }
+
+          // Aggregate grouped buckets per model (and per token_type if asked).
+          type Agg = {
+            paidCents: number;
+            listCents: number;
+            byTokenType: Record<string, number> | null;
+          };
+          const perModel = new Map<string, Agg>();
+          let unattributedCents = 0;
+          let groupedPaidCents = 0;
+          for (const bucket of grouped.items) {
+            for (const row of (bucket.results ?? [])) {
+              const paid = num(row.amount) ?? 0;
+              const list = num(row.list_amount) ?? paid;
+              groupedPaidCents += paid;
+              const modelName = row.model ?? null;
+              if (modelName === null) {
+                unattributedCents += paid;
+                continue;
+              }
+              let agg = perModel.get(modelName);
+              if (!agg) {
+                agg = {
+                  paidCents: 0,
+                  listCents: 0,
+                  byTokenType: wantTokenType ? {} : null,
+                };
+                perModel.set(modelName, agg);
+              }
+              agg.paidCents += paid;
+              agg.listCents += list;
+              if (wantTokenType && agg.byTokenType) {
+                const tt = row.token_type ?? "unknown";
+                agg.byTokenType[tt] = (agg.byTokenType[tt] ?? 0) + paid;
+              }
+            }
+          }
+
+          const models = [...perModel.entries()]
+            .map(([model, a]) => {
+              const paidUsd = r2(a.paidCents);
+              const listUsd = r2(a.listCents);
+              const discountUsd = Math.round((listUsd - paidUsd) * 100) / 100;
+              return {
+                model,
+                paidUsd,
+                listUsd,
+                discountUsd,
+                discountPct: listUsd > 0
+                  ? Math.round((discountUsd / listUsd) * 10000) / 100
+                  : 0,
+                byTokenType: a.byTokenType
+                  ? Object.fromEntries(
+                    Object.entries(a.byTokenType).map(([k, v]) => [k, r2(v)]),
+                  )
+                  : null,
+              };
+            })
+            .sort((x, y) => y.paidUsd - x.paidUsd);
+
+          // DR-1: truncation is provable — grouped rows short of the
+          // ungrouped total (beyond 1 cent) means the group cap dropped rows.
+          // When the ungrouped anchor is untrustworthy (H1), we cannot prove
+          // completeness, so flag truncated conservatively.
+          const truncated = !reconciliationChecked ||
+            groupedPaidCents < totalPaidCents - 1;
+
+          // DR-2: watermark. endDate at/after the watermark (or a null
+          // watermark) means the totals are not yet final. Compare instants
+          // numerically — lexical compare misreads non-canonical RFC3339
+          // (fractional seconds, +00:00 vs Z) for the same instant.
+          const dataRefreshedAt = ungrouped.dataRefreshedAt ??
+            grouped.dataRefreshedAt;
+          let rangeExceedsWatermark: boolean;
+          if (dataRefreshedAt === null) {
+            rangeExceedsWatermark = true;
+          } else {
+            const endMs = new Date(endingAt).getTime();
+            const markMs = new Date(dataRefreshedAt).getTime();
+            // If either fails to parse, treat the range as not-final (safe).
+            rangeExceedsWatermark = Number.isNaN(endMs) ||
+              Number.isNaN(markMs) || endMs >= markMs;
+          }
+
+          const totalPaidUsd = r2(totalPaidCents);
+          const totalListUsd = r2(totalListCents);
+          const modelsFilter = args.models && args.models.length > 0
+            ? args.models
+            : null;
+          // M-B1: when the ungrouped anchor is untrustworthy, its totals are
+          // meaningless — represent "no trustworthy total" as zero rather than
+          // writing a plausible-looking number a consumer might read past the
+          // reconciliationChecked flag. truncated is already forced true above.
+          const safeTotalPaidUsd = reconciliationChecked ? totalPaidUsd : 0;
+          const safeTotalListUsd = reconciliationChecked ? totalListUsd : 0;
+          const safeTotalPaidCents = reconciliationChecked ? totalPaidCents : 0;
+          const handle = await ctx.writeResource(
+            "costByModel",
+            `${args.startDate}_${endDate}`,
+            {
+              startDate: args.startDate,
+              endDate,
+              groupBy,
+              modelsFilter,
+              models,
+              totalPaidUsd: safeTotalPaidUsd,
+              totalPaidCents: safeTotalPaidCents,
+              totalListUsd: safeTotalListUsd,
+              totalDiscountUsd:
+                Math.round((safeTotalListUsd - safeTotalPaidUsd) * 100) /
+                100,
+              unattributedUsd: r2(unattributedCents),
+              truncated,
+              reconciliationChecked,
+              dataRefreshedAt,
+              rangeExceedsWatermark,
+              discountRate,
+              collected: true,
+              fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+          ctx.logger.info(
+            "Collected per-model cost: {count} model(s), {paid} paid over {start}..{end}{trunc}",
+            {
+              count: models.length,
+              paid: safeTotalPaidUsd.toFixed(2),
+              start: args.startDate,
+              end: endDate,
+              trunc: truncated ? " (TRUNCATED)" : "",
+            },
+          );
+          return { dataHandles: [handle] };
+        } catch (err) {
+          (ctx.logger.warn ?? ctx.logger.info)(
+            "cost_by_model collection failed: {error}",
+            { error: String(err) },
+          );
+          const handle = await ctx.writeResource(
+            "costByModel",
+            `${args.startDate}_${endDate}`,
+            {
+              startDate: args.startDate,
+              endDate,
+              groupBy,
+              modelsFilter: args.models && args.models.length > 0
+                ? args.models
+                : null,
+              models: [],
+              totalPaidUsd: 0,
+              totalPaidCents: 0,
+              totalListUsd: 0,
+              totalDiscountUsd: 0,
+              unattributedUsd: 0,
+              truncated: false,
+              reconciliationChecked: false,
+              dataRefreshedAt: null,
+              rangeExceedsWatermark: true,
+              discountRate,
+              collected: false,
+              fetchedAt: nowIso,
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+          return { dataHandles: [handle] };
+        }
       },
     },
   },

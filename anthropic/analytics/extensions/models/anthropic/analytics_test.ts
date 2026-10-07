@@ -34,11 +34,13 @@ Deno.test("analytics model: has required resources", () => {
   assertExists(model.resources.seats);
   assertExists(model.resources.adoption);
   assertExists(model.resources.cost);
+  assertExists(model.resources.costByModel);
 });
 
 Deno.test("analytics model: has required methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.collect_analytics);
+  assertExists(model.methods.collect_cost_by_model);
 });
 
 Deno.test("analytics model: all resources have lifetime and gc", () => {
@@ -1085,6 +1087,570 @@ Deno.test({
       // time-of-day component, so the span is 7..8 days depending on when
       // the test runs.
       assertEquals(spanDays >= 7 && spanDays <= 8, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// collect_cost_by_model Tests
+// ---------------------------------------------------------------------------
+
+// A cost_report mock that answers the grouped (group_by[]=model) and the
+// ungrouped reconciliation query differently, keyed off the presence of a
+// group_by[] param. Also lets a test override data_refreshed_at.
+type CostByModelMockOpts = {
+  groupedBuckets?: unknown[];
+  ungroupedBuckets?: unknown[];
+  dataRefreshedAt?: string | null;
+  failStatus?: number;
+};
+
+function startCostByModelServer(
+  opts: CostByModelMockOpts,
+): {
+  url: string;
+  server: Deno.HttpServer;
+  groupByCalls: string[][];
+  modelsCalls: string[][];
+} {
+  const groupByCalls: string[][] = [];
+  const modelsCalls: string[][] = [];
+  const refreshed = opts.dataRefreshedAt === undefined
+    ? "2026-10-01T12:00:00Z"
+    : opts.dataRefreshedAt;
+  const server = Deno.serve({ port: 0, onListen() {} }, (req: Request) => {
+    const url = new URL(req.url);
+    if (!url.pathname.endsWith("/analytics/cost_report")) {
+      return new Response("Not found", { status: 404 });
+    }
+    if (opts.failStatus) {
+      return new Response(JSON.stringify({ error: { message: "nope" } }), {
+        status: opts.failStatus,
+      });
+    }
+    const groupBy = url.searchParams.getAll("group_by[]");
+    groupByCalls.push(groupBy);
+    modelsCalls.push(url.searchParams.getAll("models[]"));
+    const grouped = groupBy.includes("model");
+    return Response.json({
+      data: grouped
+        ? (opts.groupedBuckets ?? [])
+        : (opts.ungroupedBuckets ?? []),
+      has_more: false,
+      next_page: null,
+      data_refreshed_at: refreshed,
+    });
+  });
+  const addr = server.addr as Deno.NetAddr;
+  return {
+    url: `http://localhost:${addr.port}`,
+    server,
+    groupByCalls,
+    modelsCalls,
+  };
+}
+
+type CostByModelData = {
+  startDate: string;
+  endDate: string;
+  groupBy: string[];
+  modelsFilter: string[] | null;
+  models: Array<{
+    model: string;
+    paidUsd: number;
+    listUsd: number;
+    discountUsd: number;
+    discountPct: number;
+    byTokenType: Record<string, number> | null;
+  }>;
+  totalPaidUsd: number;
+  totalPaidCents: number;
+  totalListUsd: number;
+  totalDiscountUsd: number;
+  unattributedUsd: number;
+  truncated: boolean;
+  reconciliationChecked: boolean;
+  dataRefreshedAt: string | null;
+  rangeExceedsWatermark: boolean;
+  collected: boolean;
+};
+
+// One daily bucket, three model rows + one unattributed (model:null) row.
+// Cents: opus 2,000,000 => $20,000; sonnet 1,000,000 => $10,000;
+// haiku 50,000 => $500; unattributed 10,000 => $100. Ungrouped total matches.
+const GROUPED_MODELS = [
+  {
+    starting_at: "2026-09-01T00:00:00Z",
+    ending_at: "2026-09-02T00:00:00Z",
+    results: [
+      { amount: "2000000", list_amount: "2500000", model: "claude-opus-5" },
+      { amount: "1000000", list_amount: "1000000", model: "claude-sonnet-5" },
+      { amount: "50000", list_amount: "60000", model: "claude-haiku-4-5" },
+      { amount: "10000", list_amount: "10000", model: null },
+    ],
+  },
+];
+const UNGROUPED_TOTAL = [
+  {
+    starting_at: "2026-09-01T00:00:00Z",
+    ending_at: "2026-09-02T00:00:00Z",
+    results: [
+      { amount: "3060000", list_amount: "3570000" },
+    ],
+  },
+];
+
+Deno.test({
+  name:
+    "collect_cost_by_model: per-model split, list vs paid, totals from ungrouped",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, groupByCalls } = startCostByModelServer({
+      groupedBuckets: GROUPED_MODELS,
+      ungroupedBuckets: UNGROUPED_TOTAL,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const r = getWrittenResources().find((x) => x.specName === "costByModel");
+      assertExists(r);
+      const d = r.data as CostByModelData;
+
+      // Two cost_report calls: one grouped (has model), one ungrouped (empty).
+      assertEquals(groupByCalls.length, 2);
+      assertEquals(groupByCalls.some((g) => g.includes("model")), true);
+      assertEquals(groupByCalls.some((g) => g.length === 0), true);
+
+      // instance keying + echoed window
+      assertEquals(r.name, "2026-09-01_2026-10-01");
+      assertEquals(d.startDate, "2026-09-01");
+      assertEquals(d.endDate, "2026-10-01");
+      assertEquals(d.groupBy, ["model"]);
+
+      // Models sorted by paidUsd desc.
+      assertEquals(d.models.map((m) => m.model), [
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-haiku-4-5",
+      ]);
+      const opus = d.models[0];
+      assertEquals(opus.paidUsd, 20000);
+      assertEquals(opus.listUsd, 25000);
+      assertEquals(opus.discountUsd, 5000);
+      assertEquals(opus.discountPct, 20);
+      // Sonnet is at list (no discount).
+      assertEquals(d.models[1].discountUsd, 0);
+      assertEquals(d.models[1].discountPct, 0);
+      // byTokenType omitted when token_type not grouped.
+      assertEquals(opus.byTokenType, null);
+
+      // Authoritative totals come from the ungrouped query.
+      assertEquals(d.totalPaidUsd, 30600);
+      assertEquals(d.totalListUsd, 35700);
+      assertEquals(d.totalDiscountUsd, 5100);
+      // Unattributed (model:null) paid.
+      assertEquals(d.unattributedUsd, 100);
+      // Grouped sum (30600) == ungrouped total (30600) -> not truncated.
+      assertEquals(d.truncated, false);
+      assertEquals(d.collected, true);
+      // New fields: unfiltered, reconciliation verified, exact cent anchor.
+      assertEquals(d.modelsFilter, null);
+      assertEquals(d.reconciliationChecked, true);
+      assertEquals(d.totalPaidCents, 3060000);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: grouped sum short of ungrouped total marks truncated",
+  sanitizeResources: false,
+  fn: async () => {
+    // Grouped reports only $20,000 but the ungrouped authoritative total is
+    // $30,600 -> rows were dropped by the per-bucket cap -> truncated.
+    const groupedPartial = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [
+          { amount: "2000000", list_amount: "2500000", model: "claude-opus-5" },
+        ],
+      },
+    ];
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: groupedPartial,
+      ungroupedBuckets: UNGROUPED_TOTAL,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.totalPaidUsd, 30600);
+      assertEquals(d.models.length, 1);
+      assertEquals(d.truncated, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "collect_cost_by_model: token_type split populates byTokenType",
+  sanitizeResources: false,
+  fn: async () => {
+    // Grouped by model+token_type: two token-type rows for one model.
+    const grouped = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [
+          {
+            amount: "1800000",
+            list_amount: "1800000",
+            model: "claude-opus-5",
+            token_type: "cache_read_input_tokens",
+          },
+          {
+            amount: "200000",
+            list_amount: "200000",
+            model: "claude-opus-5",
+            token_type: "output_tokens",
+          },
+        ],
+      },
+    ];
+    const ungrouped = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [{ amount: "2000000", list_amount: "2000000" }],
+      },
+    ];
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: grouped,
+      ungroupedBuckets: ungrouped,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        {
+          startDate: "2026-09-01",
+          endDate: "2026-10-01",
+          groupBy: ["token_type"],
+        },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.groupBy, ["model", "token_type"]);
+      const opus = d.models[0];
+      assertExists(opus.byTokenType);
+      assertEquals(opus.byTokenType!["cache_read_input_tokens"], 18000);
+      assertEquals(opus.byTokenType!["output_tokens"], 2000);
+      assertEquals(opus.paidUsd, 20000);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: endDate beyond watermark flags rangeExceedsWatermark",
+  sanitizeResources: false,
+  fn: async () => {
+    // Watermark is 2026-09-15; the requested window ends 2026-10-01 -> not final.
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: GROUPED_MODELS,
+      ungroupedBuckets: UNGROUPED_TOTAL,
+      dataRefreshedAt: "2026-09-15T12:00:00Z",
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.dataRefreshedAt, "2026-09-15T12:00:00Z");
+      assertEquals(d.rangeExceedsWatermark, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: null watermark -> zero totals, flagged, collected true",
+  sanitizeResources: false,
+  fn: async () => {
+    // No export yet covers the range: every bucket empty, watermark null.
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: [],
+      ungroupedBuckets: [],
+      dataRefreshedAt: null,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.collected, true);
+      assertEquals(d.totalPaidUsd, 0);
+      assertEquals(d.models.length, 0);
+      assertEquals(d.dataRefreshedAt, null);
+      assertEquals(d.rangeExceedsWatermark, true);
+      assertEquals(d.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("collect_cost_by_model: rejects a window longer than 31 days", async () => {
+  await assertRejects(
+    () =>
+      model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-11-01" },
+        testContext().context as unknown as ExecCtx,
+      ),
+    Error,
+    "maximum is 31 days",
+  );
+});
+
+Deno.test("collect_cost_by_model: rejects a malformed startDate", async () => {
+  await assertRejects(
+    () =>
+      model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-9-1", endDate: "2026-10-01" },
+        testContext().context as unknown as ExecCtx,
+      ),
+    Error,
+    "not a valid YYYY-MM-DD date",
+  );
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: API failure writes a degraded collected=false resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startCostByModelServer({ failStatus: 403 });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.collected, false);
+      assertEquals(d.totalPaidUsd, 0);
+      assertEquals(d.models.length, 0);
+      assertEquals(d.rangeExceedsWatermark, true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: unexpected dimensioned ungrouped shape flags reconciliationChecked false + truncated",
+  sanitizeResources: false,
+  fn: async () => {
+    // H1: if the ungrouped query comes back WITH per-model rows (shape the
+    // reconciliation anchor assumes it never does), the method must not trust
+    // the total — reconciliationChecked=false and truncated set conservatively.
+    const dimensionedUngrouped = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [
+          { amount: "2000000", list_amount: "2500000", model: "claude-opus-5" },
+          {
+            amount: "1060000",
+            list_amount: "1070000",
+            model: "claude-sonnet-5",
+          },
+        ],
+      },
+    ];
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: GROUPED_MODELS,
+      ungroupedBuckets: dimensionedUngrouped,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      assertEquals(d.reconciliationChecked, false);
+      // Anchor untrustworthy -> truncated flagged regardless of the sums.
+      assertEquals(d.truncated, true);
+      // M-B1: untrustworthy totals are zeroed, not written as plausible numbers.
+      assertEquals(d.totalPaidUsd, 0);
+      assertEquals(d.totalPaidCents, 0);
+      assertEquals(d.totalListUsd, 0);
+      assertEquals(d.totalDiscountUsd, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: models[] filter is forwarded to both queries and echoed",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, modelsCalls, groupByCalls } = startCostByModelServer({
+      groupedBuckets: GROUPED_MODELS,
+      ungroupedBuckets: UNGROUPED_TOTAL,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        {
+          startDate: "2026-09-01",
+          endDate: "2026-10-01",
+          models: ["claude-opus-5"],
+        },
+        context as unknown as ExecCtx,
+      );
+      // Both cost_report calls carry the models[] filter.
+      assertEquals(groupByCalls.length, 2);
+      assertEquals(modelsCalls.length, 2);
+      for (const m of modelsCalls) assertEquals(m, ["claude-opus-5"]);
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      // Filter echoed so a consumer knows totals are scoped, not org-wide.
+      assertEquals(d.modelsFilter, ["claude-opus-5"]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: non-canonical watermark instant is not over-flagged",
+  sanitizeResources: false,
+  fn: async () => {
+    // Watermark expressed with a +00:00 offset for an instant AFTER the
+    // window end. A lexical compare would wrongly flag not-final; the numeric
+    // compare must correctly report final (rangeExceedsWatermark=false).
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: GROUPED_MODELS,
+      ungroupedBuckets: UNGROUPED_TOTAL,
+      dataRefreshedAt: "2026-10-01T00:00:00.500Z",
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      // endDate instant 2026-10-01T00:00:00Z is before the .500 watermark;
+      // a lexical compare would wrongly flag not-final.
+      assertEquals(d.rangeExceedsWatermark, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "collect_cost_by_model: fractional cents keep totalPaidCents exact despite per-model rounding",
+  sanitizeResources: false,
+  fn: async () => {
+    // Two models at 100.5 cents each. Per-model USD each round to 1.01 (sum
+    // 2.02), but the exact cent total is 201 -> totalPaidCents must be exact
+    // so consumers can reconcile in cents rather than drifting dollars.
+    const grouped = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [
+          { amount: "100.5", list_amount: "100.5", model: "claude-opus-5" },
+          { amount: "100.5", list_amount: "100.5", model: "claude-sonnet-5" },
+        ],
+      },
+    ];
+    const ungrouped = [
+      {
+        starting_at: "2026-09-01T00:00:00Z",
+        ending_at: "2026-09-02T00:00:00Z",
+        results: [{ amount: "201.4", list_amount: "201.4" }],
+      },
+    ];
+    const { url, server } = startCostByModelServer({
+      groupedBuckets: grouped,
+      ungroupedBuckets: ungrouped,
+    });
+    const uninstall = installFetchMock(url);
+    try {
+      const { context, getWrittenResources } = testContext();
+      await model.methods.collect_cost_by_model.execute(
+        { startDate: "2026-09-01", endDate: "2026-10-01" },
+        context as unknown as ExecCtx,
+      );
+      const d = getWrittenResources().find((x) => x.specName === "costByModel")!
+        .data as CostByModelData;
+      // Exact cent anchor preserves sub-cent precision (201.4); a USD-derived
+      // value would collapse to 201. This pins the anchor as independent of
+      // USD rounding.
+      assertEquals(d.totalPaidCents, 201.4);
+      assertEquals(d.totalPaidUsd, 2.01);
+      // Per-model USD each round independently to 1.01 (documented drift).
+      const sumModels = d.models.reduce((s, m) => s + m.paidUsd, 0);
+      assertEquals(Math.round(sumModels * 100) / 100, 2.02);
+      // Grouped cents (201) vs ungrouped (201.4): within the 1-cent tolerance,
+      // so not flagged truncated.
+      assertEquals(d.truncated, false);
+      assertEquals(d.reconciliationChecked, true);
     } finally {
       uninstall();
       await server.shutdown();
