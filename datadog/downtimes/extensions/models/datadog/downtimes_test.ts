@@ -93,7 +93,7 @@ function startMockDdServer(
     ) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });
@@ -351,17 +351,13 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).get_downtime.execute(
-        { "downtime_id": "test-id-123", "with_run_as": true },
-        context,
-      );
+      >).get_downtime.execute({ "downtime_id": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
       assertStringIncludes(req0.path, "/downtime/test-id-123");
-      assertEquals(req0.search, "?with_run_as=true");
       assertEquals(req0.headers["dd-api-key"], "test-api-key");
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
 
@@ -506,6 +502,83 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "downtimes model: list_monitor_downtimes fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/downtime_matches": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "end": "2020-01-02T03:04:00.000Z",
+              "groups": ["service:postgres", "team:frontend"],
+              "scope": "env:(staging OR prod) AND datacenter:us-east-1",
+              "start": "2020-01-02T03:04:00.000Z",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-downtimes",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_monitor_downtimes.execute(
+        { "monitor_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/downtime_matches");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "monitor_downtimes");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
     } finally {
       uninstall();
       await server.shutdown();

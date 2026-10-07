@@ -17,7 +17,12 @@ import {
   generateModelSource,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
-import { computeModelVersion, computeUpgradesBlock } from "./lib/upgrades.ts";
+import {
+  artifactChanged,
+  computeModelVersion,
+  computeUpgradesBlock,
+  nextVersion,
+} from "./lib/upgrades.ts";
 import {
   generateApiLib,
   generateDenoJson,
@@ -201,6 +206,44 @@ async function main() {
       candidateSource,
       PLACEHOLDER,
     );
+    // The model source is not the only generated artifact: a change to the
+    // shared _lib/api.ts template or to the generated tests also makes the
+    // extension stale and must bump its version.
+    if (versionResult.status === "unchanged") {
+      const testFileName = `${config.name.replace(/-/g, "_")}_test.ts`;
+      const staleArtifacts: string[] = [];
+      if (
+        await artifactChanged(
+          join(modelDir, "_lib", "api.ts"),
+          generateApiLib(),
+        )
+      ) staleArtifacts.push("_lib/api.ts");
+      if (
+        await artifactChanged(
+          join(modelDir, testFileName),
+          generateTestSource(
+            config,
+            methods,
+            modelFileName.replace(".ts", ""),
+          ),
+        )
+      ) staleArtifacts.push(testFileName);
+      if (staleArtifacts.length > 0) {
+        console.log(
+          `   ♻️  ${config.name}: model unchanged but ${
+            staleArtifacts.join(", ")
+          } differ from generator output`,
+        );
+        const m = versionResult.existingContent?.match(
+          /version:\s*"(\d{4}\.\d{2}\.\d{2}\.\d+)"/,
+        );
+        versionResult.version = nextVersion(
+          m ? m[1] : "0000.00.00.0",
+          datePrefix,
+        );
+        versionResult.status = "changed";
+      }
+    }
     // `--version` forces a specific version. When forced, unchanged models are
     // NOT skipped below (see the skip condition) — they are rewritten and get a
     // catch-up upgrade entry, which appendGuarded rejects if the forced version

@@ -162,7 +162,7 @@ const ListMonitorDowntimesSchema = z.object({
 /** Datadog Downtimes — scheduled downtime management for monitors */
 export const model = {
   type: "@webframp/datadog/downtimes",
-  version: "2026.09.25.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -218,6 +218,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

@@ -92,7 +92,7 @@ function startMockDdServer(
     ) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });

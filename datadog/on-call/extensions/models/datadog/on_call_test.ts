@@ -117,7 +117,7 @@ function startMockDdServer(
     ) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });
@@ -430,6 +430,80 @@ Deno.test({
 });
 
 Deno.test({
+  name: "on-call model: list_on_call_schedules fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/on-call/schedules": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "name": "Primary On-Call",
+              "tags": [],
+              "time_zone": "America/New_York",
+              "teams_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_on_call_schedules.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/on-call/schedules");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "on_call_schedules");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name:
     "on-call model: list_user_notification_channels fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
@@ -503,24 +577,19 @@ Deno.test({
 });
 
 Deno.test({
-  name: "on-call model: list_on_call_schedules fetches and writes resource",
+  name:
+    "on-call model: create_user_notification_channel creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/on-call/schedules": {
+      "/test-id-123/notification-channels": {
         body: {
-          "data": [{
-            "id": "fixture-123",
+          "data": {
+            "id": "new-123",
             "type": "resource",
-            "attributes": {
-              "name": "Primary On-Call",
-              "tags": [],
-              "time_zone": "America/New_York",
-              "teams_id": "test-value",
-            },
-          }],
-          "meta": { "page": {} },
+            "attributes": { "active": true, "config": null },
+          },
         },
       },
     });
@@ -549,26 +618,25 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_on_call_schedules.execute({}, context);
+      >).create_user_notification_channel.execute({
+        "user_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
-      assertEquals(req0.method, "GET");
-      assertStringIncludes(req0.path, "/on-call/schedules");
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/test-id-123/notification-channels");
       assertEquals(req0.headers["dd-api-key"], "test-api-key");
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "on_call_schedules");
-      const data = resources[0].data as {
-        items: unknown[];
-        truncated: boolean;
-      };
-      assertEquals(Array.isArray(data.items), true);
-      assertEquals(data.items.length, 1);
-      assertEquals(typeof data.truncated, "boolean");
+      assertEquals(resources[0].specName, "user_notification_channel");
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

@@ -288,8 +288,43 @@ export async function computeModelVersion(
     return { version: existingVersion, status: "unchanged", existingContent };
   }
 
-  const version = existingDate === datePrefix
-    ? `${existingDate}.${existingMicro + 1}`
+  return {
+    version: nextVersion(existingVersion, datePrefix),
+    status: "changed",
+    existingContent,
+  };
+}
+
+/** Next CalVer after `existingVersion`: bump the micro on the same date, else
+ * start at `.1` on `datePrefix`. */
+export function nextVersion(
+  existingVersion: string,
+  datePrefix: string,
+): string {
+  const m = existingVersion.match(/^(\d{4}\.\d{2}\.\d{2})\.(\d+)$/);
+  if (!m) return `${datePrefix}.1`;
+  return m[1] === datePrefix
+    ? `${m[1]}.${parseInt(m[2], 10) + 1}`
     : `${datePrefix}.1`;
-  return { version, status: "changed", existingContent };
+}
+
+/**
+ * Whether a generated artifact other than the model source (the shared
+ * `_lib/api.ts` helper, the generated test file) differs from what the
+ * generator would emit now. A missing file counts as changed. Both sides are
+ * formatted the same way before comparison. Without this check a template-only
+ * change is invisible to the model-source comparison and every extension stays
+ * stale.
+ */
+export async function artifactChanged(
+  path: string,
+  candidate: string,
+): Promise<boolean> {
+  let existing: string;
+  try {
+    existing = await Deno.readTextFile(path);
+  } catch {
+    return true;
+  }
+  return (await formatCode(existing)) !== (await formatCode(candidate));
 }

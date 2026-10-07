@@ -99,7 +99,7 @@ function startMockDdServer(
     ) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });
@@ -399,6 +399,102 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "suppressions_affecting_future_rule");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-suppressions model: get_suppressions_affecting_rule fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/rules/test-id-123": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "creation_date": 1,
+              "creator": {
+                "handle": "john.doe@datadoghq.com",
+                "name": "John Doe",
+              },
+              "data_exclusion_query": "source:cloudtrail account_id:12345",
+              "description":
+                "This rule suppresses low-severity signals in staging environments.",
+              "editable": true,
+              "enabled": true,
+              "expiration_date": 1703187336000,
+              "name": "Custom suppression",
+              "rule_query": "type:log_detection source:cloudtrail",
+              "start_date": 1703187336000,
+              "suppression_query": "env:staging status:low",
+              "tags": ["technique:T1110-brute-force", "source:cloudtrail"],
+              "update_date": 1,
+              "updater": {
+                "handle": "john.doe@datadoghq.com",
+                "name": "John Doe",
+              },
+              "version": 42,
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-suppressions",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_suppressions_affecting_rule.execute(
+        { "rule_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/rules/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "suppressions_affecting_rule");
       const data = resources[0].data as {
         items: unknown[];
         truncated: boolean;
