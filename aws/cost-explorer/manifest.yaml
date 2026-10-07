@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-explorer"
-version: "2026.09.24.1"
+version: "2026.10.07.1"
 description: |
   Query AWS Cost Explorer for actual spend analysis by service, usage type,
   and time period. Identifies top cost drivers and spend trends.
@@ -31,6 +31,12 @@ description: |
 
   # Top 20 cost drivers
   swamp model method run aws-costs get_top_cost_drivers
+
+  # Cost for a specific calendar month, filtered to one service
+  # (end is exclusive). Groups by usage type when a service is given.
+  swamp model method run aws-costs get_cost_for_period \
+    --arg start=2026-09-01 --arg end=2026-10-01 \
+    --arg service="Claude Enterprise"
   ```
 repository: "https://github.com/webframp/swamp-extensions"
 models:

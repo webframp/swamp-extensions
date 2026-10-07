@@ -116,6 +116,37 @@ const CostByUsageTypeOutputSchema = z.object({
   ),
 });
 
+const CostForPeriodGroupSchema = z.object({
+  key: z.string().describe(
+    "Grouping key: a SERVICE name when unfiltered, or a USAGE_TYPE when a " +
+      "service filter is applied",
+  ),
+  amount: z.number(),
+  unit: z.string(),
+});
+
+const CostForPeriodOutputSchema = z.object({
+  service: z.string().nullable().describe(
+    "SERVICE filter applied, or null when unfiltered",
+  ),
+  start: z.string().describe("Period start (YYYY-MM-DD, inclusive)"),
+  end: z.string().describe("Period end (YYYY-MM-DD, exclusive)"),
+  granularity: z.string().describe("MONTHLY or DAILY"),
+  groups: z.array(CostForPeriodGroupSchema),
+  totalCost: z.number(),
+  truncated: z.boolean().describe(
+    "True if the page cap was hit before all result pages were read; " +
+      "totalCost and groups are then incomplete",
+  ),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const CostDriverItemSchema = z.object({
   service: z.string(),
   usageType: z.string(),
@@ -182,6 +213,27 @@ function formatPeriod(days: number): { Start: string; End: string } {
   return { Start: fmt(start), End: fmt(end) };
 }
 
+/**
+ * Validate a YYYY-MM-DD date string and return it unchanged.
+ * Throws on malformed input or a value that does not round-trip (e.g.
+ * 2026-02-30), so callers get a clear error before hitting the AWS API.
+ */
+function assertIsoDate(label: string, value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(
+      `${label} must be a YYYY-MM-DD date, got "${value}"`,
+    );
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  ) {
+    throw new Error(`${label} is not a valid calendar date: "${value}"`);
+  }
+  return value;
+}
+
 // =============================================================================
 // Context type (inline, matching existing pattern)
 // =============================================================================
@@ -206,16 +258,18 @@ type MethodContext = {
 /**
  * AWS Cost Explorer model definition.
  *
- * Exposes five methods for querying AWS Cost Explorer:
+ * Exposes six methods for querying AWS Cost Explorer:
  * - `get_cost_by_service` -- breakdown by AWS service
  * - `get_cost_by_usage_type` -- drill into a service's usage types
  * - `get_cost_trend` -- daily trend with direction detection
  * - `get_top_cost_drivers` -- top service/usage-type combinations
  * - `get_cost_comparison` -- period-over-period comparison
+ * - `get_cost_for_period` -- explicit date range (e.g. a calendar month),
+ *   optionally filtered to one service and grouped by usage type
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.09.24.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -416,6 +470,14 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Add get_cost_for_period method and costForPeriod spec for " +
+        "calendar-month / explicit date-range queries with optional SERVICE " +
+        "filter. Additive — existing stored resources are unaffected.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -446,6 +508,14 @@ export const model = {
     costComparison: {
       description: "Period-over-period cost comparison by service",
       schema: CostComparisonOutputSchema,
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    costForPeriod: {
+      description:
+        "Cost for an explicit date range, optionally filtered to one service " +
+        "and grouped by usage type",
+      schema: CostForPeriodOutputSchema,
       lifetime: "1h" as const,
       garbageCollection: 10,
     },
@@ -1024,6 +1094,197 @@ export const model = {
               days: args.days,
               delta: totalDelta.toFixed(2),
               deltaPercent: totalDeltaPercent.toFixed(1),
+            },
+          );
+          return { dataHandles: [handle] };
+        } finally {
+          client.destroy();
+        }
+      },
+    },
+
+    get_cost_for_period: {
+      description:
+        "Query cost for an explicit date range (e.g. a calendar month). " +
+        "Optionally filter to a single SERVICE and group by usage type; " +
+        "otherwise group by service.",
+      arguments: z.object({
+        start: z
+          .string()
+          .min(1)
+          .describe("Period start date (YYYY-MM-DD, UTC, inclusive)"),
+        end: z
+          .string()
+          .min(1)
+          .describe(
+            "Period end date (YYYY-MM-DD, UTC, exclusive — Cost Explorer " +
+              "treats End as exclusive)",
+          ),
+        service: z
+          .string()
+          .min(1, "service must not be empty when provided")
+          .optional()
+          .describe(
+            'Optional SERVICE name to filter to (e.g. "Claude Enterprise"). ' +
+              "When set, results group by USAGE_TYPE; when omitted, by SERVICE.",
+          ),
+        granularity: z
+          .enum(["MONTHLY", "DAILY"])
+          .default("MONTHLY")
+          .describe("Cost Explorer granularity"),
+      }),
+      execute: async (
+        args: {
+          start: string;
+          end: string;
+          service?: string;
+          granularity: "MONTHLY" | "DAILY";
+        },
+        context: MethodContext,
+      ): Promise<{ dataHandles: { name: string }[] }> => {
+        const startMs = Date.now();
+
+        // Validate dates before opening a client or hitting the API.
+        const start = assertIsoDate("start", args.start);
+        const end = assertIsoDate("end", args.end);
+        if (end <= start) {
+          throw new Error(
+            `end (${end}) must be strictly after start (${start})`,
+          );
+        }
+        // Guard against a far-future end that CE would reject anyway.
+        const todayPlusOne = new Date();
+        todayPlusOne.setUTCDate(todayPlusOne.getUTCDate() + 1);
+        const maxEnd = todayPlusOne.toISOString().slice(0, 10);
+        if (end > maxEnd) {
+          throw new Error(
+            `end (${end}) is in the future beyond ${maxEnd}; Cost Explorer ` +
+              `cannot report costs for dates that have not occurred`,
+          );
+        }
+
+        const client = new CostExplorerClient(
+          makeClientConfig(context.globalArgs),
+        );
+        try {
+          const groupKey = args.service ? "USAGE_TYPE" : "SERVICE";
+          const command = new GetCostAndUsageCommand({
+            TimePeriod: { Start: start, End: end },
+            Granularity: args.granularity,
+            Metrics: ["UnblendedCost"],
+            ...(args.service
+              ? {
+                Filter: {
+                  Dimensions: { Key: "SERVICE", Values: [args.service] },
+                },
+              }
+              : {}),
+            GroupBy: [{ Type: "DIMENSION", Key: groupKey }],
+          });
+
+          let response;
+          try {
+            response = await client.send(command);
+          } catch (err) {
+            throw new Error(
+              `GetCostAndUsage (group by ${groupKey}` +
+                `${args.service ? `, service=${args.service}` : ""}) failed ` +
+                `for period ${start}..${end}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`,
+              { cause: err },
+            );
+          }
+
+          // Aggregate across time buckets (DAILY/MONTHLY both land here),
+          // following NextPageToken so large unfiltered/DAILY result sets are
+          // not silently truncated. A hard page cap bounds the loop.
+          const items: { key: string; amount: number; unit: string }[] = [];
+          const MAX_PAGES = 50;
+          let pages = 0;
+          let truncated = false;
+          for (;;) {
+            for (const result of response.ResultsByTime || []) {
+              for (const group of result.Groups || []) {
+                const key = group.Keys?.[0] || "Unknown";
+                const parsed = parseFloat(
+                  group.Metrics?.UnblendedCost?.Amount || "0",
+                );
+                // Guard against a non-numeric Amount poisoning the sum.
+                const amount = Number.isFinite(parsed) ? parsed : 0;
+                const unit = group.Metrics?.UnblendedCost?.Unit || "USD";
+
+                const existing = items.find((i) => i.key === key);
+                if (existing) {
+                  existing.amount += amount;
+                } else {
+                  items.push({ key, amount, unit });
+                }
+              }
+            }
+
+            pages++;
+            const nextToken = response.NextPageToken;
+            if (!nextToken) break;
+            if (pages >= MAX_PAGES) {
+              truncated = true;
+              break;
+            }
+
+            command.input.NextPageToken = nextToken;
+            try {
+              response = await client.send(command);
+            } catch (err) {
+              throw new Error(
+                `GetCostAndUsage (group by ${groupKey}` +
+                  `${args.service ? `, service=${args.service}` : ""}, ` +
+                  `page ${pages + 1}) failed for period ${start}..${end}: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                { cause: err },
+              );
+            }
+          }
+
+          const groups = items
+            .map((i) => ({
+              key: i.key,
+              amount: Math.round(i.amount * 100) / 100,
+              unit: i.unit,
+            }))
+            .sort((a, b) => b.amount - a.amount);
+
+          // Per-group values are already finite-guarded above, so a plain
+          // sum here cannot produce NaN.
+          const totalCost = Math.round(
+            items.reduce((s, i) => s + i.amount, 0) * 100,
+          ) / 100;
+
+          const handle = await context.writeResource(
+            "costForPeriod",
+            `${start}_${end}${args.service ? `_${args.service}` : ""}`,
+            {
+              service: args.service ?? null,
+              start,
+              end,
+              granularity: args.granularity,
+              groups,
+              totalCost,
+              truncated,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          );
+
+          context.logger.info(
+            "Cost for {start}..{end}{svc}: {total} across {count} groups",
+            {
+              start,
+              end,
+              svc: args.service ? ` (service=${args.service})` : "",
+              total: totalCost.toFixed(2),
+              count: groups.length,
             },
           );
           return { dataHandles: [handle] };

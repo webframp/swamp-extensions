@@ -1,7 +1,11 @@
 // AWS Cost Explorer Model Tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+} from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { CostExplorerClient } from "npm:@aws-sdk/client-cost-explorer@3.1139.0";
 import { model } from "./cost_explorer.ts";
@@ -54,6 +58,7 @@ Deno.test("model defines per-query-type resource specs", () => {
   assertEquals("costByUsageType" in model.resources, true);
   assertEquals("costDrivers" in model.resources, true);
   assertEquals("costComparison" in model.resources, true);
+  assertEquals("costForPeriod" in model.resources, true);
 });
 
 Deno.test("model defines all expected methods", () => {
@@ -62,6 +67,7 @@ Deno.test("model defines all expected methods", () => {
   assertEquals("get_cost_trend" in model.methods, true);
   assertEquals("get_top_cost_drivers" in model.methods, true);
   assertEquals("get_cost_comparison" in model.methods, true);
+  assertEquals("get_cost_for_period" in model.methods, true);
 });
 
 // =============================================================================
@@ -653,4 +659,433 @@ Deno.test("upgrade 2026.08.13.1: handles null data gracefully", () => {
 
   const result = upgrade_08_13.upgradeAttributes(old);
   assertEquals(result, old); // returned unchanged
+});
+
+// =============================================================================
+// get_cost_for_period Tests
+// =============================================================================
+
+Deno.test({
+  name:
+    "get_cost_for_period: filtered service groups by usage type and sums total",
+  sanitizeResources: false,
+  fn: async () => {
+    // Capture the command the method sends so we can assert the API wiring.
+    let captured: { input?: Record<string, unknown> } = {};
+    const restore = mockCostExplorer((command) => {
+      captured = command as { input?: Record<string, unknown> };
+      return {
+        ResultsByTime: [{
+          Groups: [
+            {
+              Keys: ["MP:usage_fee-Units"],
+              Metrics: { UnblendedCost: { Amount: "35595.94", Unit: "USD" } },
+            },
+            {
+              Keys: ["MP:c4e_usage_based_seat_day-Units"],
+              Metrics: { UnblendedCost: { Amount: "0", Unit: "USD" } },
+            },
+          ],
+        }],
+      };
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+
+      const result = await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-10-01",
+          service: "Claude Enterprise",
+          granularity: "MONTHLY",
+        },
+        context as ExecuteContext,
+      );
+
+      assertEquals(result.dataHandles.length, 1);
+
+      // API wiring: explicit period, SERVICE filter, GroupBy USAGE_TYPE.
+      const input = captured.input as {
+        TimePeriod: { Start: string; End: string };
+        Granularity: string;
+        Filter?: { Dimensions?: { Key: string; Values: string[] } };
+        GroupBy: Array<{ Type: string; Key: string }>;
+      };
+      assertEquals(input.TimePeriod, {
+        Start: "2026-09-01",
+        End: "2026-10-01",
+      });
+      assertEquals(input.Granularity, "MONTHLY");
+      assertEquals(input.Filter?.Dimensions?.Key, "SERVICE");
+      assertEquals(input.Filter?.Dimensions?.Values, ["Claude Enterprise"]);
+      assertEquals(input.GroupBy[0].Key, "USAGE_TYPE");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "costForPeriod");
+      // Instance key includes period AND service so filtered/unfiltered and
+      // different months never clobber each other.
+      assertEquals(
+        resources[0].name,
+        "2026-09-01_2026-10-01_Claude Enterprise",
+      );
+
+      const data = resources[0].data as {
+        service: string | null;
+        start: string;
+        end: string;
+        granularity: string;
+        groups: Array<{ key: string; amount: number; unit: string }>;
+        totalCost: number;
+      };
+      assertEquals(data.service, "Claude Enterprise");
+      assertEquals(data.start, "2026-09-01");
+      assertEquals(data.end, "2026-10-01");
+      assertEquals(data.granularity, "MONTHLY");
+      assertEquals(data.totalCost, 35595.94);
+      // Sorted by amount descending; zero-dollar seat line retained.
+      assertEquals(data.groups.length, 2);
+      assertEquals(data.groups[0].key, "MP:usage_fee-Units");
+      assertEquals(data.groups[0].amount, 35595.94);
+      assertEquals(data.groups[1].key, "MP:c4e_usage_based_seat_day-Units");
+      assertEquals(data.groups[1].amount, 0);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_cost_for_period: unfiltered groups by service with no filter",
+  sanitizeResources: false,
+  fn: async () => {
+    let captured: { input?: Record<string, unknown> } = {};
+    const restore = mockCostExplorer((command) => {
+      captured = command as { input?: Record<string, unknown> };
+      return {
+        ResultsByTime: [{
+          Groups: [
+            {
+              Keys: ["Claude Enterprise"],
+              Metrics: { UnblendedCost: { Amount: "35595.94", Unit: "USD" } },
+            },
+            {
+              Keys: ["AmazonCloudWatch"],
+              Metrics: { UnblendedCost: { Amount: "100.00", Unit: "USD" } },
+            },
+          ],
+        }],
+      };
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+
+      await model.methods.get_cost_for_period.execute(
+        { start: "2026-09-01", end: "2026-10-01", granularity: "MONTHLY" },
+        context as ExecuteContext,
+      );
+
+      const input = captured.input as {
+        Filter?: unknown;
+        GroupBy: Array<{ Type: string; Key: string }>;
+      };
+      // No service => no Filter, group by SERVICE.
+      assertEquals(input.Filter, undefined);
+      assertEquals(input.GroupBy[0].Key, "SERVICE");
+
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "costForPeriod");
+      // Instance key omits the service suffix when unfiltered.
+      assertEquals(resources[0].name, "2026-09-01_2026-10-01");
+
+      const data = resources[0].data as {
+        service: string | null;
+        groups: Array<{ key: string; amount: number }>;
+        totalCost: number;
+      };
+      assertEquals(data.service, null);
+      assertEquals(data.totalCost, 35695.94);
+      assertEquals(data.groups[0].key, "Claude Enterprise");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_cost_for_period: aggregates groups across DAILY time buckets",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCostExplorer(() => ({
+      // Same usage type appears in two daily buckets; must sum, not duplicate.
+      ResultsByTime: [
+        {
+          Groups: [{
+            Keys: ["MP:usage_fee-Units"],
+            Metrics: { UnblendedCost: { Amount: "1000.00", Unit: "USD" } },
+          }],
+        },
+        {
+          Groups: [{
+            Keys: ["MP:usage_fee-Units"],
+            Metrics: { UnblendedCost: { Amount: "250.50", Unit: "USD" } },
+          }],
+        },
+      ],
+    }));
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-09-03",
+          service: "Claude Enterprise",
+          granularity: "DAILY",
+        },
+        context as ExecuteContext,
+      );
+      const data = getWrittenResources()[0].data as {
+        groups: Array<{ key: string; amount: number }>;
+        totalCost: number;
+      };
+      assertEquals(data.groups.length, 1);
+      assertEquals(data.groups[0].amount, 1250.5);
+      assertEquals(data.totalCost, 1250.5);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test("get_cost_for_period: rejects malformed start date", async () => {
+  // No client should be created; the throw happens before any API call.
+  await assertRejects(
+    () =>
+      model.methods.get_cost_for_period.execute(
+        { start: "2026/09/01", end: "2026-10-01", granularity: "MONTHLY" },
+        makeContext().context as ExecuteContext,
+      ),
+    Error,
+    "start must be a YYYY-MM-DD date",
+  );
+});
+
+Deno.test("get_cost_for_period: rejects impossible calendar date", async () => {
+  await assertRejects(
+    () =>
+      model.methods.get_cost_for_period.execute(
+        { start: "2026-02-30", end: "2026-03-05", granularity: "MONTHLY" },
+        makeContext().context as ExecuteContext,
+      ),
+    Error,
+    "not a valid calendar date",
+  );
+});
+
+Deno.test("get_cost_for_period: rejects end on or before start", async () => {
+  await assertRejects(
+    () =>
+      model.methods.get_cost_for_period.execute(
+        { start: "2026-10-01", end: "2026-10-01", granularity: "MONTHLY" },
+        makeContext().context as ExecuteContext,
+      ),
+    Error,
+    "must be strictly after start",
+  );
+});
+
+Deno.test("get_cost_for_period: rejects a far-future end date", async () => {
+  await assertRejects(
+    () =>
+      model.methods.get_cost_for_period.execute(
+        { start: "2026-09-01", end: "2099-01-01", granularity: "MONTHLY" },
+        makeContext().context as ExecuteContext,
+      ),
+    Error,
+    "in the future beyond",
+  );
+});
+
+Deno.test({
+  name: "get_cost_for_period: empty results yield zero total and no groups",
+  sanitizeResources: false,
+  fn: async () => {
+    // CE returns a bucket with no groups (e.g. a service with no spend in
+    // the window). Must be a truthful zero, not a crash.
+    const restore = mockCostExplorer(() => ({
+      ResultsByTime: [{ Groups: [] }],
+    }));
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-10-01",
+          service: "Nonexistent Service",
+          granularity: "MONTHLY",
+        },
+        context as ExecuteContext,
+      );
+      const data = getWrittenResources()[0].data as {
+        groups: unknown[];
+        totalCost: number;
+        service: string | null;
+      };
+      assertEquals(data.groups.length, 0);
+      assertEquals(data.totalCost, 0);
+      assertEquals(data.service, "Nonexistent Service");
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test("get_cost_for_period: rejects malformed end date", async () => {
+  // Guards against a regression that validates start but not end.
+  await assertRejects(
+    () =>
+      model.methods.get_cost_for_period.execute(
+        { start: "2026-09-01", end: "2026-10-32", granularity: "MONTHLY" },
+        makeContext().context as ExecuteContext,
+      ),
+    Error,
+    "not a valid calendar date",
+  );
+});
+
+Deno.test({
+  name: "get_cost_for_period: follows NextPageToken and sums across pages",
+  sanitizeResources: false,
+  fn: async () => {
+    // First send returns a token; second returns none. Same key on both
+    // pages must sum; truncated must be false (we exhausted the pages).
+    const pages = [
+      {
+        NextPageToken: "page2",
+        ResultsByTime: [{
+          Groups: [{
+            Keys: ["MP:usage_fee-Units"],
+            Metrics: { UnblendedCost: { Amount: "20000.00", Unit: "USD" } },
+          }],
+        }],
+      },
+      {
+        ResultsByTime: [{
+          Groups: [{
+            Keys: ["MP:usage_fee-Units"],
+            Metrics: { UnblendedCost: { Amount: "15595.94", Unit: "USD" } },
+          }],
+        }],
+      },
+    ];
+    let call = 0;
+    const sentTokens: Array<string | undefined> = [];
+    const restore = mockCostExplorer((command) => {
+      const input = (command as { input: { NextPageToken?: string } }).input;
+      sentTokens.push(input.NextPageToken);
+      return pages[call++];
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-10-01",
+          service: "Claude Enterprise",
+          granularity: "MONTHLY",
+        },
+        context as ExecuteContext,
+      );
+      // First call carries no token; second carries the token from page 1.
+      assertEquals(sentTokens, [undefined, "page2"]);
+
+      const data = getWrittenResources()[0].data as {
+        groups: Array<{ key: string; amount: number }>;
+        totalCost: number;
+        truncated: boolean;
+      };
+      assertEquals(data.groups.length, 1);
+      assertEquals(data.groups[0].amount, 35595.94);
+      assertEquals(data.totalCost, 35595.94);
+      assertEquals(data.truncated, false);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_cost_for_period: single page sets truncated false",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockCostExplorer(() => ({
+      ResultsByTime: [{
+        Groups: [{
+          Keys: ["MP:usage_fee-Units"],
+          Metrics: { UnblendedCost: { Amount: "100.00", Unit: "USD" } },
+        }],
+      }],
+    }));
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-10-01",
+          service: "Claude Enterprise",
+          granularity: "MONTHLY",
+        },
+        context as ExecuteContext,
+      );
+      const data = getWrittenResources()[0].data as { truncated: boolean };
+      assertEquals(data.truncated, false);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_cost_for_period: hits page cap and marks truncated true",
+  sanitizeResources: false,
+  fn: async () => {
+    // A response that always returns a NextPageToken must terminate at the
+    // 50-page cap with truncated=true (never an infinite loop).
+    let sends = 0;
+    const restore = mockCostExplorer(() => {
+      sends++;
+      return {
+        NextPageToken: `page-${sends}`,
+        ResultsByTime: [{
+          Groups: [{
+            Keys: ["MP:usage_fee-Units"],
+            Metrics: { UnblendedCost: { Amount: "1.00", Unit: "USD" } },
+          }],
+        }],
+      };
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.get_cost_for_period.execute(
+        {
+          start: "2026-09-01",
+          end: "2026-10-01",
+          service: "Claude Enterprise",
+          granularity: "MONTHLY",
+        },
+        context as ExecuteContext,
+      );
+      // Exactly 50 pages read, then stopped by the cap.
+      assertEquals(sends, 50);
+      const data = getWrittenResources()[0].data as {
+        truncated: boolean;
+        totalCost: number;
+      };
+      assertEquals(data.truncated, true);
+      // 50 pages × $1.00 of the same usage type, summed.
+      assertEquals(data.totalCost, 50);
+    } finally {
+      restore();
+    }
+  },
 });
