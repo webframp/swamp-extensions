@@ -48,6 +48,31 @@ function getBaseUrl(site: string): string {
 }
 
 /**
+ * Read a successful response body as JSON.
+ *
+ * An empty body (for example 202 Accepted) yields an empty object. A body that
+ * is not valid JSON throws an error naming the HTTP method, path and status,
+ * with a snippet of the body, so the failure is diagnosable.
+ */
+async function readJsonBody(
+  response: Response,
+  method: string,
+  path: string,
+): Promise<Record<string, unknown>> {
+  const raw = await response.text();
+  if (raw.trim() === "") return {};
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new Error(
+      `Datadog API ${method} ${path} returned invalid JSON (HTTP ${response.status}): ${
+        raw.slice(0, 200)
+      }`,
+    );
+  }
+}
+
+/**
  * Make a single Datadog API request.
  *
  * Handles:
@@ -84,8 +109,12 @@ export async function ddApi(
 
   // 429 rate limit: read Retry-After, wait, retry once
   if (response.status === 429) {
+    const retryAfterRaw = parseInt(
+      response.headers.get("Retry-After") ?? "5",
+      10,
+    );
     const retryAfter = Math.min(
-      parseInt(response.headers.get("Retry-After") ?? "5", 10),
+      Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
       60,
     );
     await response.body?.cancel();
@@ -115,7 +144,10 @@ export async function ddApi(
     return {};
   }
 
-  const json = await response.json();
+  // Some success responses (e.g. 202 Accepted) carry no body. Parsing an empty
+  // body as JSON throws after the server already applied the change, so treat
+  // an empty body as an empty object.
+  const json = await readJsonBody(response, method, path);
 
   // If response has JSON:API shape (data with id/type/attributes), flatten it
   if (json && typeof json === "object" && "data" in json) {
@@ -199,8 +231,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -223,7 +259,7 @@ export async function ddApiPaginated(
         );
       }
 
-      const json = await response.json();
+      const json = await readJsonBody(response, "GET", path);
       const items = extractItems(json);
       allResults.push(...items);
 
@@ -268,8 +304,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -292,7 +332,7 @@ export async function ddApiPaginated(
         );
       }
 
-      const json = await response.json();
+      const json = await readJsonBody(response, "GET", path);
       const items = extractItems(json);
       allResults.push(...items);
 
@@ -334,8 +374,12 @@ export async function ddApiPaginated(
 
       // 429 retry
       if (response.status === 429) {
+        const retryAfterRaw = parseInt(
+          response.headers.get("Retry-After") ?? "5",
+          10,
+        );
         const retryAfter = Math.min(
-          parseInt(response.headers.get("Retry-After") ?? "5", 10),
+          Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
           60,
         );
         await response.body?.cancel();
@@ -358,7 +402,7 @@ export async function ddApiPaginated(
         );
       }
 
-      const json = await response.json();
+      const json = await readJsonBody(response, "GET", path);
       const items = extractItems(json);
       allResults.push(...items);
 
@@ -388,8 +432,12 @@ export async function ddApiPaginated(
 
     // 429 retry
     if (response.status === 429) {
+      const retryAfterRaw = parseInt(
+        response.headers.get("Retry-After") ?? "5",
+        10,
+      );
       const retryAfter = Math.min(
-        parseInt(response.headers.get("Retry-After") ?? "5", 10),
+        Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
         60,
       );
       await response.body?.cancel();
@@ -410,7 +458,7 @@ export async function ddApiPaginated(
       );
     }
 
-    const json = await response.json();
+    const json = await readJsonBody(response, "GET", path);
     const items = extractItems(json);
     allResults.push(...items);
   }
@@ -575,8 +623,12 @@ export async function ddApiPostPaginated(
 
     // 429 retry
     if (response.status === 429) {
+      const retryAfterRaw = parseInt(
+        response.headers.get("Retry-After") ?? "5",
+        10,
+      );
       const retryAfter = Math.min(
-        parseInt(response.headers.get("Retry-After") ?? "5", 10),
+        Number.isFinite(retryAfterRaw) ? retryAfterRaw : 5,
         60,
       );
       await response.body?.cancel();
@@ -603,7 +655,7 @@ export async function ddApiPostPaginated(
       );
     }
 
-    const json = await response.json();
+    const json = await readJsonBody(response, "POST", path);
     const items = extractItems(json);
     allResults.push(...items);
 

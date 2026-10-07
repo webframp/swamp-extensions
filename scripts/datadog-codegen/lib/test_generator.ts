@@ -125,10 +125,14 @@ export function generateTestSource(
   // One execution test per method type (distinguish GET-list from POST-list)
   const testedTypes = new Set<string>();
   for (const method of methods) {
-    const typeKey =
+    // Distinguish POST-list from GET-list, and path-param from path-less
+    // variants (e.g. PATCH /x vs PATCH /x/{id}) so each request shape keeps
+    // its own execution test.
+    const baseKey =
       method.type === "list" && method.operation.httpMethod === "post"
         ? "list_post"
         : method.type;
+    const typeKey = `${baseKey}:${method.operation.pathParams.length > 0}`;
     if (testedTypes.has(typeKey)) continue;
     testedTypes.add(typeKey);
     lines.push(generateExecutionTest(config, method));
@@ -142,6 +146,19 @@ export function generateTestSource(
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Mock response body for a write method. An operation whose success response
+ * declares no content schema (e.g. 202 Accepted) gets an empty body (null), so
+ * the generated test exercises the empty-response path of the real API.
+ */
+function mockResponseBody(
+  method: ClassifiedMethod,
+  fixture: unknown,
+): unknown {
+  if (!method.operation.responseSchema) return null;
+  return method.operation.isJsonApi ? { data: fixture } : fixture;
 }
 
 /** Generate the mock HTTP server for Datadog */
@@ -185,7 +202,7 @@ function startMockDdServer(
     for (const [pattern, { body: respBody, status }] of Object.entries(responses)) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });
@@ -407,9 +424,7 @@ ${reqAsserts(false)}
   }
 
   if (method.type === "update") {
-    const responseBody = method.operation.isJsonApi
-      ? { data: fixture }
-      : fixture;
+    const responseBody = mockResponseBody(method, fixture);
     const updateArgs = { ...testArgs, name: "test-resource" };
     const expectedInstance = hasPathParam ? "test-id-123" : "updated";
     return `Deno.test({
@@ -446,7 +461,7 @@ ${reqAsserts(true)}
   }
 
   // Default: action
-  const responseBody = method.operation.isJsonApi ? { data: fixture } : fixture;
+  const responseBody = mockResponseBody(method, fixture);
   const actionArgs = { ...testArgs, name: "test-resource" };
   const actionHasBody = method.operation.requestBody !== undefined;
   return `Deno.test({

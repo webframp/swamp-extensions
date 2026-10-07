@@ -617,7 +617,7 @@ function generateGetBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^get_/, "");
+  const resourceName = getResourceName(method);
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
   ];
@@ -691,7 +691,7 @@ function generateCreateBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^create_/, "");
+  const resourceName = getResourceName(method);
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
@@ -811,7 +811,7 @@ function generateUpdateBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^update_/, "");
+  const resourceName = getResourceName(method);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1

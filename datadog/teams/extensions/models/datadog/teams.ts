@@ -359,6 +359,7 @@ const TeamNotificationRulesItemSchema = z.object({
   ).describe("Team notification rule type"),
   email: z.object({
     enabled: z.boolean().optional(),
+    recipient_email: z.string().optional(),
   }).optional().describe("Email notification settings for the team"),
   ms_teams: z.object({
     connector_name: z.string().optional(),
@@ -366,6 +367,9 @@ const TeamNotificationRulesItemSchema = z.object({
   pagerduty: z.object({
     service_name: z.string().optional(),
   }).optional().describe("PagerDuty notification settings for the team"),
+  servicenow: z.object({
+    templates: z.array(z.string()).optional(),
+  }).optional().describe("ServiceNow notification settings for the team."),
   slack: z.object({
     channel: z.string().optional(),
     workspace: z.string().optional(),
@@ -391,6 +395,7 @@ const CreateTeamNotificationRuleSchema = z.object({
   ).describe("Team notification rule type"),
   email: z.object({
     enabled: z.boolean().optional(),
+    recipient_email: z.string().optional(),
   }).optional().describe("Email notification settings for the team"),
   ms_teams: z.object({
     connector_name: z.string().optional(),
@@ -398,6 +403,9 @@ const CreateTeamNotificationRuleSchema = z.object({
   pagerduty: z.object({
     service_name: z.string().optional(),
   }).optional().describe("PagerDuty notification settings for the team"),
+  servicenow: z.object({
+    templates: z.array(z.string()).optional(),
+  }).optional().describe("ServiceNow notification settings for the team."),
   slack: z.object({
     channel: z.string().optional(),
     workspace: z.string().optional(),
@@ -504,7 +512,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -556,6 +564,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1962,6 +1975,7 @@ export const model = {
         email: z.unknown().optional(),
         ms_teams: z.unknown().optional(),
         pagerduty: z.unknown().optional(),
+        servicenow: z.unknown().optional(),
         slack: z.unknown().optional(),
       }),
       execute: async (
@@ -2059,6 +2073,7 @@ export const model = {
         email: z.unknown().optional(),
         ms_teams: z.unknown().optional(),
         pagerduty: z.unknown().optional(),
+        servicenow: z.unknown().optional(),
         slack: z.unknown().optional(),
       }),
       execute: async (

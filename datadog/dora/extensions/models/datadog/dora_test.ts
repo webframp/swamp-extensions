@@ -36,6 +36,7 @@ Deno.test("dora model: has expected methods", () => {
   assertExists(model.methods.create_dora_deployment);
   assertExists(model.methods.delete_dora_deployment);
   assertExists(model.methods.list_dora_deployments);
+  assertExists(model.methods.patch_dora_deployment_by_version);
   assertExists(model.methods.get_dora_deployment);
   assertExists(model.methods.patch_dora_deployment);
   assertExists(model.methods.create_dora_failure);
@@ -48,6 +49,7 @@ Deno.test("dora model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["dora_deployment"]);
   assertExists(model.resources["dora_deployments"]);
+  assertExists(model.resources["patch_dora_deployment_by_version"]);
   assertExists(model.resources["patch_dora_deployment"]);
   assertExists(model.resources["dora_failure"]);
   assertExists(model.resources["dora_failures"]);
@@ -98,7 +100,7 @@ function startMockDdServer(
     ) {
       if (path.includes(pattern)) {
         const code = status ?? 200;
-        if (code === 204 || code === 205) {
+        if (code === 204 || code === 205 || respBody === null) {
           return new Response(null, { status: code });
         }
         return Response.json(respBody, { status: code });
@@ -311,6 +313,61 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "dora model: patch_dora_deployment_by_version executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/dora/deployments": { body: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).patch_dora_deployment_by_version.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/dora/deployments");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "patch_dora_deployment_by_version");
+      assertEquals(resources[0].name, "updated");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "dora model: get_dora_deployment fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -387,7 +444,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/deployments/test-id-123": { body: { "id": "fixture-123" } },
+      "/deployments/test-id-123": { body: null },
     });
     const uninstall = installFetchMock(url);
 

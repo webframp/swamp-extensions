@@ -2,12 +2,14 @@
 import { assertEquals } from "@std/assert";
 import { assertThrows } from "@std/assert";
 import {
+  artifactChanged,
   buildUpgradesBlock,
   compareCalVer,
   computeModelVersion,
   computeUpgradesBlock,
   extractExistingUpgrades,
   lastToVersion,
+  nextVersion,
   stripUpgradesBlock,
 } from "./upgrades.ts";
 
@@ -181,6 +183,24 @@ Deno.test("computeModelVersion: changed content -> bumps (new date -> .1)", asyn
     );
     assertEquals(res.status, "changed");
     assertEquals(res.version, "2026.08.28.1");
+  } finally {
+    await Deno.remove(tmp);
+  }
+});
+
+Deno.test("nextVersion: bumps micro on same date, resets on new date", () => {
+  assertEquals(nextVersion("2026.10.07.3", "2026.10.07"), "2026.10.07.4");
+  assertEquals(nextVersion("2026.09.18.5", "2026.10.07"), "2026.10.07.1");
+});
+
+Deno.test("artifactChanged: detects differences, ignores formatting, missing file counts as changed", async () => {
+  const tmp = await Deno.makeTempFile({ suffix: ".ts" });
+  try {
+    await Deno.writeTextFile(tmp, "export const a = 1;\n");
+    assertEquals(await artifactChanged(tmp, "export const a = 1;\n"), false);
+    assertEquals(await artifactChanged(tmp, "export const a   =  1 ;"), false);
+    assertEquals(await artifactChanged(tmp, "export const a = 2;\n"), true);
+    assertEquals(await artifactChanged(tmp + ".missing", "x"), true);
   } finally {
     await Deno.remove(tmp);
   }

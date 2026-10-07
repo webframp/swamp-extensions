@@ -19,17 +19,18 @@ swamp model create @webframp/datadog/dora dd-dora \
 
 ## Methods
 
-| Method                   | Description                     |
-| ------------------------ | ------------------------------- |
-| `create_dora_deployment` | Send a deployment event         |
-| `delete_dora_deployment` | Delete a deployment event       |
-| `list_dora_deployments`  | Get a list of deployment events |
-| `get_dora_deployment`    | Get a deployment event          |
-| `patch_dora_deployment`  | Patch a deployment event        |
-| `create_dora_failure`    | Send an incident event          |
-| `delete_dora_failure`    | Delete an incident event        |
-| `list_dora_failures`     | Get a list of incident events   |
-| `get_dora_failure`       | Get an incident event           |
+| Method                             | Description                            |
+| ---------------------------------- | -------------------------------------- |
+| `create_dora_deployment`           | Send a deployment event                |
+| `delete_dora_deployment`           | Delete a deployment event              |
+| `list_dora_deployments`            | Get a list of deployment events        |
+| `patch_dora_deployment_by_version` | Mark a deployment as failed by version |
+| `get_dora_deployment`              | Get a deployment event                 |
+| `patch_dora_deployment`            | Mark a deployment as failed by ID      |
+| `create_dora_failure`              | Send an incident event                 |
+| `delete_dora_failure`              | Delete an incident event               |
+| `list_dora_failures`               | Get a list of incident events          |
+| `get_dora_failure`                 | Get an incident event                  |
 
 ## Development
 

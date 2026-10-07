@@ -129,7 +129,7 @@ const ListDoraFailuresSchema = z.object({
 /** Datadog DORA Metrics — deployment frequency, lead time, MTTR, and change failure rate */
 export const model = {
   type: "@webframp/datadog/dora",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -183,6 +183,11 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -198,8 +203,14 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
+    "patch_dora_deployment_by_version": {
+      description: "Mark a deployment as failed by version",
+      schema: z.object({}),
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "patch_dora_deployment": {
-      description: "Patch a deployment event",
+      description: "Mark a deployment as failed by ID",
       schema: z.object({}),
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -393,6 +404,65 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    patch_dora_deployment_by_version: {
+      description: "Mark a deployment as failed by version",
+      arguments: z.object({
+        change_failure: z.boolean().describe(
+          "Indicates whether the deployment resulted in a change failure.",
+        ),
+        env: z.string().describe(
+          "The environment the deployment was performed in.",
+        ),
+        remediation: z.unknown().optional(),
+        service: z.string().describe(
+          "The name of the service that was deployed.",
+        ),
+        version: z.string().describe(
+          "The version deployed. This can be seen in the Service Catalog or in the APM D...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = {
+          data: { type: "dora_deployment_patch_request", attributes: attrs },
+        };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "PATCH",
+          `/api/v2/dora/deployments`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "patch_dora_deployment_by_version",
+          "updated",
+          result,
+        );
+        context.logger.info("Updated patch_dora_deployment_by_version", {});
+        return { dataHandles: [handle] };
+      },
+    },
     get_dora_deployment: {
       description: "Get a deployment event",
       arguments: z.object({
@@ -433,7 +503,7 @@ export const model = {
       },
     },
     patch_dora_deployment: {
-      description: "Patch a deployment event",
+      description: "Mark a deployment as failed by ID",
       arguments: z.object({
         deployment_id: z.string().describe("The ID of the deployment event."),
         change_failure: z.boolean().optional().describe(
