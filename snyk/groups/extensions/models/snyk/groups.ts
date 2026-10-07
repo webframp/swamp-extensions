@@ -8,7 +8,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/groups";
 
@@ -23,9 +30,9 @@ const GlobalArgsSchema = z.object({
 });
 
 const GroupsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type."),
-  name: z.string().describe("The name of the group."),
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type."),
+  name: z.string().nullish().describe("The name of the group."),
 }).passthrough();
 
 const ListGroupsSchema = z.object({
@@ -41,36 +48,50 @@ const ListGroupsSchema = z.object({
 });
 
 const GetGroupSchema = z.object({
-  id: z.string(),
-  type: z.enum(["group"]).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe(
     "The type of the resource for group operations",
   ),
-  avatar_url: z.string().optional().describe(
+  avatar_url: z.string().nullish().describe(
     "The URL of an image to use as the group's avatar.",
   ),
-  created_at: z.string().describe("The time the group was created."),
-  logo_url: z.string().optional().describe(
+  created_at: z.string().nullish().describe("The time the group was created."),
+  logo_url: z.string().nullish().describe(
     "The URL of an image to use as the group's logo.",
   ),
-  name: z.string().describe("The name of the group."),
-  slug: z.string().optional().describe("A slug uniquely identifying the group"),
-  updated_at: z.string().describe("The time the group was created."),
-  tenant_id: z.string().optional().describe("Related tenant ID"),
+  name: z.string().nullish().describe("The name of the group."),
+  slug: z.string().nullish().describe("A slug uniquely identifying the group"),
+  updated_at: z.string().nullish().describe("The time the group was created."),
+  tenant_id: z.string().nullish().describe("Related tenant ID"),
 }).passthrough();
 
 const ListGroupAuditLogsSchema = z.object({
-  type: z.string().optional(),
+  type: z.string().nullish(),
+}).passthrough();
+
+const CreateGroupExportSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  created: z.string().nullish(),
+}).passthrough();
+
+const GetGroupExportJobStatusSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  created: z.string().nullish(),
+  formats: z.array(z.string()).nullish(),
+  status: z.string().nullish(),
 }).passthrough();
 
 const GroupUserOrgMembershipsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type."),
-  created_at: z.unknown().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type."),
+  created_at: z.unknown().nullish().describe(
     "The date that the org membership was created on",
   ),
-  org_id: z.string().optional().describe("Related org ID"),
-  role_id: z.string().optional().describe("Related role ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 const ListGroupUserOrgMembershipsSchema = z.object({
@@ -86,26 +107,25 @@ const ListGroupUserOrgMembershipsSchema = z.object({
 });
 
 const OrgsInGroupItemSchema = z.object({
-  id: z.string().describe("The Snyk ID of the organization."),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  access_requests_enabled: z.boolean().optional().describe(
+  id: z.string().nullish().describe("The Snyk ID of the organization."),
+  type: z.string().nullish(),
+  access_requests_enabled: z.boolean().nullish().describe(
     "Whether the organization permits access requests from users who are not members of the organization.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time the organization was created.",
   ),
-  group_id: z.string().optional().describe(
+  group_id: z.string().nullish().describe(
     "The Snyk ID of the group to which the organization belongs.",
   ),
-  is_personal: z.boolean().describe(
+  is_personal: z.boolean().nullish().describe(
     "Whether the organization is independent (that is, not part of a group).",
   ),
-  name: z.string().describe("The display name of the organization."),
-  slug: z.string().describe(
+  name: z.string().nullish().describe("The display name of the organization."),
+  slug: z.string().nullish().describe(
     "The canonical (unique and URL-friendly) name of the organization.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullish().describe(
     "The time the organization was last modified.",
   ),
 }).passthrough();
@@ -123,12 +143,12 @@ const ListOrgsInGroupSchema = z.object({
 });
 
 const GroupPoliciesItemSchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
-  type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]),
+  type: z.string().nullish(),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]).nullish(),
+  action_type: z.string().nullish(),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -145,17 +165,17 @@ const GroupPoliciesItemSchema = z.object({
         z.unknown(),
         z.unknown(),
       ]),
-    ),
-    logical_operator: z.unknown(),
-  }),
-  created_at: z.string(),
+    ).nullish(),
+    logical_operator: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish(),
   created_by: z.object({
-    email: z.string().nullable().optional(),
-    id: z.string(),
-    name: z.string(),
-  }),
-  name: z.string(),
-  updated_at: z.string(),
+    email: z.string().nullable().nullish(),
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+  }).passthrough().nullish(),
+  name: z.string().nullish(),
+  updated_at: z.string().nullish(),
 }).passthrough();
 
 const ListGroupPoliciesSchema = z.object({
@@ -171,12 +191,12 @@ const ListGroupPoliciesSchema = z.object({
 });
 
 const CreateGroupPolicySchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "A unique identifier for this particular occurrence of the group level policy.",
   ),
-  type: z.enum(["policy"]).optional(),
-  action: z.union([z.unknown(), z.unknown(), z.unknown()]),
-  action_type: z.enum(["ignore", "annotation", "severity-override"]),
+  type: z.string().nullish(),
+  action: z.union([z.unknown(), z.unknown(), z.unknown()]).nullish(),
+  action_type: z.string().nullish(),
   conditions_group: z.object({
     conditions: z.array(
       z.union([
@@ -193,34 +213,32 @@ const CreateGroupPolicySchema = z.object({
         z.unknown(),
         z.unknown(),
       ]),
-    ),
-    logical_operator: z.unknown(),
-  }),
-  created_at: z.string(),
+    ).nullish(),
+    logical_operator: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish(),
   created_by: z.object({
-    email: z.string().nullable().optional(),
-    id: z.string(),
-    name: z.string(),
-  }),
-  name: z.string(),
-  updated_at: z.string(),
+    email: z.string().nullable().nullish(),
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+  }).passthrough().nullish(),
+  name: z.string().nullish(),
+  updated_at: z.string().nullish(),
 }).passthrough();
 
 const AssignmentsItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the assignment."),
-  type: z.enum(["assignments"]).optional().describe(
+  id: z.string().nullish().describe("The unique identifier of the assignment."),
+  type: z.string().nullish().describe(
     'The type identifier for the "assignments" resource.',
   ),
-  created_at: z.string().describe(
+  created_at: z.string().nullish().describe(
     "The timestamp when the assignment was created.",
   ),
-  created_by: z.string().optional().describe(
+  created_by: z.string().nullish().describe(
     "The ID of the user who created the assignment.",
   ),
-  rule_extension_id: z.string().optional().describe(
-    "Related rule_extension ID",
-  ),
-  scope_id: z.string().optional().describe("Related scope ID"),
+  rule_extension_id: z.string().nullish().describe("Related rule_extension ID"),
+  scope_id: z.string().nullish().describe("Related scope ID"),
 }).passthrough();
 
 const ListAssignmentsSchema = z.object({
@@ -236,41 +254,41 @@ const ListAssignmentsSchema = z.object({
 });
 
 const SecretsRuleExtensionsItemSchema = z.object({
-  id: z.string().describe("Unique identifier for a SAST rule extension"),
-  type: z.enum(["rule_extensions"]).optional().describe(
+  id: z.string().nullish().describe(
+    "Unique identifier for a SAST rule extension",
+  ),
+  type: z.string().nullish().describe(
     'The type identifier for the "rule_extensions" resource.',
   ),
   configuration: z.object({
-    type: z.enum(["addition"]),
-  }),
-  created_at: z.string().describe(
+    type: z.string().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish().describe(
     "Timestamp when the rule extension was created",
   ),
-  created_by: z.string().describe(
+  created_by: z.string().nullish().describe(
     "User ID of the user who created the Secrets rule extension",
   ),
-  description: z.string().max(4000).optional().describe(
-    "The description for a rule extension to provide extra details on why it is safe to assume issues ...",
+  description: z.string().nullish().describe(
+    "The description for a rule extension to provide extra details on why it is safe to assume issues...",
   ),
-  kind: z.enum(["secrets_regex"]).describe(
+  kind: z.string().nullish().describe(
     "Kind value for secrets regex rule extensions.",
   ),
-  published_at: z.string().nullable().describe(
+  published_at: z.string().nullable().nullish().describe(
     "Timestamp when the rule extension was published",
   ),
-  published_by: z.string().nullable().describe(
+  published_by: z.string().nullable().nullish().describe(
     "User ID of the user who published the rule extension",
   ),
   signature: z.object({
-    regex_pattern: z.string().max(1000),
-  }),
-  status: z.enum(["published", "draft"]).describe(
-    "The status for a rule extension. Rule extensions in draft do not apply to any analysis test until...",
-  ),
-  updated_at: z.string().describe(
+    regex_pattern: z.string().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status for a rule extension."),
+  updated_at: z.string().nullish().describe(
     "Timestamp when the rule extension was last updated",
   ),
-  updated_by: z.string().describe(
+  updated_by: z.string().nullish().describe(
     "User ID of the user who updated the Secrets rule extension",
   ),
 }).passthrough();
@@ -288,41 +306,41 @@ const ListSecretsRuleExtensionsSchema = z.object({
 });
 
 const CreateSecretsRuleExtensionSchema = z.object({
-  id: z.string().describe("Unique identifier for a SAST rule extension"),
-  type: z.enum(["rule_extensions"]).optional().describe(
+  id: z.string().nullish().describe(
+    "Unique identifier for a SAST rule extension",
+  ),
+  type: z.string().nullish().describe(
     'The type identifier for the "rule_extensions" resource.',
   ),
   configuration: z.object({
-    type: z.enum(["addition"]),
-  }),
-  created_at: z.string().describe(
+    type: z.string().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish().describe(
     "Timestamp when the rule extension was created",
   ),
-  created_by: z.string().describe(
+  created_by: z.string().nullish().describe(
     "User ID of the user who created the Secrets rule extension",
   ),
-  description: z.string().max(4000).optional().describe(
-    "The description for a rule extension to provide extra details on why it is safe to assume issues ...",
+  description: z.string().nullish().describe(
+    "The description for a rule extension to provide extra details on why it is safe to assume issues...",
   ),
-  kind: z.enum(["secrets_regex"]).describe(
+  kind: z.string().nullish().describe(
     "Kind value for secrets regex rule extensions.",
   ),
-  published_at: z.string().nullable().describe(
+  published_at: z.string().nullable().nullish().describe(
     "Timestamp when the rule extension was published",
   ),
-  published_by: z.string().nullable().describe(
+  published_by: z.string().nullable().nullish().describe(
     "User ID of the user who published the rule extension",
   ),
   signature: z.object({
-    regex_pattern: z.string().max(1000),
-  }),
-  status: z.enum(["published", "draft"]).describe(
-    "The status for a rule extension. Rule extensions in draft do not apply to any analysis test until...",
-  ),
-  updated_at: z.string().describe(
+    regex_pattern: z.string().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status for a rule extension."),
+  updated_at: z.string().nullish().describe(
     "Timestamp when the rule extension was last updated",
   ),
-  updated_by: z.string().describe(
+  updated_by: z.string().nullish().describe(
     "User ID of the user who updated the Secrets rule extension",
   ),
 }).passthrough();
@@ -334,7 +352,7 @@ const CreateSecretsRuleExtensionSchema = z.object({
 /** Snyk Groups — group management, orgs, members, and audit */
 export const model = {
   type: "@webframp/snyk/groups",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -401,6 +419,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -424,13 +447,13 @@ export const model = {
     },
     "group_export": {
       description: "Start an export",
-      schema: z.object({}),
+      schema: CreateGroupExportSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
     "group_export_job_status": {
       description: "Get export status",
-      schema: z.object({}),
+      schema: GetGroupExportJobStatusSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -460,7 +483,7 @@ export const model = {
     },
     "assignments": {
       description: "List all assignments for a group",
-      schema: ListAssignmentsSchema,
+      schema: z.union([ListAssignmentsSchema, z.object({}).passthrough()]),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -479,7 +502,7 @@ export const model = {
     },
     "user": {
       description: "Update a user's role in a group (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -505,17 +528,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -561,6 +580,7 @@ export const model = {
           `/groups/${encodeURIComponent(groupId)}`,
           version,
         );
+        requireBody(result, "get_group");
 
         const handle = await context.writeResource("group", "latest", result);
         context.logger.info("Fetched group", {});
@@ -589,12 +609,13 @@ export const model = {
         project_id: z.string().optional().describe(
           "Filter logs by project ID.",
         ),
-        events: z.string().optional().describe(
+        events: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Filter logs by event types, cannot be used in conjunction with exclude_events...",
         ),
-        exclude_events: z.string().optional().describe(
-          "Exclude event types from results, cannot be used in conjunctions with events...",
-        ),
+        exclude_events: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Exclude event types from results, cannot be used in conjunctions with events...",
+          ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -611,23 +632,24 @@ export const model = {
         },
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(queryEntries(args, {
+          cursor: { name: "cursor" },
+          from: { name: "from" },
+          to: { name: "to" },
+          size: { name: "size" },
+          sort_order: { name: "sort_order" },
+          user_id: { name: "user_id" },
+          project_id: { name: "project_id" },
+          events: { name: "events" },
+          exclude_events: { name: "exclude_events" },
+        }));
         const result = await snykApi(
           apiToken,
           "GET",
           `/groups/${encodeURIComponent(groupId)}/audit_logs/search${qs}`,
           version,
         );
+        requireBody(result, "list_group_audit_logs");
 
         const handle = await context.writeResource(
           "list_group_audit_logs",
@@ -663,16 +685,12 @@ export const model = {
         },
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const pathKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const qs = toQueryString(
+          queryEntries(args, {
+            include_deleted: { name: "include_deleted" },
+            include_deactivated: { name: "include_deactivated" },
+          }),
+        );
 
         const result = await snykApi(
           apiToken,
@@ -718,6 +736,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_group_export");
 
         const handle = await context.writeResource(
           "group_export",
@@ -756,6 +775,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_group_export_job_status");
 
         const handle = await context.writeResource(
           "group_export_job_status",
@@ -791,17 +811,17 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          user_id: { name: "user_id" },
+          org_name: { name: "org_name" },
+          role_name: { name: "role_name" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/org_memberships`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -858,17 +878,17 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          name: { name: "name" },
+          slug: { name: "slug" },
+          expand: { name: "expand" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/orgs`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -911,17 +931,13 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/policies`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -981,6 +997,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_group_policy");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1076,9 +1093,8 @@ export const model = {
     list_assignments: {
       description: "List all assignments for a group",
       arguments: z.object({
-        rule_extension_id: z.string().optional().describe(
-          "Filter by rule extension IDs",
-        ),
+        rule_extension_id: z.union([z.string(), z.array(z.string())]).optional()
+          .describe("Filter by rule extension IDs"),
         org_id: z.string().optional().describe("Filter by organization ID"),
         group_id: z.string().optional().describe("Filter by group ID"),
       }),
@@ -1098,17 +1114,17 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          rule_extension_id: { name: "rule_extension_id", comma: true },
+          org_id: { name: "org_id" },
+          group_id: { name: "group_id" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/rule_extensions/assignments`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1177,7 +1193,9 @@ export const model = {
     delete_assignments: {
       description: "Delete assignments for rule extensions",
       arguments: z.object({
-        id: z.string().optional().describe("Filter by IDs"),
+        id: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Filter by IDs",
+        ),
         rule_extension_id: z.string().optional().describe(
           "Filter by rule extension ID",
         ),
@@ -1197,17 +1215,12 @@ export const model = {
         },
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const pathKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, {
+            id: { name: "id", comma: true },
+            rule_extension_id: { name: "rule_extension_id" },
+          }),
+        );
         await snykApi(
           apiToken,
           "DELETE",
@@ -1241,17 +1254,13 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/secrets/rule_extensions`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1312,6 +1321,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_secrets_rule_extension");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1355,6 +1365,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_secrets_rule_extension");
 
         const handle = await context.writeResource(
           "secrets_rule_extension",

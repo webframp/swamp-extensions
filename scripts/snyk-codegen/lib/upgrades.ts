@@ -232,6 +232,14 @@ export async function formatCode(code: string): Promise<string> {
   }
 }
 
+/** A generated file shipped next to the model whose changes must also bump the version. */
+export interface CompanionFile {
+  /** On-disk path of the existing file. */
+  path: string;
+  /** Freshly generated content for that file. */
+  candidate: string;
+}
+
 export interface ModelVersionResult {
   version: string;
   status: "new" | "changed" | "unchanged";
@@ -247,12 +255,18 @@ export interface ModelVersionResult {
  * compares. Identical → keep the existing version (status "unchanged").
  * Different → bump the micro segment (same date) or start at .1 (new date).
  * Missing file → status "new" at `${datePrefix}.1`.
+ *
+ * `companions` are the other generated TypeScript files that ship with or test
+ * the model (the shared `_lib/api.ts` helper and the test file). A change to any
+ * of them is a real change to the extension, so it bumps the version too; a
+ * missing companion counts as a change.
  */
 export async function computeModelVersion(
   modelPath: string,
   datePrefix: string,
   candidateCode: string,
   placeholderVersion = "0.0.0.0",
+  companions: CompanionFile[] = [],
 ): Promise<ModelVersionResult> {
   let existingContent: string;
   try {
@@ -284,7 +298,26 @@ export async function computeModelVersion(
   // needed on this side — just strip the upgrades block to match.
   const normalizedCandidate = stripUpgradesBlock(formattedCandidate);
 
-  if (normalizedExisting === normalizedCandidate) {
+  let companionsChanged = false;
+  for (const companion of companions) {
+    let onDisk: string;
+    try {
+      onDisk = await Deno.readTextFile(companion.path);
+    } catch {
+      companionsChanged = true;
+      break;
+    }
+    const formatted = await formatCode(companion.candidate);
+    if (
+      onDisk.replaceAll(`"${existingVersion}"`, `"${placeholderVersion}"`) !==
+        formatted
+    ) {
+      companionsChanged = true;
+      break;
+    }
+  }
+
+  if (!companionsChanged && normalizedExisting === normalizedCandidate) {
     return { version: existingVersion, status: "unchanged", existingContent };
   }
 

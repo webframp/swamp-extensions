@@ -21,11 +21,20 @@ export interface TypeMapperOptions {
   indent?: number;
   /** Maximum depth before collapsing to z.unknown() */
   maxDepth?: number;
+  /**
+   * Response-side mode. Response schemas describe what the API returned, which
+   * the spec never captures fully, so one unexpected value must not fail a
+   * whole page. Lenient mode emits plain `z.string()` / `z.number()` for
+   * enums, drops value constraints (min/max/pattern/int), marks every object
+   * property nullish, and omits defaults. Request-side schemas stay strict.
+   */
+  lenient?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   indent: 2,
   maxDepth: 8,
+  lenient: false,
 };
 
 /**
@@ -60,7 +69,7 @@ function schemaToZodInner(
 ): string {
   // Enum takes priority
   if (schema.enum) {
-    return enumToZod(schema.enum);
+    return opts.lenient ? lenientEnum(schema.enum) : enumToZod(schema.enum);
   }
 
   // Union types
@@ -75,10 +84,10 @@ function schemaToZodInner(
 
   switch (schema.type) {
     case "string":
-      return stringToZod(schema);
+      return opts.lenient ? "z.string()" : stringToZod(schema);
     case "number":
     case "integer":
-      return numberToZod(schema);
+      return opts.lenient ? "z.number()" : numberToZod(schema);
     case "boolean":
       return "z.boolean()";
     case "array":
@@ -122,6 +131,18 @@ function numberToZod(schema: SchemaObject): string {
     s += `.max(${schema.maximum})`;
   }
   return s;
+}
+
+/** Response-side enum: accept any value of the enum's primitive type. */
+function lenientEnum(values: (string | number | boolean)[]): string {
+  const types = new Set(values.map((v) => typeof v));
+  if (types.size === 1) {
+    const only = [...types][0];
+    if (only === "string") return "z.string()";
+    if (only === "number") return "z.number()";
+    if (only === "boolean") return "z.boolean()";
+  }
+  return "z.unknown()";
 }
 
 function enumToZod(values: (string | number | boolean)[]): string {
@@ -170,7 +191,7 @@ function objectToZod(
   }
 
   if (!schema.properties) {
-    return "z.object({})";
+    return opts.lenient ? "z.object({}).passthrough()" : "z.object({})";
   }
 
   const required = new Set(schema.required ?? []);
@@ -183,12 +204,16 @@ function objectToZod(
     let fieldType = schemaToZod(prop, opts, depth + 1);
 
     // Add .optional() for non-required fields
-    if (!required.has(name)) {
+    if (opts.lenient) {
+      // Snyk returns null for attributes the spec types as plain values.
+      fieldType += ".nullish()";
+    } else if (!required.has(name)) {
       fieldType += ".optional()";
     }
 
-    // Add .default() if the schema declares a default value
-    if (prop.default !== undefined) {
+    // Add .default() if the schema declares a default value. Response-side
+    // schemas record what the API sent, so they never inject defaults.
+    if (!opts.lenient && prop.default !== undefined) {
       fieldType += `.default(${JSON.stringify(prop.default)})`;
     }
 
@@ -203,10 +228,12 @@ function objectToZod(
   }
 
   if (fields.length === 0) {
-    return "z.object({})";
+    return opts.lenient ? "z.object({}).passthrough()" : "z.object({})";
   }
 
-  return `z.object({\n${fields.join("\n")}\n${closingIndent}})`;
+  // Response objects keep fields the spec does not list, at every depth.
+  const tail = opts.lenient ? ".passthrough()" : "";
+  return `z.object({\n${fields.join("\n")}\n${closingIndent}})${tail}`;
 }
 
 /** Generate a Zod schema variable name from an operation/resource name */
@@ -229,7 +256,37 @@ function escapeString(s: string): string {
 
 /** Truncate long descriptions for .describe() calls */
 function truncateDescription(desc: string): string {
-  const oneLine = desc.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= 100) return oneLine;
-  return oneLine.slice(0, 97) + "...";
+  return truncateAtBoundary(desc, 100);
+}
+
+/**
+ * Truncate prose to at most `max` characters without cutting a word in half.
+ * Prefers the last complete sentence inside the budget, then the last whole
+ * word followed by an ellipsis.
+ */
+export function truncateAtBoundary(text: string, max: number): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= max) return oneLine;
+
+  const bounded = oneLine.slice(0, max);
+  // A sentence terminator only counts when followed by a space (or the cut),
+  // so "e.g." or "v1.2" inside a word does not end the sentence.
+  let sentenceEnd = -1;
+  for (let i = bounded.length - 1; i > 0; i--) {
+    if (
+      ".!?".includes(bounded[i]) &&
+      (i === bounded.length - 1 ? oneLine[max] === " " : bounded[i + 1] === " ")
+    ) {
+      sentenceEnd = i;
+      break;
+    }
+  }
+  if (sentenceEnd > 0) return bounded.slice(0, sentenceEnd + 1);
+
+  // Cut at the last space within budget less room for the ellipsis.
+  const room = bounded.slice(0, max - 3);
+  const wordEnd = oneLine[max - 3] === " "
+    ? room.length
+    : room.lastIndexOf(" ");
+  return `${room.slice(0, wordEnd > 0 ? wordEnd : room.length).trimEnd()}...`;
 }

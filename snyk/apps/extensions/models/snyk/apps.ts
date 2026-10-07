@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/apps";
 
@@ -23,15 +29,15 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetAppInstallsForGroupItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().optional().describe(
-    "The OAuth2 client id for the app installation. Only provided for installations of non-interactive...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
   ),
-  installed_at: z.string().optional().describe(
+  installed_at: z.string().nullish().describe(
     "Timestamp at which this app was first installed at.",
   ),
-  app_id: z.string().optional().describe("Related app ID"),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const GetAppInstallsForGroupSchema = z.object({
@@ -47,57 +53,55 @@ const GetAppInstallsForGroupSchema = z.object({
 });
 
 const CreateGroupAppInstallSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string(),
-  client_secret: z.string(),
-  app_id: z.string().optional().describe("Related app ID"),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish(),
+  client_secret: z.string().nullish(),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const UpdateGroupAppInstallSecretSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().describe(
-    "The OAuth2 client id for the app installation. Only provided for installations of non-interactive...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
   ),
-  client_secret: z.string().min(1).describe(
-    "The OAuth2 client secret for the app. This is the only time this secret will be returned, store i...",
+  client_secret: z.string().nullish().describe(
+    "The OAuth2 client secret for the app.",
   ),
-  installed_at: z.string().optional().describe(
+  installed_at: z.string().nullish().describe(
     "Timestamp at which this app was first installed at.",
   ),
-  app_id: z.string().optional().describe("Related app ID"),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const GetOrgAppsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token_ttl_seconds: z.number().min(3600).max(86400).describe(
-    "The access token time to live for your app, in seconds. It only affects the newly generated acces...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The access token time to live for your app, in seconds.",
   ),
-  client_id: z.string().optional().describe(
-    "The oauth2 client id for the app.",
-  ),
-  context: z.enum(["tenant", "user"]).describe(
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  context: z.string().nullish().describe(
     "Allow installing the app to at org/group level or user level. Defaults to tenant.",
   ),
-  grant_type: z.enum(["authorization_code", "client_credentials"]).describe(
+  grant_type: z.string().nullish().describe(
     "An authorization grant is a credential representing the resource owner's authorization (to access...",
   ),
-  is_confidential: z.boolean().describe(
-    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC. Confidential apps c...",
+  is_confidential: z.boolean().nullish().describe(
+    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC.",
   ),
-  is_public: z.boolean().describe(
+  is_public: z.boolean().nullish().describe(
     "A boolean to indicate if an app is publicly available or not.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  org_public_id: z.string().optional(),
-  redirect_uris: z.array(z.string()).optional().describe(
-    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorizatio...",
+  org_public_id: z.string().nullish(),
+  redirect_uris: z.array(z.string()).nullish().describe(
+    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorization.",
   ),
-  scopes: z.array(z.string().min(1)).describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
@@ -115,149 +119,145 @@ const GetOrgAppsSchema = z.object({
 });
 
 const CreateOrgAppSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token_ttl_seconds: z.number().min(3600).max(86400).describe(
-    "The access token time to live for your app, in seconds. It only affects the newly generated acces...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The access token time to live for your app, in seconds.",
   ),
-  client_id: z.string().describe("The oauth2 client id for the app."),
-  client_secret: z.string().min(1).describe(
-    "The oauth2 client secret for the app. This is the only time this secret will be returned, store i...",
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  client_secret: z.string().nullish().describe(
+    "The oauth2 client secret for the app.",
   ),
-  context: z.enum(["tenant", "user"]).describe(
+  context: z.string().nullish().describe(
     "Allow installing the app to at org/group level or user level. Defaults to tenant.",
   ),
-  grant_type: z.enum(["authorization_code", "client_credentials"]).describe(
+  grant_type: z.string().nullish().describe(
     "An authorization grant is a credential representing the resource owner's authorization (to access...",
   ),
-  is_confidential: z.boolean().describe(
-    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC. Confidential apps c...",
+  is_confidential: z.boolean().nullish().describe(
+    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC.",
   ),
-  is_public: z.boolean().describe(
+  is_public: z.boolean().nullish().describe(
     "A boolean to indicate if an app is publicly available or not.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  org_public_id: z.string().optional(),
-  redirect_uris: z.array(z.string()).describe(
-    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorizatio...",
+  org_public_id: z.string().nullish(),
+  redirect_uris: z.array(z.string()).nullish().describe(
+    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorization.",
   ),
-  scopes: z.array(z.string().min(1)).describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
 
 const GetAppByIdSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token_ttl_seconds: z.number().min(3600).max(86400).describe(
-    "The access token time to live for your app, in seconds. It only affects the newly generated acces...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The access token time to live for your app, in seconds.",
   ),
-  client_id: z.string().optional().describe(
-    "The oauth2 client id for the app.",
-  ),
-  context: z.enum(["tenant", "user"]).describe(
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  context: z.string().nullish().describe(
     "Allow installing the app to at org/group level or user level. Defaults to tenant.",
   ),
-  grant_type: z.enum(["authorization_code", "client_credentials"]).describe(
+  grant_type: z.string().nullish().describe(
     "An authorization grant is a credential representing the resource owner's authorization (to access...",
   ),
-  is_confidential: z.boolean().describe(
-    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC. Confidential apps c...",
+  is_confidential: z.boolean().nullish().describe(
+    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC.",
   ),
-  is_public: z.boolean().describe(
+  is_public: z.boolean().nullish().describe(
     "A boolean to indicate if an app is publicly available or not.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  org_public_id: z.string().optional(),
-  redirect_uris: z.array(z.string()).optional().describe(
-    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorizatio...",
+  org_public_id: z.string().nullish(),
+  redirect_uris: z.array(z.string()).nullish().describe(
+    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorization.",
   ),
-  scopes: z.array(z.string().min(1)).describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
 
 const UpdateAppCreationByIdSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token_ttl_seconds: z.number().min(3600).max(86400).describe(
-    "The access token time to live for your app, in seconds. It only affects the newly generated acces...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The access token time to live for your app, in seconds.",
   ),
-  client_id: z.string().optional().describe(
-    "The oauth2 client id for the app.",
-  ),
-  context: z.enum(["tenant", "user"]).describe(
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  context: z.string().nullish().describe(
     "Allow installing the app to at org/group level or user level. Defaults to tenant.",
   ),
-  grant_type: z.enum(["authorization_code", "client_credentials"]).describe(
+  grant_type: z.string().nullish().describe(
     "An authorization grant is a credential representing the resource owner's authorization (to access...",
   ),
-  is_confidential: z.boolean().describe(
-    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC. Confidential apps c...",
+  is_confidential: z.boolean().nullish().describe(
+    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC.",
   ),
-  is_public: z.boolean().describe(
+  is_public: z.boolean().nullish().describe(
     "A boolean to indicate if an app is publicly available or not.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  org_public_id: z.string().optional(),
-  redirect_uris: z.array(z.string()).optional().describe(
-    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorizatio...",
+  org_public_id: z.string().nullish(),
+  redirect_uris: z.array(z.string()).nullish().describe(
+    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorization.",
   ),
-  scopes: z.array(z.string().min(1)).describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
 
 const CreateManageAppCreationSecretSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token_ttl_seconds: z.number().min(3600).max(86400).describe(
-    "The access token time to live for your app, in seconds. It only affects the newly generated acces...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The access token time to live for your app, in seconds.",
   ),
-  client_id: z.string().describe("The oauth2 client id for the app."),
-  client_secret: z.string().min(1).describe(
-    "The oauth2 client secret for the app. This is the only time this secret will be returned, store i...",
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  client_secret: z.string().nullish().describe(
+    "The oauth2 client secret for the app.",
   ),
-  context: z.enum(["tenant", "user"]).describe(
+  context: z.string().nullish().describe(
     "Allow installing the app to at org/group level or user level. Defaults to tenant.",
   ),
-  grant_type: z.enum(["authorization_code", "client_credentials"]).describe(
+  grant_type: z.string().nullish().describe(
     "An authorization grant is a credential representing the resource owner's authorization (to access...",
   ),
-  is_confidential: z.boolean().describe(
-    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC. Confidential apps c...",
+  is_confidential: z.boolean().nullish().describe(
+    "A boolean to indicate if an app is confidential or not as per the OAuth2 RFC.",
   ),
-  is_public: z.boolean().describe(
+  is_public: z.boolean().nullish().describe(
     "A boolean to indicate if an app is publicly available or not.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  org_public_id: z.string().optional(),
-  redirect_uris: z.array(z.string()).describe(
-    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorizatio...",
+  org_public_id: z.string().nullish(),
+  redirect_uris: z.array(z.string()).nullish().describe(
+    "List of allowed redirect URIs (OAuth callbacks) where Snyk will redirect users after authorization.",
   ),
-  scopes: z.array(z.string().min(1)).describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
 
 const GetAppInstallsForOrgItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().optional().describe(
-    "The OAuth2 client id for the app installation. Only provided for installations of non-interactive...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
   ),
-  installed_at: z.string().optional().describe(
+  installed_at: z.string().nullish().describe(
     "Timestamp at which this app was first installed at.",
   ),
-  app_id: z.string().optional().describe("Related app ID"),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const GetAppInstallsForOrgSchema = z.object({
@@ -273,26 +273,26 @@ const GetAppInstallsForOrgSchema = z.object({
 });
 
 const CreateOrgAppInstallSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string(),
-  client_secret: z.string(),
-  app_id: z.string().optional().describe("Related app ID"),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish(),
+  client_secret: z.string().nullish(),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const UpdateOrgAppInstallSecretSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().describe(
-    "The OAuth2 client id for the app installation. Only provided for installations of non-interactive...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
   ),
-  client_secret: z.string().min(1).describe(
-    "The OAuth2 client secret for the app. This is the only time this secret will be returned, store i...",
+  client_secret: z.string().nullish().describe(
+    "The OAuth2 client secret for the app.",
   ),
-  installed_at: z.string().optional().describe(
+  installed_at: z.string().nullish().describe(
     "Timestamp at which this app was first installed at.",
   ),
-  app_id: z.string().optional().describe("Related app ID"),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 // =============================================================================
@@ -302,7 +302,7 @@ const UpdateOrgAppInstallSecretSchema = z.object({
 /** Snyk Apps — OAuth application management, bots, installations */
 export const model = {
   type: "@webframp/snyk/apps",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -366,6 +366,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -448,7 +453,9 @@ export const model = {
       description: "Get a list of Snyk Apps installed for a Group",
       arguments: z.object({
         group_id: z.string().describe("Group ID"),
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -466,17 +473,15 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          expand: { name: "expand", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(String(args.group_id))}/apps/installs`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -548,6 +553,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_group_app_install");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -639,18 +645,17 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "update_group_app_install_secret");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
-          "update_group_app_install_secret",
+          "group_app_install_secret",
           id,
           result,
         );
-        context.logger.info("Created update_group_app_install_secret {id}", {
-          id,
-        });
+        context.logger.info("Created group_app_install_secret {id}", { id });
         return { dataHandles: [handle] };
       },
     },
@@ -673,17 +678,13 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/apps/creations`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -749,6 +750,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_org_app");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -786,6 +788,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_app_by_id");
 
         const handle = await context.writeResource(
           "app_by_id",
@@ -925,6 +928,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_manage_app_creation_secret");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -941,7 +945,9 @@ export const model = {
     get_app_installs_for_org: {
       description: "Get a list of Snyk Apps installed for an Organization",
       arguments: z.object({
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -959,17 +965,15 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          expand: { name: "expand", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/apps/installs`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1040,6 +1044,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_org_app_install");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1130,18 +1135,17 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "update_org_app_install_secret");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
-          "update_org_app_install_secret",
+          "org_app_install_secret",
           id,
           result,
         );
-        context.logger.info("Created update_org_app_install_secret {id}", {
-          id,
-        });
+        context.logger.info("Created org_app_install_secret {id}", { id });
         return { dataHandles: [handle] };
       },
     },

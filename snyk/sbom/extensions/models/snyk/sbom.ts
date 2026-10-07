@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi } from "./_lib/api.ts";
+import { requireBody, sanitizeInstanceName, snykApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -21,23 +21,20 @@ const GlobalArgsSchema = z.object({
 });
 
 const CreateSbomTestRunSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
 }).passthrough();
 
 const GetSbomTestStatusSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  status: z.enum(["processing", "error", "finished"]).optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  status: z.string().nullish(),
 }).passthrough();
 
 const GetSbomTestResultSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  affected_packages_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  affected_packages_id: z.string().nullish().describe(
     "Related affected_packages ID",
   ),
 }).passthrough();
@@ -49,7 +46,7 @@ const GetSbomTestResultSchema = z.object({
 /** Snyk SBOM — software bill of materials testing and analysis */
 export const model = {
   type: "@webframp/snyk/sbom",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -100,6 +97,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -163,6 +165,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_sbom_test_run");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -200,6 +203,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_sbom_test_status");
 
         const handle = await context.writeResource(
           "sbom_test_status",
@@ -238,6 +242,7 @@ export const model = {
           }/results`,
           version,
         );
+        requireBody(result, "get_sbom_test_result");
 
         const handle = await context.writeResource(
           "sbom_test_result",

@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/tests";
 
@@ -22,194 +28,213 @@ const GlobalArgsSchema = z.object({
   version: z.string().default("2024-10-15").describe("Snyk API version date"),
 });
 
+const CreateTestSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe(
+    "Creation time of the job resource",
+  ),
+  status: z.object({}).passthrough().nullish(),
+}).passthrough();
+
 const ComponentFindingsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["findings"]).optional(),
-  cause_of_failure: z.boolean().default(false).describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  cause_of_failure: z.boolean().nullish().describe(
     "Did this finding cause the test outcome to fail?",
   ),
-  component_key: z.object({}).optional(),
-  description: z.string().describe(
+  component_key: z.object({}).passthrough().nullish(),
+  description: z.string().nullish().describe(
     "A longer human-readable text description for this finding.",
   ),
-  evidence: z.array(z.unknown()).describe(
+  evidence: z.array(z.unknown()).nullish().describe(
     "Supporting evidence for (rather than representative of) the finding in other security domains and...",
   ),
-  finding_type: z.object({}),
-  key: z.string().describe(
-    "An opaque key used for aggregating the finding across multiple test executions operating on the s...",
+  finding_type: z.object({}).passthrough().nullish(),
+  key: z.string().nullish().describe(
+    "An opaque key used for aggregating the finding across multiple test executions operating on the...",
   ),
-  locations: z.array(z.unknown()).describe(
+  locations: z.array(z.unknown()).nullish().describe(
     "Locations in the tested component's contents where the finding may be found.",
   ),
-  policy_modifications: z.array(z.unknown()).optional().describe(
+  policy_modifications: z.array(z.unknown()).nullish().describe(
     "Attributes which have been modified by policy decisions.",
   ),
   problems: z.array(z.union([
     z.object({
-      id: z.string().regex(new RegExp("^CWE-[0-9]+$")),
-      source: z.enum(["cwe"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
       default_configuration: z.object({
-        severity: z.unknown(),
-      }),
+        severity: z.unknown().nullish(),
+      }).passthrough().nullish(),
       help: z.object({
-        markdown: z.string().optional(),
-        text: z.string().optional(),
-      }),
-      id: z.string(),
-      name: z.string(),
+        markdown: z.string().nullish(),
+        text: z.string().nullish(),
+      }).passthrough().nullish(),
+      id: z.string().nullish(),
+      name: z.string().nullish(),
       properties: z.object({
-        categories: z.array(z.string()),
-        cwe: z.array(z.string()),
-        example_commit_descriptions: z.array(z.string()),
-        example_commit_fixes: z.array(z.object({
-          commit_url: z.string(),
-          lines: z.array(z.unknown()),
-        })),
-        precision: z.string(),
-        repo_dataset_size: z.number().int(),
-        tags: z.array(z.string()),
-      }),
+        categories: z.array(z.string()).nullish(),
+        cwe: z.array(z.string()).nullish(),
+        example_commit_descriptions: z.array(z.string()).nullish(),
+        example_commit_fixes: z.array(
+          z.object({
+            commit_url: z.string().nullish(),
+            lines: z.array(z.unknown()).nullish(),
+          }).passthrough(),
+        ).nullish(),
+        precision: z.string().nullish(),
+        repo_dataset_size: z.number().nullish(),
+        tags: z.array(z.string()).nullish(),
+      }).passthrough().nullish(),
       short_description: z.object({
-        markdown: z.string().optional(),
-        text: z.string().optional(),
-      }),
-      source: z.enum(["snyk_code_rule"]),
-    }),
+        markdown: z.string().nullish(),
+        text: z.string().nullish(),
+      }).passthrough().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string().regex(new RegExp("^CVE-[0-9]+-[0-9]+$")),
-      source: z.enum(["cve"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      affected_hash_ranges: z.array(z.string()).optional(),
-      affected_hashes: z.array(z.string()).optional(),
-      affected_versions: z.array(z.string()).optional(),
-      alternative_ids: z.array(z.string()).optional(),
-      created_at: z.string(),
-      credits: z.array(z.string()),
-      cvss_base_score: z.unknown(),
-      cvss_sources: z.array(z.object({
-        assigner: z.string(),
-        base_score: z.unknown(),
-        cvss_version: z.string(),
-        modified_at: z.string(),
-        severity: z.unknown(),
-        type: z.unknown(),
-        vector: z.string(),
-      })),
-      cvss_vector: z.string(),
-      disclosed_at: z.string(),
-      ecosystem: z.unknown(),
-      epss_details: z.unknown().optional(),
-      exploit_details: z.unknown(),
-      id: z.string().regex(
-        new RegExp("(^SNYK(-[^-]+)+[-][0-9]+$)|(^[^:]+(:[^:]+)+$)"),
-      ),
-      initially_fixed_in_versions: z.array(z.string()),
-      insights: z.unknown().optional(),
-      is_disputed: z.boolean().optional().default(false),
-      is_fixable: z.boolean().default(false),
-      is_malicious: z.boolean().default(false),
-      is_proprietary: z.boolean().optional().default(false),
-      is_social_media_trending: z.boolean().default(false),
-      modified_at: z.string(),
-      module_name: z.string().optional(),
-      package_full_name: z.string().optional(),
-      package_name: z.string(),
-      package_namespace: z.string().optional(),
-      package_popularity_rank: z.number().min(0).max(100).optional(),
-      package_repository_url: z.string().optional(),
-      package_version: z.string(),
-      published_at: z.string(),
-      references: z.array(z.object({
-        title: z.string(),
-        url: z.string(),
-      })),
-      severity: z.unknown(),
-      severity_based_on: z.string().optional(),
-      source: z.enum(["snyk_vuln"]),
-      vendor_severity: z.string().optional(),
+      affected_hash_ranges: z.array(z.string()).nullish(),
+      affected_hashes: z.array(z.string()).nullish(),
+      affected_versions: z.array(z.string()).nullish(),
+      alternative_ids: z.array(z.string()).nullish(),
+      created_at: z.string().nullish(),
+      credits: z.array(z.string()).nullish(),
+      cvss_base_score: z.unknown().nullish(),
+      cvss_sources: z.array(
+        z.object({
+          assigner: z.string().nullish(),
+          base_score: z.unknown().nullish(),
+          cvss_version: z.string().nullish(),
+          modified_at: z.string().nullish(),
+          severity: z.unknown().nullish(),
+          type: z.unknown().nullish(),
+          vector: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      cvss_vector: z.string().nullish(),
+      disclosed_at: z.string().nullish(),
+      ecosystem: z.unknown().nullish(),
+      epss_details: z.unknown().nullish(),
+      exploit_details: z.unknown().nullish(),
+      id: z.string().nullish(),
+      initially_fixed_in_versions: z.array(z.string()).nullish(),
+      insights: z.unknown().nullish(),
+      is_disputed: z.boolean().nullish(),
+      is_fixable: z.boolean().nullish(),
+      is_malicious: z.boolean().nullish(),
+      is_proprietary: z.boolean().nullish(),
+      is_social_media_trending: z.boolean().nullish(),
+      modified_at: z.string().nullish(),
+      module_name: z.string().nullish(),
+      package_full_name: z.string().nullish(),
+      package_name: z.string().nullish(),
+      package_namespace: z.string().nullish(),
+      package_popularity_rank: z.number().nullish(),
+      package_repository_url: z.string().nullish(),
+      package_version: z.string().nullish(),
+      published_at: z.string().nullish(),
+      references: z.array(
+        z.object({
+          title: z.string().nullish(),
+          url: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      severity: z.unknown().nullish(),
+      severity_based_on: z.string().nullish(),
+      source: z.string().nullish(),
+      vendor_severity: z.string().nullish(),
       vulnerable_functions: z.record(
         z.string(),
         z.object({
-          function_id: z.unknown(),
-          versions: z.array(z.string()),
-        }),
-      ).optional(),
-      vulnerable_functions_list: z.array(z.object({
-        function_id: z.unknown(),
-        versions: z.array(z.string()),
-      })).optional(),
-    }),
+          function_id: z.unknown().nullish(),
+          versions: z.array(z.string()).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      vulnerable_functions_list: z.array(
+        z.object({
+          function_id: z.unknown().nullish(),
+          versions: z.array(z.string()).nullish(),
+        }).passthrough(),
+      ).nullish(),
+    }).passthrough(),
     z.object({
-      affected_hash_ranges: z.array(z.string()).optional(),
-      affected_hashes: z.array(z.string()).optional(),
-      affected_versions: z.array(z.string()).optional(),
-      created_at: z.string(),
-      ecosystem: z.unknown(),
-      id: z.string().regex(new RegExp("^snyk(:[^:]+)+$")),
-      instructions: z.array(z.object({
-        content: z.string(),
-        license: z.string(),
-      })),
-      license: z.string(),
-      package_full_name: z.string().optional(),
-      package_name: z.string(),
-      package_namespace: z.string().optional(),
-      package_version: z.string(),
-      published_at: z.string(),
-      severity: z.unknown(),
-      source: z.enum(["snyk_license"]),
-    }),
+      affected_hash_ranges: z.array(z.string()).nullish(),
+      affected_hashes: z.array(z.string()).nullish(),
+      affected_versions: z.array(z.string()).nullish(),
+      created_at: z.string().nullish(),
+      ecosystem: z.unknown().nullish(),
+      id: z.string().nullish(),
+      instructions: z.array(
+        z.object({
+          content: z.string().nullish(),
+          license: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      license: z.string().nullish(),
+      package_full_name: z.string().nullish(),
+      package_name: z.string().nullish(),
+      package_namespace: z.string().nullish(),
+      package_version: z.string().nullish(),
+      published_at: z.string().nullish(),
+      severity: z.unknown().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string().regex(new RegExp("^SNYK-CC-([^-]+)+[-][0-9]+$")),
-      source: z.enum(["snyk_cloud_rule"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string(),
-      source: z.enum(["ghsa"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      categories: z.array(z.string()),
-      help: z.string(),
-      id: z.string(),
-      name: z.string(),
-      precision: z.string(),
-      severity: z.unknown(),
-      short_description: z.string(),
-      source: z.enum(["secret"]),
-      tags: z.array(z.string()),
-    }),
+      categories: z.array(z.string()).nullish(),
+      help: z.string().nullish(),
+      id: z.string().nullish(),
+      name: z.string().nullish(),
+      precision: z.string().nullish(),
+      severity: z.unknown().nullish(),
+      short_description: z.string().nullish(),
+      source: z.string().nullish(),
+      tags: z.array(z.string()).nullish(),
+    }).passthrough(),
     z.object({
-      source: z.enum(["other"]),
-    }),
-  ])).describe(
-    "Problems are representative of the finding in other security domains and systems with a well-know...",
+      source: z.string().nullish(),
+    }).passthrough(),
+  ])).nullish().describe(
+    "Problems are representative of the finding in other security domains and systems with a...",
   ),
   rating: z.object({
-    severity: z.unknown(),
-  }),
+    severity: z.unknown().nullish(),
+  }).passthrough().nullish(),
   risk: z.object({
-    risk_score: z.unknown().optional(),
-  }),
+    risk_score: z.unknown().nullish(),
+  }).passthrough().nullish(),
   suppression: z.object({
-    created_at: z.string().optional(),
-    expires_at: z.string().optional(),
-    justification: z.string().optional(),
-    path: z.array(z.string()).optional(),
-    policy: z.unknown().optional(),
-    skipIfFixable: z.boolean().optional(),
-    status: z.unknown(),
-  }).optional(),
-  title: z.string().describe("A human-readable title for this finding."),
-  asset_id: z.string().optional().describe("Related asset ID"),
-  fix_id: z.string().optional().describe("Related fix ID"),
-  org_id: z.string().optional().describe("Related org ID"),
-  policy_id: z.string().optional().describe("Related policy ID"),
-  project_id: z.string().optional().describe("Related project ID"),
-  test_id: z.string().optional().describe("Related test ID"),
+    created_at: z.string().nullish(),
+    expires_at: z.string().nullish(),
+    justification: z.string().nullish(),
+    path: z.array(z.string()).nullish(),
+    policy: z.unknown().nullish(),
+    skipIfFixable: z.boolean().nullish(),
+    status: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  title: z.string().nullish().describe(
+    "A human-readable title for this finding.",
+  ),
+  asset_id: z.string().nullish().describe("Related asset ID"),
+  fix_id: z.string().nullish().describe("Related fix ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
+  policy_id: z.string().nullish().describe("Related policy ID"),
+  project_id: z.string().nullish().describe("Related project ID"),
+  test_id: z.string().nullish().describe("Related test ID"),
 }).passthrough();
 
 const ListComponentFindingsSchema = z.object({
@@ -225,193 +250,203 @@ const ListComponentFindingsSchema = z.object({
 });
 
 const FindingsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["findings"]).optional(),
-  cause_of_failure: z.boolean().default(false).describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  cause_of_failure: z.boolean().nullish().describe(
     "Did this finding cause the test outcome to fail?",
   ),
-  component_key: z.object({}).optional(),
-  description: z.string().describe(
+  component_key: z.object({}).passthrough().nullish(),
+  description: z.string().nullish().describe(
     "A longer human-readable text description for this finding.",
   ),
-  evidence: z.array(z.unknown()).describe(
+  evidence: z.array(z.unknown()).nullish().describe(
     "Supporting evidence for (rather than representative of) the finding in other security domains and...",
   ),
-  finding_type: z.object({}),
-  key: z.string().describe(
-    "An opaque key used for aggregating the finding across multiple test executions operating on the s...",
+  finding_type: z.object({}).passthrough().nullish(),
+  key: z.string().nullish().describe(
+    "An opaque key used for aggregating the finding across multiple test executions operating on the...",
   ),
-  locations: z.array(z.unknown()).describe(
+  locations: z.array(z.unknown()).nullish().describe(
     "Locations in the tested component's contents where the finding may be found.",
   ),
-  policy_modifications: z.array(z.unknown()).optional().describe(
+  policy_modifications: z.array(z.unknown()).nullish().describe(
     "Attributes which have been modified by policy decisions.",
   ),
   problems: z.array(z.union([
     z.object({
-      id: z.string().regex(new RegExp("^CWE-[0-9]+$")),
-      source: z.enum(["cwe"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
       default_configuration: z.object({
-        severity: z.unknown(),
-      }),
+        severity: z.unknown().nullish(),
+      }).passthrough().nullish(),
       help: z.object({
-        markdown: z.string().optional(),
-        text: z.string().optional(),
-      }),
-      id: z.string(),
-      name: z.string(),
+        markdown: z.string().nullish(),
+        text: z.string().nullish(),
+      }).passthrough().nullish(),
+      id: z.string().nullish(),
+      name: z.string().nullish(),
       properties: z.object({
-        categories: z.array(z.string()),
-        cwe: z.array(z.string()),
-        example_commit_descriptions: z.array(z.string()),
-        example_commit_fixes: z.array(z.object({
-          commit_url: z.string(),
-          lines: z.array(z.unknown()),
-        })),
-        precision: z.string(),
-        repo_dataset_size: z.number().int(),
-        tags: z.array(z.string()),
-      }),
+        categories: z.array(z.string()).nullish(),
+        cwe: z.array(z.string()).nullish(),
+        example_commit_descriptions: z.array(z.string()).nullish(),
+        example_commit_fixes: z.array(
+          z.object({
+            commit_url: z.string().nullish(),
+            lines: z.array(z.unknown()).nullish(),
+          }).passthrough(),
+        ).nullish(),
+        precision: z.string().nullish(),
+        repo_dataset_size: z.number().nullish(),
+        tags: z.array(z.string()).nullish(),
+      }).passthrough().nullish(),
       short_description: z.object({
-        markdown: z.string().optional(),
-        text: z.string().optional(),
-      }),
-      source: z.enum(["snyk_code_rule"]),
-    }),
+        markdown: z.string().nullish(),
+        text: z.string().nullish(),
+      }).passthrough().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string().regex(new RegExp("^CVE-[0-9]+-[0-9]+$")),
-      source: z.enum(["cve"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      affected_hash_ranges: z.array(z.string()).optional(),
-      affected_hashes: z.array(z.string()).optional(),
-      affected_versions: z.array(z.string()).optional(),
-      alternative_ids: z.array(z.string()).optional(),
-      created_at: z.string(),
-      credits: z.array(z.string()),
-      cvss_base_score: z.unknown(),
-      cvss_sources: z.array(z.object({
-        assigner: z.string(),
-        base_score: z.unknown(),
-        cvss_version: z.string(),
-        modified_at: z.string(),
-        severity: z.unknown(),
-        type: z.unknown(),
-        vector: z.string(),
-      })),
-      cvss_vector: z.string(),
-      disclosed_at: z.string(),
-      ecosystem: z.unknown(),
-      epss_details: z.unknown().optional(),
-      exploit_details: z.unknown(),
-      id: z.string().regex(
-        new RegExp("(^SNYK(-[^-]+)+[-][0-9]+$)|(^[^:]+(:[^:]+)+$)"),
-      ),
-      initially_fixed_in_versions: z.array(z.string()),
-      insights: z.unknown().optional(),
-      is_disputed: z.boolean().optional().default(false),
-      is_fixable: z.boolean().default(false),
-      is_malicious: z.boolean().default(false),
-      is_proprietary: z.boolean().optional().default(false),
-      is_social_media_trending: z.boolean().default(false),
-      modified_at: z.string(),
-      module_name: z.string().optional(),
-      package_full_name: z.string().optional(),
-      package_name: z.string(),
-      package_namespace: z.string().optional(),
-      package_popularity_rank: z.number().min(0).max(100).optional(),
-      package_repository_url: z.string().optional(),
-      package_version: z.string(),
-      published_at: z.string(),
-      references: z.array(z.object({
-        title: z.string(),
-        url: z.string(),
-      })),
-      severity: z.unknown(),
-      severity_based_on: z.string().optional(),
-      source: z.enum(["snyk_vuln"]),
-      vendor_severity: z.string().optional(),
+      affected_hash_ranges: z.array(z.string()).nullish(),
+      affected_hashes: z.array(z.string()).nullish(),
+      affected_versions: z.array(z.string()).nullish(),
+      alternative_ids: z.array(z.string()).nullish(),
+      created_at: z.string().nullish(),
+      credits: z.array(z.string()).nullish(),
+      cvss_base_score: z.unknown().nullish(),
+      cvss_sources: z.array(
+        z.object({
+          assigner: z.string().nullish(),
+          base_score: z.unknown().nullish(),
+          cvss_version: z.string().nullish(),
+          modified_at: z.string().nullish(),
+          severity: z.unknown().nullish(),
+          type: z.unknown().nullish(),
+          vector: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      cvss_vector: z.string().nullish(),
+      disclosed_at: z.string().nullish(),
+      ecosystem: z.unknown().nullish(),
+      epss_details: z.unknown().nullish(),
+      exploit_details: z.unknown().nullish(),
+      id: z.string().nullish(),
+      initially_fixed_in_versions: z.array(z.string()).nullish(),
+      insights: z.unknown().nullish(),
+      is_disputed: z.boolean().nullish(),
+      is_fixable: z.boolean().nullish(),
+      is_malicious: z.boolean().nullish(),
+      is_proprietary: z.boolean().nullish(),
+      is_social_media_trending: z.boolean().nullish(),
+      modified_at: z.string().nullish(),
+      module_name: z.string().nullish(),
+      package_full_name: z.string().nullish(),
+      package_name: z.string().nullish(),
+      package_namespace: z.string().nullish(),
+      package_popularity_rank: z.number().nullish(),
+      package_repository_url: z.string().nullish(),
+      package_version: z.string().nullish(),
+      published_at: z.string().nullish(),
+      references: z.array(
+        z.object({
+          title: z.string().nullish(),
+          url: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      severity: z.unknown().nullish(),
+      severity_based_on: z.string().nullish(),
+      source: z.string().nullish(),
+      vendor_severity: z.string().nullish(),
       vulnerable_functions: z.record(
         z.string(),
         z.object({
-          function_id: z.unknown(),
-          versions: z.array(z.string()),
-        }),
-      ).optional(),
-      vulnerable_functions_list: z.array(z.object({
-        function_id: z.unknown(),
-        versions: z.array(z.string()),
-      })).optional(),
-    }),
+          function_id: z.unknown().nullish(),
+          versions: z.array(z.string()).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      vulnerable_functions_list: z.array(
+        z.object({
+          function_id: z.unknown().nullish(),
+          versions: z.array(z.string()).nullish(),
+        }).passthrough(),
+      ).nullish(),
+    }).passthrough(),
     z.object({
-      affected_hash_ranges: z.array(z.string()).optional(),
-      affected_hashes: z.array(z.string()).optional(),
-      affected_versions: z.array(z.string()).optional(),
-      created_at: z.string(),
-      ecosystem: z.unknown(),
-      id: z.string().regex(new RegExp("^snyk(:[^:]+)+$")),
-      instructions: z.array(z.object({
-        content: z.string(),
-        license: z.string(),
-      })),
-      license: z.string(),
-      package_full_name: z.string().optional(),
-      package_name: z.string(),
-      package_namespace: z.string().optional(),
-      package_version: z.string(),
-      published_at: z.string(),
-      severity: z.unknown(),
-      source: z.enum(["snyk_license"]),
-    }),
+      affected_hash_ranges: z.array(z.string()).nullish(),
+      affected_hashes: z.array(z.string()).nullish(),
+      affected_versions: z.array(z.string()).nullish(),
+      created_at: z.string().nullish(),
+      ecosystem: z.unknown().nullish(),
+      id: z.string().nullish(),
+      instructions: z.array(
+        z.object({
+          content: z.string().nullish(),
+          license: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      license: z.string().nullish(),
+      package_full_name: z.string().nullish(),
+      package_name: z.string().nullish(),
+      package_namespace: z.string().nullish(),
+      package_version: z.string().nullish(),
+      published_at: z.string().nullish(),
+      severity: z.unknown().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string().regex(new RegExp("^SNYK-CC-([^-]+)+[-][0-9]+$")),
-      source: z.enum(["snyk_cloud_rule"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      id: z.string(),
-      source: z.enum(["ghsa"]),
-    }),
+      id: z.string().nullish(),
+      source: z.string().nullish(),
+    }).passthrough(),
     z.object({
-      categories: z.array(z.string()),
-      help: z.string(),
-      id: z.string(),
-      name: z.string(),
-      precision: z.string(),
-      severity: z.unknown(),
-      short_description: z.string(),
-      source: z.enum(["secret"]),
-      tags: z.array(z.string()),
-    }),
+      categories: z.array(z.string()).nullish(),
+      help: z.string().nullish(),
+      id: z.string().nullish(),
+      name: z.string().nullish(),
+      precision: z.string().nullish(),
+      severity: z.unknown().nullish(),
+      short_description: z.string().nullish(),
+      source: z.string().nullish(),
+      tags: z.array(z.string()).nullish(),
+    }).passthrough(),
     z.object({
-      source: z.enum(["other"]),
-    }),
-  ])).describe(
-    "Problems are representative of the finding in other security domains and systems with a well-know...",
+      source: z.string().nullish(),
+    }).passthrough(),
+  ])).nullish().describe(
+    "Problems are representative of the finding in other security domains and systems with a...",
   ),
   rating: z.object({
-    severity: z.unknown(),
-  }),
+    severity: z.unknown().nullish(),
+  }).passthrough().nullish(),
   risk: z.object({
-    risk_score: z.unknown().optional(),
-  }),
+    risk_score: z.unknown().nullish(),
+  }).passthrough().nullish(),
   suppression: z.object({
-    created_at: z.string().optional(),
-    expires_at: z.string().optional(),
-    justification: z.string().optional(),
-    path: z.array(z.string()).optional(),
-    policy: z.unknown().optional(),
-    skipIfFixable: z.boolean().optional(),
-    status: z.unknown(),
-  }).optional(),
-  title: z.string().describe("A human-readable title for this finding."),
-  asset_id: z.string().optional().describe("Related asset ID"),
-  fix_id: z.string().optional().describe("Related fix ID"),
-  org_id: z.string().optional().describe("Related org ID"),
-  policy_id: z.string().optional().describe("Related policy ID"),
-  project_id: z.string().optional().describe("Related project ID"),
-  test_id: z.string().optional().describe("Related test ID"),
+    created_at: z.string().nullish(),
+    expires_at: z.string().nullish(),
+    justification: z.string().nullish(),
+    path: z.array(z.string()).nullish(),
+    policy: z.unknown().nullish(),
+    skipIfFixable: z.boolean().nullish(),
+    status: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  title: z.string().nullish().describe(
+    "A human-readable title for this finding.",
+  ),
+  asset_id: z.string().nullish().describe("Related asset ID"),
+  fix_id: z.string().nullish().describe("Related fix ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
+  policy_id: z.string().nullish().describe("Related policy ID"),
+  project_id: z.string().nullish().describe("Related project ID"),
+  test_id: z.string().nullish().describe("Related test ID"),
 }).passthrough();
 
 const ListFindingsSchema = z.object({
@@ -433,7 +468,7 @@ const ListFindingsSchema = z.object({
 /** Snyk Tests — on-demand package and dependency vulnerability testing */
 export const model = {
   type: "@webframp/snyk/tests",
-  version: "2026.09.25.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -492,12 +527,17 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
     "test": {
       description: "Create a new test. (Early Access)",
-      schema: z.object({}),
+      schema: CreateTestSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -549,6 +589,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_test");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -588,6 +629,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_test");
 
         const handle = await context.writeResource(
           "test",
@@ -624,11 +666,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["test_id", "component_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -638,7 +676,7 @@ export const model = {
             encodeURIComponent(String(args.component_id))
           }/findings`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -689,11 +727,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["test_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -701,7 +735,7 @@ export const model = {
             encodeURIComponent(String(args.test_id))
           }/findings`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {

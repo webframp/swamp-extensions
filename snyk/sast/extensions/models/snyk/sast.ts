@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/sast";
 
@@ -23,40 +29,40 @@ const GlobalArgsSchema = z.object({
 });
 
 const SastRuleExtensionsByGroupItemSchema = z.object({
-  id: z.string().describe("Unique identifier for a SAST rule extension"),
-  type: z.enum(["rule_extensions"]).optional().describe(
+  id: z.string().nullish().describe(
+    "Unique identifier for a SAST rule extension",
+  ),
+  type: z.string().nullish().describe(
     'The type identifier for the "rule_extensions" resource.',
   ),
   configuration: z.object({
-    rule_keys: z.unknown(),
-    type: z.unknown(),
-  }),
-  created_at: z.string().describe(
+    rule_keys: z.unknown().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish().describe(
     "Timestamp when the SAST rule extension was created",
   ),
-  created_by: z.string().nullable().describe(
+  created_by: z.string().nullable().nullish().describe(
     "User ID of the user who created the SAST rule extension",
   ),
-  description: z.string().max(4000).optional().describe(
-    "The description for a rule extension to provide extra details on why it is safe to assume issues ...",
+  description: z.string().nullish().describe(
+    "The description for a rule extension to provide extra details on why it is safe to assume issues...",
   ),
-  kind: z.enum(["sast_sanitizer"]).describe("The kind of SAST rule extension."),
-  published_at: z.string().nullable().describe(
+  kind: z.string().nullish().describe("The kind of SAST rule extension."),
+  published_at: z.string().nullable().nullish().describe(
     "Timestamp when the SAST rule extension was published",
   ),
-  published_by: z.string().nullable().describe(
+  published_by: z.string().nullable().nullish().describe(
     "User ID of the user who published the SAST rule extension",
   ),
   signature: z.object({
-    fully_qualified_name: z.unknown(),
-  }),
-  status: z.enum(["published", "draft"]).describe(
-    "The status for a rule extension. Rule extensions in draft do not apply to any analysis test until...",
-  ),
-  updated_at: z.string().describe(
+    fully_qualified_name: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status for a rule extension."),
+  updated_at: z.string().nullish().describe(
     "Timestamp when the SAST rule extension was last updated",
   ),
-  updated_by: z.string().nullable().describe(
+  updated_by: z.string().nullable().nullish().describe(
     "User ID of the user who last updated the SAST rule extension",
   ),
 }).passthrough();
@@ -74,116 +80,143 @@ const ListSastRuleExtensionsByGroupSchema = z.object({
 });
 
 const CreateSastRuleExtensionSchema = z.object({
-  id: z.string().describe("Unique identifier for a SAST rule extension"),
-  type: z.enum(["rule_extensions"]).optional().describe(
+  id: z.string().nullish().describe(
+    "Unique identifier for a SAST rule extension",
+  ),
+  type: z.string().nullish().describe(
     'The type identifier for the "rule_extensions" resource.',
   ),
   configuration: z.object({
-    rule_keys: z.unknown(),
-    type: z.unknown(),
-  }),
-  created_at: z.string().describe(
+    rule_keys: z.unknown().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish().describe(
     "Timestamp when the SAST rule extension was created",
   ),
-  created_by: z.string().nullable().describe(
+  created_by: z.string().nullable().nullish().describe(
     "User ID of the user who created the SAST rule extension",
   ),
-  description: z.string().max(4000).optional().describe(
-    "The description for a rule extension to provide extra details on why it is safe to assume issues ...",
+  description: z.string().nullish().describe(
+    "The description for a rule extension to provide extra details on why it is safe to assume issues...",
   ),
-  kind: z.enum(["sast_sanitizer"]).describe("The kind of SAST rule extension."),
-  published_at: z.string().nullable().describe(
+  kind: z.string().nullish().describe("The kind of SAST rule extension."),
+  published_at: z.string().nullable().nullish().describe(
     "Timestamp when the SAST rule extension was published",
   ),
-  published_by: z.string().nullable().describe(
+  published_by: z.string().nullable().nullish().describe(
     "User ID of the user who published the SAST rule extension",
   ),
   signature: z.object({
-    fully_qualified_name: z.unknown(),
-  }),
-  status: z.enum(["published", "draft"]).describe(
-    "The status for a rule extension. Rule extensions in draft do not apply to any analysis test until...",
-  ),
-  updated_at: z.string().describe(
+    fully_qualified_name: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status for a rule extension."),
+  updated_at: z.string().nullish().describe(
     "Timestamp when the SAST rule extension was last updated",
   ),
-  updated_by: z.string().nullable().describe(
+  updated_by: z.string().nullable().nullish().describe(
     "User ID of the user who last updated the SAST rule extension",
   ),
 }).passthrough();
 
-const GetSastImpactTestStatusSchema = z.object({
-  id: z.string().describe(
+const CreateSastImpactTestSchema = z.object({
+  id: z.string().nullish().describe(
     "A unique identifier for this particular occurrence of the problem.",
   ),
-  type: z.enum(["tests"]).optional().describe(
+  type: z.string().nullish().describe(
     'The type identifier for the "tests" resource.',
   ),
-  code: z.string().optional().describe(
+  code: z.string().nullish().describe(
     "An error catalog code to identify the error.",
   ),
-  detail: z.string().optional().describe(
+  detail: z.string().nullish().describe(
     "A human-readable explanation specific to the test error status.",
   ),
   links: z.object({
     about: z.union([
       z.string(),
       z.object({
-        href: z.string(),
-        meta: z.record(z.string(), z.unknown()).optional(),
-      }),
-    ]).optional(),
-  }).optional().describe(
+        href: z.string().nullish(),
+        meta: z.record(z.string(), z.unknown()).nullish(),
+      }).passthrough(),
+    ]).nullish(),
+  }).passthrough().nullish().describe(
     "A link that leads to further details about this particular occurrance of the problem.",
   ),
-  meta: z.record(z.string(), z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).nullish(),
   source: z.object({
-    parameter: z.string().optional(),
-    pointer: z.string().optional(),
-  }).optional(),
-  status: z.enum(["STARTED", "COMPLETED", "ERRORED"]).describe(
-    "The status of the impact test.",
+    parameter: z.string().nullish(),
+    pointer: z.string().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status of the impact test."),
+  title: z.string().nullish().describe(
+    "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to...",
   ),
-  title: z.string().optional().describe(
-    "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to occurren...",
+}).passthrough();
+
+const GetSastImpactTestStatusSchema = z.object({
+  id: z.string().nullish().describe(
+    "A unique identifier for this particular occurrence of the problem.",
+  ),
+  type: z.string().nullish().describe(
+    'The type identifier for the "tests" resource.',
+  ),
+  code: z.string().nullish().describe(
+    "An error catalog code to identify the error.",
+  ),
+  detail: z.string().nullish().describe(
+    "A human-readable explanation specific to the test error status.",
+  ),
+  links: z.object({
+    about: z.union([
+      z.string(),
+      z.object({
+        href: z.string().nullish(),
+        meta: z.record(z.string(), z.unknown()).nullish(),
+      }).passthrough(),
+    ]).nullish(),
+  }).passthrough().nullish().describe(
+    "A link that leads to further details about this particular occurrance of the problem.",
+  ),
+  meta: z.record(z.string(), z.unknown()).nullish(),
+  source: z.object({
+    parameter: z.string().nullish(),
+    pointer: z.string().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe("The status of the impact test."),
+  title: z.string().nullish().describe(
+    "A short, human-readable summary of the problem that SHOULD NOT change from occurrence to...",
   ),
 }).passthrough();
 
 const GetSastImpactTestResultSchema = z.object({
-  id: z.string().describe("The test id of the resource."),
-  type: z.enum([
-    "flows_through_sanitizer",
-    "if_true_sanitizer",
-    "if_false_sanitizer",
-    "any_usage_sanitizer",
-  ]).describe(
-    "The type of the SAST rule extensions determine the Snyk SAST analysis behavior against the input ...",
+  id: z.string().nullish().describe("The test id of the resource."),
+  type: z.string().nullish().describe(
+    "The type of the SAST rule extensions determine the Snyk SAST analysis behavior against the input...",
   ),
   added_findings: z.object({
-    changes: z.array(z.unknown()),
-    count: z.number().int(),
-  }).optional(),
-  fully_qualified_name: z.string().max(1000).regex(new RegExp("^\\S+$"))
-    .describe(
-      "The fully qualified name of a function that performs sanitization in your codebase. Should Snyk S...",
-    ),
-  org_id: z.string().describe(
+    changes: z.array(z.unknown()).nullish(),
+    count: z.number().nullish(),
+  }).passthrough().nullish(),
+  fully_qualified_name: z.string().nullish().describe(
+    "The fully qualified name of a function that performs sanitization in your codebase.",
+  ),
+  org_id: z.string().nullish().describe(
     "The org id for the relevant project against which to run the test.",
   ),
-  project_commit_sha: z.string().regex(new RegExp("^[0-9a-f]{40}$")).describe(
+  project_commit_sha: z.string().nullish().describe(
     "The relevant commit sha for the project against which the test was run.",
   ),
-  project_id: z.string().describe(
+  project_id: z.string().nullish().describe(
     "The relevant uuid for the project against which to run the test.",
   ),
   removed_findings: z.object({
-    changes: z.array(z.unknown()),
-    count: z.number().int(),
-  }).optional(),
-  rule_keys: z.array(z.string().max(200)).describe(
+    changes: z.array(z.unknown()).nullish(),
+    count: z.number().nullish(),
+  }).passthrough().nullish(),
+  rule_keys: z.array(z.string()).nullish().describe(
     "Array of rule keys for the impact test.",
   ),
-  total_count: z.number().int().describe(
+  total_count: z.number().nullish().describe(
     "The total number of findings added and removed as a result of the rule extension.",
   ),
 }).passthrough();
@@ -195,7 +228,7 @@ const GetSastImpactTestResultSchema = z.object({
 /** Snyk SAST — static application security testing results and management */
 export const model = {
   type: "@webframp/snyk/sast",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -249,6 +282,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -267,7 +305,7 @@ export const model = {
     },
     "sast_impact_test": {
       description: "Trigger a SAST rule extension impact test.",
-      schema: z.object({}),
+      schema: CreateSastImpactTestSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -306,17 +344,13 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/sast/rule_extensions`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -377,6 +411,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_sast_rule_extension");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -423,6 +458,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_sast_impact_test");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -464,6 +500,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_sast_impact_test_status");
 
         const handle = await context.writeResource(
           "sast_impact_test_status",
@@ -502,6 +539,7 @@ export const model = {
           }/results`,
           version,
         );
+        requireBody(result, "get_sast_impact_test_result");
 
         const handle = await context.writeResource(
           "sast_impact_test_result",
@@ -542,6 +580,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_sast_rule_extension");
 
         const handle = await context.writeResource(
           "sast_rule_extension",

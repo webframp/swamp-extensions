@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/self";
 
@@ -22,19 +27,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetSelfSchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "The Snyk ID corresponding to this user, service account or app",
   ),
-  type: z.enum(["user", "service_account", "app_instance"]).optional().describe(
-    "Content type.",
-  ),
+  type: z.string().nullish().describe("Content type."),
 }).passthrough();
 
 const GetAccessRequestsItemSchema = z.object({
-  id: z.string().describe("The Snyk ID of the access request."),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  status: z.enum(["pending", "expired"]),
+  id: z.string().nullish().describe("The Snyk ID of the access request."),
+  type: z.string().nullish(),
+  status: z.string().nullish(),
 }).passthrough();
 
 const GetAccessRequestsSchema = z.object({
@@ -50,16 +52,16 @@ const GetAccessRequestsSchema = z.object({
 });
 
 const GetUserInstalledAppsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().describe("The oauth2 client id for the app."),
-  context: z.enum(["tenant", "user"]).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe("The oauth2 client id for the app."),
+  context: z.string().nullish().describe(
     "Allow installing the app to a org/group or to a user, default tenant.",
   ),
-  name: z.string().min(1).describe(
+  name: z.string().nullish().describe(
     "New name of the app to display to users during authorization flow.",
   ),
-  scopes: z.array(z.string().min(1)).optional().describe(
+  scopes: z.array(z.string()).nullish().describe(
     "The scopes this app is allowed to request during authorization.",
   ),
 }).passthrough();
@@ -77,15 +79,15 @@ const GetUserInstalledAppsSchema = z.object({
 });
 
 const GetAppInstallsForUserItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  client_id: z.string().optional().describe(
-    "The OAuth2 client id for the app installation. Only provided for installations of non-interactive...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
   ),
-  installed_at: z.string().optional().describe(
+  installed_at: z.string().nullish().describe(
     "Timestamp at which this app was first installed at.",
   ),
-  app_id: z.string().optional().describe("Related app ID"),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const GetAppInstallsForUserSchema = z.object({
@@ -101,9 +103,9 @@ const GetAppInstallsForUserSchema = z.object({
 });
 
 const GetUserAppSessionsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  created_at: z.string(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  created_at: z.string().nullish(),
 }).passthrough();
 
 const GetUserAppSessionsSchema = z.object({
@@ -119,16 +121,16 @@ const GetUserAppSessionsSchema = z.object({
 });
 
 const PersonalAccessTokenItemSchema = z.object({
-  id: z.string().describe("The personal access token id"),
-  type: z.enum(["personal_access_token"]).optional().describe(
-    "Type of the resource.",
+  id: z.string().nullish().describe("The personal access token id"),
+  type: z.string().nullish().describe("Type of the resource."),
+  created_at: z.string().nullish().describe(
+    "Date/Time when the token was created",
   ),
-  created_at: z.string().describe("Date/Time when the token was created"),
-  expires_at: z.string().describe("Date/Time when the token expires"),
-  label: z.string().describe(
+  expires_at: z.string().nullish().describe("Date/Time when the token expires"),
+  label: z.string().nullish().describe(
     "A human-friendly name for the personal access token",
   ),
-  tenant_id: z.string().nullable().optional().describe(
+  tenant_id: z.string().nullable().nullish().describe(
     "Identifier of the tenant to which the Personal Access Token is scoped.",
   ),
 }).passthrough();
@@ -152,7 +154,7 @@ const ListPersonalAccessTokenSchema = z.object({
 /** Snyk Self — current user context, org listing, and app management */
 export const model = {
   type: "@webframp/snyk/self",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -203,6 +205,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -272,6 +279,7 @@ export const model = {
           `/self`,
           version,
         );
+        requireBody(result, "get_self");
 
         const handle = await context.writeResource("self", "latest", result);
         context.logger.info("Fetched self", {});
@@ -281,7 +289,7 @@ export const model = {
     get_access_requests: {
       description: "Get access requests (Early Access)",
       arguments: z.object({
-        org_id: z.string().optional().describe(
+        org_id: z.union([z.string(), z.array(z.string())]).optional().describe(
           "The IDs of the org to filter by",
         ),
       }),
@@ -301,17 +309,15 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          org_id: { name: "org_id", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/self/access_requests`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -358,17 +364,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/self/apps`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -399,7 +401,9 @@ export const model = {
     get_app_installs_for_user: {
       description: "Get a list of Snyk Apps installed for a user",
       arguments: z.object({
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -417,17 +421,15 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          expand: { name: "expand", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/self/apps/installs`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -538,17 +540,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["app_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/self/apps/${encodeURIComponent(String(args.app_id))}/sessions`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -629,17 +627,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/self/personal_access_tokens`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {

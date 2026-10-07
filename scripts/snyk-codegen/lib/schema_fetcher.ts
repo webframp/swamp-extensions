@@ -50,6 +50,10 @@ export interface ParameterObject {
   required?: boolean;
   schema?: SchemaObject;
   example?: unknown;
+  /** Array serialization style; query parameters default to "form". */
+  style?: string;
+  /** Repeat the key per value (default for form) or join with commas. */
+  explode?: boolean;
 }
 
 export interface RequestBodyObject {
@@ -58,6 +62,8 @@ export interface RequestBodyObject {
 }
 
 export interface ResponseObject {
+  /** Reference into components.responses; resolve before reading content. */
+  $ref?: string;
   description?: string;
   content?: Record<string, { schema?: SchemaObject }>;
 }

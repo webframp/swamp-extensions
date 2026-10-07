@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/cloud";
 
@@ -23,20 +29,18 @@ const GlobalArgsSchema = z.object({
 });
 
 const EnvironmentsItemSchema = z.object({
-  id: z.string().describe("Environment ID"),
-  type: z.string().optional(),
-  created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional(),
-  kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
-    "Environment kind: aws",
-  ),
-  name: z.string().describe("Environment name"),
-  options: z.object({}).optional(),
-  properties: z.object({}).optional(),
-  revision: z.number().int().optional().describe(
+  id: z.string().nullish().describe("Environment ID"),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("When the environment was created"),
+  deleted_at: z.string().nullable().nullish(),
+  kind: z.string().nullish().describe("Environment kind: aws"),
+  name: z.string().nullish().describe("Environment name"),
+  options: z.object({}).passthrough().nullish(),
+  properties: z.object({}).passthrough().nullish(),
+  revision: z.number().nullish().describe(
     "Increment for each change to an environment",
   ),
-  updated_at: z.string().nullable().optional().describe(
+  updated_at: z.string().nullable().nullish().describe(
     "When the environment was last updated",
   ),
 }).passthrough();
@@ -54,63 +58,63 @@ const ListEnvironmentsSchema = z.object({
 });
 
 const CreateEnvironmentSchema = z.object({
-  id: z.string().describe("Environment ID"),
-  type: z.string().optional(),
-  created_at: z.string().describe("When the environment was created"),
-  deleted_at: z.string().nullable().optional(),
-  kind: z.enum(["aws", "google", "azure", "scm", "tfc", "cli"]).describe(
-    "Environment kind: aws",
-  ),
-  name: z.string().describe("Environment name"),
-  options: z.object({}).optional(),
-  properties: z.object({}).optional(),
-  revision: z.number().int().optional().describe(
+  id: z.string().nullish().describe("Environment ID"),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("When the environment was created"),
+  deleted_at: z.string().nullable().nullish(),
+  kind: z.string().nullish().describe("Environment kind: aws"),
+  name: z.string().nullish().describe("Environment name"),
+  options: z.object({}).passthrough().nullish(),
+  properties: z.object({}).passthrough().nullish(),
+  revision: z.number().nullish().describe(
     "Increment for each change to an environment",
   ),
-  updated_at: z.string().nullable().optional().describe(
+  updated_at: z.string().nullable().nullish().describe(
     "When the environment was last updated",
   ),
 }).passthrough();
 
 const GetPermissionsSchema = z.object({
-  id: z.string(),
-  type: z.enum(["cf", "tf", "bash"]),
-  data: z.string(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  data: z.string().nullish(),
 }).passthrough();
 
 const ResourcesItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  created_at: z.string().describe("When the resource was first recorded"),
-  deleted_at: z.string().nullable().optional(),
-  hash: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe(
+    "When the resource was first recorded",
+  ),
+  deleted_at: z.string().nullable().nullish(),
+  hash: z.string().nullish().describe(
     "Computed hash value for the resource based on its attributes",
   ),
-  is_managed: z.boolean().nullable().optional(),
-  kind: z.string().describe("Kind of resource: cloud"),
-  location: z.string().optional().describe("Physical location (AWS region)"),
-  name: z.string().optional().describe("Human friendly resource name"),
-  namespace: z.string().optional().describe("Resource namespace (AWS region)"),
-  native_id: z.string().optional().describe(
+  is_managed: z.boolean().nullable().nullish(),
+  kind: z.string().nullish().describe("Kind of resource: cloud"),
+  location: z.string().nullish().describe("Physical location (AWS region)"),
+  name: z.string().nullish().describe("Human friendly resource name"),
+  namespace: z.string().nullish().describe("Resource namespace (AWS region)"),
+  native_id: z.string().nullish().describe(
     "ID of the physical resource from the cloud provider (AWS ARN, if available)",
   ),
-  platform: z.string().describe("Resource platform: aws"),
-  relationships: z.record(z.string(), z.unknown()).optional(),
-  removed_at: z.string().nullable().optional(),
-  resource_id: z.string().describe("Unique ID for the resource"),
-  resource_type: z.string().describe("Terraform resource type"),
-  revision: z.number().int().describe(
+  platform: z.string().nullish().describe("Resource platform: aws"),
+  relationships: z.record(z.string(), z.unknown()).nullish(),
+  removed_at: z.string().nullable().nullish(),
+  resource_id: z.string().nullish().describe("Unique ID for the resource"),
+  resource_type: z.string().nullish().describe("Terraform resource type"),
+  revision: z.number().nullish().describe(
     "Increment for each change to a resource",
   ),
-  schema_version: z.string().nullable().optional(),
-  source_location: z.array(z.record(z.string(), z.unknown())).optional(),
-  state: z.record(z.string(), z.unknown()).optional().describe(
+  schema_version: z.string().nullable().nullish(),
+  source_location: z.array(z.record(z.string(), z.unknown())).nullish(),
+  state: z.record(z.string(), z.unknown()).nullish().describe(
     "Terraform state attributes",
   ),
-  tags: z.record(z.string(), z.unknown()).optional().describe(
+  tags: z.record(z.string(), z.unknown()).nullish().describe(
     "Resource tags from the cloud provider",
   ),
-  updated_at: z.string().nullable().describe(
+  updated_at: z.string().nullable().nullish().describe(
     "When the resource was last updated",
   ),
 }).passthrough();
@@ -128,35 +132,28 @@ const ListResourcesSchema = z.object({
 });
 
 const ScanItemSchema = z.object({
-  id: z.string().describe("Scan ID"),
-  type: z.string().optional(),
-  created_at: z.string().describe("When the scan was created"),
-  deleted_at: z.string().nullable().optional(),
-  environment_id: z.string().optional().describe("Environment ID"),
-  error: z.string().nullable().describe("Error message if the scan failed"),
-  finished_at: z.string().nullable().optional().describe(
+  id: z.string().nullish().describe("Scan ID"),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("When the scan was created"),
+  deleted_at: z.string().nullable().nullish(),
+  environment_id: z.string().nullish().describe("Environment ID"),
+  error: z.string().nullable().nullish().describe(
+    "Error message if the scan failed",
+  ),
+  finished_at: z.string().nullable().nullish().describe(
     "When the scan finished",
   ),
-  kind: z.union([
-    z.literal("scheduled"),
-    z.literal("user_initiated"),
-    z.literal("event_driven"),
-    z.literal(null),
-  ]).nullable().describe("Scan kind"),
-  options: z.object({}).nullable().optional(),
-  organization_id: z.string().optional().describe("Organization ID"),
-  partial_errors: z.string().optional().describe(
+  kind: z.unknown().nullable().nullish().describe("Scan kind"),
+  options: z.object({}).passthrough().nullable().nullish(),
+  organization_id: z.string().nullish().describe("Organization ID"),
+  partial_errors: z.string().nullish().describe(
     "Errors that didn't fail the scan",
   ),
-  revision: z.number().describe("Increment for each change to a scan"),
-  status: z.union([
-    z.literal("queued"),
-    z.literal("in_progress"),
-    z.literal("success"),
-    z.literal("error"),
-    z.literal(null),
-  ]).nullable().describe("Scan status"),
-  updated_at: z.string().nullable().optional().describe(
+  revision: z.number().nullish().describe(
+    "Increment for each change to a scan",
+  ),
+  status: z.unknown().nullable().nullish().describe("Scan status"),
+  updated_at: z.string().nullable().nullish().describe(
     "When the scan was last updated",
   ),
 }).passthrough();
@@ -173,6 +170,33 @@ const ListScanSchema = z.object({
   ),
 });
 
+const CreateScanSchema = z.object({
+  id: z.string().nullish().describe("Scan ID"),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("When the scan was created"),
+  deleted_at: z.string().nullable().nullish(),
+  environment_id: z.string().nullish().describe("Environment ID"),
+  error: z.string().nullable().nullish().describe(
+    "Error message if the scan failed",
+  ),
+  finished_at: z.string().nullable().nullish().describe(
+    "When the scan finished",
+  ),
+  kind: z.unknown().nullable().nullish().describe("Scan kind"),
+  options: z.object({}).passthrough().nullable().nullish(),
+  organization_id: z.string().nullish().describe("Organization ID"),
+  partial_errors: z.string().nullish().describe(
+    "Errors that didn't fail the scan",
+  ),
+  revision: z.number().nullish().describe(
+    "Increment for each change to a scan",
+  ),
+  status: z.unknown().nullable().nullish().describe("Scan status"),
+  updated_at: z.string().nullable().nullish().describe(
+    "When the scan was last updated",
+  ),
+}).passthrough();
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -180,7 +204,7 @@ const ListScanSchema = z.object({
 /** Snyk Cloud — cloud environments, scans, and resource posture management */
 export const model = {
   type: "@webframp/snyk/cloud",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -247,6 +271,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -276,7 +305,7 @@ export const model = {
     },
     "scan": {
       description: "List Scans (Early Access)",
-      schema: ListScanSchema,
+      schema: z.union([ListScanSchema, CreateScanSchema]),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -331,17 +360,23 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          created_after: { name: "created_after" },
+          created_before: { name: "created_before" },
+          updated_after: { name: "updated_after" },
+          updated_before: { name: "updated_before" },
+          name: { name: "name" },
+          kind: { name: "kind" },
+          status: { name: "status" },
+          id: { name: "id" },
+          project_id: { name: "project_id" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/cloud/environments`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -401,6 +436,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_environment");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -535,16 +571,13 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "get_permissions");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
-        const handle = await context.writeResource(
-          "get_permissions",
-          id,
-          result,
-        );
-        context.logger.info("Created get_permissions {id}", { id });
+        const handle = await context.writeResource("permissions", id, result);
+        context.logger.info("Created permissions {id}", { id });
         return { dataHandles: [handle] };
       },
     },
@@ -598,17 +631,24 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          environment_id: { name: "environment_id" },
+          resource_type: { name: "resource_type" },
+          resource_id: { name: "resource_id" },
+          native_id: { name: "native_id" },
+          id: { name: "id" },
+          platform: { name: "platform" },
+          name: { name: "name" },
+          kind: { name: "kind" },
+          location: { name: "location" },
+          removed: { name: "removed" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/cloud/resources`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -651,17 +691,13 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/cloud/scans`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -720,6 +756,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_scan");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -757,6 +794,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_scan");
 
         const handle = await context.writeResource(
           "scan",

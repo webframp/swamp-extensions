@@ -12,7 +12,8 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import { schemaToZod } from "./type_mapper.ts";
+import type { ParameterObject } from "./schema_fetcher.ts";
+import { schemaToZod, truncateAtBoundary } from "./type_mapper.ts";
 import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -33,6 +34,21 @@ export interface ClassifiedMethod {
   description: string;
   /** The original operation */
   operation: GroupedOperation;
+}
+
+/**
+ * The resource spec a method reads or writes. Every site that declares,
+ * writes, or tests a resource MUST derive the name here: a method's verb
+ * prefix need not match its type (a POST with a body is a "create" even when
+ * the operation is named `update_*`), and a body generator that strips only
+ * its own type's prefix would write to a spec the model never declared.
+ */
+export function resourceNameOf(
+  method: Pick<ClassifiedMethod, "name" | "type">,
+): string {
+  return method.type === "list"
+    ? method.name.replace(/^list_/, "")
+    : method.name.replace(/^(get|create|update|action)_/, "");
 }
 
 /**
@@ -176,6 +192,18 @@ export function generateModelSource(
   const apiImports: string[] = [];
   if (usesSingle) apiImports.push("snykApi");
   if (usesPaginated || usesSimpleList) apiImports.push("snykApiPaginated");
+  // Every list method builds its query with queryEntries; other methods use it
+  // (via toQueryString) only when the operation declares query parameters.
+  const usesQuery = methods.some((m) => m.operation.queryParams.length > 0);
+  if (usesPaginated || usesSimpleList || usesQuery) {
+    apiImports.push("queryEntries");
+  }
+  if (methods.some(requiresBody)) apiImports.push("requireBody");
+  if (
+    methods.some((m) => m.type !== "list" && m.operation.queryParams.length > 0)
+  ) {
+    apiImports.push("toQueryString");
+  }
   // sanitizeInstanceName is emitted only by bodies that build an instance name
   // from an API-influenced value: every `create`, and any `get`/`update`
   // targeting a resource by a path id. `list` and `action` use constant
@@ -237,9 +265,7 @@ export function generateModelSource(
   const seenResources = new Set<string>();
   for (const method of methods) {
     if (method.type === "delete") continue;
-    const resourceName = method.type === "list"
-      ? method.name.replace(/^list_/, "")
-      : method.name.replace(/^(get|create|update|action)_/, "");
+    const resourceName = resourceNameOf(method);
     if (seenResources.has(resourceName)) continue;
     seenResources.add(resourceName);
     lines.push(`    "${resourceName}": {`);
@@ -294,41 +320,49 @@ function generateGlobalArgsSchema(config: ServiceConfig): string {
   return lines.join("\n");
 }
 
-/** Generate Zod schemas for all unique response shapes */
+/** Schema for a resource nothing declares a response shape for. */
+const OPEN_OBJECT = "z.object({}).passthrough()";
+
+/**
+ * Generate Zod schemas for every resource, keyed back to each method.
+ *
+ * Several methods can write one resource (list_x, get_x, create_x). A list
+ * writes the {items, truncated, ...} wrapper and the others write a flat
+ * object, so a single shared schema built from whichever method comes first
+ * rejects the other writers' data. A resource with both kinds therefore gets a
+ * union of the wrapper and the flat shape, and the flat shape comes from the
+ * first writer that actually declares a response schema.
+ */
 function generateResponseSchemas(
   methods: ClassifiedMethod[],
   lines: string[],
 ): Map<string, string> {
   const schemaNames = new Map<string, string>();
 
-  const seenResources = new Set<string>();
-  const methodsWithResources: ClassifiedMethod[] = [];
-
+  const writersByResource = new Map<string, ClassifiedMethod[]>();
   for (const method of methods) {
     if (method.type === "delete") continue;
-    const resourceName = method.type === "list"
-      ? method.name.replace(/^list_/, "")
-      : method.name.replace(/^(get|create|update|action)_/, "");
-    if (!seenResources.has(resourceName)) {
-      seenResources.add(resourceName);
-      methodsWithResources.push(method);
-    }
+    const resourceName = resourceNameOf(method);
+    const writers = writersByResource.get(resourceName) ?? [];
+    writers.push(method);
+    writersByResource.set(resourceName, writers);
   }
 
-  for (const method of methodsWithResources) {
-    const schema = method.operation.responseSchema;
-    if (!schema) {
-      schemaNames.set(method.name, "z.object({})");
-      continue;
-    }
+  for (const [, writers] of writersByResource) {
+    const listWriter = writers.find((m) => m.type === "list");
+    const flatWriter = writers.find((m) =>
+      m.type !== "list" && m.operation.responseSchema
+    );
 
-    const varName = toPascalCase(method.name) + "Schema";
-    schemaNames.set(method.name, varName);
-
-    if (method.type === "list") {
-      const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
+    let listExpr: string | undefined;
+    if (listWriter) {
+      const varName = toPascalCase(listWriter.name) + "Schema";
+      const itemVarName = toPascalCase(listWriter.name.replace(/^list_/, "")) +
         "ItemSchema";
-      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const schema = listWriter.operation.responseSchema;
+      const itemZod = schema
+        ? withPassthrough(schemaToZod(schema, { indent: 2, lenient: true }, 1))
+        : OPEN_OBJECT;
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -346,34 +380,35 @@ function generateResponseSchemas(
       lines.push(`    "Extension that collected this data",`);
       lines.push(`  ),`);
       lines.push(`});`);
-    } else {
-      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
-      lines.push(`const ${varName} = ${zodStr};`);
+      lines.push(``);
+      listExpr = varName;
     }
-    lines.push(``);
-  }
 
-  // Map secondary methods to existing schemas
-  for (const method of methods) {
-    if (method.type === "delete") continue;
-    if (schemaNames.has(method.name)) continue;
-    const resourceName = method.type === "list"
-      ? method.name.replace(/^list_/, "")
-      : method.name.replace(/^(get|create|update|action)_/, "");
-    const primary = methodsWithResources.find((m) => {
-      const primaryResource = m.type === "list"
-        ? m.name.replace(/^list_/, "")
-        : m.name.replace(/^(get|create|update|action)_/, "");
-      return primaryResource === resourceName;
-    });
-    if (primary) {
-      schemaNames.set(
-        method.name,
-        schemaNames.get(primary.name) ?? "z.object({})",
+    let flatExpr: string | undefined;
+    if (flatWriter) {
+      const varName = toPascalCase(flatWriter.name) + "Schema";
+      const zodStr = withPassthrough(
+        schemaToZod(flatWriter.operation.responseSchema!, {
+          indent: 2,
+          lenient: true,
+        }, 1),
       );
-    } else {
-      schemaNames.set(method.name, "z.object({})");
+      lines.push(`const ${varName} = ${zodStr};`);
+      lines.push(``);
+      flatExpr = varName;
     }
+
+    // Wrapper first: list data matches it; flat data falls through to the
+    // second member. The flat shape is all-optional, so it also tolerates the
+    // empty object a 204 writes.
+    // A non-list writer without a declared response (a 204 create) still
+    // writes an object, so it counts as a flat writer with an open shape.
+    const hasFlatWriter = writers.some((m) => m.type !== "list");
+    if (!flatExpr && hasFlatWriter) flatExpr = OPEN_OBJECT;
+    const expr = listExpr && flatExpr
+      ? `z.union([${listExpr}, ${flatExpr}])`
+      : (listExpr ?? flatExpr ?? OPEN_OBJECT);
+    for (const m of writers) schemaNames.set(m.name, expr);
   }
 
   return schemaNames;
@@ -499,7 +534,9 @@ function generateArgsSchema(op: GroupedOperation): string {
       ? `.describe("${escapeStr(truncateStr(p.description))}")`
       : "";
     let zodType = "z.string()";
-    if (p.schema?.type === "integer" || p.schema?.type === "number") {
+    if (isArrayParam(p)) {
+      zodType = "z.union([z.string(), z.array(z.string())])";
+    } else if (p.schema?.type === "integer" || p.schema?.type === "number") {
       zodType = "z.number()";
     } else if (p.schema?.type === "boolean") {
       zodType = "z.boolean()";
@@ -542,25 +579,18 @@ function generateListBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^list_/, "");
-  const pathParamNames = method.operation.pathParams
-    .map((p) => sanitizeFieldName(p.name));
-  const excludeNames = [...pathParamNames];
+  const resourceName = resourceNameOf(method);
 
   return `${indent}    const startMs = Date.now();
-${indent}    const params: Record<string, string> = {};
-${indent}    const excludeKeys = new Set<string>(${
-    JSON.stringify(excludeNames)
+${indent}    const query = queryEntries(args, ${
+    queryFieldsLiteral(method.operation)
   });
-${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-${indent}    }
 ${indent}
 ${indent}    const { results, truncated } = await snykApiPaginated(
 ${indent}      apiToken,
 ${indent}      \`${apiPath}\`,
 ${indent}      version,
-${indent}      params,
+${indent}      query,
 ${indent}    );
 ${indent}
 ${indent}    if (truncated) {
@@ -585,7 +615,7 @@ function generateGetBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^get_/, "");
+  const resourceName = resourceNameOf(method);
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
   ];
@@ -593,41 +623,16 @@ function generateGetBody(
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
     : '"latest"';
 
-  const hasQueryParams = method.operation.queryParams.length > 0;
-  const pathParamNames = method.operation.pathParams.map((p) =>
-    sanitizeFieldName(p.name)
-  );
+  const qsSetup = querySetup(method.operation, indent);
+  const qsSuffix = qsSetup ? "${qs}" : "";
 
-  if (hasQueryParams) {
-    const excludeNames = [...pathParamNames];
-    return `${indent}    const queryParts: string[] = [];
-${indent}    const excludeKeys = new Set<string>(${
-      JSON.stringify(excludeNames)
-    });
-${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !excludeKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
-${indent}    }
-${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
-${indent}
-${indent}    const result = await snykApi(
+  return `${qsSetup}${indent}    const result = await snykApi(
 ${indent}      apiToken,
 ${indent}      "GET",
-${indent}      \`${apiPath}\${qs}\`,
+${indent}      \`${apiPath}${qsSuffix}\`,
 ${indent}      version,
 ${indent}    );
-${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
-${indent}    context.logger.info("Fetched ${resourceName}", {});
-${indent}    return { dataHandles: [handle] };`;
-  }
-
-  return `${indent}    const result = await snykApi(
-${indent}      apiToken,
-${indent}      "GET",
-${indent}      \`${apiPath}\`,
-${indent}      version,
-${indent}    );
-${indent}
+${requireLine(method, indent)}${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Fetched ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
@@ -639,7 +644,7 @@ function generateCreateBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^create_/, "");
+  const resourceName = resourceNameOf(method);
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
@@ -647,6 +652,8 @@ function generateCreateBody(
     sanitizeFieldName(p.name)
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
+  const qsSetup = querySetup(method.operation, indent);
+  const qsSuffix = qsSetup ? "${qs}" : "";
 
   return `${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
@@ -655,15 +662,15 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }
-${indent}
+${qsSetup}${indent}
 ${indent}    const result = await snykApi(
 ${indent}      apiToken,
 ${indent}      "POST",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${qsSuffix}\`,
 ${indent}      version,
 ${indent}      body,
 ${indent}    );
-${indent}
+${requireLine(method, indent)}${indent}
 ${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
@@ -676,7 +683,7 @@ function generateUpdateBody(
   apiPath: string,
   indent: string,
 ): string {
-  const resourceName = method.name.replace(/^update_/, "");
+  const resourceName = resourceNameOf(method);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
@@ -691,6 +698,8 @@ function generateUpdateBody(
     sanitizeFieldName(p.name)
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
+  const qsSetup = querySetup(method.operation, indent);
+  const qsSuffix = qsSetup ? "${qs}" : "";
 
   return `${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
@@ -699,11 +708,11 @@ ${indent}    const excludeKeys = new Set<string>(${
 ${indent}    for (const [k, v] of Object.entries(args)) {
 ${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }
-${indent}
+${qsSetup}${indent}
 ${indent}    const result = await snykApi(
 ${indent}      apiToken,
 ${indent}      "${httpMethod}",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${qsSuffix}\`,
 ${indent}      version,
 ${indent}      body,
 ${indent}    );
@@ -726,36 +735,13 @@ function generateDeleteBody(
     ? `args.${sanitizeFieldName(idParam.name)}`
     : '"unknown"';
 
-  const hasQueryParams = method.operation.queryParams.length > 0;
-  const pathParamNames = method.operation.pathParams.map((p) =>
-    sanitizeFieldName(p.name)
-  );
+  const qsSetup = querySetup(method.operation, indent);
+  const qsSuffix = qsSetup ? "${qs}" : "";
 
-  if (hasQueryParams) {
-    return `${indent}    const queryParts: string[] = [];
-${indent}    const pathKeys = new Set<string>(${
-      JSON.stringify(pathParamNames)
-    });
-${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !pathKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
-${indent}    }
-${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
-${indent}
-${indent}    await snykApi(
+  return `${qsSetup}${indent}    await snykApi(
 ${indent}      apiToken,
 ${indent}      "DELETE",
-${indent}      \`${apiPath}\${qs}\`,
-${indent}      version,
-${indent}    );
-${indent}
-${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
-${indent}    return { dataHandles: [] };`;
-  }
-
-  return `${indent}    await snykApi(
-${indent}      apiToken,
-${indent}      "DELETE",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${qsSuffix}\`,
 ${indent}      version,
 ${indent}    );
 ${indent}
@@ -773,7 +759,7 @@ function generateActionBody(
   // POST may be named create_/update_/get_*). This must match the resource-key
   // derivation in generateModelSource, or the method writes to an undeclared
   // resource spec.
-  const resourceName = method.name.replace(/^(get|create|update|action)_/, "");
+  const resourceName = resourceNameOf(method);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
   const pathParamNames = method.operation.pathParams.map((p) =>
@@ -784,9 +770,10 @@ function generateActionBody(
   );
   const excludeNames = [...pathParamNames, ...queryParamNames];
 
+  const qsSetup = querySetup(method.operation, indent);
+  const urlSuffix = qsSetup ? "${qs}" : "";
   let bodySetup = "";
   let bodyArg = "";
-  let urlSuffix = "";
   if (hasBody) {
     bodySetup = `${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
@@ -797,19 +784,8 @@ ${indent}      if (!excludeKeys.has(k)) body[k] = v;
 ${indent}    }
 `;
     bodyArg = `\n${indent}      body,`;
-  } else if (queryParamNames.length > 0) {
-    // No body but has query params — append to URL
-    bodySetup = `${indent}    const queryParts: string[] = [];
-${indent}    const pathKeys = new Set<string>(${
-      JSON.stringify(pathParamNames)
-    });
-${indent}    for (const [k, v] of Object.entries(args)) {
-${indent}      if (v !== undefined && !pathKeys.has(k)) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(String(v))}\`);
-${indent}    }
-${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
-`;
-    urlSuffix = "${qs}";
   }
+  bodySetup += qsSetup;
 
   return `${bodySetup}
 ${indent}    const result = await snykApi(
@@ -822,6 +798,68 @@ ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/**
+ * True when a get/create body must reject an empty reply. Only operations the
+ * spec says return content qualify: a create that answers 204 (for example a
+ * relationship update) succeeds with no body, and failing it would report an
+ * error after the server already applied the change.
+ */
+function requiresBody(method: ClassifiedMethod): boolean {
+  return (method.type === "get" || method.type === "create") &&
+    method.operation.hasResponseBody;
+}
+
+/** The requireBody statement for a method, or "" when an empty reply is fine. */
+function requireLine(method: ClassifiedMethod, indent: string): string {
+  return requiresBody(method)
+    ? `${indent}    requireBody(result, "${method.name}");\n`
+    : "";
+}
+
+/** True for a query parameter whose schema is an array. */
+function isArrayParam(p: ParameterObject): boolean {
+  return p.schema?.type === "array";
+}
+
+/**
+ * Emit the object literal mapping each query argument to its API parameter.
+ * Argument names are sanitized identifiers; API names can contain dots (for
+ * example `meta.count`), so the original name travels with the field. Arrays
+ * join with commas only when the spec says `explode: false`; otherwise each
+ * value repeats the key (the OpenAPI default for query parameters).
+ */
+function queryFieldsLiteral(op: GroupedOperation): string {
+  const entries: string[] = [];
+  // A query parameter whose argument name matches a path parameter shares one
+  // argument with it; the path value wins, as in the args schema.
+  const seen = new Set<string>(
+    op.pathParams.map((p) => sanitizeFieldName(p.name)),
+  );
+  for (const p of op.queryParams) {
+    const field = sanitizeFieldName(p.name);
+    if (seen.has(field)) continue;
+    seen.add(field);
+    const comma = isArrayParam(p) && p.explode === false;
+    entries.push(
+      `${field}: { name: ${JSON.stringify(p.name)}${
+        comma ? ", comma: true" : ""
+      } }`,
+    );
+  }
+  return entries.length === 0 ? "{}" : `{ ${entries.join(", ")} }`;
+}
+
+/**
+ * Emit the `const qs = ...` statement for a non-list method, or "" when the
+ * operation has no query parameters. Ends with a newline when non-empty.
+ */
+function querySetup(op: GroupedOperation, indent: string): string {
+  if (op.queryParams.length === 0) return "";
+  return `${indent}    const qs = toQueryString(queryEntries(args, ${
+    queryFieldsLiteral(op)
+  }));\n`;
 }
 
 /** Build the API path with template literal substitution */
@@ -892,6 +930,8 @@ function toPascalCase(name: string): string {
  */
 function withPassthrough(zodExpr: string): string {
   if (!zodExpr.startsWith("z.object({")) return zodExpr;
+  // Lenient mapping already attaches it (at every depth); never double up.
+  if (/\.passthrough\(\)(\.nullable\(\))?$/.test(zodExpr)) return zodExpr;
   // `.passthrough()` must attach to the ZodObject, not a wrapper: a nullable
   // object is `z.object({...}).nullable()` and ZodNullable has no
   // `.passthrough()`. Insert before the trailing `.nullable()` in that case.
@@ -908,19 +948,5 @@ function escapeStr(s: string): string {
 }
 
 function truncateStr(s: string): string {
-  const oneLine = s.replace(/\s+/g, " ").trim();
-  if (oneLine.length <= 80) return oneLine;
-
-  // Avoid emitting dangling fragments such as "whe..." in user-facing help.
-  // Prefer the last complete sentence in the normal display budget, then a
-  // whole-word truncation when there is no sentence boundary.
-  const bounded = oneLine.slice(0, 80);
-  const sentenceEnd = Math.max(
-    bounded.lastIndexOf("."),
-    bounded.lastIndexOf("!"),
-    bounded.lastIndexOf("?"),
-  );
-  if (sentenceEnd > 0) return bounded.slice(0, sentenceEnd + 1);
-  const wordEnd = bounded.lastIndexOf(" ");
-  return `${bounded.slice(0, wordEnd > 0 ? wordEnd : bounded.length)}...`;
+  return truncateAtBoundary(s, 80);
 }

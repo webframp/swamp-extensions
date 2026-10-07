@@ -8,7 +8,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/memberships";
 
@@ -23,14 +30,14 @@ const GlobalArgsSchema = z.object({
 });
 
 const GroupMembershipsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type"),
-  created_at: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type"),
+  created_at: z.string().nullish().describe(
     "The time when this group membership was created",
   ),
-  group_id: z.string().optional().describe("Related group ID"),
-  role_id: z.string().optional().describe("Related role ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  group_id: z.string().nullish().describe("Related group ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 const ListGroupMembershipsSchema = z.object({
@@ -46,25 +53,25 @@ const ListGroupMembershipsSchema = z.object({
 });
 
 const CreateGroupMembershipSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type."),
-  created_at: z.unknown().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type."),
+  created_at: z.unknown().nullish().describe(
     "The date that the group membership was created on",
   ),
-  group_id: z.string().optional().describe("Related group ID"),
-  role_id: z.string().optional().describe("Related role ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  group_id: z.string().nullish().describe("Related group ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 const OrgMembershipsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type"),
-  created_at: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type"),
+  created_at: z.string().nullish().describe(
     "The time when this Org membership was created",
   ),
-  org_id: z.string().optional().describe("Related org ID"),
-  role_id: z.string().optional().describe("Related role ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 const ListOrgMembershipsSchema = z.object({
@@ -80,14 +87,14 @@ const ListOrgMembershipsSchema = z.object({
 });
 
 const CreateOrgMembershipSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type."),
-  created_at: z.unknown().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type."),
+  created_at: z.unknown().nullish().describe(
     "The date that the org membership was created on",
   ),
-  org_id: z.string().optional().describe("Related org ID"),
-  role_id: z.string().optional().describe("Related role ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 // =============================================================================
@@ -97,7 +104,7 @@ const CreateOrgMembershipSchema = z.object({
 /** Snyk Memberships — group and org member management */
 export const model = {
   type: "@webframp/snyk/memberships",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -156,6 +163,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -173,7 +185,7 @@ export const model = {
     },
     "group_user_membership": {
       description: "Update a role from a group membership",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -238,17 +250,23 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort_by: { name: "sort_by" },
+          sort_order: { name: "sort_order" },
+          email: { name: "email" },
+          user_id: { name: "user_id" },
+          username: { name: "username" },
+          role_name: { name: "role_name" },
+          include_group_membership_count: {
+            name: "include_group_membership_count",
+          },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(String(args.group_id))}/memberships`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -332,6 +350,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_group_membership");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -416,17 +435,9 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const pathKeys = new Set<string>(["group_id", "membership_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !pathKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, { cascade: { name: "cascade" } }),
+        );
         await snykApi(
           apiToken,
           "DELETE",
@@ -484,17 +495,20 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort_by: { name: "sort_by" },
+          sort_order: { name: "sort_order" },
+          email: { name: "email" },
+          user_id: { name: "user_id" },
+          username: { name: "username" },
+          role_name: { name: "role_name" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/memberships`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -573,6 +587,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_org_membership");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),

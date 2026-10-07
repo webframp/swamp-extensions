@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/collections";
 
@@ -23,15 +29,14 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetCollectionsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  is_generated: z.boolean().optional(),
-  name: z.string().describe("User-defined name of the collection"),
-  created_by_user_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  is_generated: z.boolean().nullish(),
+  name: z.string().nullish().describe("User-defined name of the collection"),
+  created_by_user_id: z.string().nullish().describe(
     "Related created_by_user ID",
   ),
-  org_id: z.string().optional().describe("Related org ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
 }).passthrough();
 
 const GetCollectionsSchema = z.object({
@@ -47,22 +52,20 @@ const GetCollectionsSchema = z.object({
 });
 
 const CreateCollectionSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  is_generated: z.boolean().optional(),
-  name: z.string().describe("User-defined name of the collection"),
-  created_by_user_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  is_generated: z.boolean().nullish(),
+  name: z.string().nullish().describe("User-defined name of the collection"),
+  created_by_user_id: z.string().nullish().describe(
     "Related created_by_user ID",
   ),
-  org_id: z.string().optional().describe("Related org ID"),
+  org_id: z.string().nullish().describe("Related org ID"),
 }).passthrough();
 
 const GetProjectsOfCollectionItemSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  target_id: z.string().optional().describe("Related target ID"),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  target_id: z.string().nullish().describe("Related target ID"),
 }).passthrough();
 
 const GetProjectsOfCollectionSchema = z.object({
@@ -84,7 +87,7 @@ const GetProjectsOfCollectionSchema = z.object({
 /** Snyk Collections — project collection groupings and management */
 export const model = {
   type: "@webframp/snyk/collections",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -151,6 +154,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -174,7 +182,7 @@ export const model = {
     },
     "collection_with_projects": {
       description: "Add projects to a collection",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -213,17 +221,18 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort: { name: "sort" },
+          direction: { name: "direction" },
+          name: { name: "name" },
+          is_generated: { name: "is_generated" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/collections`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -285,6 +294,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_collection");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -324,6 +334,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_collection");
 
         const handle = await context.writeResource(
           "collection",
@@ -436,15 +447,15 @@ export const model = {
         direction: z.enum(["ASC", "DESC"]).optional().describe(
           "Return projects sorted in the specified direction",
         ),
-        target_id: z.string().optional().describe(
-          "Return projects that belong to the provided targets",
-        ),
-        show: z.string().optional().describe(
+        target_id: z.union([z.string(), z.array(z.string())]).optional()
+          .describe("Return projects that belong to the provided targets"),
+        show: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that are with or without issues",
         ),
-        integration: z.string().optional().describe(
-          "Return projects that match the provided integration types",
-        ),
+        integration: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Return projects that match the provided integration types",
+          ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -462,11 +473,13 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["collection_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort: { name: "sort" },
+          direction: { name: "direction" },
+          target_id: { name: "target_id" },
+          show: { name: "show" },
+          integration: { name: "integration" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -474,7 +487,7 @@ export const model = {
             encodeURIComponent(String(args.collection_id))
           }/relationships/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -548,13 +561,11 @@ export const model = {
           String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
-          "update_collection_with_projects",
+          "collection_with_projects",
           id,
           result,
         );
-        context.logger.info("Created update_collection_with_projects {id}", {
-          id,
-        });
+        context.logger.info("Created collection_with_projects {id}", { id });
         return { dataHandles: [handle] };
       },
     },

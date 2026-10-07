@@ -20,7 +20,11 @@ import type {
   ResponseObject,
   SchemaObject,
 } from "./schema_fetcher.ts";
-import { resolveParamRef, resolveSchema } from "./schema_fetcher.ts";
+import {
+  resolveParamRef,
+  resolveRef,
+  resolveSchema,
+} from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
 /** A single API operation grouped into a service */
@@ -47,6 +51,11 @@ export interface GroupedOperation {
   isCollection: boolean;
   /** Whether this endpoint uses cursor-based pagination */
   usesCursorPagination: boolean;
+  /**
+   * Whether any 2xx response in the spec carries content. False for 204s and
+   * redirect-only operations, where an empty reply is the success case.
+   */
+  hasResponseBody: boolean;
   /** Whether this endpoint is deprecated */
   deprecated: boolean;
   /** Tags from the OpenAPI spec */
@@ -238,9 +247,37 @@ function extractOperation(
     responseSchema,
     isCollection,
     usesCursorPagination,
+    hasResponseBody: hasSuccessBody(spec, operation),
     deprecated: operation.deprecated ?? false,
     tags: operation.tags ?? [],
   };
+}
+
+/**
+ * Resolve a response that may be a $ref into components.responses. Most Snyk
+ * operations reference shared responses, so reading `content` without this
+ * misses the schema (and misclassifies collections as single items).
+ */
+function resolveResponse(
+  spec: OpenAPISpec,
+  resp: ResponseObject | undefined,
+): ResponseObject | undefined {
+  if (!resp) return undefined;
+  if (resp.$ref) return resolveRef(spec, resp.$ref) as ResponseObject;
+  return resp;
+}
+
+/** True when any 2xx response of the operation declares content. */
+function hasSuccessBody(
+  spec: OpenAPISpec,
+  operation: OperationObject,
+): boolean {
+  for (const [code, raw] of Object.entries(operation.responses ?? {})) {
+    if (!/^2\d\d$/.test(code)) continue;
+    const resp = resolveResponse(spec, raw);
+    if (resp?.content && Object.keys(resp.content).length > 0) return true;
+  }
+  return false;
 }
 
 /**
@@ -259,14 +296,21 @@ function extractResponseSchema(
 ): { responseSchema?: SchemaObject; isCollection: boolean } {
   if (!operation.responses) return { isCollection: false };
 
-  // Try 200, 201, then any 2xx
-  const successCodes = ["200", "201"];
+  // Try 200, 201, 202, then any other 2xx that declares content
+  const successCodes = [
+    "200",
+    "201",
+    "202",
+    ...Object.keys(operation.responses).filter((c) =>
+      /^2\d\d$/.test(c) && !["200", "201", "202"].includes(c)
+    ),
+  ];
   let responseContent:
     | Record<string, { schema?: SchemaObject }>
     | undefined;
 
   for (const code of successCodes) {
-    const resp = operation.responses[code] as ResponseObject | undefined;
+    const resp = resolveResponse(spec, operation.responses[code]);
     if (resp?.content) {
       // Try JSON:API content type first, then fall back to regular JSON
       if (resp.content["application/vnd.api+json"]) {

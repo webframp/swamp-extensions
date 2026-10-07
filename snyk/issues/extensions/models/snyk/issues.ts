@@ -8,7 +8,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
+
+const EXTENSION_NAME = "@webframp/snyk/issues";
 
 // =============================================================================
 // Schemas
@@ -20,6 +29,626 @@ const GlobalArgsSchema = z.object({
   version: z.string().default("2024-10-15").describe("Snyk API version date"),
 });
 
+const GroupIssuesItemSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("The type of an issue."),
+  classes: z.array(z.unknown()).nullish().describe(
+    "A list of details for weakness data, policy, etc that are the class of this issue's source.",
+  ),
+  coordinates: z.array(
+    z.object({
+      code_flows: z.array(
+        z.object({
+          thread_flows: z.array(
+            z.object({
+              locations: z.array(z.unknown()).nullish(),
+            }).passthrough(),
+          ).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      code_flows_omitted: z.boolean().nullish(),
+      created_at: z.string().nullish(),
+      is_fixable_manually: z.boolean().nullish(),
+      is_fixable_snyk: z.boolean().nullish(),
+      is_fixable_upstream: z.boolean().nullish(),
+      is_patchable: z.boolean().nullish(),
+      is_pinnable: z.boolean().nullish(),
+      is_upgradeable: z.boolean().nullish(),
+      last_introduced_at: z.string().nullish(),
+      last_resolved_at: z.string().nullish(),
+      last_resolved_details: z.string().nullish(),
+      reachability: z.string().nullish(),
+      remedies: z.array(
+        z.object({
+          correlation_id: z.string().nullish(),
+          description: z.string().nullish(),
+          meta: z.object({
+            data: z.record(z.string(), z.unknown()).nullish(),
+            schema_version: z.string().nullish(),
+          }).passthrough().nullish(),
+          type: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      representations: z.array(z.union([
+        z.object({
+          resourcePath: z.string().nullish(),
+        }).passthrough(),
+        z.object({
+          dependency: z.object({
+            package_name: z.string().nullish(),
+            package_version: z.string().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          cloud_resource: z.object({
+            environment: z.object({
+              id: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+            resource: z.object({
+              iac_mappings_count: z.unknown().nullish(),
+              id: z.unknown().nullish(),
+              input_type: z.unknown().nullish(),
+              location: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              platform: z.unknown().nullish(),
+              resource_type: z.unknown().nullish(),
+              tags: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          sourceLocation: z.object({
+            commit_id: z.string().nullish(),
+            file: z.string().nullish(),
+            region: z.object({
+              end: z.unknown().nullish(),
+              start: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+      ])).nullish(),
+      state: z.string().nullish(),
+      updated_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("Where the issue originated, specific to issue type."),
+  created_at: z.string().nullish().describe("The creation time of this issue."),
+  description: z.string().nullish().describe(
+    "A markdown-formatted optional description of this issue. Links are not permitted.",
+  ),
+  effective_severity_level: z.string().nullish().describe(
+    "The computed effective severity of this issue.",
+  ),
+  exploit_details: z.object({
+    maturity_levels: z.array(
+      z.object({
+        format: z.string().nullish(),
+        level: z.string().nullish(),
+      }).passthrough(),
+    ).nullish(),
+    sources: z.array(z.string()).nullish(),
+  }).passthrough().nullish(),
+  ignored: z.boolean().nullish().describe(
+    "A flag indicating if the issue is being ignored.",
+  ),
+  key: z.string().nullish().describe(
+    "An opaque key used for uniquely identifying this issue across test runs, within a project.",
+  ),
+  key_asset: z.string().nullish().describe(
+    "SAST identifier that allows the identification of Snyk Code issues with a unique ID per repository.",
+  ),
+  problems: z.array(z.unknown()).nullish().describe(
+    "A list of details for vulnerability data, policy, etc that are the source of this issue.",
+  ),
+  resolution: z.object({
+    details: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "An optional field recording when and via what means an issue was resolved, if it was resolved.",
+  ),
+  risk: z.object({
+    factors: z.array(z.unknown()).nullish(),
+    score: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "Risk prioritization information for an issue",
+  ),
+  severities: z.array(z.unknown()).nullish(),
+  status: z.string().nullish().describe(
+    "The issue's status. Derived from the issue's resolution, which provides more details.",
+  ),
+  title: z.string().nullish().describe(
+    "A human-readable title for this issue.",
+  ),
+  tool: z.string().nullish().describe(
+    "An opaque identifier for corelating across test runs.",
+  ),
+  updated_at: z.string().nullish().describe(
+    "The time when this issue was last modified.",
+  ),
+  ignore_id: z.string().nullish().describe("Related ignore ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  scan_item_id: z.string().nullish().describe("Related scan_item ID"),
+  test_executions_id: z.string().nullish().describe(
+    "Related test_executions ID",
+  ),
+}).passthrough();
+
+const ListGroupIssuesSchema = z.object({
+  items: z.array(GroupIssuesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const GetGroupIssueByIssueIdSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("The type of an issue."),
+  classes: z.array(z.unknown()).nullish().describe(
+    "A list of details for weakness data, policy, etc that are the class of this issue's source.",
+  ),
+  coordinates: z.array(
+    z.object({
+      code_flows: z.array(
+        z.object({
+          thread_flows: z.array(
+            z.object({
+              locations: z.array(z.unknown()).nullish(),
+            }).passthrough(),
+          ).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      code_flows_omitted: z.boolean().nullish(),
+      created_at: z.string().nullish(),
+      is_fixable_manually: z.boolean().nullish(),
+      is_fixable_snyk: z.boolean().nullish(),
+      is_fixable_upstream: z.boolean().nullish(),
+      is_patchable: z.boolean().nullish(),
+      is_pinnable: z.boolean().nullish(),
+      is_upgradeable: z.boolean().nullish(),
+      last_introduced_at: z.string().nullish(),
+      last_resolved_at: z.string().nullish(),
+      last_resolved_details: z.string().nullish(),
+      reachability: z.string().nullish(),
+      remedies: z.array(
+        z.object({
+          correlation_id: z.string().nullish(),
+          description: z.string().nullish(),
+          meta: z.object({
+            data: z.record(z.string(), z.unknown()).nullish(),
+            schema_version: z.string().nullish(),
+          }).passthrough().nullish(),
+          type: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      representations: z.array(z.union([
+        z.object({
+          resourcePath: z.string().nullish(),
+        }).passthrough(),
+        z.object({
+          dependency: z.object({
+            package_name: z.string().nullish(),
+            package_version: z.string().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          cloud_resource: z.object({
+            environment: z.object({
+              id: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+            resource: z.object({
+              iac_mappings_count: z.unknown().nullish(),
+              id: z.unknown().nullish(),
+              input_type: z.unknown().nullish(),
+              location: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              platform: z.unknown().nullish(),
+              resource_type: z.unknown().nullish(),
+              tags: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          sourceLocation: z.object({
+            commit_id: z.string().nullish(),
+            file: z.string().nullish(),
+            region: z.object({
+              end: z.unknown().nullish(),
+              start: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+      ])).nullish(),
+      state: z.string().nullish(),
+      updated_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("Where the issue originated, specific to issue type."),
+  created_at: z.string().nullish().describe("The creation time of this issue."),
+  description: z.string().nullish().describe(
+    "A markdown-formatted optional description of this issue. Links are not permitted.",
+  ),
+  effective_severity_level: z.string().nullish().describe(
+    "The computed effective severity of this issue.",
+  ),
+  exploit_details: z.object({
+    maturity_levels: z.array(
+      z.object({
+        format: z.string().nullish(),
+        level: z.string().nullish(),
+      }).passthrough(),
+    ).nullish(),
+    sources: z.array(z.string()).nullish(),
+  }).passthrough().nullish(),
+  ignored: z.boolean().nullish().describe(
+    "A flag indicating if the issue is being ignored.",
+  ),
+  key: z.string().nullish().describe(
+    "An opaque key used for uniquely identifying this issue across test runs, within a project.",
+  ),
+  key_asset: z.string().nullish().describe(
+    "SAST identifier that allows the identification of Snyk Code issues with a unique ID per repository.",
+  ),
+  problems: z.array(z.unknown()).nullish().describe(
+    "A list of details for vulnerability data, policy, etc that are the source of this issue.",
+  ),
+  resolution: z.object({
+    details: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "An optional field recording when and via what means an issue was resolved, if it was resolved.",
+  ),
+  risk: z.object({
+    factors: z.array(z.unknown()).nullish(),
+    score: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "Risk prioritization information for an issue",
+  ),
+  severities: z.array(z.unknown()).nullish(),
+  status: z.string().nullish().describe(
+    "The issue's status. Derived from the issue's resolution, which provides more details.",
+  ),
+  title: z.string().nullish().describe(
+    "A human-readable title for this issue.",
+  ),
+  tool: z.string().nullish().describe(
+    "An opaque identifier for corelating across test runs.",
+  ),
+  updated_at: z.string().nullish().describe(
+    "The time when this issue was last modified.",
+  ),
+  ignore_id: z.string().nullish().describe("Related ignore ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  scan_item_id: z.string().nullish().describe("Related scan_item ID"),
+  test_executions_id: z.string().nullish().describe(
+    "Related test_executions ID",
+  ),
+}).passthrough();
+
+const OrgIssuesItemSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("The type of an issue."),
+  classes: z.array(z.unknown()).nullish().describe(
+    "A list of details for weakness data, policy, etc that are the class of this issue's source.",
+  ),
+  coordinates: z.array(
+    z.object({
+      code_flows: z.array(
+        z.object({
+          thread_flows: z.array(
+            z.object({
+              locations: z.array(z.unknown()).nullish(),
+            }).passthrough(),
+          ).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      code_flows_omitted: z.boolean().nullish(),
+      created_at: z.string().nullish(),
+      is_fixable_manually: z.boolean().nullish(),
+      is_fixable_snyk: z.boolean().nullish(),
+      is_fixable_upstream: z.boolean().nullish(),
+      is_patchable: z.boolean().nullish(),
+      is_pinnable: z.boolean().nullish(),
+      is_upgradeable: z.boolean().nullish(),
+      last_introduced_at: z.string().nullish(),
+      last_resolved_at: z.string().nullish(),
+      last_resolved_details: z.string().nullish(),
+      reachability: z.string().nullish(),
+      remedies: z.array(
+        z.object({
+          correlation_id: z.string().nullish(),
+          description: z.string().nullish(),
+          meta: z.object({
+            data: z.record(z.string(), z.unknown()).nullish(),
+            schema_version: z.string().nullish(),
+          }).passthrough().nullish(),
+          type: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      representations: z.array(z.union([
+        z.object({
+          resourcePath: z.string().nullish(),
+        }).passthrough(),
+        z.object({
+          dependency: z.object({
+            package_name: z.string().nullish(),
+            package_version: z.string().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          cloud_resource: z.object({
+            environment: z.object({
+              id: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+            resource: z.object({
+              iac_mappings_count: z.unknown().nullish(),
+              id: z.unknown().nullish(),
+              input_type: z.unknown().nullish(),
+              location: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              platform: z.unknown().nullish(),
+              resource_type: z.unknown().nullish(),
+              tags: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          sourceLocation: z.object({
+            commit_id: z.string().nullish(),
+            file: z.string().nullish(),
+            region: z.object({
+              end: z.unknown().nullish(),
+              start: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+      ])).nullish(),
+      state: z.string().nullish(),
+      updated_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("Where the issue originated, specific to issue type."),
+  created_at: z.string().nullish().describe("The creation time of this issue."),
+  description: z.string().nullish().describe(
+    "A markdown-formatted optional description of this issue. Links are not permitted.",
+  ),
+  effective_severity_level: z.string().nullish().describe(
+    "The computed effective severity of this issue.",
+  ),
+  exploit_details: z.object({
+    maturity_levels: z.array(
+      z.object({
+        format: z.string().nullish(),
+        level: z.string().nullish(),
+      }).passthrough(),
+    ).nullish(),
+    sources: z.array(z.string()).nullish(),
+  }).passthrough().nullish(),
+  ignored: z.boolean().nullish().describe(
+    "A flag indicating if the issue is being ignored.",
+  ),
+  key: z.string().nullish().describe(
+    "An opaque key used for uniquely identifying this issue across test runs, within a project.",
+  ),
+  key_asset: z.string().nullish().describe(
+    "SAST identifier that allows the identification of Snyk Code issues with a unique ID per repository.",
+  ),
+  problems: z.array(z.unknown()).nullish().describe(
+    "A list of details for vulnerability data, policy, etc that are the source of this issue.",
+  ),
+  resolution: z.object({
+    details: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "An optional field recording when and via what means an issue was resolved, if it was resolved.",
+  ),
+  risk: z.object({
+    factors: z.array(z.unknown()).nullish(),
+    score: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "Risk prioritization information for an issue",
+  ),
+  severities: z.array(z.unknown()).nullish(),
+  status: z.string().nullish().describe(
+    "The issue's status. Derived from the issue's resolution, which provides more details.",
+  ),
+  title: z.string().nullish().describe(
+    "A human-readable title for this issue.",
+  ),
+  tool: z.string().nullish().describe(
+    "An opaque identifier for corelating across test runs.",
+  ),
+  updated_at: z.string().nullish().describe(
+    "The time when this issue was last modified.",
+  ),
+  ignore_id: z.string().nullish().describe("Related ignore ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  scan_item_id: z.string().nullish().describe("Related scan_item ID"),
+  test_executions_id: z.string().nullish().describe(
+    "Related test_executions ID",
+  ),
+}).passthrough();
+
+const ListOrgIssuesSchema = z.object({
+  items: z.array(OrgIssuesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const GetOrgIssueByIssueIdSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("The type of an issue."),
+  classes: z.array(z.unknown()).nullish().describe(
+    "A list of details for weakness data, policy, etc that are the class of this issue's source.",
+  ),
+  coordinates: z.array(
+    z.object({
+      code_flows: z.array(
+        z.object({
+          thread_flows: z.array(
+            z.object({
+              locations: z.array(z.unknown()).nullish(),
+            }).passthrough(),
+          ).nullish(),
+        }).passthrough(),
+      ).nullish(),
+      code_flows_omitted: z.boolean().nullish(),
+      created_at: z.string().nullish(),
+      is_fixable_manually: z.boolean().nullish(),
+      is_fixable_snyk: z.boolean().nullish(),
+      is_fixable_upstream: z.boolean().nullish(),
+      is_patchable: z.boolean().nullish(),
+      is_pinnable: z.boolean().nullish(),
+      is_upgradeable: z.boolean().nullish(),
+      last_introduced_at: z.string().nullish(),
+      last_resolved_at: z.string().nullish(),
+      last_resolved_details: z.string().nullish(),
+      reachability: z.string().nullish(),
+      remedies: z.array(
+        z.object({
+          correlation_id: z.string().nullish(),
+          description: z.string().nullish(),
+          meta: z.object({
+            data: z.record(z.string(), z.unknown()).nullish(),
+            schema_version: z.string().nullish(),
+          }).passthrough().nullish(),
+          type: z.string().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      representations: z.array(z.union([
+        z.object({
+          resourcePath: z.string().nullish(),
+        }).passthrough(),
+        z.object({
+          dependency: z.object({
+            package_name: z.string().nullish(),
+            package_version: z.string().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          cloud_resource: z.object({
+            environment: z.object({
+              id: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+            resource: z.object({
+              iac_mappings_count: z.unknown().nullish(),
+              id: z.unknown().nullish(),
+              input_type: z.unknown().nullish(),
+              location: z.unknown().nullish(),
+              name: z.unknown().nullish(),
+              native_id: z.unknown().nullish(),
+              platform: z.unknown().nullish(),
+              resource_type: z.unknown().nullish(),
+              tags: z.unknown().nullish(),
+              type: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+        z.object({
+          sourceLocation: z.object({
+            commit_id: z.string().nullish(),
+            file: z.string().nullish(),
+            region: z.object({
+              end: z.unknown().nullish(),
+              start: z.unknown().nullish(),
+            }).passthrough().nullish(),
+          }).passthrough().nullish(),
+        }).passthrough(),
+      ])).nullish(),
+      state: z.string().nullish(),
+      updated_at: z.string().nullish(),
+    }).passthrough(),
+  ).nullish().describe("Where the issue originated, specific to issue type."),
+  created_at: z.string().nullish().describe("The creation time of this issue."),
+  description: z.string().nullish().describe(
+    "A markdown-formatted optional description of this issue. Links are not permitted.",
+  ),
+  effective_severity_level: z.string().nullish().describe(
+    "The computed effective severity of this issue.",
+  ),
+  exploit_details: z.object({
+    maturity_levels: z.array(
+      z.object({
+        format: z.string().nullish(),
+        level: z.string().nullish(),
+      }).passthrough(),
+    ).nullish(),
+    sources: z.array(z.string()).nullish(),
+  }).passthrough().nullish(),
+  ignored: z.boolean().nullish().describe(
+    "A flag indicating if the issue is being ignored.",
+  ),
+  key: z.string().nullish().describe(
+    "An opaque key used for uniquely identifying this issue across test runs, within a project.",
+  ),
+  key_asset: z.string().nullish().describe(
+    "SAST identifier that allows the identification of Snyk Code issues with a unique ID per repository.",
+  ),
+  problems: z.array(z.unknown()).nullish().describe(
+    "A list of details for vulnerability data, policy, etc that are the source of this issue.",
+  ),
+  resolution: z.object({
+    details: z.string().nullish(),
+    resolved_at: z.string().nullish(),
+    type: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "An optional field recording when and via what means an issue was resolved, if it was resolved.",
+  ),
+  risk: z.object({
+    factors: z.array(z.unknown()).nullish(),
+    score: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
+    "Risk prioritization information for an issue",
+  ),
+  severities: z.array(z.unknown()).nullish(),
+  status: z.string().nullish().describe(
+    "The issue's status. Derived from the issue's resolution, which provides more details.",
+  ),
+  title: z.string().nullish().describe(
+    "A human-readable title for this issue.",
+  ),
+  tool: z.string().nullish().describe(
+    "An opaque identifier for corelating across test runs.",
+  ),
+  updated_at: z.string().nullish().describe(
+    "The time when this issue was last modified.",
+  ),
+  ignore_id: z.string().nullish().describe("Related ignore ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  scan_item_id: z.string().nullish().describe("Related scan_item ID"),
+  test_executions_id: z.string().nullish().describe(
+    "Related test_executions ID",
+  ),
+}).passthrough();
+
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -27,7 +656,7 @@ const GlobalArgsSchema = z.object({
 /** Snyk Issues — vulnerability issues across projects and groups */
 export const model = {
   type: "@webframp/snyk/issues",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -76,30 +705,35 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
-    "list_group_issues": {
+    "group_issues": {
       description: "Get issues by group ID",
-      schema: z.object({}),
+      schema: ListGroupIssuesSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "group_issue_by_issue_id": {
       description: "Get an issue",
-      schema: z.object({}),
+      schema: GetGroupIssueByIssueIdSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "list_org_issues": {
+    "org_issues": {
       description: "Get issues by org ID",
-      schema: z.object({}),
+      schema: ListOrgIssuesSchema,
       lifetime: "infinite" as const,
-      garbageCollection: 20,
+      garbageCollection: 10,
     },
     "org_issue_by_issue_id": {
       description: "Get an issue",
-      schema: z.object({}),
+      schema: GetOrgIssueByIssueIdSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -129,10 +763,13 @@ export const model = {
         created_after: z.string().optional().describe(
           "A filter to select issues created after this date.",
         ),
-        effective_severity_level: z.string().optional().describe(
-          "One or more effective severity levels to filter issues.",
+        effective_severity_level: z.union([z.string(), z.array(z.string())])
+          .optional().describe(
+            "One or more effective severity levels to filter issues.",
+          ),
+        status: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "An issue's status",
         ),
-        status: z.string().optional().describe("An issue's status"),
         ignored: z.boolean().optional().describe(
           "Whether an issue is ignored or not.",
         ),
@@ -155,30 +792,49 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const startMs = Date.now();
+        const query = queryEntries(args, {
+          scan_item_id: { name: "scan_item.id" },
+          scan_item_type: { name: "scan_item.type" },
+          type: { name: "type" },
+          updated_before: { name: "updated_before" },
+          updated_after: { name: "updated_after" },
+          created_before: { name: "created_before" },
+          created_after: { name: "created_after" },
+          effective_severity_level: {
+            name: "effective_severity_level",
+            comma: true,
+          },
+          status: { name: "status", comma: true },
+          ignored: { name: "ignored" },
+          include_code_flows: { name: "include_code_flows" },
+        });
 
-        const result = await snykApi(
+        const { results, truncated } = await snykApiPaginated(
           apiToken,
-          "GET",
-          `/groups/${encodeURIComponent(String(args.group_id))}/issues${qs}`,
+          `/groups/${encodeURIComponent(String(args.group_id))}/issues`,
           version,
+          query,
         );
 
-        const handle = await context.writeResource(
-          "list_group_issues",
-          sanitizeInstanceName(String(args.group_id)),
-          result,
-        );
-        context.logger.info("Fetched list_group_issues", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("group_issues", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} group_issues", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -206,17 +862,11 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["group_id", "issue_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, {
+            include_code_flows: { name: "include_code_flows" },
+          }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -225,6 +875,7 @@ export const model = {
           }${qs}`,
           version,
         );
+        requireBody(result, "get_group_issue_by_issue_id");
 
         const handle = await context.writeResource(
           "group_issue_by_issue_id",
@@ -257,10 +908,13 @@ export const model = {
         created_after: z.string().optional().describe(
           "A filter to select issues created after this date.",
         ),
-        effective_severity_level: z.string().optional().describe(
-          "One or more effective severity levels to filter issues.",
+        effective_severity_level: z.union([z.string(), z.array(z.string())])
+          .optional().describe(
+            "One or more effective severity levels to filter issues.",
+          ),
+        status: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "An issue's status",
         ),
-        status: z.string().optional().describe("An issue's status"),
         ignored: z.boolean().optional().describe(
           "Whether an issue is ignored or not.",
         ),
@@ -283,30 +937,49 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const startMs = Date.now();
+        const query = queryEntries(args, {
+          scan_item_id: { name: "scan_item.id" },
+          scan_item_type: { name: "scan_item.type" },
+          type: { name: "type" },
+          updated_before: { name: "updated_before" },
+          updated_after: { name: "updated_after" },
+          created_before: { name: "created_before" },
+          created_after: { name: "created_after" },
+          effective_severity_level: {
+            name: "effective_severity_level",
+            comma: true,
+          },
+          status: { name: "status", comma: true },
+          ignored: { name: "ignored" },
+          include_code_flows: { name: "include_code_flows" },
+        });
 
-        const result = await snykApi(
+        const { results, truncated } = await snykApiPaginated(
           apiToken,
-          "GET",
-          `/orgs/${encodeURIComponent(orgId)}/issues${qs}`,
+          `/orgs/${encodeURIComponent(orgId)}/issues`,
           version,
+          query,
         );
 
-        const handle = await context.writeResource(
-          "list_org_issues",
-          "latest",
-          result,
-        );
-        context.logger.info("Fetched list_org_issues", {});
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("org_issues", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} org_issues", {
+          count: results.length,
+        });
         return { dataHandles: [handle] };
       },
     },
@@ -333,17 +1006,11 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["issue_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, {
+            include_code_flows: { name: "include_code_flows" },
+          }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -352,6 +1019,7 @@ export const model = {
           }${qs}`,
           version,
         );
+        requireBody(result, "get_org_issue_by_issue_id");
 
         const handle = await context.writeResource(
           "org_issue_by_issue_id",

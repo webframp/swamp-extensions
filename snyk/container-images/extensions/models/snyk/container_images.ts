@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/container-images";
 
@@ -23,87 +29,12 @@ const GlobalArgsSchema = z.object({
 });
 
 const ContainerImageItemSchema = z.object({
-  id: z.string().regex(new RegExp("^sha256(:|%3A)[a-f0-9]{64}$")),
-  type: z.enum(["container_image"]).optional(),
-  layers: z.array(z.unknown()),
-  names: z.array(z.unknown()).optional(),
-  platform: z.enum([
-    "aix/ppc64",
-    "android/386",
-    "android/amd64",
-    "android/arm",
-    "android/arm/v5",
-    "android/arm/v6",
-    "android/arm/v7",
-    "android/arm64",
-    "android/arm64/v8",
-    "darwin/amd64",
-    "darwin/arm",
-    "darwin/arm/v5",
-    "darwin/arm/v6",
-    "darwin/arm/v7",
-    "darwin/arm64",
-    "darwin/arm64/v8",
-    "dragonfly/amd64",
-    "freebsd/386",
-    "freebsd/amd64",
-    "freebsd/arm",
-    "freebsd/arm/v5",
-    "freebsd/arm/v6",
-    "freebsd/arm/v7",
-    "illumos/amd64",
-    "ios/arm64",
-    "ios/arm64/v8",
-    "js/wasm",
-    "linux/386",
-    "linux/amd64",
-    "linux/arm",
-    "linux/arm/v5",
-    "linux/arm/v6",
-    "linux/arm/v7",
-    "linux/arm64",
-    "linux/arm64/v8",
-    "linux/loong64",
-    "linux/mips",
-    "linux/mipsle",
-    "linux/mips64",
-    "linux/mips64le",
-    "linux/ppc64",
-    "linux/ppc64le",
-    "linux/riscv64",
-    "linux/s390x",
-    "linux/x86_64",
-    "netbsd/386",
-    "netbsd/amd64",
-    "netbsd/arm",
-    "netbsd/arm/v5",
-    "netbsd/arm/v6",
-    "netbsd/arm/v7",
-    "openbsd/386",
-    "openbsd/amd64",
-    "openbsd/arm",
-    "openbsd/arm/v5",
-    "openbsd/arm/v6",
-    "openbsd/arm/v7",
-    "openbsd/arm64",
-    "openbsd/arm64/v8",
-    "plan9/386",
-    "plan9/amd64",
-    "plan9/arm",
-    "plan9/arm/v5",
-    "plan9/arm/v6",
-    "plan9/arm/v7",
-    "solaris/amd64",
-    "windows/386",
-    "windows/amd64",
-    "windows/arm",
-    "windows/arm/v5",
-    "windows/arm/v6",
-    "windows/arm/v7",
-    "windows/arm64",
-    "windows/arm64/v8",
-  ]),
-  image_target_refs_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  layers: z.array(z.unknown()).nullish(),
+  names: z.array(z.unknown()).nullish(),
+  platform: z.string().nullish(),
+  image_target_refs_id: z.string().nullish().describe(
     "Related image_target_refs ID",
   ),
 }).passthrough();
@@ -120,87 +51,23 @@ const ListContainerImageSchema = z.object({
   ),
 });
 
+const GetContainerImageSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  layers: z.array(z.unknown()).nullish(),
+  names: z.array(z.unknown()).nullish(),
+  platform: z.string().nullish(),
+  image_target_refs_id: z.string().nullish().describe(
+    "Related image_target_refs ID",
+  ),
+}).passthrough();
+
 const ImageTargetRefsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["image_target_reference"]).optional(),
-  platform: z.enum([
-    "aix/ppc64",
-    "android/386",
-    "android/amd64",
-    "android/arm",
-    "android/arm/v5",
-    "android/arm/v6",
-    "android/arm/v7",
-    "android/arm64",
-    "android/arm64/v8",
-    "darwin/amd64",
-    "darwin/arm",
-    "darwin/arm/v5",
-    "darwin/arm/v6",
-    "darwin/arm/v7",
-    "darwin/arm64",
-    "darwin/arm64/v8",
-    "dragonfly/amd64",
-    "freebsd/386",
-    "freebsd/amd64",
-    "freebsd/arm",
-    "freebsd/arm/v5",
-    "freebsd/arm/v6",
-    "freebsd/arm/v7",
-    "illumos/amd64",
-    "ios/arm64",
-    "ios/arm64/v8",
-    "js/wasm",
-    "linux/386",
-    "linux/amd64",
-    "linux/arm",
-    "linux/arm/v5",
-    "linux/arm/v6",
-    "linux/arm/v7",
-    "linux/arm64",
-    "linux/arm64/v8",
-    "linux/loong64",
-    "linux/mips",
-    "linux/mipsle",
-    "linux/mips64",
-    "linux/mips64le",
-    "linux/ppc64",
-    "linux/ppc64le",
-    "linux/riscv64",
-    "linux/s390x",
-    "linux/x86_64",
-    "netbsd/386",
-    "netbsd/amd64",
-    "netbsd/arm",
-    "netbsd/arm/v5",
-    "netbsd/arm/v6",
-    "netbsd/arm/v7",
-    "openbsd/386",
-    "openbsd/amd64",
-    "openbsd/arm",
-    "openbsd/arm/v5",
-    "openbsd/arm/v6",
-    "openbsd/arm/v7",
-    "openbsd/arm64",
-    "openbsd/arm64/v8",
-    "plan9/386",
-    "plan9/amd64",
-    "plan9/arm",
-    "plan9/arm/v5",
-    "plan9/arm/v6",
-    "plan9/arm/v7",
-    "solaris/amd64",
-    "windows/386",
-    "windows/amd64",
-    "windows/arm",
-    "windows/arm/v5",
-    "windows/arm/v6",
-    "windows/arm/v7",
-    "windows/arm64",
-    "windows/arm64/v8",
-  ]).optional(),
-  target_id: z.string().optional(),
-  target_reference: z.string().optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  platform: z.string().nullish(),
+  target_id: z.string().nullish(),
+  target_reference: z.string().nullish(),
 }).passthrough();
 
 const ListImageTargetRefsSchema = z.object({
@@ -222,7 +89,7 @@ const ListImageTargetRefsSchema = z.object({
 /** Snyk Container Images — container image scanning and vulnerability data */
 export const model = {
   type: "@webframp/snyk/container-images",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -284,12 +151,17 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
     "container_image": {
       description: "List instances of container image",
-      schema: ListContainerImageSchema,
+      schema: z.union([ListContainerImageSchema, GetContainerImageSchema]),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -306,9 +178,8 @@ export const model = {
     list_container_image: {
       description: "List instances of container image",
       arguments: z.object({
-        image_ids: z.string().optional().describe(
-          "A comma-separated list of Image IDs",
-        ),
+        image_ids: z.union([z.string(), z.array(z.string())]).optional()
+          .describe("A comma-separated list of Image IDs"),
         platform: z.enum([
           "aix/ppc64",
           "android/386",
@@ -387,7 +258,9 @@ export const model = {
         ]).optional().describe(
           "The image Operating System and processor architecture",
         ),
-        names: z.string().optional().describe("The container registry names"),
+        names: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "The container registry names",
+        ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -405,17 +278,17 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          image_ids: { name: "image_ids", comma: true },
+          platform: { name: "platform" },
+          names: { name: "names", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/container_images`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -467,6 +340,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_container_image");
 
         const handle = await context.writeResource(
           "container_image",
@@ -499,11 +373,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["image_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -511,7 +381,7 @@ export const model = {
             encodeURIComponent(String(args.image_id))
           }/relationships/image_target_refs`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {

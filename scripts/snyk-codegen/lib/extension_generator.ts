@@ -194,27 +194,101 @@ export function sanitizeInstanceName(name: string): string {
 
 const MAX_RETRIES = 3;
 
+/** Longest pause honored between 429 retries. */
+const MAX_RETRY_DELAY_MS = 30_000;
+
+/** Hard deadline for one HTTP attempt, including reading the response body. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+function isTimeout(err: unknown): boolean {
+  return err instanceof DOMException &&
+    (err.name === "TimeoutError" || err.name === "AbortError");
+}
+
+function timeoutError(label: string): Error {
+  return new Error(
+    \`Snyk API request timed out after \${REQUEST_TIMEOUT_MS}ms: \${label}\`,
+  );
+}
+
 /**
- * fetch with bounded retry on HTTP 429. Honors \`Retry-After\` (seconds) when
- * present, otherwise backs off linearly. Returns the final Response; does not
- * throw on non-429 statuses.
+ * fetch with a per-attempt timeout and bounded retry on HTTP 429. Honors
+ * \`Retry-After\` (seconds, clamped to 30s) when present, otherwise backs off
+ * linearly. Throws once retries are exhausted. Returns the Response for every
+ * other status, with its body still bound to the attempt's deadline.
  */
-async function snykFetch(url: string, init?: RequestInit): Promise<Response> {
+async function snykFetch(
+  url: string,
+  init: RequestInit | undefined,
+  label: string,
+): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch(url, init);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (isTimeout(err)) throw timeoutError(label);
+      throw err;
+    }
     if (response.status !== 429) return response;
 
     const retryAfter = response.headers.get("Retry-After");
     const parsed = retryAfter ? Number(retryAfter) : NaN;
-    const delayMs = Number.isFinite(parsed) ? parsed * 1000 : 1000 * (attempt + 1);
-    await response.text();
+    // Clamp the server's hint: a huge Retry-After must not park the method.
+    const delayMs = Number.isFinite(parsed)
+      ? Math.min(Math.max(parsed, 0) * 1000, MAX_RETRY_DELAY_MS)
+      : 1000 * (attempt + 1);
+    await readText(response, label);
     if (attempt < MAX_RETRIES) {
       await new Promise((r) => setTimeout(r, delayMs));
       continue;
     }
-    return response;
+    throw new Error(
+      \`Snyk API rate limited after \${MAX_RETRIES} retries: \${label}\`,
+    );
   }
-  throw new Error(\`Snyk API request failed: \${url}\`);
+  throw new Error(\`Snyk API request failed: \${label}\`);
+}
+
+/** Read a response body, reporting a deadline hit as a labelled timeout. */
+async function readText(response: Response, label: string): Promise<string> {
+  try {
+    return await response.text();
+  } catch (err) {
+    if (isTimeout(err)) throw timeoutError(label);
+    throw err;
+  }
+}
+
+/**
+ * Parse a response body as JSON. An empty body yields undefined (202/204 and
+ * empty 200 responses are legitimate); malformed JSON throws an error that
+ * names the status and request instead of a bare SyntaxError.
+ */
+function parseJsonBody(text: string, status: number, label: string): unknown {
+  if (text.trim() === "") return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      \`Snyk API HTTP \${status}: invalid JSON in response to \${label}: \${text.slice(0, 200)}\`,
+    );
+  }
+}
+
+/** Build the error for a non-2xx response from its body. */
+function httpError(status: number, text: string, label: string): Error {
+  let detail = text.slice(0, 500);
+  try {
+    const err = JSON.parse(text) as SnykErrorResponse;
+    if (err.errors?.length) {
+      detail = err.errors.map((e) => e.detail).join("; ");
+    }
+  } catch { /* use raw text */ }
+  return new Error(\`Snyk API HTTP \${status}: \${detail} (\${label})\`);
 }
 
 export interface SnykJsonApiResponse<T = unknown> {
@@ -238,9 +312,70 @@ export interface SnykErrorResponse {
   }>;
 }
 
+/** How one method argument maps onto a query parameter. */
+export interface QueryField {
+  /** The API's parameter name, which may differ from the argument name. */
+  name: string;
+  /** Join array values with commas (style=form, explode=false). */
+  comma?: boolean;
+}
+
+/**
+ * Translate method arguments into ordered query entries. Only declared fields
+ * are emitted. Argument names are identifier-safe while API names may contain
+ * dots (for example meta.count), so each field carries its API name. Arrays
+ * become one comma-joined entry or repeated entries, per the parameter style.
+ */
+export function queryEntries(
+  args: Record<string, unknown>,
+  fields: Record<string, QueryField>,
+): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  for (const [field, spec] of Object.entries(fields)) {
+    const value = args[field];
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      const items = value.map((v) => String(v));
+      if (items.length === 0) continue;
+      if (spec.comma) entries.push([spec.name, items.join(",")]);
+      else for (const item of items) entries.push([spec.name, item]);
+      continue;
+    }
+    const text = String(value);
+    if (text !== "") entries.push([spec.name, text]);
+  }
+  return entries;
+}
+
+/** Render query entries as "?k=v&k=v", or "" when there are none. */
+export function toQueryString(entries: Array<[string, string]>): string {
+  if (entries.length === 0) return "";
+  return \`?\${
+    entries
+      .map(([k, v]) => \`\${encodeURIComponent(k)}=\${encodeURIComponent(v)}\`)
+      .join("&")
+  }\`;
+}
+
+/**
+ * Fail when a get/create response carried no data. snykApi returns {} for an
+ * empty 2xx body, which is right for delete and action calls but would
+ * otherwise persist an empty resource and look like fresh data.
+ */
+export function requireBody(
+  result: Record<string, unknown>,
+  label: string,
+): Record<string, unknown> {
+  if (Object.keys(result).length === 0) {
+    throw new Error(\`Snyk API returned an empty response body: \${label}\`);
+  }
+  return result;
+}
+
 /**
  * Make a single Snyk API request.
- * Returns the flattened data (id + attributes merged).
+ * Returns the flattened data (id + attributes merged), or {} when the response
+ * carries no body (204, or an empty 2xx such as 202).
  */
 export async function snykApi(
   apiToken: string,
@@ -251,6 +386,7 @@ export async function snykApi(
 ): Promise<Record<string, unknown>> {
   const separator = path.includes("?") ? "&" : "?";
   const url = \`\${SNYK_API_BASE}\${path}\${separator}version=\${encodeURIComponent(version)}\`;
+  const label = \`\${method} \${path.split("?")[0]}\`;
 
   const headers: Record<string, string> = {
     "Authorization": \`token \${apiToken}\`,
@@ -263,31 +399,23 @@ export async function snykApi(
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-  });
+  }, label);
 
-  if (response.status === 429) {
-    await response.text();
-    throw new Error(\`Snyk API rate limited after \${MAX_RETRIES} retries: \${method} \${path}\`);
-  }
+  const text = await readText(response, label);
 
   if (!response.ok) {
-    const text = await response.text();
-    let detail = text.slice(0, 500);
-    try {
-      const err = JSON.parse(text) as SnykErrorResponse;
-      if (err.errors?.length) {
-        detail = err.errors.map((e) => e.detail).join("; ");
-      }
-    } catch { /* use raw text */ }
-    throw new Error(\`Snyk API HTTP \${response.status}: \${detail}\`);
+    throw httpError(response.status, text, label);
   }
 
-  // DELETE returns 204 No Content
-  if (response.status === 204) {
-    return {};
+  const json = parseJsonBody(text, response.status, label) as
+    | SnykJsonApiResponse
+    | undefined;
+  if (json === undefined || json === null) return {};
+  // A non-list call whose data is an array (for example a create that returns
+  // several credentials) keeps every item under \`items\` instead of losing it.
+  if (Array.isArray(json.data)) {
+    return { items: json.data.map((item) => flattenData(item)) };
   }
-
-  const json = await response.json() as SnykJsonApiResponse;
   return flattenData(json.data);
 }
 
@@ -300,6 +428,36 @@ export interface PaginatedResult {
 }
 
 /**
+ * Resolve a links.next value to an absolute URL on the Snyk API origin. The
+ * API token is sent on every page request, so a next link on a different
+ * origin is refused with an error rather than followed or silently dropped. Relative links
+ * may or may not carry the /rest prefix; both resolve under the API base.
+ */
+function resolveNextUrl(next: string): string {
+  const base = new URL(SNYK_API_BASE);
+  let resolved: URL;
+  try {
+    resolved = new URL(next, \`\${base.origin}/\`);
+  } catch {
+    throw new Error(\`Snyk API returned an invalid pagination link: \${next}\`);
+  }
+  if (resolved.origin !== base.origin) {
+    throw new Error(\`Snyk API returned a pagination link to another origin: \${next}\`);
+  }
+  const inApi = (u: URL) => u.pathname.startsWith(\`\${base.pathname}/\`);
+  if (!/^https?:/i.test(next) && !inApi(resolved)) {
+    // A relative link without the /rest prefix: anchor it under the base path.
+    resolved = new URL(\`\${SNYK_API_BASE}\${next.startsWith("/") ? "" : "/"}\${next}\`);
+  }
+  // URL normalization has already collapsed any "..", so this catches links
+  // that climb out of the API prefix on the same host.
+  if (!inApi(resolved)) {
+    throw new Error(\`Snyk API returned a pagination link outside \${base.pathname}: \${next}\`);
+  }
+  return resolved.toString();
+}
+
+/**
  * Paginate through a Snyk list endpoint using cursor-based pagination.
  * Follows links.next until exhausted or MAX_PAGES reached.
  */
@@ -307,18 +465,17 @@ export async function snykApiPaginated(
   apiToken: string,
   path: string,
   version: string,
-  params?: Record<string, string>,
+  params?: Array<[string, string]>,
 ): Promise<PaginatedResult> {
   const allResults: Record<string, unknown>[] = [];
   let page = 0;
   let truncated = false;
+  const label = \`GET \${path}\`;
 
   // Build initial URL with params
   const queryParts: string[] = [\`version=\${encodeURIComponent(version)}\`, "limit=100"];
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(v)}\`);
-    }
+  for (const [k, v] of params ?? []) {
+    if (v) queryParts.push(\`\${encodeURIComponent(k)}=\${encodeURIComponent(v)}\`);
   }
   let nextUrl: string | null = \`\${SNYK_API_BASE}\${path}?\${queryParts.join("&")}\`;
 
@@ -327,38 +484,27 @@ export async function snykApiPaginated(
       headers: {
         "Authorization": \`token \${apiToken}\`,
       },
-    });
+    }, label);
 
-    if (response.status === 429) {
-      await response.text();
-      throw new Error(\`Snyk API rate limited after \${MAX_RETRIES} retries: GET \${path}\`);
-    }
+    const text = await readText(response, label);
 
     if (!response.ok) {
-      const text = await response.text();
-      let detail = text.slice(0, 500);
-      try {
-        const err = JSON.parse(text) as SnykErrorResponse;
-        if (err.errors?.length) {
-          detail = err.errors.map((e) => e.detail).join("; ");
-        }
-      } catch { /* use raw text */ }
-      throw new Error(\`Snyk API HTTP \${response.status}: \${detail}\`);
+      throw httpError(response.status, text, label);
     }
 
-    const json = await response.json() as SnykJsonApiResponse<unknown[]>;
-    const items = Array.isArray(json.data) ? json.data : json.data ? [json.data] : [];
+    const json = parseJsonBody(text, response.status, label) as
+      | SnykJsonApiResponse<unknown[]>
+      | undefined;
+    const data = json?.data;
+    const items = Array.isArray(data) ? data : data ? [data] : [];
 
     for (const item of items) {
       allResults.push(flattenData(item));
     }
 
     // Follow links.next for cursor pagination
-    nextUrl = json.links?.next ?? null;
-    if (nextUrl && !nextUrl.startsWith("http")) {
-      // Relative URL — prepend base
-      nextUrl = \`\${SNYK_API_BASE}\${nextUrl}\`;
-    }
+    const next = json?.links?.next;
+    nextUrl = next ? resolveNextUrl(next) : null;
 
     page++;
   }

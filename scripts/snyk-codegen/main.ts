@@ -195,11 +195,28 @@ async function main() {
       PLACEHOLDER,
       "  upgrades: [],",
     );
+    // The shared API helper and the generated tests ship with the extension
+    // (or gate it), so a change to either must bump the version as well.
+    const candidateTests = generateTestSource(
+      config,
+      methods,
+      modelFileName.replace(".ts", ""),
+    );
     const versionResult = await computeModelVersion(
       modelPath,
       datePrefix,
       candidateSource,
       PLACEHOLDER,
+      [
+        {
+          path: join(modelDir, "_lib", "api.ts"),
+          candidate: generateApiLib(),
+        },
+        {
+          path: join(modelDir, `${config.name.replace(/-/g, "_")}_test.ts`),
+          candidate: candidateTests,
+        },
+      ],
     );
     // `--version` forces a specific version. When forced, unchanged models are
     // NOT skipped below (see the skip condition) — they are rewritten and get a

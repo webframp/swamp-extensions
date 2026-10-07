@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { snykApi, snykApiPaginated } from "./_lib/api.ts";
+import { queryEntries, snykApi, snykApiPaginated } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/sso";
 
@@ -23,9 +23,11 @@ const GlobalArgsSchema = z.object({
 });
 
 const GroupSsoConnectionsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional().describe("Content type."),
-  name: z.string().describe("The display name of the sso connection."),
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Content type."),
+  name: z.string().nullish().describe(
+    "The display name of the sso connection.",
+  ),
 }).passthrough();
 
 const ListGroupSsoConnectionsSchema = z.object({
@@ -41,18 +43,18 @@ const ListGroupSsoConnectionsSchema = z.object({
 });
 
 const GroupSsoConnectionUsersItemSchema = z.object({
-  id: z.string().describe("The Snyk ID corresponding to this user"),
-  type: z.string().optional().describe("Content type."),
-  active: z.boolean().optional().describe(
+  id: z.string().nullish().describe("The Snyk ID corresponding to this user"),
+  type: z.string().nullish().describe("Content type."),
+  active: z.boolean().nullish().describe(
     "Whether the user status is enabled or not",
   ),
-  email: z.string().optional().describe("The email of the user."),
+  email: z.string().nullish().describe("The email of the user."),
   membership: z.object({
-    created_at: z.string().optional(),
-    strategy: z.enum(["direct", "indirect"]).optional(),
-  }).optional(),
-  name: z.string().optional().describe("The name of the user."),
-  username: z.string().optional().describe("The username of the user."),
+    created_at: z.string().nullish(),
+    strategy: z.string().nullish(),
+  }).passthrough().nullish(),
+  name: z.string().nullish().describe("The name of the user."),
+  username: z.string().nullish().describe("The username of the user."),
 }).passthrough();
 
 const ListGroupSsoConnectionUsersSchema = z.object({
@@ -74,7 +76,7 @@ const ListGroupSsoConnectionUsersSchema = z.object({
 /** Snyk SSO — single sign-on connection management for groups */
 export const model = {
   type: "@webframp/snyk/sso",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -128,6 +130,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -165,17 +172,13 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/groups/${encodeURIComponent(groupId)}/sso_connections`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -224,11 +227,7 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["sso_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -236,7 +235,7 @@ export const model = {
             encodeURIComponent(String(args.sso_id))
           }/users`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
