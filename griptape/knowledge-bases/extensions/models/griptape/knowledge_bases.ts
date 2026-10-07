@@ -30,82 +30,50 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetKnowledgeBaseJobSchema = z.looseObject({
-  bytes_ingested: z.number().optional(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  errors: z.array(z.unknown()).optional(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_job_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
+  bytes_ingested: z.number().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  errors: z.array(z.unknown()).nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_job_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
 });
 
 const GetKnowledgeBaseQuerySchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  entries: z.array(z.unknown()),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_query_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  query: z.string(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  entries: z.array(z.unknown()).nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_query_id: z.string().nullish(),
+  query: z.string().nullish(),
 });
 
 const GetKnowledgeBaseSearchSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_search_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  query: z.string(),
-  result: z.string(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_search_id: z.string().nullish(),
+  query: z.string().nullish(),
+  result: z.string().nullish(),
 });
 
 const KnowledgeBasesItemSchema = z.looseObject({
-  asset_paths: z.array(z.string()),
-  config: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string().optional(),
-  embedding_model: z.unknown().optional(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  schedule_expression: z.string().min(1).max(200).optional(),
-  transforms: z.array(z.unknown()).optional(),
-  type: z.string().min(1).max(200),
-  updated_at: z.string().nullable(),
-  use_default_embedding_model: z.boolean().optional(),
+  asset_paths: z.array(z.string()).nullish(),
+  config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  embedding_model: z.unknown().nullish(),
+  knowledge_base_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  schedule_expression: z.string().nullish(),
+  transforms: z.array(z.unknown()).nullish(),
+  type: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  use_default_embedding_model: z.boolean().nullish(),
 });
 
 const ListKnowledgeBasesSchema = z.object({
@@ -121,48 +89,32 @@ const ListKnowledgeBasesSchema = z.object({
 });
 
 const CreateKnowledgeBaseSchema = z.looseObject({
-  asset_paths: z.array(z.string()),
-  config: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string().optional(),
-  embedding_model: z.unknown().optional(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  schedule_expression: z.string().min(1).max(200).optional(),
-  transforms: z.array(z.unknown()).optional(),
-  type: z.string().min(1).max(200),
-  updated_at: z.string().nullable(),
-  use_default_embedding_model: z.boolean().optional(),
+  asset_paths: z.array(z.string()).nullish(),
+  config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  embedding_model: z.unknown().nullish(),
+  knowledge_base_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  schedule_expression: z.string().nullish(),
+  transforms: z.array(z.unknown()).nullish(),
+  type: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  use_default_embedding_model: z.boolean().nullish(),
 });
 
 const KnowledgeBaseJobsItemSchema = z.looseObject({
-  bytes_ingested: z.number().optional(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  errors: z.array(z.unknown()).optional(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_job_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
+  bytes_ingested: z.number().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  errors: z.array(z.unknown()).nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_job_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
 });
 
 const ListKnowledgeBaseJobsSchema = z.object({
@@ -178,20 +130,12 @@ const ListKnowledgeBaseJobsSchema = z.object({
 });
 
 const KnowledgeBaseQueriesItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  entries: z.array(z.unknown()),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_query_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  query: z.string(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  entries: z.array(z.unknown()).nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_query_id: z.string().nullish(),
+  query: z.string().nullish(),
 });
 
 const ListKnowledgeBaseQueriesSchema = z.object({
@@ -207,20 +151,12 @@ const ListKnowledgeBaseQueriesSchema = z.object({
 });
 
 const KnowledgeBaseSearchesItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  knowledge_base_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  knowledge_base_search_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  query: z.string(),
-  result: z.string(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  knowledge_base_id: z.string().nullish(),
+  knowledge_base_search_id: z.string().nullish(),
+  query: z.string().nullish(),
+  result: z.string().nullish(),
 });
 
 const ListKnowledgeBaseSearchesSchema = z.object({
@@ -242,7 +178,7 @@ const ListKnowledgeBaseSearchesSchema = z.object({
 /** Griptape Cloud Knowledge Bases — RAG knowledge bases, queries, searches, and index jobs */
 export const model = {
   type: "@webframp/griptape/knowledge-bases",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -260,6 +196,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -24,7 +24,7 @@ export const SCHEMA_URL =
  * re-fetches, prints the old/new hash, and rewrites this constant.
  */
 export const SPEC_SHA256 =
-  "189b319ab221116f898d000e1342d02bbba6adf2ecf53d8dc9c621a598f5a083";
+  "eb5f5f758d39ed536f56b450da302ee49bb7a04acbb0104d7581ec2c59afc194";
 
 /** Where generated extensions land, relative to the codegen dir (cwd). */
 export const OUTPUT_BASE = "../../griptape";

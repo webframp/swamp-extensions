@@ -30,33 +30,21 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetToolRunSchema = z.looseObject({
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  env_vars: z.array(z.unknown()).optional(),
-  input: z.unknown(),
-  output: z.unknown().optional(),
-  output_timestamp: z.number().optional(),
-  runtime_path: z.string(),
-  started_at: z.string().nullable().default(null),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  tool_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  input: z.unknown().nullish(),
+  output: z.unknown().nullish(),
+  output_timestamp: z.number().nullish(),
+  runtime_path: z.string().nullish(),
+  started_at: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  tool_id: z.string().nullish(),
+  tool_run_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ToolRunLogsItemSchema = z.string();
@@ -74,29 +62,17 @@ const ListToolRunLogsSchema = z.object({
 });
 
 const ToolsItemSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  tool_config_file: z.string().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  tool_config_file: z.string().nullish(),
+  tool_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListToolsSchema = z.object({
@@ -112,50 +88,30 @@ const ListToolsSchema = z.object({
 });
 
 const CreateToolSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  tool_config_file: z.string().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  tool_config_file: z.string().nullish(),
+  tool_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const CreateToolActivityRunSchema = z.unknown();
 
 const ToolDeploymentsItemSchema = z.looseObject({
-  code_source: z.unknown(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
+  code_source: z.unknown().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  tool_id: z.string().nullish(),
 });
 
 const ListToolDeploymentsSchema = z.object({
@@ -171,54 +127,34 @@ const ListToolDeploymentsSchema = z.object({
 });
 
 const CreateToolDeploymentSchema = z.looseObject({
-  code_source: z.unknown(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
+  code_source: z.unknown().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  tool_id: z.string().nullish(),
 });
 
 const GetToolOpenApiRunSchema = z.unknown();
 
 const ToolRunsItemSchema = z.looseObject({
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  env_vars: z.array(z.unknown()).optional(),
-  input: z.unknown(),
-  output: z.unknown().optional(),
-  output_timestamp: z.number().optional(),
-  runtime_path: z.string(),
-  started_at: z.string().nullable().default(null),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  tool_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  tool_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  input: z.unknown().nullish(),
+  output: z.unknown().nullish(),
+  output_timestamp: z.number().nullish(),
+  runtime_path: z.string().nullish(),
+  started_at: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  tool_id: z.string().nullish(),
+  tool_run_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListToolRunsSchema = z.object({
@@ -240,7 +176,7 @@ const ListToolRunsSchema = z.object({
 /** Griptape Cloud Tools — hosted tools, activities, deployments, and tool runs */
 export const model = {
   type: "@webframp/griptape/tools",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -258,6 +194,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

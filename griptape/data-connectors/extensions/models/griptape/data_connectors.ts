@@ -30,26 +30,18 @@ const GlobalArgsSchema = z.object({
 });
 
 const DataConnectorsItemSchema = z.looseObject({
-  bucket_id: z.string().optional(),
-  config: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  data_connector_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  description: z.string().optional(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  schedule_expression: z.string().optional(),
-  transforms: z.array(z.unknown()).optional(),
-  type: z.string(),
-  updated_at: z.string().nullable(),
+  bucket_id: z.string().nullish(),
+  config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  data_connector_id: z.string().nullish(),
+  description: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  schedule_expression: z.string().nullish(),
+  transforms: z.array(z.unknown()).nullish(),
+  type: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListDataConnectorsSchema = z.object({
@@ -65,44 +57,28 @@ const ListDataConnectorsSchema = z.object({
 });
 
 const CreateDataConnectorSchema = z.looseObject({
-  config: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  data_connector_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  data_job_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  description: z.string().optional(),
-  name: z.string(),
-  schedule_expression: z.string().optional(),
-  type: z.string(),
-  updated_at: z.string().nullable(),
+  config: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  data_connector_id: z.string().nullish(),
+  data_job_id: z.string().nullish(),
+  description: z.string().nullish(),
+  name: z.string().nullish(),
+  schedule_expression: z.string().nullish(),
+  type: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const DataJobsItemSchema = z.looseObject({
-  bytes_ingested: z.number().optional(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  data_connector_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  data_job_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  errors: z.array(z.unknown()).optional(),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
+  bytes_ingested: z.number().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  data_connector_id: z.string().nullish(),
+  data_job_id: z.string().nullish(),
+  errors: z.array(z.unknown()).nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
 });
 
 const ListDataJobsSchema = z.object({
@@ -118,23 +94,15 @@ const ListDataJobsSchema = z.object({
 });
 
 const CreateDataJobSchema = z.looseObject({
-  bytes_ingested: z.number().optional(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  data_connector_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  data_job_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  errors: z.array(z.unknown()).optional(),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
+  bytes_ingested: z.number().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  data_connector_id: z.string().nullish(),
+  data_job_id: z.string().nullish(),
+  errors: z.array(z.unknown()).nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
 });
 
 // =============================================================================
@@ -144,7 +112,7 @@ const CreateDataJobSchema = z.looseObject({
 /** Griptape Cloud Data Connectors — data source connectors and ingest jobs */
 export const model = {
   type: "@webframp/griptape/data-connectors",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -162,6 +130,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

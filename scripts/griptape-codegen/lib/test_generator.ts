@@ -6,12 +6,23 @@
  * - List endpoints return { <itemsKey>: [...], pagination: {...} }.
  * - The mock rewrites the API base origin (GRIPTAPE_API_BASE) to the local server.
  *
- * Test fixtures are synthesized from the OpenAPI response schemas.
+ * Every generated method gets its own test. Each test executes the method
+ * against a local mock server that records the request, then asserts the
+ * request shape (HTTP method, exact path, query string, auth header, JSON body)
+ * and the written resource (spec name, instance name, data). A handful of
+ * per-extension tests cover the shared API helper: HTTP errors, malformed JSON,
+ * empty 2xx bodies, timeouts, and 429 retry.
+ *
+ * Test fixtures are synthesized from the OpenAPI schemas.
  */
 
 import type { ClassifiedMethod } from "./method_classifier.ts";
-import { resourceNameFor, sanitizeFieldName } from "./method_classifier.ts";
-import type { SchemaObject } from "./schema_fetcher.ts";
+import {
+  lastPathParam,
+  resourceNameFor,
+  sanitizeFieldName,
+} from "./method_classifier.ts";
+import type { ParameterObject, SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 import { GRIPTAPE_API_BASE } from "../config.ts";
 
@@ -21,6 +32,9 @@ import { GRIPTAPE_API_BASE } from "../config.ts";
  * delete fixture — defined once so they cannot drift.
  */
 export const PATH_PARAM_TEST_VALUE = "test-id-123";
+
+/** The id a create response is seeded with (distinct from the path value). */
+const CREATED_ID_TEST_VALUE = "new-123";
 
 /** Generate a complete test file for a service. */
 export function generateTestSource(
@@ -37,7 +51,12 @@ export function generateTestSource(
   lines.push(`// SPDX-License-Identifier: Apache-2.0`);
   lines.push(``);
   lines.push(
-    `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
+    `import {`,
+    `  assertEquals,`,
+    `  assertExists,`,
+    `  assertRejects,`,
+    `  assertStringIncludes,`,
+    `} from "jsr:@std/assert@1.0.19";`,
   );
   lines.push(
     `import { createModelTestContext } from "@swamp-club/swamp-testing";`,
@@ -109,74 +128,139 @@ export function generateTestSource(
     `// ---------------------------------------------------------------------------`,
   );
   lines.push(``);
-  lines.push(generateMockServer());
+  lines.push(generateMockHarness());
   lines.push(``);
 
-  // One execution test per method type.
-  const testedTypes = new Set<string>();
+  lines.push(
+    `// ---------------------------------------------------------------------------`,
+  );
+  lines.push(`// Per-method execution tests`);
+  lines.push(
+    `// ---------------------------------------------------------------------------`,
+  );
+  lines.push(``);
+
+  // One test per method. Test names are keyed on the method name, so no method
+  // can displace another's coverage.
   for (const method of methods) {
-    if (testedTypes.has(method.type)) continue;
-    testedTypes.add(method.type);
-    lines.push(generateExecutionTest(config, method));
+    lines.push(generateMethodTest(config, method));
+    lines.push(``);
+  }
+
+  lines.push(
+    `// ---------------------------------------------------------------------------`,
+  );
+  lines.push(`// Response schema tolerance and API helper behavior`);
+  lines.push(
+    `// ---------------------------------------------------------------------------`,
+  );
+  lines.push(``);
+  lines.push(generateSchemaToleranceTest(config, methods));
+  lines.push(``);
+  const helperTests = generateHelperTests(config, methods);
+  if (helperTests) {
+    lines.push(helperTests);
     lines.push(``);
   }
 
   return lines.join("\n");
 }
 
-/** Generate the mock HTTP server helper. */
-function generateMockServer(): string {
-  return `interface MockResponse {
-  body: unknown;
-  itemsKey?: string;
+/** Generate the mock HTTP server and shared assertion helpers. */
+function generateMockHarness(): string {
+  return `interface MockRoute {
   status?: number;
+  /** JSON body (ignored when raw is set). */
+  json?: unknown;
+  /** Verbatim response body. */
+  raw?: string;
+  /** Wrap json in a Griptape list envelope under this key. */
+  itemsKey?: string;
+  /** Delay before responding, to exercise the request timeout. */
+  delayMs?: number;
+  headers?: Record<string, string>;
 }
 
+interface RecordedRequest {
+  method: string;
+  pathname: string;
+  search: URLSearchParams;
+  authorization: string | null;
+  body: string;
+}
+
+/** Routes are keyed "METHOD /exact/path"; an array is served in order, last repeating. */
+type Routes = Record<string, MockRoute | MockRoute[]>;
+
+type Written = ReturnType<
+  ReturnType<typeof createModelTestContext>["getWrittenResources"]
+>;
+
 function startMockGtServer(
-  responses: Record<string, MockResponse>,
+  routes: Routes,
+  requests: RecordedRequest[],
 ): { url: string; server: Deno.HttpServer } {
-  const server = Deno.serve({ port: 0, onListen() {} }, (req) => {
+  const served: Record<string, number> = {};
+  const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
     const url = new URL(req.url);
-    const path = url.pathname;
+    requests.push({
+      method: req.method,
+      pathname: url.pathname,
+      search: url.searchParams,
+      authorization: req.headers.get("authorization"),
+      body: await req.text(),
+    });
 
     // Guard against a doubled "/api" prefix (base URL + already-/api-prefixed
-    // path). This is invisible to path.includes() matching, so assert it here:
-    // a regression that reintroduces it fails the test loudly instead of 404ing
-    // only in production.
-    if (path.includes("/api/api/")) {
+    // path): a regression that reintroduces it fails the test loudly instead of
+    // 404ing only in production.
+    if (url.pathname.includes("/api/api/")) {
       return Response.json(
-        { message: \`doubled /api prefix in request path: \${path}\` },
+        { message: "doubled /api prefix in request path: " + url.pathname },
         { status: 500 },
       );
     }
 
-    for (const [pattern, spec] of Object.entries(responses)) {
-      if (path.includes(pattern)) {
-        const status = spec.status ?? 200;
-        // 204/205 must have a null body.
-        if (status === 204 || status === 205) {
-          return new Response(null, { status });
-        }
-        if (spec.itemsKey) {
-          return Response.json({
-            [spec.itemsKey]: spec.body,
-            pagination: {
-              page_number: 1,
-              page_size: 50,
-              total_count: Array.isArray(spec.body) ? spec.body.length : 0,
-              total_pages: 1,
-            },
-          }, { status });
-        }
-        return Response.json(spec.body, { status });
-      }
+    // Exact METHOD + path match: a route for one method can never answer
+    // another method's request.
+    const key = req.method + " " + url.pathname;
+    const entry = routes[key];
+    if (entry === undefined) {
+      return Response.json({ message: "Not found: " + key }, { status: 404 });
     }
+    const n = served[key] ?? 0;
+    served[key] = n + 1;
+    const route = Array.isArray(entry)
+      ? entry[Math.min(n, entry.length - 1)]
+      : entry;
 
-    return Response.json({ message: "Not found" }, { status: 404 });
+    if (route.delayMs) await new Promise((r) => setTimeout(r, route.delayMs));
+    const status = route.status ?? 200;
+    const headers = route.headers ?? {};
+    // 204/205 must have a null body.
+    if (status === 204 || status === 205) {
+      return new Response(null, { status, headers });
+    }
+    if (route.raw !== undefined) {
+      return new Response(route.raw, { status, headers });
+    }
+    if (route.itemsKey) {
+      const items = route.json as unknown[];
+      return Response.json({
+        [route.itemsKey]: items,
+        pagination: {
+          page_number: 1,
+          page_size: 50,
+          total_count: items.length,
+          total_pages: 1,
+        },
+      }, { status, headers });
+    }
+    return Response.json(route.json, { status, headers });
   });
 
   const addr = server.addr as Deno.NetAddr;
-  return { url: \`http://localhost:\${addr.port}\`, server };
+  return { url: "http://localhost:" + addr.port, server };
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -189,142 +273,575 @@ function installFetchMock(mockUrl: string): () => void {
   return () => {
     globalThis.fetch = originalFetch;
   };
+}
+
+type Exec = (
+  args: Record<string, unknown>,
+  ctx: unknown,
+) => Promise<{ dataHandles: unknown[] }>;
+
+interface Api {
+  run: (
+    method: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ dataHandles: unknown[] }>;
+  requests: RecordedRequest[];
+  written: () => Written;
+}
+
+/**
+ * Run \`fn\` against a mock Griptape server. Ambient GT_CLOUD_BASE_URL and
+ * GT_CLOUD_TIMEOUT_MS are cleared (the latter optionally set) and restored, so
+ * a developer's environment cannot redirect or alter a test.
+ */
+async function withMockApi(
+  routes: Routes,
+  fn: (api: Api) => Promise<void>,
+  opts: { timeoutMs?: string } = {},
+): Promise<void> {
+  const envNames = ["GT_CLOUD_BASE_URL", "GT_CLOUD_TIMEOUT_MS"];
+  const saved = envNames.map((n) => [n, Deno.env.get(n)] as const);
+  Deno.env.delete("GT_CLOUD_BASE_URL");
+  if (opts.timeoutMs === undefined) Deno.env.delete("GT_CLOUD_TIMEOUT_MS");
+  else Deno.env.set("GT_CLOUD_TIMEOUT_MS", opts.timeoutMs);
+
+  const requests: RecordedRequest[] = [];
+  const { url, server } = startMockGtServer(routes, requests);
+  const uninstall = installFetchMock(url);
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: { apiKey: "test-key" },
+      definition: { id: "test-id", name: "test-model", version: 1, tags: {} },
+    });
+    const methods = model.methods as unknown as Record<string, { execute: Exec }>;
+    await fn({
+      run: (method, args) => methods[method].execute(args, context),
+      requests,
+      written: getWrittenResources,
+    });
+  } finally {
+    uninstall();
+    await server.shutdown();
+    for (const [name, value] of saved) {
+      if (value === undefined) Deno.env.delete(name);
+      else Deno.env.set(name, value);
+    }
+  }
+}
+
+/** Assert the single recorded request matches the expected shape exactly. */
+function assertRequest(
+  requests: RecordedRequest[],
+  expected: {
+    method: string;
+    pathname: string;
+    query: Record<string, string>;
+    body?: unknown;
+  },
+): void {
+  assertEquals(requests.length, 1);
+  const r = requests[0];
+  assertEquals(r.method, expected.method);
+  assertEquals(r.pathname, expected.pathname);
+  assertEquals(r.authorization, "Bearer test-key");
+  // Every expected query arg is present with its value, and nothing else is sent.
+  assertEquals(
+    [...r.search.keys()].sort(),
+    Object.keys(expected.query).sort(),
+  );
+  for (const [k, v] of Object.entries(expected.query)) {
+    assertEquals(r.search.get(k), v);
+  }
+  if (expected.body === undefined) assertEquals(r.body, "");
+  else assertEquals(JSON.parse(r.body), expected.body);
+}
+
+function assertWritten(
+  written: Written,
+  specName: string,
+  name: string,
+  data?: unknown,
+): void {
+  assertEquals(written.length, 1);
+  assertEquals(written[0].specName, specName);
+  assertEquals(written[0].name, name);
+  if (data !== undefined) assertEquals(written[0].data, data);
+  assertEquals(resourceSchema(specName).safeParse(written[0].data).success, true);
+}
+
+interface SchemaLike {
+  safeParse: (v: unknown) => { success: boolean; data?: unknown };
+}
+
+function resourceSchema(specName: string): SchemaLike {
+  return (model.resources as unknown as Record<string, { schema: SchemaLike }>)[
+    specName
+  ].schema;
 }`;
 }
 
-/** Generate an execution test for a method. */
-function generateExecutionTest(
+// ---------------------------------------------------------------------------
+// Request planning (shared by method tests and helper tests)
+// ---------------------------------------------------------------------------
+
+/** What a method test sends and expects to see on the wire. */
+export interface RequestPlan {
+  /** Arguments passed to execute(). */
+  args: Record<string, unknown>;
+  /** Expected query string (name -> value), excluding nothing the runtime sends. */
+  query: Record<string, string>;
+  /** Expected JSON body, or undefined when the method sends none. */
+  body: unknown;
+  /** Exact request pathname. */
+  pathname: string;
+  /** Upper-case HTTP verb. */
+  httpMethod: string;
+}
+
+/** A representative value for a query parameter. */
+export function queryTestValue(p: ParameterObject): unknown {
+  const schema = p.schema;
+  if (!schema) return "test-value";
+  if (schema.enum && schema.enum.length > 0) return schema.enum[0];
+  if (schema.type === "integer" || schema.type === "number") {
+    const min = schema.minimum ?? 1;
+    return schema.maximum !== undefined ? Math.min(min, schema.maximum) : min;
+  }
+  if (schema.type === "boolean") return true;
+  if (schema.type === "array" && schema.items?.enum?.length) {
+    return schema.items.enum[0];
+  }
+  return "test-value";
+}
+
+/** True when the generated method sends a JSON body. */
+function sendsBody(method: ClassifiedMethod): boolean {
+  const { type, operation } = method;
+  if (type === "create" || type === "update") return true;
+  if (type !== "action") return false;
+  return ["post", "put", "patch"].includes(operation.httpMethod);
+}
+
+/** Plan the request a method test sends and the wire shape it must produce. */
+export function planRequest(method: ClassifiedMethod): RequestPlan {
+  const op = method.operation;
+  const pathNames = op.pathParams.map((p) => sanitizeFieldName(p.name));
+  const isList = method.type === "list";
+
+  // Query params. The list helper owns page/page_size, so they are neither
+  // supplied nor treated as caller-controlled.
+  const queryArgs: Record<string, unknown> = {};
+  for (const p of op.queryParams) {
+    const name = sanitizeFieldName(p.name);
+    if (isList && (name === "page" || name === "page_size")) continue;
+    if (pathNames.includes(name)) continue;
+    queryArgs[name] = queryTestValue(p);
+  }
+
+  // Request body arguments, synthesized from the request schema (never from the
+  // response fixture).
+  const bodyArgs: Record<string, unknown> = {};
+  const rb = op.requestBody;
+  if (rb?.type === "array") {
+    bodyArgs.items = rb.items ? [synthesizeValue(rb.items)] : [];
+  } else if (rb?.oneOf) {
+    bodyArgs.body = synthesizeValue(rb.oneOf[0]);
+  } else if (rb?.properties) {
+    for (const [name, prop] of Object.entries(rb.properties)) {
+      bodyArgs[sanitizeFieldName(name)] = synthesizeValue(prop);
+    }
+  }
+
+  const pathArgs: Record<string, unknown> = {};
+  for (const name of pathNames) pathArgs[name] = PATH_PARAM_TEST_VALUE;
+
+  // Path params win over body fields, mirroring the runtime body filter, so a
+  // body field sharing a path-param name cannot rewrite the request URL.
+  const args = { ...bodyArgs, ...queryArgs, ...pathArgs };
+
+  const query: Record<string, string> = {};
+  for (const name of Object.keys(queryArgs)) query[name] = String(args[name]);
+  if (isList) {
+    query.page = "1";
+    query.page_size = "50";
+  }
+
+  let body: unknown = undefined;
+  if (sendsBody(method)) {
+    if (rb?.type === "array") {
+      body = args.items;
+    } else if (rb?.oneOf) {
+      body = args.body;
+    } else {
+      const exclude = new Set([
+        ...pathNames,
+        ...op.queryParams.map((p) => sanitizeFieldName(p.name)),
+      ]);
+      body = Object.fromEntries(
+        Object.entries(args).filter(([k]) => !exclude.has(k)),
+      );
+    }
+  }
+
+  return {
+    args,
+    query,
+    body,
+    pathname: extractPathPattern(op.path),
+    httpMethod: op.httpMethod.toUpperCase(),
+  };
+}
+
+/** The resource instance name a successful call writes under. */
+function expectedInstanceName(method: ClassifiedMethod): string {
+  const idParam = lastPathParam(method);
+  const fromPath = idParam ? PATH_PARAM_TEST_VALUE : undefined;
+  switch (method.type) {
+    case "list":
+      return fromPath ?? "main";
+    case "get":
+      return fromPath ?? "latest";
+    case "create":
+      return CREATED_ID_TEST_VALUE;
+    case "update":
+      return fromPath ?? "updated";
+    default:
+      return fromPath ?? "latest";
+  }
+}
+
+/** Build the (response body, route literal) a method's happy-path test serves. */
+function happyRoute(method: ClassifiedMethod): {
+  key: string;
+  response: unknown;
+  route: string;
+} {
+  const plan = planRequest(method);
+  const key = `${plan.httpMethod} ${plan.pathname}`;
+  if (method.type === "delete") {
+    return { key, response: undefined, route: `{ status: 204 }` };
+  }
+  if (method.type === "list") {
+    const itemsKey = method.operation.listItemsKey ?? "data";
+    // Items are stored as the API returns them; they need not be objects (the
+    // structure/tool run logs endpoints return arrays of strings).
+    const schema = method.operation.responseSchema;
+    const item = schema ? synthesizeValue(schema) : { id: "fixture-123" };
+    return {
+      key,
+      response: [item],
+      route: `{ itemsKey: ${JSON.stringify(itemsKey)}, json: [fixture] }`,
+    };
+  }
+  const fixture = generateFixture(method);
+  if (method.type === "create") {
+    const idField = entityIdFieldForTest(method);
+    // The id leads so the runtime's id-shaped-key scan finds it first.
+    const { [idField]: _drop, ...rest } = fixture;
+    const response = { [idField]: CREATED_ID_TEST_VALUE, ...rest };
+    return { key, response, route: `{ json: fixture }` };
+  }
+  return { key, response: fixture, route: `{ json: fixture }` };
+}
+
+/** Generate one test that executes a method and asserts request and result. */
+function generateMethodTest(
   config: ServiceConfig,
   method: ClassifiedMethod,
 ): string {
-  const globalArgs = { apiKey: "test-key" };
-  const fixture = generateFixture(method);
-  const pathPattern = extractPathPattern(method.operation.path);
-  const testArgs = buildTestArgs(method);
-  const execCast =
-    `(model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>)`;
-  const ctxDef =
-    `definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },`;
+  const plan = planRequest(method);
+  const { key, response, route } = happyRoute(method);
+  const spec = resourceNameFor(method);
+  const verb = method.type === "delete"
+    ? "sends the expected request"
+    : "sends the expected request and writes the resource";
 
-  if (method.type === "list") {
-    const itemsKey = method.operation.listItemsKey ?? "data";
-    const argsStr = Object.keys(testArgs).length > 0
-      ? JSON.stringify(testArgs)
-      : "{}";
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockGtServer({
-      "${pathPattern}": { body: [${
-      JSON.stringify(fixture)
-    }], itemsKey: "${itemsKey}" },
-    });
-    const uninstall = installFetchMock(url);
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        ${ctxDef}
-      });
-      const result = await ${execCast}.${method.name}.execute(${argsStr}, context);
-      assertEquals(result.dataHandles.length, 1);
-      assertEquals(getWrittenResources().length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
+  const fixtureDecl = response === undefined
+    ? ""
+    : method.type === "list"
+    ? `const fixture = ${JSON.stringify((response as unknown[])[0])};\n    `
+    : `const fixture = ${JSON.stringify(response)};\n    `;
+
+  const requestExpect = `assertRequest(requests, {
+        method: ${JSON.stringify(plan.httpMethod)},
+        pathname: ${JSON.stringify(plan.pathname)},
+        query: ${JSON.stringify(plan.query)},${
+    plan.body !== undefined
+      ? `\n        body: ${JSON.stringify(plan.body)},`
+      : ""
   }
+      });`;
 
-  if (method.type === "get") {
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockGtServer({
-      "${pathPattern}": { body: ${JSON.stringify(fixture)} },
-    });
-    const uninstall = installFetchMock(url);
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        ${ctxDef}
-      });
-      const result = await ${execCast}.${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
-      assertEquals(result.dataHandles.length, 1);
-      assertEquals(getWrittenResources().length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
-  }
-
+  let assertions: string;
   if (method.type === "delete") {
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} executes successfully",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockGtServer({
-      "${pathPattern}": { body: {}, status: 204 },
+    assertions = `assertEquals(result.dataHandles.length, 0);
+      assertEquals(written().length, 0);
+      ${requestExpect}`;
+  } else if (method.type === "list") {
+    const name = expectedInstanceName(method);
+    assertions = `assertEquals(result.dataHandles.length, 1);
+      ${requestExpect}
+      assertWritten(written(), ${JSON.stringify(spec)}, ${
+      JSON.stringify(name)
     });
-    const uninstall = installFetchMock(url);
-    try {
-      const { context } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        ${ctxDef}
-      });
-      const result = await ${execCast}.${method.name}.execute(${
-      JSON.stringify(testArgs)
-    }, context);
-      assertEquals(result.dataHandles.length, 0);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
+      const data = written()[0].data as { items: unknown[]; truncated: boolean };
+      assertEquals(data.items, [fixture]);
+      assertEquals(data.truncated, false);`;
+  } else {
+    const name = expectedInstanceName(method);
+    assertions = `assertEquals(result.dataHandles.length, 1);
+      ${requestExpect}
+      assertWritten(written(), ${JSON.stringify(spec)}, ${
+      JSON.stringify(name)
+    }, fixture);`;
   }
 
-  // create / update / action — path params win over the fixture so a body
-  // field sharing a path-param name cannot rewrite the request URL.
-  const idField = method.type === "create"
-    ? entityIdFieldForTest(method)
-    : null;
-  const responseBody = idField ? { [idField]: "new-123", ...fixture } : fixture;
-  const callArgs = buildFinalTestArgs(method, fixture);
-  const verb = method.type === "create" ? "creates" : "executes";
   return `Deno.test({
-  name: "${config.name} model: ${method.name} ${verb} and writes resource",
+  name: "${config.name} model: ${method.name} ${verb}",
   sanitizeResources: false,
   fn: async () => {
-    const { url, server } = startMockGtServer({
-      "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
+    ${fixtureDecl}await withMockApi({
+      ${JSON.stringify(key)}: ${route},
+    }, async ({ run, requests, written }) => {
+      const result = await run(${JSON.stringify(method.name)}, ${
+    JSON.stringify(plan.args)
+  });
+      ${assertions}
     });
-    const uninstall = installFetchMock(url);
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        ${ctxDef}
-      });
-      const result = await ${execCast}.${method.name}.execute(${
-    JSON.stringify(callArgs)
-  }, context);
-      assertEquals(result.dataHandles.length, 1);
-      assertEquals(getWrittenResources().length, 1);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
   },
 });`;
 }
 
-/** Mirror of method_classifier.entityIdCandidates for building create fixtures. */
+// ---------------------------------------------------------------------------
+// Response-schema tolerance
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a test that every written resource schema accepts a payload with
+ * missing fields, an unexpected enum member, and unknown extra keys. Response
+ * schemas are observational: one surprising item must not fail a whole page.
+ */
+function generateSchemaToleranceTest(
+  config: ServiceConfig,
+  methods: ClassifiedMethod[],
+): string {
+  const seen = new Set<string>();
+  const checks: string[] = [];
+  for (const method of methods) {
+    if (method.type === "delete") continue;
+    const spec = resourceNameFor(method);
+    if (seen.has(spec)) continue;
+    seen.add(spec);
+    const schema = method.operation.responseSchema;
+    // Only entity-shaped (object) responses can be probed with partial objects;
+    // a list of plain strings (run logs) has no fields to drop or extend.
+    if (schema && schema.type !== "object" && !schema.properties) continue;
+    const enumProps = Object.entries(schema?.properties ?? {})
+      .filter(([, p]) => Array.isArray(p.enum))
+      .map(([name]) => name);
+    // Object payload placed where the schema expects the entity (list items sit
+    // under `items` in the stored envelope).
+    const wrap = (entity: string) =>
+      method.type === "list"
+        ? `{ items: [${entity}], truncated: false, fetchedAt: "2024-01-01T00:00:00Z" }`
+        : entity;
+    checks.push(
+      `  // ${spec}: empty entity (every field absent) still validates.
+  assertEquals(resourceSchema(${JSON.stringify(spec)}).safeParse(${
+        wrap("{}")
+      }).success, true);`,
+    );
+    if (schema?.properties) {
+      checks.push(
+        `  // ${spec}: unknown keys are preserved, not stripped or rejected.
+  {
+    const parsed = resourceSchema(${JSON.stringify(spec)}).safeParse(${
+          wrap(`{ unexpected_field: 1 }`)
+        });
+    assertEquals(parsed.success, true);
+    // A plain z.object would also succeed, but would strip the key.
+    assertEquals(JSON.stringify(parsed.data).includes("unexpected_field"), true);
+  }`,
+      );
+    }
+    for (const prop of enumProps) {
+      checks.push(
+        `  // ${spec}.${prop}: an enum member the spec did not list still validates.
+  assertEquals(resourceSchema(${JSON.stringify(spec)}).safeParse(${
+          wrap(`{ ${JSON.stringify(prop)}: "__unexpected_enum_member__" }`)
+        }).success, true);`,
+      );
+    }
+  }
+  return `Deno.test("${config.name} model: response schemas tolerate unexpected data", () => {
+${checks.join("\n")}
+});`;
+}
+
+// ---------------------------------------------------------------------------
+// Shared API helper behavior (HTTP errors, malformed JSON, empty body, ...)
+// ---------------------------------------------------------------------------
+
+/** Pick a method to probe the shared helper with: prefer a plain GET. */
+function pickProbe(methods: ClassifiedMethod[]): ClassifiedMethod | undefined {
+  return methods.find((m) => m.type === "get") ??
+    methods.find((m) => m.type === "list") ??
+    methods.find((m) => m.type !== "delete");
+}
+
+function generateHelperTests(
+  config: ServiceConfig,
+  methods: ClassifiedMethod[],
+): string | null {
+  const probe = pickProbe(methods);
+  if (!probe) return null;
+  const plan = planRequest(probe);
+  const key = `${plan.httpMethod} ${plan.pathname}`;
+  const label = `${plan.httpMethod} ${plan.pathname}`;
+  const happy = happyRoute(probe);
+  const probeFixture = happy.response === undefined
+    ? "undefined"
+    : probe.type === "list"
+    ? JSON.stringify((happy.response as unknown[])[0])
+    : JSON.stringify(happy.response);
+  const args = JSON.stringify(plan.args);
+  const call = `run(${JSON.stringify(probe.name)}, ${args})`;
+  const t = (name: string) => `${config.name} model: ${name}`;
+
+  const tests: string[] = [];
+
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("HTTP errors name the request and status"))},
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${JSON.stringify(key)}: { status: 500, json: { message: "boom" } },
+    }, async ({ run }) => {
+      const err = await assertRejects(() => ${call}, Error);
+      assertStringIncludes(err.message, ${JSON.stringify(label)});
+      assertStringIncludes(err.message, "500");
+      assertStringIncludes(err.message, "boom");
+    });
+  },
+});`);
+
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("malformed JSON names status and request"))},
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${JSON.stringify(key)}: { raw: "<html>not json</html>" },
+    }, async ({ run }) => {
+      const err = await assertRejects(() => ${call}, Error);
+      assertStringIncludes(err.message, "malformed JSON");
+      assertStringIncludes(err.message, ${JSON.stringify(label)});
+      assertStringIncludes(err.message, "HTTP 200");
+    });
+  },
+});`);
+
+  const emptyExpect = probe.type === "list"
+    ? `assertEquals(result.dataHandles.length, 1);
+      assertEquals((written()[0].data as { items: unknown[] }).items, []);`
+    : `assertEquals(result.dataHandles.length, 0);
+      assertEquals(written().length, 0);`;
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("an empty 2xx body is not a parse failure"))},
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${JSON.stringify(key)}: { status: 202, raw: "" },
+    }, async ({ run, written }) => {
+      const result = await ${call};
+      ${emptyExpect}
+    });
+  },
+});`);
+
+  // A mutating method exercises the empty-2xx path of griptapeApi's write side.
+  const mutating = methods.find((m) =>
+    m.type === "create" || m.type === "update" || m.type === "action"
+  );
+  if (mutating) {
+    const mp = planRequest(mutating);
+    tests.push(`Deno.test({
+  name: ${
+      JSON.stringify(t(`${mutating.name} tolerates an empty 202 response`))
+    },
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${
+      JSON.stringify(`${mp.httpMethod} ${mp.pathname}`)
+    }: { status: 202, raw: "" },
+    }, async ({ run, written }) => {
+      const result = await run(${JSON.stringify(mutating.name)}, ${
+      JSON.stringify(mp.args)
+    });
+      assertEquals(result.dataHandles.length, 0);
+      assertEquals(written().length, 0);
+    });
+  },
+});`);
+  }
+
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("a stalled request times out with a clear error"))},
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${JSON.stringify(key)}: { delayMs: 500, json: {} },
+    }, async ({ run }) => {
+      const err = await assertRejects(() => ${call}, Error);
+      assertStringIncludes(err.message, "timed out after 50ms");
+      assertStringIncludes(err.message, ${JSON.stringify(label)});
+    }, { timeoutMs: "50" });
+  },
+});`);
+
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("an invalid GT_CLOUD_TIMEOUT_MS is rejected"))},
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      ${JSON.stringify(key)}: { json: {} },
+    }, async ({ run }) => {
+      const err = await assertRejects(() => ${call}, Error);
+      assertStringIncludes(err.message, "GT_CLOUD_TIMEOUT_MS");
+    }, { timeoutMs: "abc" });
+  },
+});`);
+
+  const retryRoute = probe.type === "list"
+    ? `{ itemsKey: ${
+      JSON.stringify(probe.operation.listItemsKey ?? "data")
+    }, json: [fixture] }`
+    : happy.route;
+  tests.push(`Deno.test({
+  name: ${JSON.stringify(t("a 429 is retried after Retry-After"))},
+  sanitizeResources: false,
+  fn: async () => {
+    const fixture = ${probeFixture === "undefined" ? "{}" : probeFixture};
+    await withMockApi({
+      ${JSON.stringify(key)}: [
+        { status: 429, headers: { "Retry-After": "0" }, json: {} },
+        ${retryRoute},
+      ],
+    }, async ({ run, requests }) => {
+      const result = await ${call};
+      assertEquals(result.dataHandles.length, 1);
+      assertEquals(requests.length, 2);
+    });
+  },
+});`);
+
+  return tests.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
+
 /**
  * The response id field to seed a create test fixture with, mirroring the
  * runtime resolution order in method_classifier.entityIdCandidates:
@@ -376,7 +893,7 @@ function generateFixture(method: ClassifiedMethod): Record<string, unknown> {
 }
 
 /** Synthesize a value matching a schema (for test fixtures). */
-function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
+export function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
   if (depth > 4) return null;
   if (schema.example !== undefined) return schema.example;
   if (schema.enum) return schema.enum[0];
@@ -410,31 +927,12 @@ function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
 }
 
 /**
- * Extract a path pattern for mock server matching: replace path params with the
- * fixed test value so the pattern matches what the model actually requests.
+ * Extract the concrete request path for mock server matching: replace path
+ * params with the fixed test value so it matches what the model actually
+ * requests.
  */
 export function extractPathPattern(path: string): string {
   return path
     .replace(/\{[^}]+\}/g, PATH_PARAM_TEST_VALUE)
     .replace(/\/$/, "");
-}
-
-/** Build test args containing path param values matching the mock pattern. */
-function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
-  const args: Record<string, unknown> = {};
-  for (const p of method.operation.pathParams) {
-    args[sanitizeFieldName(p.name)] = PATH_PARAM_TEST_VALUE;
-  }
-  return args;
-}
-
-/**
- * Merge a request-body fixture with path-param values, path params winning.
- * Exported for direct unit testing.
- */
-export function buildFinalTestArgs(
-  method: ClassifiedMethod,
-  fixture: Record<string, unknown>,
-): Record<string, unknown> {
-  return { ...fixture, ...buildTestArgs(method) };
 }

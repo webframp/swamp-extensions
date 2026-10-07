@@ -129,7 +129,7 @@ export function generateUpgradeEntry(toVersion: string): string {
   return [
     `    {`,
     `      toVersion: "${toVersion}",`,
-    `      description: "Regenerated from updated API spec; no migration required",`,
+    `      description: "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",`,
     `      upgradeAttributes: (old: Record<string, unknown>) => old,`,
     `    }`,
   ].join("\n");
@@ -216,8 +216,11 @@ export function computeUpgradesBlock(
 /** Format TypeScript via `deno fmt` in a temp file, so a candidate and the
  * on-disk file are compared in the same normalized state. Returns the original
  * content if formatting fails. */
-export async function formatCode(code: string): Promise<string> {
-  const tmpFile = await Deno.makeTempFile({ suffix: ".ts" });
+export async function formatCode(
+  code: string,
+  suffix = ".ts",
+): Promise<string> {
+  const tmpFile = await Deno.makeTempFile({ suffix });
   try {
     await Deno.writeTextFile(tmpFile, code);
     const result = await new Deno.Command("deno", {
@@ -230,6 +233,52 @@ export async function formatCode(code: string): Promise<string> {
       await Deno.remove(tmpFile);
     } catch { /* ignore */ }
   }
+}
+
+/**
+ * A generated file other than the model that ships with (or is verified
+ * alongside) the extension: the shared API helper, the test file, manifest,
+ * README, deno.json, LICENSE, .gitignore. `candidate` must be generated with
+ * the placeholder version so it compares equal to an unchanged on-disk copy.
+ */
+export interface ArtifactCandidate {
+  /** Path of the existing file on disk. */
+  path: string;
+  /** Freshly generated content (placeholder version). */
+  candidate: string;
+}
+
+/**
+ * True when any artifact differs from its on-disk copy (or is missing). Both
+ * sides are formatted with `deno fmt` and the existing version string is
+ * replaced with the placeholder before comparing, so only real content changes
+ * count.
+ */
+export async function artifactsChanged(
+  artifacts: ArtifactCandidate[],
+  existingVersion: string,
+  placeholderVersion: string,
+): Promise<string[]> {
+  const changed: string[] = [];
+  for (const { path, candidate } of artifacts) {
+    let existing: string;
+    try {
+      existing = await Deno.readTextFile(path);
+    } catch {
+      changed.push(path);
+      continue;
+    }
+    const suffix = path.slice(path.lastIndexOf("."));
+    const normalize = async (text: string) =>
+      (await formatCode(text, suffix.startsWith(".") ? suffix : ".txt"))
+        .trimEnd();
+    const a = await normalize(
+      existing.replaceAll(existingVersion, placeholderVersion),
+    );
+    const b = await normalize(candidate);
+    if (a !== b) changed.push(path);
+  }
+  return changed;
 }
 
 export interface ModelVersionResult {
@@ -245,7 +294,8 @@ export interface ModelVersionResult {
  * Formats the candidate, replaces both sides' version literal with a
  * placeholder, strips the upgrades block (which is derived, not authored), and
  * compares. Identical → keep the existing version (status "unchanged").
- * Different → bump the micro segment (same date) or start at .1 (new date).
+ * Different — in the model OR in any of `artifacts` — bumps the micro segment
+ * (same date) or starts at .1 (new date).
  * Missing file → status "new" at `${datePrefix}.1`.
  */
 export async function computeModelVersion(
@@ -253,6 +303,7 @@ export async function computeModelVersion(
   datePrefix: string,
   candidateCode: string,
   placeholderVersion = "0.0.0.0",
+  artifacts: ArtifactCandidate[] = [],
 ): Promise<ModelVersionResult> {
   let existingContent: string;
   try {
@@ -284,8 +335,18 @@ export async function computeModelVersion(
   // needed on this side — just strip the upgrades block to match.
   const normalizedCandidate = stripUpgradesBlock(formattedCandidate);
 
+  // The model source is only one of the shipped/verified files: a change to the
+  // API helper, tests, manifest, README, deno.json or LICENSE must also bump the
+  // version, or the registry would publish different bytes under an old version.
   if (normalizedExisting === normalizedCandidate) {
-    return { version: existingVersion, status: "unchanged", existingContent };
+    const changedArtifacts = await artifactsChanged(
+      artifacts,
+      existingVersion,
+      placeholderVersion,
+    );
+    if (changedArtifacts.length === 0) {
+      return { version: existingVersion, status: "unchanged", existingContent };
+    }
   }
 
   const version = existingDate === datePrefix

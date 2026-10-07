@@ -30,20 +30,12 @@ const GlobalArgsSchema = z.object({
 });
 
 const SecretsItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  last_used: z.string().nullable(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  secret_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  last_used: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  secret_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListSecretsSchema = z.object({
@@ -59,20 +51,12 @@ const ListSecretsSchema = z.object({
 });
 
 const CreateSecretSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  last_used: z.string().nullable(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  secret_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  created_at: z.string().nullish(),
+  last_used: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  secret_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 // =============================================================================
@@ -82,7 +66,7 @@ const CreateSecretSchema = z.looseObject({
 /** Griptape Cloud Secrets — organization secret management */
 export const model = {
   type: "@webframp/griptape/secrets",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -100,6 +84,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

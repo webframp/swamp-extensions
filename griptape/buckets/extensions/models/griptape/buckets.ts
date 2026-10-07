@@ -30,20 +30,12 @@ const GlobalArgsSchema = z.object({
 });
 
 const BucketsItemSchema = z.looseObject({
-  bucket_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  bucket_id: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListBucketsSchema = z.object({
@@ -59,40 +51,28 @@ const ListBucketsSchema = z.object({
 });
 
 const CreateBucketSchema = z.looseObject({
-  bucket_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  bucket_id: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const CreateAssetUrlSchema = z.looseObject({
-  headers: z.unknown(),
-  url: z.string(),
+  headers: z.unknown().nullish(),
+  url: z.string().nullish(),
 });
 
 const AssetsItemSchema = z.looseObject({
-  bucket_id: z.string().optional(),
-  contents: z.unknown().optional(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  size: z.number().optional(),
-  updated_at: z.string().nullable(),
+  bucket_id: z.string().nullish(),
+  contents: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  size: z.number().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListAssetsSchema = z.object({
@@ -108,18 +88,14 @@ const ListAssetsSchema = z.object({
 });
 
 const CreateAssetSchema = z.looseObject({
-  bucket_id: z.string().optional(),
-  contents: z.unknown().optional(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  size: z.number().optional(),
-  updated_at: z.string().nullable(),
+  bucket_id: z.string().nullish(),
+  contents: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  size: z.number().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 // =============================================================================
@@ -129,7 +105,7 @@ const CreateAssetSchema = z.looseObject({
 /** Griptape Cloud Buckets — asset buckets and their stored assets */
 export const model = {
   type: "@webframp/griptape/buckets",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -147,6 +123,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -446,7 +428,7 @@ export const model = {
         content_type: z.string().min(1).max(255).regex(
           new RegExp("^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"),
         ).optional().describe(
-          "Optional MIME type to apply to the presigned URL. When provided, overrides the type guessed from ...",
+          "Optional MIME type to apply to the presigned URL. When provided, overrides the type guessed from...",
         ),
         operation: z.unknown().optional(),
       }),

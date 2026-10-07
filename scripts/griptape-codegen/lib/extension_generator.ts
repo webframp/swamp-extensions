@@ -229,30 +229,118 @@ export function sanitizeInstanceName(name: string): string {
 }
 
 const MAX_RETRIES = 3;
+const DEFAULT_TIMEOUT_MS = 30000;
+const MAX_RETRY_DELAY_MS = 30000;
 
 /**
- * fetch with bounded retry on HTTP 429. Honors Retry-After (seconds) when
- * present, otherwise backs off linearly. Returns the final Response.
+ * Per-request timeout in milliseconds. Defaults to 30s; override with
+ * GT_CLOUD_TIMEOUT_MS (positive integer). The timeout covers connecting and
+ * reading the response body, and applies to every retry attempt separately.
  */
-async function gtFetch(url: string, init: RequestInit): Promise<Response> {
+function resolveTimeoutMs(): number {
+  const raw = Deno.env.get("GT_CLOUD_TIMEOUT_MS");
+  if (raw === undefined || raw === "") return DEFAULT_TIMEOUT_MS;
+  const parsed = Number(raw);
+  // 2^31-1 ms (~24 days) is the largest delay a timer accepts.
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 2147483647) {
+    throw new Error(
+      \`GT_CLOUD_TIMEOUT_MS must be a positive integer (milliseconds) of at most 2147483647, got "\${raw}"\`,
+    );
+  }
+  return parsed;
+}
+
+/** Turn a fetch/body-read failure into an error naming the request. */
+function requestError(err: unknown, label: string, timeoutMs: number): Error {
+  if (
+    err instanceof DOMException &&
+    (err.name === "TimeoutError" || err.name === "AbortError")
+  ) {
+    return new Error(
+      \`Griptape API request timed out after \${timeoutMs}ms: \${label}\`,
+    );
+  }
+  return new Error(
+    \`Griptape API request failed: \${label}: \${
+      err instanceof Error ? err.message : String(err)
+    }\`,
+  );
+}
+
+/** One fetch attempt with a hard deadline. */
+async function fetchOnce(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
+  const timeoutMs = resolveTimeoutMs();
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    throw requestError(err, label, timeoutMs);
+  }
+}
+
+/** Read a response body as text, mapping a stalled or broken stream to a clear error. */
+async function readText(response: Response, label: string): Promise<string> {
+  try {
+    return await response.text();
+  } catch (err) {
+    throw requestError(err, label, resolveTimeoutMs());
+  }
+}
+
+/**
+ * Parse a JSON body. A malformed body (an HTML error page from a proxy, a
+ * truncated response) throws an error carrying the status, request, and a
+ * snippet of the body rather than a bare SyntaxError.
+ */
+function parseJson<T>(text: string, response: Response, label: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      \`Griptape API returned malformed JSON: \${label} (HTTP \${response.status}): \${text.slice(0, 200)}\`,
+    );
+  }
+}
+
+/**
+ * fetch with a per-attempt timeout and bounded retry on HTTP 429. Honors
+ * Retry-After (seconds, capped at 30s) when present, otherwise backs off
+ * linearly. Returns the final Response.
+ */
+async function gtFetch(
+  url: string,
+  init: RequestInit,
+  label: string,
+): Promise<Response> {
   // Retry only on 429. Attempts 0..MAX_RETRIES-1 back off and retry; the final
   // attempt returns whatever it gets. Structured so the last statement is an
   // unconditional return (no unreachable trailing throw).
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const response = await fetch(url, init);
+    const response = await fetchOnce(url, init, label);
     if (response.status !== 429) return response;
 
     const retryAfter = response.headers.get("Retry-After");
     const parsed = retryAfter ? Number(retryAfter) : NaN;
-    const delayMs = Number.isFinite(parsed) ? parsed * 1000 : 1000 * (attempt + 1);
-    await response.text();
+    const delayMs = Math.min(
+      Math.max(Number.isFinite(parsed) ? parsed * 1000 : 1000 * (attempt + 1), 0),
+      MAX_RETRY_DELAY_MS,
+    );
+    await readText(response, label);
     await new Promise((r) => setTimeout(r, delayMs));
   }
   // Final attempt (after MAX_RETRIES backoffs): return its result as-is.
-  return await fetch(url, init);
+  return await fetchOnce(url, init, label);
 }
 
-/** Perform a single JSON request against the Griptape Cloud API. */
+/**
+ * Perform a single JSON request against the Griptape Cloud API.
+ *
+ * Resolves to undefined when a successful response has no body (204, or any
+ * 2xx such as 202 with an empty body); callers must handle that.
+ */
 export async function griptapeApi<T>(
   apiKey: string,
   method: string,
@@ -262,6 +350,7 @@ export async function griptapeApi<T>(
 ): Promise<T> {
   const key = resolveKey(apiKey);
   const url = \`\${resolveBaseUrl(baseUrl)}\${path}\`;
+  const label = \`\${method} \${path}\`;
   const headers: Record<string, string> = {
     "Authorization": \`Bearer \${key}\`,
     "Content-Type": "application/json",
@@ -270,25 +359,24 @@ export async function griptapeApi<T>(
   const response = await gtFetch(url, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  }, label);
 
   if (response.status === 429) {
-    await response.text();
-    throw new Error(\`Griptape API rate limited after \${MAX_RETRIES} retries: \${method} \${path}\`);
+    await readText(response, label);
+    throw new Error(\`Griptape API rate limited after \${MAX_RETRIES} retries: \${label}\`);
   }
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(\`Griptape API error: \${method} \${path} returned \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
+    const text = await readText(response, label);
+    throw new Error(\`Griptape API error: \${label} returned \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
   }
 
-  // 204 No Content (deletes) — nothing to parse.
-  if (response.status === 204) return undefined as unknown as T;
-
-  const text = await response.text();
-  if (!text) return undefined as unknown as T;
-  return JSON.parse(text) as T;
+  // 204 No Content (deletes) and empty 2xx bodies (e.g. 202 Accepted) have
+  // nothing to parse.
+  const text = await readText(response, label);
+  if (text.trim() === "") return undefined as unknown as T;
+  return parseJson<T>(text, response, label);
 }
 
 const MAX_PAGES = ${MAX_PAGES};
@@ -312,9 +400,9 @@ interface Pagination {
  *
  * Griptape list responses have no fixed collection key: each wrapper carries a
  * resource-named array (\`threads\`, \`structures\`, ...) plus a \`pagination\`
- * object. \`itemsKey\` names the array to read. Stops when the reported page
- * reaches total_pages, when a page returns nothing, or at MAX_PAGES (in which
- * case truncated=true).
+ * object. \`itemsKey\` names the array to read. Stops when the page counter
+ * reaches total_pages, when a page returns nothing (including an empty 2xx
+ * body), or at MAX_PAGES (in which case truncated=true).
  */
 export async function griptapeApiPaginated<T>(
   apiKey: string,
@@ -325,6 +413,7 @@ export async function griptapeApiPaginated<T>(
 ): Promise<PaginatedResult<T>> {
   const key = resolveKey(apiKey);
   const base = resolveBaseUrl(baseUrl);
+  const label = \`GET \${path}\`;
   const allResults: T[] = [];
   const pageSize = 50;
   let page = 1;
@@ -340,18 +429,32 @@ export async function griptapeApiPaginated<T>(
 
     const response = await gtFetch(url, {
       headers: { "Authorization": \`Bearer \${key}\` },
-    });
+    }, label);
 
     if (response.status === 429) {
-      await response.text();
-      throw new Error(\`Griptape API rate limited after \${MAX_RETRIES} retries: GET \${path}\`);
+      await readText(response, label);
+      throw new Error(\`Griptape API rate limited after \${MAX_RETRIES} retries: \${label}\`);
     }
     if (!response.ok) {
-      const text = await response.text();
-      throw new Error(\`Griptape API error: GET \${path} returned \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
+      const text = await readText(response, label);
+      throw new Error(\`Griptape API error: \${label} returned \${response.status} \${response.statusText}: \${text.slice(0, 500)}\`);
     }
 
-    const data = (await response.json()) as Record<string, unknown>;
+    // An empty 2xx body is an empty page, not a parse failure.
+    const text = await readText(response, label);
+    if (text.trim() === "") break;
+    const parsedBody = parseJson<unknown>(text, response, label);
+    if (
+      parsedBody === null || typeof parsedBody !== "object" ||
+      Array.isArray(parsedBody)
+    ) {
+      throw new Error(
+        \`Griptape API: \${label} expected a JSON object with a "\${itemsKey}" array, got \${
+          Array.isArray(parsedBody) ? "an array" : parsedBody === null ? "null" : typeof parsedBody
+        }\`,
+      );
+    }
+    const data = parsedBody as Record<string, unknown>;
     const rawItems = data[itemsKey];
     if (!Array.isArray(rawItems)) {
       // The itemsKey named at codegen time is not an array in this response.
@@ -364,7 +467,7 @@ export async function griptapeApiPaginated<T>(
       );
       if (otherArrayKey) {
         throw new Error(
-          \`Griptape API: GET \${path} response has no array at "\${itemsKey}" \` +
+          \`Griptape API: \${label} response has no array at "\${itemsKey}" \` +
             \`but does at "\${otherArrayKey}". The generated itemsKey is wrong; \` +
             \`regenerate the extension.\`,
         );
@@ -373,14 +476,21 @@ export async function griptapeApiPaginated<T>(
     }
     const pageItems = rawItems as T[];
     allResults.push(...pageItems);
+    if (pageItems.length === 0) break;
 
     const pagination = data.pagination as Pagination | undefined;
-    if (pagination?.total_pages !== undefined) {
-      const current = pagination.page_number ?? page;
-      if (current >= pagination.total_pages) break;
+    if (typeof pagination?.total_pages === "number") {
+      // Terminate on our own page counter, not the server's echoed
+      // page_number: a server that ignores the page parameter would otherwise
+      // loop on page 1 until MAX_PAGES.
+      if (page >= pagination.total_pages) break;
     } else {
-      // No pagination metadata: a short page means we're done.
-      if (pageItems.length < pageSize) break;
+      // No usable total_pages (absent or null). An explicit next_page means
+      // more data even when the page is short (a server that caps page_size);
+      // otherwise a short page means we're done.
+      const nextPage = Number(pagination?.next_page);
+      const hasNext = Number.isFinite(nextPage) && nextPage > page;
+      if (!hasNext && pageItems.length < pageSize) break;
       if (page >= MAX_PAGES) {
         truncated = true;
         break;

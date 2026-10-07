@@ -30,50 +30,30 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetStructureRunSchema = z.looseObject({
-  args: z.array(z.string()),
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  env_vars: z.array(z.unknown()).optional(),
-  output: z.unknown().optional(),
-  output_timestamp: z.number().optional(),
-  started_at: z.string().nullable().default(null),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  args: z.array(z.string()).nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  output: z.unknown().nullish(),
+  output_timestamp: z.number().nullish(),
+  started_at: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  structure_id: z.string().nullish(),
+  structure_run_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const EventsItemSchema = z.looseObject({
-  created_at: z.string().nullable(),
-  event_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  origin: z.string(),
-  payload: z.unknown(),
-  structure_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  timestamp: z.number(),
-  type: z.string(),
+  created_at: z.string().nullish(),
+  event_id: z.string().nullish(),
+  origin: z.string().nullish(),
+  payload: z.unknown().nullish(),
+  structure_run_id: z.string().nullish(),
+  timestamp: z.number().nullish(),
+  type: z.string().nullish(),
 });
 
 const ListEventsSchema = z.object({
@@ -103,15 +83,15 @@ const ListStructureRunLogsSchema = z.object({
 });
 
 const SpansItemSchema = z.looseObject({
-  attributes: z.unknown(),
-  end_time: z.string().nullable(),
-  events: z.unknown(),
-  name: z.string(),
-  parent_id: z.string().optional(),
-  span_id: z.string(),
-  start_time: z.string().nullable(),
-  status: z.unknown(),
-  trace_id: z.string(),
+  attributes: z.unknown().nullish(),
+  end_time: z.string().nullish(),
+  events: z.unknown().nullish(),
+  name: z.string().nullish(),
+  parent_id: z.string().nullish(),
+  span_id: z.string().nullish(),
+  start_time: z.string().nullish(),
+  status: z.unknown().nullish(),
+  trace_id: z.string().nullish(),
 });
 
 const ListSpansSchema = z.object({
@@ -127,30 +107,18 @@ const ListSpansSchema = z.object({
 });
 
 const StructuresItemSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_config_file: z.string().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
-  webhook_enabled: z.boolean(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  structure_config_file: z.string().nullish(),
+  structure_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  webhook_enabled: z.boolean().nullish(),
 });
 
 const ListStructuresSchema = z.object({
@@ -166,49 +134,29 @@ const ListStructuresSchema = z.object({
 });
 
 const CreateStructureSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_config_file: z.string().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
-  webhook_enabled: z.boolean(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  structure_config_file: z.string().nullish(),
+  structure_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  webhook_enabled: z.boolean().nullish(),
 });
 
 const StructureDeploymentsItemSchema = z.looseObject({
-  code_source: z.unknown(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
+  code_source: z.unknown().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  structure_id: z.string().nullish(),
 });
 
 const ListStructureDeploymentsSchema = z.object({
@@ -224,51 +172,31 @@ const ListStructureDeploymentsSchema = z.object({
 });
 
 const CreateStructureDeploymentSchema = z.looseObject({
-  code_source: z.unknown(),
-  completed_at: z.string().nullable().optional().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
+  code_source: z.unknown().nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  structure_id: z.string().nullish(),
 });
 
 const StructureRunsItemSchema = z.looseObject({
-  args: z.array(z.string()),
-  completed_at: z.string().nullable().default(null),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ).optional(),
-  env_vars: z.array(z.unknown()).optional(),
-  output: z.unknown().optional(),
-  output_timestamp: z.number().optional(),
-  started_at: z.string().nullable().default(null),
-  status: z.unknown(),
-  status_detail: z.unknown().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_run_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
+  args: z.array(z.string()).nullish(),
+  completed_at: z.string().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  deployment_id: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  output: z.unknown().nullish(),
+  output_timestamp: z.number().nullish(),
+  started_at: z.string().nullish(),
+  status: z.unknown().nullish(),
+  status_detail: z.unknown().nullish(),
+  structure_id: z.string().nullish(),
+  structure_run_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
 });
 
 const ListStructureRunsSchema = z.object({
@@ -284,57 +212,33 @@ const ListStructureRunsSchema = z.object({
 });
 
 const GetInvokeStructureWebhookGetSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_config_file: z.string().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
-  webhook_enabled: z.boolean(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  structure_config_file: z.string().nullish(),
+  structure_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  webhook_enabled: z.boolean().nullish(),
 });
 
 const InvokeStructureWebhookPostSchema = z.looseObject({
-  code: z.unknown(),
-  created_at: z.string().nullable(),
-  created_by: z.string(),
-  description: z.string(),
-  env_vars: z.array(z.unknown()),
-  latest_deployment_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  name: z.string(),
-  organization_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  structure_config_file: z.string().optional(),
-  structure_id: z.string().regex(
-    new RegExp(
-      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89ab][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$",
-    ),
-  ),
-  updated_at: z.string().nullable(),
-  webhook_enabled: z.boolean(),
+  code: z.unknown().nullish(),
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  description: z.string().nullish(),
+  env_vars: z.array(z.unknown()).nullish(),
+  latest_deployment_id: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  structure_config_file: z.string().nullish(),
+  structure_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
+  webhook_enabled: z.boolean().nullish(),
 });
 
 // =============================================================================
@@ -344,7 +248,7 @@ const InvokeStructureWebhookPostSchema = z.looseObject({
 /** Griptape Cloud Structures — deployed structures, runs, logs, and spans */
 export const model = {
   type: "@webframp/griptape/structures",
-  version: "2026.09.18.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -364,6 +268,12 @@ export const model = {
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -378,6 +288,12 @@ export const model = {
       schema: ListEventsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "events_result": {
+      description: "create operation",
+      schema: z.looseObject({}),
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "structure_run_logs": {
       description: "list operation",
@@ -636,7 +552,7 @@ export const model = {
 
         // A 204 No Content (or empty body) yields undefined; nothing to persist.
         if (result === undefined || result === null) {
-          context.logger.info("Created events (no content)", {});
+          context.logger.info("Created events_result (no content)", {});
           return { dataHandles: [] };
         }
 
@@ -644,7 +560,7 @@ export const model = {
         const pathParamValues = new Set<string>([
           String(args.structure_run_id),
         ]);
-        const idCandidates = ["event_id", "id"];
+        const idCandidates = ["events_result_id", "id"];
         let rawId = idCandidates.map((k) => record[k]).find((v) =>
           v !== undefined && v !== null && v !== ""
         );
@@ -673,8 +589,8 @@ export const model = {
             s && s !== "undefined"
           ).join("_") || "created";
         const id = sanitizeInstanceName(String(rawId ?? fallbackId));
-        const handle = await context.writeResource("events", id, result);
-        context.logger.info("Created events {id}", { id });
+        const handle = await context.writeResource("events_result", id, result);
+        context.logger.info("Created events_result {id}", { id });
         return { dataHandles: [handle] };
       },
     },
