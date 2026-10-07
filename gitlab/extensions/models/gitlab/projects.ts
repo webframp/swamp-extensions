@@ -1509,7 +1509,7 @@ const PIPELINE_BY_IID_QUERY = `
 query pipelineByIid($fullPath: ID!, $iid: ID!) {
   project(fullPath: $fullPath) {
     pipeline(iid: $iid) {
-      id status webUrl
+      id status
     }
   }
 }`;
@@ -2530,7 +2530,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.01.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2711,6 +2711,14 @@ export const model = {
         "Fixed create_issue failing on GitLab CE: the mutation now declares " +
         "only the optional fields supplied, and assignees are applied via " +
         "issueSetAssignees. No schema or globalArguments change.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
+      description:
+        "Fixed get_pipeline_by_iid failing on GitLab schemas without " +
+        "Pipeline.webUrl: the URL is now built from host, project, and id. " +
+        "No schema or globalArguments change.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -5124,7 +5132,8 @@ export const model = {
             iid: args.iid,
             id,
             status: (pipeline.status ?? "").toLowerCase(),
-            webUrl: pipeline.webUrl ?? null,
+            // `Pipeline.webUrl` is not in every GitLab schema, so build it.
+            webUrl: `https://${host}/${args.project}/-/pipelines/${id}`,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
