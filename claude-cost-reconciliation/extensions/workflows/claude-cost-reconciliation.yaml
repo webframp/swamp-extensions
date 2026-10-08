@@ -1,0 +1,93 @@
+id: 2d6f9c4a-7b1e-4a3c-9f20-5c8e1d4b6a90
+name: "@webframp/claude-cost-reconciliation"
+description: >-
+  Reconcile the monthly AWS Marketplace "Claude Enterprise" invoice line against
+  Anthropic's own post-discount paid total for the same calendar month. Two
+  independent read-only observations run in parallel — AWS Cost Explorer
+  (get_cost_for_period, filtered to the Claude Enterprise service) and the
+  Anthropic Analytics cost API (collect_cost_by_model) — then the attached
+  workflow-scope report joins them into a verdict (MATCH / MISMATCH /
+  UNVERIFIABLE) with a FINAL / PROVISIONAL finality label, gated on upstream
+  trust and settlement flags.
+tags:
+  purpose: cost-reconciliation
+  vendor: anthropic
+inputs:
+  properties:
+    month:
+      type: string
+      pattern: "^[0-9]{4}-(0[1-9]|1[0-2])$"
+      description: >-
+        Billing month to reconcile, as YYYY-MM (e.g. 2026-09). The window is
+        [<month>-01, first day of the following month) — end is exclusive, per
+        Cost Explorer and the Anthropic cost API.
+    awsModel:
+      type: string
+      default: aws-costs
+      description: >-
+        Existing @webframp/aws/cost-explorer model instance name that owns the
+        Cost Explorer credentials/profile.
+    anthropicModel:
+      type: string
+      default: claude-analytics
+      description: >-
+        Existing @webframp/anthropic/analytics model instance name that owns the
+        Anthropic Enterprise Analytics credentials.
+    toleranceUsd:
+      type: number
+      default: 50
+      minimum: 0
+      description: >-
+        Absolute dollar tolerance. A month passes as MATCH if the absolute delta
+        is within this OR within tolerancePct.
+    tolerancePct:
+      type: number
+      default: 0.5
+      minimum: 0
+      description: >-
+        Percentage tolerance (percent, e.g. 0.5 = 0.5%). A month passes as MATCH
+        if |deltaPct| is within this OR the absolute delta is within toleranceUsd.
+  required:
+    - month
+reports:
+  require:
+    - "@webframp/claude-cost-reconciliation"
+jobs:
+  - name: reconcile
+    description: >-
+      Collect both sides of the Claude Enterprise bill for the target month.
+      The two steps are independent (different models, no data dependency) and
+      run concurrently; the attached workflow-scope report joins them afterward.
+    dependsOn: []
+    weight: 0
+    steps:
+      - name: aws_cost
+        description: >-
+          AWS Marketplace "Claude Enterprise" monthly total via Cost Explorer.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.awsModel }}
+          methodName: get_cost_for_period
+          inputs:
+            start: '${{ inputs.month + "-01" }}'
+            end: '${{ int(inputs.month.split("-")[1]) == 12 ? (string(int(inputs.month.split("-")[0]) + 1) + "-01-01") : (inputs.month.split("-")[0] + "-" + (int(inputs.month.split("-")[1]) + 1 < 10 ? "0" + string(int(inputs.month.split("-")[1]) + 1) : string(int(inputs.month.split("-")[1]) + 1)) + "-01") }}'
+            service: "Claude Enterprise"
+            granularity: MONTHLY
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+      - name: anthropic_cost
+        description: >-
+          Anthropic post-discount paid total via the Enterprise Analytics cost
+          API, carrying the trust/finality flags the verdict depends on.
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.anthropicModel }}
+          methodName: collect_cost_by_model
+          inputs:
+            startDate: '${{ inputs.month + "-01" }}'
+            endDate: '${{ int(inputs.month.split("-")[1]) == 12 ? (string(int(inputs.month.split("-")[0]) + 1) + "-01-01") : (inputs.month.split("-")[0] + "-" + (int(inputs.month.split("-")[1]) + 1 < 10 ? "0" + string(int(inputs.month.split("-")[1]) + 1) : string(int(inputs.month.split("-")[1]) + 1)) + "-01") }}'
+        dependsOn: []
+        weight: 0
+        allowFailure: false
+version: 1
