@@ -111,11 +111,12 @@ Deno.test("twitch model: has globalArguments with required fields", () => {
   assertExists(shape.refreshToken);
 });
 
-Deno.test("twitch model: has all 8 methods and required resources", () => {
+Deno.test("twitch model: has all 9 methods and required resources", () => {
   assertExists(model.methods);
   assertExists(model.methods.get_channel);
   assertExists(model.methods.get_chatters);
   assertExists(model.methods.get_user);
+  assertExists(model.methods.get_user_context);
   assertExists(model.methods.get_banned_users);
   assertExists(model.methods.ban_user);
   assertExists(model.methods.unban_user);
@@ -130,6 +131,7 @@ Deno.test("twitch model: has all 8 methods and required resources", () => {
   assertExists(model.resources["ban-result"]);
   assertExists(model.resources["chat-message"]);
   assertExists(model.resources["mod-events"]);
+  assertExists(model.resources["user-moderation-context"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -432,6 +434,86 @@ Deno.test({
       assertEquals(data.bans[0].login, "badactor");
       assertEquals(data.bans[0].expiresAt, null); // empty string -> null
       assertEquals(data.bans[1].expiresAt, "2025-01-03T00:00:00Z");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "twitch model: get_user_context writes compact observable facts",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockHelixServer({
+      "/users?login=target": () => ({
+        data: [
+          {
+            id: "target-user",
+            login: "target",
+            display_name: "Target",
+            created_at: "2020-01-01T00:00:00Z",
+            profile_image_url: "https://example.com/target.png",
+            broadcaster_type: "",
+          },
+        ],
+      }),
+      "/users": () => USERS_RESPONSE,
+      "/chat/chatters": () => ({
+        data: [
+          {
+            user_id: "target-user",
+            user_login: "target",
+            user_name: "Target",
+          },
+        ],
+        pagination: {},
+      }),
+      "/moderation/banned": () => ({
+        data: [
+          {
+            user_id: "target-user",
+            user_login: "target",
+            reason: "repeated spam",
+            moderator_login: "testchannel",
+            created_at: "2026-09-01T00:00:00Z",
+            expires_at: "",
+          },
+        ],
+        pagination: {},
+      }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { ...GLOBAL_ARGS, hasBroadcasterAuth: true },
+        definition: DEFINITION,
+      });
+
+      const result = await model.methods.get_user_context.execute(
+        { login: "target" },
+        context as unknown as Parameters<
+          typeof model.methods.get_user_context.execute
+        >[1],
+      );
+
+      assertEquals(result.dataHandles.length, 1);
+      const resources = getWrittenResources();
+      assertEquals(resources[0].specName, "user-moderation-context");
+      const data = resources[0].data as {
+        channel: string;
+        user: { login: string };
+        isCurrentChatter: boolean;
+        ban: { reason: string; expiresAt: string | null } | null;
+        availability: { banStatus: boolean };
+      };
+      assertEquals(data.channel, "testchannel");
+      assertEquals(data.user.login, "target");
+      assertEquals(data.isCurrentChatter, true);
+      assertEquals(data.ban?.reason, "repeated spam");
+      assertEquals(data.ban?.expiresAt, null);
+      assertEquals(data.availability.banStatus, true);
     } finally {
       uninstall();
       await server.shutdown();
