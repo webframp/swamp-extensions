@@ -1,0 +1,90 @@
+manifestVersion: 1
+name: "@webframp/claude-cost-reconciliation"
+version: "2026.10.07.1"
+description: |
+  Monthly reconciliation of the AWS Marketplace "Claude Enterprise" invoice
+  line against Anthropic's own post-discount paid total for the same calendar
+  month. Ships a workflow that collects both sides in parallel and a
+  workflow-scope report that joins them into a verdict.
+
+  ## What it answers
+
+  > Does what AWS billed us for Claude Enterprise match what Anthropic's usage
+  > API says we were charged, for the same month?
+
+  The AWS Marketplace carries Claude Enterprise as a single private-offer
+  passthrough line. This extension turns a previously manual investigation into
+  a parameterized, repeatable pipeline: one `swamp workflow run` produces the
+  reconciliation.
+
+  ## Workflow — `@webframp/claude-cost-reconciliation`
+
+  Input `month` (YYYY-MM). Derives the window `[<month>-01, next-month-01)`
+  (end exclusive; December rolls the year over). Two independent, read-only
+  steps run concurrently:
+
+  - `@webframp/aws/cost-explorer` `get_cost_for_period` — the "Claude
+    Enterprise" service total (the invoice line), MONTHLY granularity.
+  - `@webframp/anthropic/analytics` `collect_cost_by_model` — the post-discount
+    paid total, carrying the trust/finality flags (`reconciliationChecked`,
+    `rangeExceedsWatermark`, `collected`, `truncated`) the verdict depends on.
+
+  Model instance names are workflow inputs (`awsModel`, `anthropicModel`) with
+  defaults, never hardcoded. Tolerances are workflow inputs (`toleranceUsd`
+  default 50, `tolerancePct` default 0.5) overridable per run.
+
+  ## Report — `@webframp/claude-cost-reconciliation` (workflow scope)
+
+  Reads both steps' data handles, applies trust and finality gates, then
+  computes the verdict:
+
+  - `verdict`: `MATCH` (within tolerance), `MISMATCH` (outside tolerance), or
+    `UNVERIFIABLE` (a precondition failed — a trust failure is not a billing
+    discrepancy, so it is a distinct state, never folded into MISMATCH).
+  - `finality`: `FINAL` (settled) or `PROVISIONAL` (`rangeExceedsWatermark` —
+    verdict is still computed but flagged as not yet settled).
+
+  Tolerance passes on EITHER the absolute dollar floor OR the percentage, so a
+  large invoice with a sub-percent delta and a small invoice with a few dollars
+  of delta both pass. The report DEGRADES, NEVER THROWS: an absent handle, a
+  parse failure, a disagreeing window, or any unexpected error yields a valid
+  `{ markdown, json }` with `verdict: "UNVERIFIABLE"` and `degraded: true`.
+
+  Per-model showback is intentionally out of scope: the AWS Marketplace line is
+  a single rollup and cannot be split by model, so a per-model table would not
+  serve reconciliation. Amazon Bedrock usage is a separate cost center and is
+  excluded.
+
+  ## Usage
+
+  ```bash
+  swamp workflow run @webframp/claude-cost-reconciliation --input month=2026-09
+  # tighter tolerance for one run:
+  swamp workflow run @webframp/claude-cost-reconciliation \
+    --input month=2026-09 --input toleranceUsd=25 --input tolerancePct=0.25
+
+  swamp report get @webframp/claude-cost-reconciliation \
+    --workflow claude-cost-reconciliation --json
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+workflows:
+  - claude-cost-reconciliation.yaml
+reports:
+  - reconciliation.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - cost
+  - finops
+  - reconciliation
+  - anthropic
+  - aws
+dependencies:
+  - "@webframp/aws/cost-explorer@2026.10.07.1"
+  - "@webframp/anthropic/analytics@2026.10.07.1"
