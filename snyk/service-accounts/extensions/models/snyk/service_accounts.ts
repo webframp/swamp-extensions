@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/service-accounts";
 
@@ -23,45 +29,42 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetManyGroupServiceAccountItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
@@ -79,177 +82,165 @@ const GetManyGroupServiceAccountSchema = z.object({
 });
 
 const CreateGroupServiceAccountSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
 
 const GetOneGroupServiceAccountSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
 
 const UpdateServiceAccountSecretSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
 
 const GetManyOrgServiceAccountsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
@@ -267,133 +258,124 @@ const GetManyOrgServiceAccountsSchema = z.object({
 });
 
 const CreateOrgServiceAccountSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
 
 const GetOneOrgServiceAccountSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
 
 const UpdateOrgServiceAccountSecretSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  access_token: z.string().optional().describe(
-    "The Snyk access token for this service account. Only returned on creation, and only when auth_typ...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  access_token: z.string().nullish().describe(
+    "The Snyk access token for this service account.",
   ),
-  access_token_expires_at: z.string().optional().describe(
+  access_token_expires_at: z.string().nullish().describe(
     "The expiry date of the access token. Only provided when auth_type is access_token.",
   ),
-  access_token_ttl_seconds: z.number().optional().describe(
-    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset. Onl...",
+  access_token_ttl_seconds: z.number().nullish().describe(
+    "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().optional().describe(
-    "The Snyk API Key for this service account. Only returned on creation, and only when auth_type is ...",
+  api_key: z.string().nullish().describe(
+    "The Snyk API Key for this service account.",
   ),
-  auth_type: z.enum([
-    "api_key",
-    "oauth_client_secret",
-    "oauth_private_key_jwt",
-    "access_token",
-  ]).describe(
-    "The authentication strategy for the service account: * api_key - Regular Snyk API Key. * oauth_cl...",
+  auth_type: z.string().nullish().describe(
+    "The authentication strategy for the service account: * api_key - Regular Snyk API Key.",
   ),
-  client_id: z.string().optional().describe(
-    "The service account's attached client-id. Used to request an access-token. Only provided when aut...",
+  client_id: z.string().nullish().describe(
+    "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().optional().describe(
-    "The client secret used for obtaining oauth access tokens. Only sent on creation of new service ac...",
+  client_secret: z.string().nullish().describe(
+    "The client secret used for obtaining oauth access tokens.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullish().describe(
     "The time at which the service account was created.",
   ),
-  jwks_url: z.string().optional().describe(
-    "A JWKs URL used to verify signed JWT requests against. Must be https. Only provided when auth_typ...",
+  jwks_url: z.string().nullish().describe(
+    "A JWKs URL used to verify signed JWT requests against. Must be https.",
   ),
-  level: z.enum(["Group", "Org"]).optional().describe(
-    "The level of access for the service account: * Group - the service account was created at the Gro...",
+  level: z.string().nullish().describe(
+    "The level of access for the service account: * Group - the service account was created at the...",
   ),
-  name: z.string().describe("A human-friendly name of the service account."),
-  role_id: z.string().describe(
+  name: z.string().nullish().describe(
+    "A human-friendly name of the service account.",
+  ),
+  role_id: z.string().nullish().describe(
     "The ID of the role which the Service Account is associated with.",
   ),
 }).passthrough();
@@ -405,7 +387,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -461,6 +443,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -541,11 +528,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -553,7 +536,7 @@ export const model = {
             encodeURIComponent(String(args.group_id))
           }/service_accounts`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -635,6 +618,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_group_service_account");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -683,6 +667,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_one_group_service_account");
 
         const handle = await context.writeResource(
           "one_group_service_account",
@@ -843,18 +828,17 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "update_service_account_secret");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
-          "update_service_account_secret",
+          "service_account_secret",
           id,
           result,
         );
-        context.logger.info("Created update_service_account_secret {id}", {
-          id,
-        });
+        context.logger.info("Created service_account_secret {id}", { id });
         return { dataHandles: [handle] };
       },
     },
@@ -877,17 +861,13 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/service_accounts`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -964,6 +944,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_org_service_account");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1007,6 +988,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_one_org_service_account");
 
         const handle = await context.writeResource(
           "one_org_service_account",
@@ -1152,18 +1134,17 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "update_org_service_account_secret");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
         const handle = await context.writeResource(
-          "update_org_service_account_secret",
+          "org_service_account_secret",
           id,
           result,
         );
-        context.logger.info("Created update_org_service_account_secret {id}", {
-          id,
-        });
+        context.logger.info("Created org_service_account_secret {id}", { id });
         return { dataHandles: [handle] };
       },
     },

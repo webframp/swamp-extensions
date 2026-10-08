@@ -8,7 +8,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/tenants";
 
@@ -22,16 +29,17 @@ const GlobalArgsSchema = z.object({
 });
 
 const TenantsItemSchema = z.object({
-  id: z.string().describe("The Snyk ID of the tenant."),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  created_at: z.string().describe("The time the tenant was created."),
-  name: z.string().describe("The display name of the tenant."),
-  slug: z.string().describe(
+  id: z.string().nullish().describe("The Snyk ID of the tenant."),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("The time the tenant was created."),
+  name: z.string().nullish().describe("The display name of the tenant."),
+  slug: z.string().nullish().describe(
     "The canonical (unique and URL-friendly) name of the tenant.",
   ),
-  updated_at: z.string().describe("The time the tenant was last modified."),
-  owner_id: z.string().optional().describe("Related owner ID"),
+  updated_at: z.string().nullish().describe(
+    "The time the tenant was last modified.",
+  ),
+  owner_id: z.string().nullish().describe("Related owner ID"),
 }).passthrough();
 
 const ListTenantsSchema = z.object({
@@ -47,21 +55,22 @@ const ListTenantsSchema = z.object({
 });
 
 const GetTenantSchema = z.object({
-  id: z.string().describe("The Snyk ID of the tenant."),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  created_at: z.string().describe("The time the tenant was created."),
-  name: z.string().describe("The display name of the tenant."),
-  slug: z.string().describe(
+  id: z.string().nullish().describe("The Snyk ID of the tenant."),
+  type: z.string().nullish(),
+  created_at: z.string().nullish().describe("The time the tenant was created."),
+  name: z.string().nullish().describe("The display name of the tenant."),
+  slug: z.string().nullish().describe(
     "The canonical (unique and URL-friendly) name of the tenant.",
   ),
-  updated_at: z.string().describe("The time the tenant was last modified."),
-  owner_id: z.string().optional().describe("Related owner ID"),
+  updated_at: z.string().nullish().describe(
+    "The time the tenant was last modified.",
+  ),
+  owner_id: z.string().nullish().describe("Related owner ID"),
 }).passthrough();
 
 const GetBrokerConnectionIntegrationsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
 }).passthrough();
 
 const GetBrokerConnectionIntegrationsSchema = z.object({
@@ -77,22 +86,24 @@ const GetBrokerConnectionIntegrationsSchema = z.object({
 });
 
 const CreateBrokerConnectionIntegrationSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
 }).passthrough();
 
 const BrokerDeploymentsForTenantItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_deployment"]).optional(),
-  broker_app_installed_in_org_id: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  broker_app_installed_in_org_id: z.string().nullish().describe(
     "Org Id in which the Broker App is installed",
   ),
-  created_at: z.string().describe("Deployment creation time in UTC"),
-  install_id: z.string().optional().describe("Associated Install ID"),
-  metadata: z.object({}).describe(
+  created_at: z.string().nullish().describe("Deployment creation time in UTC"),
+  install_id: z.string().nullish().describe("Associated Install ID"),
+  metadata: z.object({}).passthrough().nullish().describe(
     "Metadata information such user/org id or metrics",
   ),
-  updated_at: z.string().describe("Deployment last update time in UTC"),
+  updated_at: z.string().nullish().describe(
+    "Deployment last update time in UTC",
+  ),
 }).passthrough();
 
 const ListBrokerDeploymentsForTenantSchema = z.object({
@@ -108,15 +119,15 @@ const ListBrokerDeploymentsForTenantSchema = z.object({
 });
 
 const ConnectionContextsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_context"]).optional(),
-  context: z.record(z.string(), z.string()),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  context: z.record(z.string(), z.string()).nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
-  applied_integrations_id: z.string().optional().describe(
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
+  applied_integrations_id: z.string().nullish().describe(
     "Related applied_integrations ID",
   ),
 }).passthrough();
@@ -134,55 +145,57 @@ const ListConnectionContextsSchema = z.object({
 });
 
 const GetConnectionContextSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_context"]).optional(),
-  context: z.record(z.string(), z.string()),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  context: z.record(z.string(), z.string()).nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
-  applied_integrations_id: z.string().optional().describe(
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
+  applied_integrations_id: z.string().nullish().describe(
     "Related applied_integrations ID",
   ),
 }).passthrough();
 
 const UpdateBrokerContextSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_context"]).optional(),
-  context: z.record(z.string(), z.string()),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  context: z.record(z.string(), z.string()).nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
-  applied_integrations_id: z.string().optional().describe(
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
+  applied_integrations_id: z.string().nullish().describe(
     "Related applied_integrations ID",
   ),
 }).passthrough();
 
 const UpdateBrokerContextIntegrationSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_context"]).optional(),
-  integrations_relationships_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  integrations_relationships_id: z.string().nullish().describe(
     "Related integrations_relationships ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
 }).passthrough();
 
 const BrokerDeploymentsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_deployment"]).optional(),
-  broker_app_installed_in_org_id: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  broker_app_installed_in_org_id: z.string().nullish().describe(
     "Org Id in which the Broker App is installed",
   ),
-  created_at: z.string().describe("Deployment creation time in UTC"),
-  install_id: z.string().optional().describe("Associated Install ID"),
-  metadata: z.object({}).describe(
+  created_at: z.string().nullish().describe("Deployment creation time in UTC"),
+  install_id: z.string().nullish().describe("Associated Install ID"),
+  metadata: z.object({}).passthrough().nullish().describe(
     "Metadata information such user/org id or metrics",
   ),
-  updated_at: z.string().describe("Deployment last update time in UTC"),
+  updated_at: z.string().nullish().describe(
+    "Deployment last update time in UTC",
+  ),
 }).passthrough();
 
 const ListBrokerDeploymentsSchema = z.object({
@@ -198,34 +211,36 @@ const ListBrokerDeploymentsSchema = z.object({
 });
 
 const CreateBrokerDeploymentSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_deployment"]).optional(),
-  broker_app_installed_in_org_id: z.string().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  broker_app_installed_in_org_id: z.string().nullish().describe(
     "Org Id in which the Broker App is installed",
   ),
-  created_at: z.string().describe("Deployment creation time in UTC"),
-  install_id: z.string().optional().describe("Associated Install ID"),
-  metadata: z.object({}).describe(
+  created_at: z.string().nullish().describe("Deployment creation time in UTC"),
+  install_id: z.string().nullish().describe("Associated Install ID"),
+  metadata: z.object({}).passthrough().nullish().describe(
     "Metadata information such user/org id or metrics",
   ),
-  updated_at: z.string().describe("Deployment last update time in UTC"),
+  updated_at: z.string().nullish().describe(
+    "Deployment last update time in UTC",
+  ),
 }).passthrough();
 
 const BrokerConnectionsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_connection"]).optional(),
-  deployment_id: z.string().describe("Associated Deployment ID"),
-  identifier: z.string().optional().describe("Broker identifier"),
-  name: z.string().describe("Associated name"),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  deployment_id: z.string().nullish().describe("Associated Deployment ID"),
+  identifier: z.string().nullish().describe("Broker identifier"),
+  name: z.string().nullish().describe("Associated name"),
   secrets: z.object({
-    primary: z.unknown(),
-    secondary: z.unknown(),
-  }).optional(),
+    primary: z.unknown().nullish(),
+    secondary: z.unknown().nullish(),
+  }).passthrough().nullish(),
   configuration: z.object({
-    required: z.record(z.string(), z.string()),
-    type: z.string(),
-    validations: z.array(z.object({})).optional(),
-  }),
+    required: z.record(z.string(), z.string()).nullish(),
+    type: z.string().nullish(),
+    validations: z.array(z.object({}).passthrough()).nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 
 const ListBrokerConnectionsSchema = z.object({
@@ -241,27 +256,27 @@ const ListBrokerConnectionsSchema = z.object({
 });
 
 const CreateBrokerConnectionSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_connection"]).optional(),
-  deployment_id: z.string().describe("Associated Deployment ID"),
-  identifier: z.string().optional().describe("Broker identifier"),
-  name: z.string().describe("Associated name"),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  deployment_id: z.string().nullish().describe("Associated Deployment ID"),
+  identifier: z.string().nullish().describe("Broker identifier"),
+  name: z.string().nullish().describe("Associated name"),
   secrets: z.object({
-    primary: z.unknown(),
-    secondary: z.unknown(),
-  }).optional(),
+    primary: z.unknown().nullish(),
+    secondary: z.unknown().nullish(),
+  }).passthrough().nullish(),
   configuration: z.object({
-    required: z.record(z.string(), z.string()),
-    type: z.string(),
-    validations: z.array(z.object({})).optional(),
-  }),
+    required: z.record(z.string(), z.string()).nullish(),
+    type: z.string().nullish(),
+    validations: z.array(z.object({}).passthrough()).nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 
 const BrokerOrgsForBulkMigrationItemSchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "The organization ID associated with the bulk migration.",
   ),
-  type: z.enum(["broker_organization"]).optional(),
+  type: z.string().nullish(),
 }).passthrough();
 
 const ListBrokerOrgsForBulkMigrationSchema = z.object({
@@ -276,16 +291,22 @@ const ListBrokerOrgsForBulkMigrationSchema = z.object({
   ),
 });
 
+const CreateBrokerOrgsForBulkMigrationSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  status: z.string().nullish(),
+}).passthrough();
+
 const DeploymentContextsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["broker_context"]).optional(),
-  context: z.record(z.string(), z.string()),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  context: z.record(z.string(), z.string()).nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
-  applied_integrations_id: z.string().optional().describe(
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
+  applied_integrations_id: z.string().nullish().describe(
     "Related applied_integrations ID",
   ),
 }).passthrough();
@@ -303,16 +324,16 @@ const ListDeploymentContextsSchema = z.object({
 });
 
 const DeploymentCredentialsItemSchema = z.object({
-  id: z.string(),
-  type: z.string().describe("Associated connection type"),
-  comment: z.string().optional().describe("Optional comment information"),
-  deployment_id: z.string().describe("Associated Deployment ID"),
-  environment_variable_name: z.string(),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Associated connection type"),
+  comment: z.string().nullish().describe("Optional comment information"),
+  deployment_id: z.string().nullish().describe("Associated Deployment ID"),
+  environment_variable_name: z.string().nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
 }).passthrough();
 
 const ListDeploymentCredentialsSchema = z.object({
@@ -328,24 +349,23 @@ const ListDeploymentCredentialsSchema = z.object({
 });
 
 const CreateDeploymentCredentialSchema = z.object({
-  id: z.string(),
-  type: z.string().describe("Associated connection type"),
-  comment: z.string().optional().describe("Optional comment information"),
-  deployment_id: z.string().describe("Associated Deployment ID"),
-  environment_variable_name: z.string(),
-  broker_connections_id: z.string().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Associated connection type"),
+  comment: z.string().nullish().describe("Optional comment information"),
+  deployment_id: z.string().nullish().describe("Associated Deployment ID"),
+  environment_variable_name: z.string().nullish(),
+  broker_connections_id: z.string().nullish().describe(
     "Related broker_connections ID",
   ),
-  jsonapi_id: z.string().optional().describe("Related jsonapi ID"),
-  links_id: z.string().optional().describe("Related links ID"),
+  jsonapi_id: z.string().nullish().describe("Related jsonapi ID"),
+  links_id: z.string().nullish().describe("Related links ID"),
 }).passthrough();
 
 const AssetsTenantItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const ListAssetsTenantSchema = z.object({
@@ -361,16 +381,17 @@ const ListAssetsTenantSchema = z.object({
 });
 
 const GetFilterFieldsTenantItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter field"),
-  type: z.enum(["string", "boolean", "datetime", "array", "object"]).describe(
+  id: z.string().nullish().describe("UUID identifier for the filter field"),
+  type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.enum(["container_images", "sboms", "repositories"]))
-    .describe("List of asset types this field applies to"),
-  name: z.string().describe(
+  asset_types: z.array(z.string()).nullish().describe(
+    "List of asset types this field applies to",
+  ),
+  name: z.string().nullish().describe(
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetFilterFieldsTenantSchema = z.object({
@@ -386,15 +407,13 @@ const GetFilterFieldsTenantSchema = z.object({
 });
 
 const GetFilterValuesTenantItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter value"),
-  type: z.enum(["filter_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  key: z.string().optional().describe(
+  id: z.string().nullish().describe("UUID identifier for the filter value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  key: z.string().nullish().describe(
     "For object-type filters (e.g., tags), the key name. Only present for object-type filter values.",
   ),
-  value: z.string().optional().describe(
-    "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
+  value: z.string().nullish().describe(
+    "The filter value. For simple filters, this is the value itself.",
   ),
 }).passthrough();
 
@@ -411,17 +430,15 @@ const GetFilterValuesTenantSchema = z.object({
 });
 
 const GetGroupFieldsTenantItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group field"),
-  type: z.enum(["group_fields"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  asset_types: z.array(z.string()).describe(
+  id: z.string().nullish().describe("UUID identifier for the group field"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  asset_types: z.array(z.string()).nullish().describe(
     "List of asset types this field applies to",
   ),
-  name: z.string().describe(
+  name: z.string().nullish().describe(
     'The field name used for grouping (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetGroupFieldsTenantSchema = z.object({
@@ -437,11 +454,9 @@ const GetGroupFieldsTenantSchema = z.object({
 });
 
 const GetGroupValuesTenantItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group value"),
-  type: z.enum(["group_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  value: z.string().describe("The grouped value"),
+  id: z.string().nullish().describe("UUID identifier for the group value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  value: z.string().nullish().describe("The grouped value"),
 }).passthrough();
 
 const GetGroupValuesTenantSchema = z.object({
@@ -457,11 +472,10 @@ const GetGroupValuesTenantSchema = z.object({
 });
 
 const GetAssetSearchResultsTenantItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const GetAssetSearchResultsTenantSchema = z.object({
@@ -477,102 +491,61 @@ const GetAssetSearchResultsTenantSchema = z.object({
 });
 
 const GetAssetTenantSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const AssetProjectsTenantItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
+  id: z.string().nullish().describe("The unique identifier of the project"),
+  type: z.string().nullish().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional(),
-    base_image_name: z.string(),
-    base_image_outdated: z.boolean().optional(),
-    code: z.string(),
-    distro_alert: z.string().optional(),
-    proposed_base_images: z.unknown().optional(),
-  }).optional().describe(
+    base_image: z.unknown().nullish(),
+    base_image_name: z.string().nullish(),
+    base_image_outdated: z.boolean().nullish(),
+    code: z.string().nullish(),
+    distro_alert: z.string().nullish(),
+    proposed_base_images: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
-  is_canonical: z.boolean().optional().describe(
-    "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
+  is_canonical: z.boolean().nullish().describe(
+    "Indicates whether this project is the canonical project for its target_file.",
   ),
   issues: z.object({
-    critical: z.number().int(),
-    high: z.number().int(),
-    low: z.number().int(),
-    medium: z.number().int(),
-  }).optional().describe("Issue counts by severity"),
-  monitor_created_at: z.string().optional().describe(
+    critical: z.number().nullish(),
+    high: z.number().nullish(),
+    low: z.number().nullish(),
+    medium: z.number().nullish(),
+  }).passthrough().nullish().describe("Issue counts by severity"),
+  monitor_created_at: z.string().nullish().describe(
     "Timestamp when the monitor was created",
   ),
-  monitor_id: z.string().optional().describe(
+  monitor_id: z.string().nullish().describe(
     "The ID of the monitor associated with this project",
   ),
-  org_id: z.string().optional().describe(
+  org_id: z.string().nullish().describe(
     "The ID of the organization that owns this project",
   ),
-  project_type: z.enum([
-    "rubygems",
-    "composer",
-    "sbt",
-    "maven",
-    "gomodules",
-    "poetry",
-    "cocoapods",
-    "pipenv",
-    "pnpm",
-    "pub",
-    "yarn",
-    "yarn-workspace",
-    "paket",
-    "pip",
-    "unmanaged",
-    "gradle",
-    "nuget",
-    "cpp",
-    "npm",
-    "conan",
-    "govendor",
-    "hex",
-    "golangdep",
-    "cargo",
-    "swift",
-    "golang",
-    "secrets",
-    "iac",
-    "uv",
-    "sast",
-    "armconfig",
-    "helmconfig",
-    "terraformconfig",
-    "cloudformationconfig",
-    "k8sconfig",
-    "cloudconfig",
-    "dockerfile",
-    "deb",
-    "apk",
-    "linux",
-    "rpm",
-  ]).optional().describe("Type of the project (e.g., npm, maven)"),
-  risk_score: z.number().int().optional().describe(
+  project_type: z.string().nullish().describe(
+    "Type of the project (e.g., npm, maven)",
+  ),
+  risk_score: z.number().nullish().describe(
     "The calculated risk score for this project",
   ),
-  snapshot_created_at: z.string().optional().describe(
+  snapshot_created_at: z.string().nullish().describe(
     "Timestamp when the snapshot was created",
   ),
-  snapshot_id: z.string().optional().describe("The ID of the snapshot"),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_id: z.string().optional().describe(
+  snapshot_id: z.string().nullish().describe("The ID of the snapshot"),
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_id: z.string().nullish().describe(
     "The ID of the target this project belongs to",
   ),
-  target_origin: z.string().optional().describe(
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -590,19 +563,19 @@ const ListAssetProjectsTenantSchema = z.object({
 });
 
 const AssetTargetsTenantItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the target"),
-  type: z.enum(["target"]).optional().describe("The JSON:API resource type"),
-  imported_at: z.string().optional().describe(
+  id: z.string().nullish().describe("The unique identifier of the target"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  imported_at: z.string().nullish().describe(
     "Timestamp when the target was imported",
   ),
-  integration_id: z.string().optional().describe(
+  integration_id: z.string().nullish().describe(
     "The ID of the integration associated with this target",
   ),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_origin: z.string().optional().describe(
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -620,16 +593,16 @@ const ListAssetTargetsTenantSchema = z.object({
 });
 
 const GetTenantMembershipsItemSchema = z.object({
-  id: z.string().describe("Unique identifier for a tenant membership."),
-  type: z.enum(["tenant_membership"]).optional().describe(
-    "Resource type for tenant memberships.",
+  id: z.string().nullish().describe(
+    "Unique identifier for a tenant membership.",
   ),
-  created_at: z.string().describe(
+  type: z.string().nullish().describe("Resource type for tenant memberships."),
+  created_at: z.string().nullish().describe(
     "The time at which the resource was created.",
   ),
-  role_id: z.string().optional().describe("Related role ID"),
-  tenant_id: z.string().optional().describe("Related tenant ID"),
-  user_id: z.string().optional().describe("Related user ID"),
+  role_id: z.string().nullish().describe("Related role ID"),
+  tenant_id: z.string().nullish().describe("Related tenant ID"),
+  user_id: z.string().nullish().describe("Related user ID"),
 }).passthrough();
 
 const GetTenantMembershipsSchema = z.object({
@@ -644,17 +617,161 @@ const GetTenantMembershipsSchema = z.object({
   ),
 });
 
+const ModelsItemSchema = z.object({
+  id: z.string().nullish().describe(
+    "The ID of the model in Snyk's Risk Database.",
+  ),
+  type: z.string().nullish(),
+  access_info: z.object({
+    api_available: z.boolean().nullish(),
+    cost_tier: z.string().nullish(),
+    license_name: z.string().nullish(),
+    license_type: z.string().nullish(),
+    self_hostable: z.boolean().nullish(),
+  }).passthrough().nullish(),
+  architectures: z.array(z.string()).nullish(),
+  capability_assessment: z.object({
+    eci_score: z.number().nullish(),
+  }).passthrough().nullish(),
+  context_length: z.number().nullish().describe(
+    "Maximum context window in tokens.",
+  ),
+  country_of_origin: z.string().nullish().describe(
+    "ISO 3166-1 alpha-2 country code of the provider.",
+  ),
+  has_risk_assessment: z.boolean().nullish().describe(
+    "Whether the model has risk scores. Available regardless of entitlement.",
+  ),
+  inputs: z.array(z.string()).nullish(),
+  last_updated: z.string().nullish().describe(
+    "When the model's data was last updated in Snyk's Risk Database. Omitted when unknown.",
+  ),
+  model_family: z.string().nullish(),
+  model_type: z.string().nullish(),
+  model_variant: z.string().nullish(),
+  outputs: z.array(z.string()).nullish(),
+  parameters: z.string().nullish().describe(
+    "Approximate parameter count as published upstream.",
+  ),
+  pipeline_tag: z.string().nullish(),
+  provider: z.string().nullish().describe(
+    "The provider slug, e.g. openai. Filterable via the provider query parameter.",
+  ),
+  provider_name: z.string().nullish(),
+  release_date: z.string().nullish().describe(
+    "When the model was first published upstream. Omitted when unknown.",
+  ),
+  risk_assessment: z.array(
+    z.object({
+      attacker_goals: z.array(
+        z.object({
+          name: z.string().nullish(),
+          score: z.number().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      name: z.string().nullish(),
+      score: z.number().nullish(),
+    }).passthrough(),
+  ).nullish(),
+  risk_assessment_complete: z.boolean().nullish().describe(
+    "Whether the model's risk assessment is complete.",
+  ),
+  source_id: z.string().nullish().describe(
+    "The model's identifier at its source, e.g. a Hugging Face repository ID.",
+  ),
+  source_url: z.string().nullish(),
+  tasks: z.array(z.string()).nullish(),
+}).passthrough();
+
+const ListModelsSchema = z.object({
+  items: z.array(ModelsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const GetModelSchema = z.object({
+  id: z.string().nullish().describe(
+    "The ID of the model in Snyk's Risk Database.",
+  ),
+  type: z.string().nullish(),
+  access_info: z.object({
+    api_available: z.boolean().nullish(),
+    cost_tier: z.string().nullish(),
+    license_name: z.string().nullish(),
+    license_type: z.string().nullish(),
+    self_hostable: z.boolean().nullish(),
+  }).passthrough().nullish(),
+  architectures: z.array(z.string()).nullish(),
+  capability_assessment: z.object({
+    eci_score: z.number().nullish(),
+  }).passthrough().nullish(),
+  context_length: z.number().nullish().describe(
+    "Maximum context window in tokens.",
+  ),
+  country_of_origin: z.string().nullish().describe(
+    "ISO 3166-1 alpha-2 country code of the provider.",
+  ),
+  has_risk_assessment: z.boolean().nullish().describe(
+    "Whether the model has risk scores. Available regardless of entitlement.",
+  ),
+  inputs: z.array(z.string()).nullish(),
+  last_updated: z.string().nullish().describe(
+    "When the model's data was last updated in Snyk's Risk Database. Omitted when unknown.",
+  ),
+  model_family: z.string().nullish(),
+  model_type: z.string().nullish(),
+  model_variant: z.string().nullish(),
+  outputs: z.array(z.string()).nullish(),
+  parameters: z.string().nullish().describe(
+    "Approximate parameter count as published upstream.",
+  ),
+  pipeline_tag: z.string().nullish(),
+  provider: z.string().nullish().describe(
+    "The provider slug, e.g. openai. Filterable via the provider query parameter.",
+  ),
+  provider_name: z.string().nullish(),
+  release_date: z.string().nullish().describe(
+    "When the model was first published upstream. Omitted when unknown.",
+  ),
+  risk_assessment: z.array(
+    z.object({
+      attacker_goals: z.array(
+        z.object({
+          name: z.string().nullish(),
+          score: z.number().nullish(),
+        }).passthrough(),
+      ).nullish(),
+      name: z.string().nullish(),
+      score: z.number().nullish(),
+    }).passthrough(),
+  ).nullish(),
+  risk_assessment_complete: z.boolean().nullish().describe(
+    "Whether the model's risk assessment is complete.",
+  ),
+  source_id: z.string().nullish().describe(
+    "The model's identifier at its source, e.g. a Hugging Face repository ID.",
+  ),
+  source_url: z.string().nullish(),
+  tasks: z.array(z.string()).nullish(),
+}).passthrough();
+
 const TenantRolesItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["tenant_role"]).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe(
     "The type of the resource for tenant role operations",
   ),
-  custom: z.boolean().default(false),
-  description: z.string(),
-  name: z.string(),
-  normalized_name: z.string().optional(),
-  permissions: z.array(z.string()),
-  tenant_id: z.string().optional().describe("Related tenant ID"),
+  custom: z.boolean().nullish(),
+  description: z.string().nullish(),
+  name: z.string().nullish(),
+  normalized_name: z.string().nullish(),
+  permissions: z.array(z.string()).nullish(),
+  tenant_id: z.string().nullish().describe("Related tenant ID"),
 }).passthrough();
 
 const ListTenantRolesSchema = z.object({
@@ -670,16 +787,16 @@ const ListTenantRolesSchema = z.object({
 });
 
 const CreateTenantRoleSchema = z.object({
-  id: z.string(),
-  type: z.enum(["tenant_role"]).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish().describe(
     "The type of the resource for tenant role operations",
   ),
-  custom: z.boolean().default(false),
-  description: z.string(),
-  name: z.string(),
-  normalized_name: z.string().optional(),
-  permissions: z.array(z.string()),
-  tenant_id: z.string().optional().describe("Related tenant ID"),
+  custom: z.boolean().nullish(),
+  description: z.string().nullish(),
+  name: z.string().nullish(),
+  normalized_name: z.string().nullish(),
+  permissions: z.array(z.string()).nullish(),
+  tenant_id: z.string().nullish().describe("Related tenant ID"),
 }).passthrough();
 
 // =============================================================================
@@ -689,7 +806,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.09.25.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -745,6 +862,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.25.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -832,7 +954,10 @@ export const model = {
     },
     "broker_orgs_for_bulk_migration": {
       description: "List organizations for bulk migration",
-      schema: ListBrokerOrgsForBulkMigrationSchema,
+      schema: z.union([
+        ListBrokerOrgsForBulkMigrationSchema,
+        CreateBrokerOrgsForBulkMigrationSchema,
+      ]),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -862,7 +987,7 @@ export const model = {
     },
     "assets_bulk_tenant": {
       description: "Bulk update asset attributes (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -892,7 +1017,7 @@ export const model = {
     },
     "asset_search_tenant": {
       description: "Create an asset search (asynchronous) (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -929,7 +1054,19 @@ export const model = {
     },
     "tenant_membership": {
       description: "Update tenant membership (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "models": {
+      description: "List models (Early Access)",
+      schema: ListModelsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "model": {
+      description: "Get a model (Early Access)",
+      schema: GetModelSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -972,17 +1109,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, { name: { name: "name" } });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/tenants`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1030,6 +1163,7 @@ export const model = {
           `/tenants/${encodeURIComponent(String(args.tenant_id))}`,
           version,
         );
+        requireBody(result, "get_tenant");
 
         const handle = await context.writeResource(
           "tenant",
@@ -1110,11 +1244,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "connection_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1124,7 +1254,7 @@ export const model = {
             encodeURIComponent(String(args.connection_id))
           }/integrations`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1197,6 +1327,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_broker_connection_integration");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1275,11 +1406,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1287,7 +1414,7 @@ export const model = {
             encodeURIComponent(String(args.tenant_id))
           }/brokers/deployments`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1338,15 +1465,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([
-          "tenant_id",
-          "install_id",
-          "connection_id",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1358,7 +1477,7 @@ export const model = {
             encodeURIComponent(String(args.connection_id))
           }/contexts`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1418,6 +1537,7 @@ export const model = {
           }/contexts/${encodeURIComponent(String(args.context_id))}`,
           version,
         );
+        requireBody(result, "get_connection_context");
 
         const handle = await context.writeResource(
           "connection_context",
@@ -1650,11 +1770,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "install_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1664,7 +1780,7 @@ export const model = {
             encodeURIComponent(String(args.install_id))
           }/deployments`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1731,6 +1847,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_broker_deployment");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -1860,15 +1977,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([
-          "tenant_id",
-          "install_id",
-          "deployment_id",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1880,7 +1989,7 @@ export const model = {
             encodeURIComponent(String(args.deployment_id))
           }/connections`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1957,6 +2066,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_broker_connection");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -2046,6 +2156,7 @@ export const model = {
           }/connections/${encodeURIComponent(String(args.connection_id))}`,
           version,
         );
+        requireBody(result, "get_broker_connection");
 
         const handle = await context.writeResource(
           "broker_connection",
@@ -2184,16 +2295,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([
-          "connection_id",
-          "deployment_id",
-          "install_id",
-          "tenant_id",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2207,7 +2309,7 @@ export const model = {
             encodeURIComponent(String(args.connection_id))
           }/bulk_migration`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2287,6 +2389,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_broker_orgs_for_bulk_migration");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -2325,15 +2428,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([
-          "tenant_id",
-          "install_id",
-          "deployment_id",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2345,7 +2440,7 @@ export const model = {
             encodeURIComponent(String(args.deployment_id))
           }/contexts`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2422,6 +2517,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_broker_context");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -2458,15 +2554,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([
-          "tenant_id",
-          "install_id",
-          "deployment_id",
-        ]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2478,7 +2566,7 @@ export const model = {
             encodeURIComponent(String(args.deployment_id))
           }/credentials`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2555,6 +2643,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_deployment_credential");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -2603,6 +2692,7 @@ export const model = {
           }/credentials/${encodeURIComponent(String(args.credential_id))}`,
           version,
         );
+        requireBody(result, "get_deployment_credential");
 
         const handle = await context.writeResource(
           "deployment_credential",
@@ -2746,11 +2836,12 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+          meta_count: { name: "meta_count" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2758,7 +2849,7 @@ export const model = {
             encodeURIComponent(String(args.tenant_id))
           }/inventory/assets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2852,11 +2943,9 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2864,7 +2953,7 @@ export const model = {
             encodeURIComponent(String(args.tenant_id))
           }/inventory/assets/filters`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2925,11 +3014,11 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "filter_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          q: { name: "q" },
+          keys_only: { name: "keys_only" },
+          key: { name: "key" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2939,7 +3028,7 @@ export const model = {
             encodeURIComponent(String(args.filter_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2991,11 +3080,9 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -3003,7 +3090,7 @@ export const model = {
             encodeURIComponent(String(args.tenant_id))
           }/inventory/assets/groups`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3047,9 +3134,10 @@ export const model = {
         sort: z.string().optional().describe(
           "Comma-separated sort fields for group values.",
         ),
-        meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified.",
-        ),
+        meta_fields: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Meta fields to include in the response. Multiple fields can be specified.",
+          ),
         aggregate: z.string().optional().describe(
           "Per-field aggregate function override for meta fields.",
         ),
@@ -3070,11 +3158,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "group_field_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          meta_fields: { name: "meta_fields", comma: true },
+          aggregate: { name: "aggregate" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -3084,7 +3174,7 @@ export const model = {
             encodeURIComponent(String(args.group_field_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3200,11 +3290,10 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "search_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -3214,7 +3303,7 @@ export const model = {
             encodeURIComponent(String(args.search_id))
           }/results`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3266,17 +3355,9 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, { fields: { name: "fields" } }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -3285,6 +3366,7 @@ export const model = {
           }/inventory/assets/${encodeURIComponent(String(args.asset_id))}${qs}`,
           version,
         );
+        requireBody(result, "get_asset_tenant");
 
         const handle = await context.writeResource(
           "asset_tenant",
@@ -3378,11 +3460,11 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          canonical: { name: "canonical" },
+          target_id: { name: "target_id" },
+          sort: { name: "sort" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -3392,7 +3474,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3442,11 +3524,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -3456,7 +3534,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/targets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3536,17 +3614,23 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort_by: { name: "sort_by" },
+          sort_order: { name: "sort_order" },
+          email: { name: "email" },
+          user_id: { name: "user_id" },
+          name: { name: "name" },
+          username: { name: "username" },
+          connection_type: { name: "connection_type" },
+          role_name: { name: "role_name" },
+          account_type: { name: "account_type" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/tenants/${encodeURIComponent(String(args.tenant_id))}/memberships`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3660,6 +3744,125 @@ export const model = {
         return { dataHandles: [] };
       },
     },
+    list_models: {
+      description: "List models (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        provider: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Return only models whose provider slug matches one of the given values...",
+          ),
+        has_risk_assessment: z.boolean().optional().describe(
+          "When true, return only models that have risk scores; when false, only models...",
+        ),
+        risk_assessment_complete: z.boolean().optional().describe(
+          "When true, return only models whose risk assessment is complete; when false,...",
+        ),
+        last_updated_after: z.string().optional().describe(
+          "Return only models whose `last_updated` is after this date and time.",
+        ),
+        model_name: z.string().optional().describe(
+          "Return only the model with this name: its source ID, an alias, or a...",
+        ),
+        meta_count: z.enum(["with"]).optional().describe(
+          "Include a count of the total matching items in the response meta",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
+        const query = queryEntries(args, {
+          provider: { name: "provider", comma: true },
+          has_risk_assessment: { name: "has_risk_assessment" },
+          risk_assessment_complete: { name: "risk_assessment_complete" },
+          last_updated_after: { name: "last_updated_after" },
+          model_name: { name: "model_name" },
+          meta_count: { name: "meta_count" },
+        });
+
+        const { results, truncated } = await snykApiPaginated(
+          apiToken,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/risk_db/models`,
+          version,
+          query,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("models", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} models", { count: results.length });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_model: {
+      description: "Get a model (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        model_id: z.string().describe(
+          "The ID of the model in Snyk's Risk Database.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/risk_db/models/${encodeURIComponent(String(args.model_id))}`,
+          version,
+        );
+        requireBody(result, "get_model");
+
+        const handle = await context.writeResource(
+          "model",
+          sanitizeInstanceName(String(args.model_id)),
+          result,
+        );
+        context.logger.info("Fetched model", {});
+        return { dataHandles: [handle] };
+      },
+    },
     list_tenant_roles: {
       description: "List all available roles for a given tenant (Early Access)",
       arguments: z.object({
@@ -3669,7 +3872,7 @@ export const model = {
           "Whether role is custom or not.",
         ),
         assignable_by_me: z.string().optional().describe(
-          "When true, only return roles that the current user can assign to others in the...",
+          "When true, only return roles that the current user can assign to others in...",
         ),
         expand_permissions: z.boolean().optional().describe(
           "option to show all permission types",
@@ -3691,17 +3894,18 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          name: { name: "name" },
+          custom: { name: "custom" },
+          assignable_by_me: { name: "assignable_by_me" },
+          expand_permissions: { name: "expand_permissions" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -3763,6 +3967,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_tenant_role");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -3797,17 +4002,11 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["tenant_id", "role_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, {
+            has_users_assigned: { name: "has_users_assigned" },
+          }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -3816,6 +4015,7 @@ export const model = {
           }${qs}`,
           version,
         );
+        requireBody(result, "get_tenant_role");
 
         const handle = await context.writeResource(
           "tenant_role",
@@ -3861,13 +4061,16 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
+        const qs = toQueryString(
+          queryEntries(args, { force: { name: "force" } }),
+        );
 
         const result = await snykApi(
           apiToken,
           "PATCH",
           `/tenants/${encodeURIComponent(String(args.tenant_id))}/roles/${
             encodeURIComponent(String(args.role_id))
-          }`,
+          }${qs}`,
           version,
           body,
         );

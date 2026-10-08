@@ -9,6 +9,7 @@
  */
 
 import type { ClassifiedMethod } from "./method_classifier.ts";
+import { resourceNameOf } from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -27,7 +28,7 @@ export function generateTestSource(
   lines.push(`// SPDX-License-Identifier: Apache-2.0`);
   lines.push(``);
   lines.push(
-    `import { assertEquals, assertExists, assertStringIncludes } from "jsr:@std/assert@1.0.19";`,
+    `import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";`,
   );
   lines.push(
     `import { createModelTestContext } from "@swamp-club/swamp-testing";`,
@@ -90,8 +91,7 @@ export function generateTestSource(
   const resources = methods
     .filter((m) => m.type !== "delete")
     .map((m) => {
-      if (m.type === "list") return m.name.replace(/^list_/, "");
-      return m.name.replace(/^(get|create|update|action)_/, "");
+      return resourceNameOf(m);
     });
   const uniqueResources = [...new Set(resources)];
 
@@ -117,20 +117,12 @@ export function generateTestSource(
   lines.push(generateMockServer());
   lines.push(``);
 
-  // Cover two distinct list methods: this retains baseline list-path coverage
-  // when a service gains a second list contract, while keeping generated suites
-  // bounded for services with many list endpoints. For the remaining method
-  // types, one representative execution test is sufficient.
-  const testedTypes = new Set<string>();
-  let listTests = 0;
+  // Every method gets its own execute test asserting the request it sends
+  // (verb, exact path, query parameters, body) and the resource it writes. A
+  // method that was never executed could ship with a wrong path or verb and
+  // still pass an existence check. Method names are unique per service, so
+  // test names cannot collide.
   for (const method of methods) {
-    if (method.type === "list") {
-      if (listTests >= 2) continue;
-      listTests++;
-    } else if (testedTypes.has(method.type)) {
-      continue;
-    }
-    testedTypes.add(method.type);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);
   }
@@ -154,8 +146,19 @@ function generateMockServer(): string {
   body: unknown;
 }
 
+interface MockRoute {
+  /** JSON:API primary data. Omit with a 202/204 status for an empty body. */
+  data?: unknown;
+  isCollection?: boolean;
+  status?: number;
+}
+
+/**
+ * Routes are keyed by exact "METHOD /path", so a method that calls the wrong
+ * verb or path gets a 404 instead of a lucky substring match.
+ */
 function startMockSnykServer(
-  responses: Record<string, { data: unknown; isCollection?: boolean }>,
+  routes: Record<string, MockRoute>,
 ): { url: string; server: Deno.HttpServer; requests: CapturedRequest[] } {
   const requests: CapturedRequest[] = [];
   const server = Deno.serve({ port: 0, onListen() {} }, async (req) => {
@@ -182,33 +185,49 @@ function startMockSnykServer(
       body: reqBody,
     });
 
-    for (const [pattern, { data, isCollection }] of Object.entries(responses)) {
-      if (path.includes(pattern)) {
-        const body = isCollection
-          ? {
-              data: Array.isArray(data) ? data : [data],
-              jsonapi: { version: "1.0" },
-              links: { self: path, next: null },
-            }
-          : {
-              data,
-              jsonapi: { version: "1.0" },
-              links: { self: path },
-            };
-        return Response.json(body, {
-          headers: { "content-type": "application/vnd.api+json" },
-        });
+    const route = routes[\`\${req.method} \${path}\`];
+    if (route) {
+      if (route.data === undefined) {
+        return new Response(null, { status: route.status ?? 204 });
       }
+      const body = route.isCollection
+        ? {
+            data: Array.isArray(route.data) ? route.data : [route.data],
+            jsonapi: { version: "1.0" },
+            links: { self: path, next: null },
+          }
+        : {
+            data: route.data,
+            jsonapi: { version: "1.0" },
+            links: { self: path },
+          };
+      return Response.json(body, {
+        status: route.status ?? 200,
+        headers: { "content-type": "application/vnd.api+json" },
+      });
     }
 
     return new Response(JSON.stringify({
       jsonapi: { version: "1.0" },
-      errors: [{ status: "404", detail: "Not found" }],
+      errors: [{ status: "404", detail: \`No mock route for \${req.method} \${path}\` }],
     }), { status: 404, headers: { "content-type": "application/vnd.api+json" } });
   });
 
   const addr = server.addr as Deno.NetAddr;
   return { url: \`http://localhost:\${addr.port}\`, server, requests };
+}
+
+/** Written data must satisfy the schema the model declares for its resource. */
+function assertValidResource(specName: string, data: unknown): void {
+  const resources = model.resources as Record<
+    string,
+    { schema: { safeParse: (d: unknown) => { success: boolean } } }
+  >;
+  assertEquals(
+    resources[specName].schema.safeParse(data).success,
+    true,
+    \`data written to \${specName} does not satisfy its resource schema\`,
+  );
 }
 
 function installFetchMock(mockUrl: string): () => void {
@@ -224,6 +243,68 @@ function installFetchMock(mockUrl: string): () => void {
 }`;
 }
 
+/** One query argument a generated test sends, and what the server must see. */
+interface QueryExpectation {
+  /** Method argument name (identifier-safe). */
+  field: string;
+  /** API parameter name as it must appear on the wire. */
+  name: string;
+  /** Value passed to execute(). */
+  value: string | string[];
+  /** Values the server must receive under `name`, in order. */
+  wire: string[];
+}
+
+/** Deterministic test value for a query parameter, plus its wire form. */
+function queryExpectations(method: ClassifiedMethod): QueryExpectation[] {
+  const out: QueryExpectation[] = [];
+  // A query parameter sharing an argument name with a path parameter reuses
+  // the path value, so it is not a separate query expectation.
+  const seen = new Set<string>(
+    method.operation.pathParams.map((p) => fieldName(p.name)),
+  );
+  for (const p of method.operation.queryParams) {
+    const field = fieldName(p.name);
+    if (seen.has(field)) continue;
+    seen.add(field);
+    if (p.schema?.type === "array") {
+      // Values with a space and "&" prove query encoding survives the wire.
+      const value = ["al pha", "be&ta"];
+      out.push({
+        field,
+        name: p.name,
+        value,
+        wire: p.explode === false ? ["al pha,be&ta"] : value,
+      });
+      continue;
+    }
+    let value = "a b&c=d";
+    if (p.schema?.enum && p.schema.enum.length > 0) {
+      value = String(p.schema.enum[0]);
+    } else if (p.schema?.type === "integer" || p.schema?.type === "number") {
+      value = "7";
+    } else if (p.schema?.type === "boolean") {
+      value = "true";
+    }
+    out.push({ field, name: p.name, value, wire: [value] });
+  }
+  return out;
+}
+
+/** Argument value as execute() receives it (numbers/booleans stay typed). */
+function queryArgValue(
+  method: ClassifiedMethod,
+  q: QueryExpectation,
+): unknown {
+  if (Array.isArray(q.value)) return q.value;
+  const p = method.operation.queryParams.find((x) => x.name === q.name);
+  if (p?.schema?.type === "integer" || p?.schema?.type === "number") {
+    return Number(q.value);
+  }
+  if (p?.schema?.type === "boolean") return q.value === "true";
+  return q.value;
+}
+
 /** Generate an execution test for a method */
 function generateExecutionTest(
   config: ServiceConfig,
@@ -231,41 +312,71 @@ function generateExecutionTest(
 ): string {
   const globalArgs = snykGlobalArgs(config);
   const fixture = generateJsonApiFixture(method);
-  const pathPattern = extractPathPattern(method.operation.path, config.scope);
-  const testArgs = buildTestArgs(method);
+  const routePath = extractFullPath(method.operation.path, config.scope);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const resourceName = testResourceName(method);
   const hasPathParam = method.operation.pathParams.length > 0;
+  const queries = queryExpectations(method);
 
-  // Shared request assertions: exactly one request (the mock returns a single
-  // page with links.next=null, so even paginated lists issue one call), the
-  // right verb + path, the Snyk `version` query param, and token auth.
-  // `write` adds the JSON:API content-type + non-empty body checks.
-  const reqAsserts = (write: boolean): string =>
-    `      assertEquals(requests.length, 1);
+  const args: Record<string, unknown> = { ...buildTestArgs(method) };
+  for (const q of queries) args[q.field] = queryArgValue(method, q);
+  const writesBody = method.type === "create" || method.type === "update" ||
+    (method.type === "action" && method.operation.requestBody !== undefined);
+  // The body is every argument that is neither a path nor a query field, so
+  // derive it from the spec's request properties, mirroring the model's args.
+  const bodyFields: Record<string, unknown> = {};
+  if (writesBody) {
+    const taken = new Set([
+      ...method.operation.pathParams.map((p) => fieldName(p.name)),
+      ...queries.map((q) => q.field),
+    ]);
+    for (
+      const [name, prop] of Object.entries(
+        method.operation.requestBody?.properties ?? {},
+      )
+    ) {
+      const field = fieldName(name);
+      if (name === "id" || taken.has(field) || field in bodyFields) continue;
+      bodyFields[field] = synthesizeValue(prop);
+    }
+    Object.assign(args, bodyFields);
+  }
+
+  // Request-shape assertions shared by every method: exactly one request (the
+  // mock returns a single page with links.next=null), the right verb and exact
+  // path, the Snyk `version` query parameter, every declared query parameter
+  // under its API name, and token auth. Write methods also check the JSON:API
+  // content type and that the argument body was sent.
+  const queryAsserts = queries.map((q) =>
+    `      assertEquals(query.getAll(${JSON.stringify(q.name)}), ${
+      JSON.stringify(q.wire)
+    });`
+  ).join("\n");
+  const reqAsserts = `      assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "${httpMethod}");
-      assertStringIncludes(req0.path, "${pathPattern}");
-      assertStringIncludes(req0.search, "version=");
+      assertEquals(req0.path, ${JSON.stringify(routePath)});
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");${
+    method.type === "list"
+      ? `\n      assertEquals(query.get("limit"), "100");`
+      : ""
+  }${queryAsserts ? `\n${queryAsserts}` : ""}
       assertEquals(req0.headers["authorization"], "token test-token");${
-      write
-        ? `\n      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
-      assertExists(req0.body);`
-        : ""
-    }`;
+    writesBody
+      ? `\n      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, ${JSON.stringify(bodyFields)});`
+      : `\n      assertEquals(req0.body, null);`
+  }`;
 
-  if (method.type === "list") {
-    const argsStr = Object.keys(testArgs).length > 0
-      ? JSON.stringify(testArgs)
-      : "{}";
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} fetches and writes resource",
+  const routeKey = `${httpMethod} ${routePath}`;
+  const argsStr = Object.keys(args).length > 0 ? JSON.stringify(args) : "{}";
+  const header = (verb: string, route: string) =>
+    `Deno.test({
+  name: "${config.name} model: ${method.name} ${verb}",
   sanitizeResources: false,
   fn: async () => {
-    const mockItem = ${JSON.stringify(fixture)};
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: [mockItem], isCollection: true },
-    });
+${route}
     const uninstall = installFetchMock(url);
 
     try {
@@ -273,200 +384,110 @@ function generateExecutionTest(
         globalArgs: ${JSON.stringify(globalArgs)},
         definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
       });
+`;
+  const footer = `    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
 
+  if (method.type === "list") {
+    return `${
+      header(
+        "fetches and writes resource",
+        `    const mockItem = ${JSON.stringify(fixture)};
+    const { url, server, requests } = startMockSnykServer({
+      ${JSON.stringify(routeKey)}: { data: [mockItem], isCollection: true },
+    });`,
+      )
+    }
       const result = await ${execCall(method.name, argsStr)};
       assertEquals(result.dataHandles.length, 1);
 
-${reqAsserts(false)}
+${reqAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "${resourceName}");
+      assertValidResource("${resourceName}", resources[0].data);
       const data = resources[0].data as { items: unknown[]; truncated: boolean };
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
-      assertEquals(typeof data.truncated, "boolean");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
-  }
-
-  if (method.type === "get") {
-    const expectedInstance = hasPathParam ? "test-id-123" : "latest";
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = ${JSON.stringify(fixture)};
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
-      });
-
-      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
-      assertEquals(result.dataHandles.length, 1);
-
-${reqAsserts(false)}
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "${resourceName}");
-      assertEquals(resources[0].name, "${expectedInstance}");
-      const data = resources[0].data as Record<string, unknown>;
-      assertEquals(data.id, "fixture-123");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
-  }
-
-  if (method.type === "create") {
-    const createArgs = { ...testArgs, name: "test-resource" };
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = ${JSON.stringify({ ...fixture, id: "new-123" })};
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
-      });
-
-      const result = await ${execCall(method.name, JSON.stringify(createArgs))};
-      assertEquals(result.dataHandles.length, 1);
-
-${reqAsserts(true)}
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "${resourceName}");
-      assertEquals(resources[0].name, "new-123");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
+      assertEquals(data.truncated, false);
+${footer}`;
   }
 
   if (method.type === "delete") {
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} executes successfully",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: { id: "test-id-123", type: "resource" } },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
-      });
-
-      const result = await ${execCall(method.name, JSON.stringify(testArgs))};
+    // A successful DELETE answers 204 with no body; the helper must accept it.
+    return `${
+      header(
+        "executes successfully",
+        `    const { url, server, requests } = startMockSnykServer({
+      ${JSON.stringify(routeKey)}: { status: 204 },
+    });`,
+      )
+    }
+      const result = await ${execCall(method.name, argsStr)};
       assertEquals(result.dataHandles.length, 0);
 
-${reqAsserts(false)}
+${reqAsserts}
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 0);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
+      assertEquals(getWrittenResources().length, 0);
+${footer}`;
   }
 
-  if (method.type === "update") {
-    const updateArgs = { ...testArgs, name: "test-resource" };
-    const expectedInstance = hasPathParam ? "test-id-123" : "updated";
-    return `Deno.test({
-  name: "${config.name} model: ${method.name} executes and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = ${JSON.stringify(fixture)};
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: mockData },
-    });
-    const uninstall = installFetchMock(url);
+  const verb = method.type === "get"
+    ? "fetches and writes resource"
+    : method.type === "create"
+    ? "creates and writes resource"
+    : "executes and writes resource";
+  const mockData = method.type === "create"
+    ? { ...fixture, id: "new-123" }
+    : fixture;
+  // A get/create the spec says answers without content (204, redirect) is
+  // mocked that way: the method must succeed and store an empty resource.
+  const noBody = (method.type === "get" || method.type === "create") &&
+    !method.operation.hasResponseBody;
+  const expectedInstance = method.type === "create"
+    ? (noBody ? "created" : "new-123")
+    : method.type === "get"
+    ? (hasPathParam ? "test-id-123" : "latest")
+    : method.type === "update"
+    ? (hasPathParam ? "test-id-123" : "updated")
+    : "latest";
+  const dataAssert = noBody
+    ? ""
+    : method.type === "get"
+    ? `\n      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");`
+    : method.type === "action"
+    ? `\n      assertExists(resources[0].data);`
+    : "";
 
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
-      });
-
-      const result = await ${execCall(method.name, JSON.stringify(updateArgs))};
+  return `${
+    header(
+      verb,
+      `${
+        noBody ? "" : `    const mockData = ${JSON.stringify(mockData)};\n`
+      }    const { url, server, requests } = startMockSnykServer({
+      ${JSON.stringify(routeKey)}: ${
+        noBody ? "{ status: 204 }" : "{ data: mockData }"
+      },
+    });`,
+    )
+  }
+      const result = await ${execCall(method.name, argsStr)};
       assertEquals(result.dataHandles.length, 1);
 
-${reqAsserts(true)}
+${reqAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "${resourceName}");
-      assertEquals(resources[0].name, "${expectedInstance}");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
-  }
-
-  // Default: action
-  const actionArgs = { ...testArgs, name: "test-resource" };
-  const actionHasBody = method.operation.requestBody !== undefined;
-  return `Deno.test({
-  name: "${config.name} model: ${method.name} executes and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = ${JSON.stringify(fixture)};
-    const { url, server, requests } = startMockSnykServer({
-      "${pathPattern}": { data: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: ${JSON.stringify(globalArgs)},
-        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
-      });
-
-      const result = await ${execCall(method.name, JSON.stringify(actionArgs))};
-      assertEquals(result.dataHandles.length, 1);
-
-${reqAsserts(actionHasBody)}
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "${resourceName}");
-      assertExists(resources[0].data);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});`;
+      assertValidResource("${resourceName}", resources[0].data);
+      assertEquals(resources[0].name, "${expectedInstance}");${dataAssert}
+${footer}`;
 }
 
 /** Standard test globalArgs for a service, including its scope id. */
@@ -491,20 +512,12 @@ function execCall(methodName: string, argsStr: string): string {
 
 /** Resource key (specName) a method writes — mirrors the model generator. */
 function testResourceName(method: ClassifiedMethod): string {
-  if (method.type === "list") return method.name.replace(/^list_/, "");
-  return method.name.replace(/^(get|create|update|action)_/, "");
+  return resourceNameOf(method);
 }
 
-/** Args passed to execute() in tests, including the write-method name field. */
+/** Args passed to execute() in the error-path test. */
 function buildExecuteArgs(method: ClassifiedMethod): Record<string, unknown> {
-  const testArgs = buildTestArgs(method);
-  if (
-    method.type === "create" || method.type === "update" ||
-    method.type === "action"
-  ) {
-    return { ...testArgs, name: "test-resource" };
-  }
-  return testArgs;
+  return buildTestArgs(method);
 }
 
 /**
@@ -621,24 +634,37 @@ function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
   }
 }
 
-/** Extract path pattern for mock server matching */
-function extractPathPattern(path: string, scope: string): string {
-  let result = path;
-  if (scope === "org") {
-    result = result.replace("/orgs/{org_id}", "");
-  } else if (scope === "group") {
-    result = result.replace("/groups/{group_id}", "");
-  }
-  result = result.replace(/\{[^}]+\}/g, "test-id-123");
-  result = result.replace(/\/$/, "");
-  return result;
+/**
+ * The exact request path a generated method sends, with the service's scope id
+ * and every other path parameter replaced by the test values. The mock server
+ * has no "/rest" prefix because the fetch mock strips the API base.
+ */
+function extractFullPath(path: string, scope: string): string {
+  const scopeParam = scope === "org"
+    ? "org_id"
+    : scope === "group"
+    ? "group_id"
+    : null;
+  return path.replace(
+    /\{([^}]+)\}/g,
+    (_, name) => name === scopeParam ? "test-org-123" : "test-id-123",
+  );
 }
 
 /** Build test args that include path param values */
 function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
   const args: Record<string, unknown> = {};
   for (const p of method.operation.pathParams) {
-    args[p.name.replace(/-/g, "_")] = "test-id-123";
+    args[fieldName(p.name)] = "test-id-123";
   }
   return args;
+}
+
+/** Mirror of the model generator's argument-name sanitizer. */
+function fieldName(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "")
+    .replace(/^\d/, "_$&");
 }

@@ -8,7 +8,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/projects";
 
@@ -23,58 +30,50 @@ const GlobalArgsSchema = z.object({
 });
 
 const OrgProjectsItemSchema = z.object({
-  id: z.string().describe("Resource ID."),
-  type: z.string().describe("The package manager of the project."),
-  build_args: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
-  business_criticality: z.array(z.enum(["critical", "high", "medium", "low"]))
-    .optional(),
-  created: z.string().describe("The date that the project was created on"),
-  environment: z.array(
-    z.enum([
-      "frontend",
-      "backend",
-      "internal",
-      "external",
-      "mobile",
-      "saas",
-      "onprem",
-      "hosted",
-      "distributed",
-    ]),
-  ).optional(),
-  lifecycle: z.array(z.enum(["production", "development", "sandbox"]))
-    .optional(),
-  name: z.string().describe("Project name."),
-  origin: z.string().describe("The origin the project was added from."),
-  read_only: z.boolean().describe("Whether the project is read-only"),
+  id: z.string().nullish().describe("Resource ID."),
+  type: z.string().nullish().describe("The package manager of the project."),
+  build_args: z.union([z.unknown(), z.unknown(), z.unknown()]).nullish(),
+  business_criticality: z.array(z.string()).nullish(),
+  created: z.string().nullish().describe(
+    "The date that the project was created on",
+  ),
+  environment: z.array(z.string()).nullish(),
+  lifecycle: z.array(z.string()).nullish(),
+  name: z.string().nullish().describe("Project name."),
+  origin: z.string().nullish().describe(
+    "The origin the project was added from.",
+  ),
+  read_only: z.boolean().nullish().describe("Whether the project is read-only"),
   settings: z.object({
-    auto_dependency_upgrade: z.unknown().optional(),
-    auto_remediation_prs: z.unknown().optional(),
-    manual_remediation_prs: z.unknown().optional(),
-    pull_request_assignment: z.unknown().optional(),
-    pull_requests: z.unknown(),
-    recurring_tests: z.unknown(),
-  }),
-  status: z.enum(["active", "inactive"]).describe(
+    auto_dependency_upgrade: z.unknown().nullish(),
+    auto_remediation_prs: z.unknown().nullish(),
+    manual_remediation_prs: z.unknown().nullish(),
+    pull_request_assignment: z.unknown().nullish(),
+    pull_requests: z.unknown().nullish(),
+    recurring_tests: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe(
     "Describes if a project is currently monitored or it is de-activated.",
   ),
-  tags: z.array(z.object({
-    key: z.string().optional(),
-    value: z.string().optional(),
-  })).optional(),
-  target_file: z.string().describe(
-    "Path within the target to identify a specific file/directory/image etc. when scanning just part o...",
+  tags: z.array(
+    z.object({
+      key: z.string().nullish(),
+      value: z.string().nullish(),
+    }).passthrough(),
+  ).nullish(),
+  target_file: z.string().nullish().describe(
+    "Path within the target to identify a specific file/directory/image etc.",
   ),
-  target_reference: z.string().describe(
+  target_reference: z.string().nullish().describe(
     "The additional information required to resolve which revision of the resource should be scanned.",
   ),
-  target_runtime: z.string().optional().describe(
+  target_runtime: z.string().nullish().describe(
     "Dotnet Target, for relevant projects",
   ),
-  importer_id: z.string().optional().describe("Related importer ID"),
-  organization_id: z.string().optional().describe("Related organization ID"),
-  owner_id: z.string().optional().describe("Related owner ID"),
-  target_id: z.string().optional().describe("Related target ID"),
+  importer_id: z.string().nullish().describe("Related importer ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  owner_id: z.string().nullish().describe("Related owner ID"),
+  target_id: z.string().nullish().describe("Related target ID"),
 }).passthrough();
 
 const ListOrgProjectsSchema = z.object({
@@ -90,72 +89,63 @@ const ListOrgProjectsSchema = z.object({
 });
 
 const DeleteOrgProjectsSchema = z.object({
-  jsonapi: z.unknown(),
+  jsonapi: z.unknown().nullish(),
   meta: z.object({
-    deleted: z.array(z.unknown()),
-    failed: z.array(z.unknown()),
-  }),
+    deleted: z.array(z.unknown()).nullish(),
+    failed: z.array(z.unknown()).nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 
 const GetOrgProjectSchema = z.object({
-  id: z.string().describe("The Resource ID."),
-  type: z.string().describe("The package manager of the project."),
-  build_args: z.union([z.unknown(), z.unknown(), z.unknown()]).optional(),
-  business_criticality: z.array(z.enum(["critical", "high", "medium", "low"]))
-    .optional(),
-  created: z.string().describe("The date that the project was created on"),
-  environment: z.array(
-    z.enum([
-      "frontend",
-      "backend",
-      "internal",
-      "external",
-      "mobile",
-      "saas",
-      "onprem",
-      "hosted",
-      "distributed",
-    ]),
-  ).optional(),
-  lifecycle: z.array(z.enum(["production", "development", "sandbox"]))
-    .optional(),
-  name: z.string().describe("Project name."),
-  origin: z.string().describe("The origin the project was added from."),
-  read_only: z.boolean().describe("Whether the project is read-only"),
+  id: z.string().nullish().describe("The Resource ID."),
+  type: z.string().nullish().describe("The package manager of the project."),
+  build_args: z.union([z.unknown(), z.unknown(), z.unknown()]).nullish(),
+  business_criticality: z.array(z.string()).nullish(),
+  created: z.string().nullish().describe(
+    "The date that the project was created on",
+  ),
+  environment: z.array(z.string()).nullish(),
+  lifecycle: z.array(z.string()).nullish(),
+  name: z.string().nullish().describe("Project name."),
+  origin: z.string().nullish().describe(
+    "The origin the project was added from.",
+  ),
+  read_only: z.boolean().nullish().describe("Whether the project is read-only"),
   settings: z.object({
-    auto_dependency_upgrade: z.unknown().optional(),
-    auto_remediation_prs: z.unknown().optional(),
-    manual_remediation_prs: z.unknown().optional(),
-    pull_request_assignment: z.unknown().optional(),
-    pull_requests: z.unknown(),
-    recurring_tests: z.unknown(),
-  }),
-  status: z.enum(["active", "inactive"]).describe(
+    auto_dependency_upgrade: z.unknown().nullish(),
+    auto_remediation_prs: z.unknown().nullish(),
+    manual_remediation_prs: z.unknown().nullish(),
+    pull_request_assignment: z.unknown().nullish(),
+    pull_requests: z.unknown().nullish(),
+    recurring_tests: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  status: z.string().nullish().describe(
     "Describes if a project is currently monitored or it is de-activated.",
   ),
-  tags: z.array(z.object({
-    key: z.string().optional(),
-    value: z.string().optional(),
-  })).optional(),
-  target_file: z.string().describe(
-    "Path within the target to identify a specific file/directory/image etc. when scanning just part o...",
+  tags: z.array(
+    z.object({
+      key: z.string().nullish(),
+      value: z.string().nullish(),
+    }).passthrough(),
+  ).nullish(),
+  target_file: z.string().nullish().describe(
+    "Path within the target to identify a specific file/directory/image etc.",
   ),
-  target_reference: z.string().describe(
+  target_reference: z.string().nullish().describe(
     "The additional information required to resolve which revision of the resource should be scanned.",
   ),
-  target_runtime: z.string().optional().describe(
+  target_runtime: z.string().nullish().describe(
     "Dotnet Target, for relevant projects",
   ),
-  importer_id: z.string().optional().describe("Related importer ID"),
-  organization_id: z.string().optional().describe("Related organization ID"),
-  owner_id: z.string().optional().describe("Related owner ID"),
-  target_id: z.string().optional().describe("Related target ID"),
+  importer_id: z.string().nullish().describe("Related importer ID"),
+  organization_id: z.string().nullish().describe("Related organization ID"),
+  owner_id: z.string().nullish().describe("Related owner ID"),
+  target_id: z.string().nullish().describe("Related target ID"),
 }).passthrough();
 
 const GetSbomSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
 }).passthrough();
 
 // =============================================================================
@@ -165,7 +155,7 @@ const GetSbomSchema = z.object({
 /** Snyk Projects — project listing, attributes, relationships, and target management */
 export const model = {
   type: "@webframp/snyk/projects",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -219,6 +209,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -252,9 +247,8 @@ export const model = {
     list_org_projects: {
       description: "List all Projects for an Org with the given Org ID.",
       arguments: z.object({
-        target_id: z.string().optional().describe(
-          "Return projects that belong to the provided targets",
-        ),
+        target_id: z.union([z.string(), z.array(z.string())]).optional()
+          .describe("Return projects that belong to the provided targets"),
         target_reference: z.string().optional().describe(
           "Return projects that match the provided target reference",
         ),
@@ -267,27 +261,30 @@ export const model = {
         meta_count: z.enum(["only"]).optional().describe(
           "The collection count.",
         ),
-        ids: z.string().optional().describe(
+        ids: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that match the provided IDs.",
         ),
-        names: z.string().optional().describe(
+        names: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that match the provided names.",
         ),
-        names_start_with: z.string().optional().describe(
-          "Return projects with names starting with the specified prefix.",
-        ),
-        origins: z.string().optional().describe(
+        names_start_with: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Return projects with names starting with the specified prefix.",
+          ),
+        origins: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that match the provided origins.",
         ),
-        types: z.string().optional().describe(
+        types: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that match the provided types.",
         ),
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
         meta_latest_issue_counts: z.boolean().optional().describe(
           "Include a summary count for the issues found in the most recent scan of this...",
         ),
         meta_latest_dependency_total: z.boolean().optional().describe(
-          "Include the total number of dependencies found in the most recent scan of this...",
+          "Include the total number of dependencies found in the most recent scan of...",
         ),
         cli_monitored_before: z.string().optional().describe(
           "Filter projects uploaded and monitored before this date (encoded value)",
@@ -295,21 +292,25 @@ export const model = {
         cli_monitored_after: z.string().optional().describe(
           "Filter projects uploaded and monitored after this date (encoded value)",
         ),
-        importing_user_public_id: z.string().optional().describe(
-          "Return projects that match the provided importing user public ids.",
-        ),
-        tags: z.string().optional().describe(
+        importing_user_public_id: z.union([z.string(), z.array(z.string())])
+          .optional().describe(
+            "Return projects that match the provided importing user public ids.",
+          ),
+        tags: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Return projects that match all the provided tags",
         ),
-        business_criticality: z.string().optional().describe(
-          "Return projects that match all the provided business_criticality value",
-        ),
-        environment: z.string().optional().describe(
-          "Return projects that match all the provided environment values",
-        ),
-        lifecycle: z.string().optional().describe(
-          "Return projects that match all the provided lifecycle values",
-        ),
+        business_criticality: z.union([z.string(), z.array(z.string())])
+          .optional().describe(
+            "Return projects that match all the provided business_criticality value",
+          ),
+        environment: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Return projects that match all the provided environment values",
+          ),
+        lifecycle: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Return projects that match all the provided lifecycle values",
+          ),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -327,17 +328,39 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          target_id: { name: "target_id" },
+          target_reference: { name: "target_reference" },
+          target_file: { name: "target_file" },
+          target_runtime: { name: "target_runtime" },
+          meta_count: { name: "meta_count" },
+          ids: { name: "ids", comma: true },
+          names: { name: "names", comma: true },
+          names_start_with: { name: "names_start_with", comma: true },
+          origins: { name: "origins", comma: true },
+          types: { name: "types", comma: true },
+          expand: { name: "expand", comma: true },
+          meta_latest_issue_counts: { name: "meta.latest_issue_counts" },
+          meta_latest_dependency_total: {
+            name: "meta.latest_dependency_total",
+          },
+          cli_monitored_before: { name: "cli_monitored_before" },
+          cli_monitored_after: { name: "cli_monitored_after" },
+          importing_user_public_id: {
+            name: "importing_user_public_id",
+            comma: true,
+          },
+          tags: { name: "tags", comma: true },
+          business_criticality: { name: "business_criticality", comma: true },
+          environment: { name: "environment", comma: true },
+          lifecycle: { name: "lifecycle", comma: true },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -399,6 +422,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "delete_org_projects");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -416,12 +440,14 @@ export const model = {
       description: "Get project by project ID.",
       arguments: z.object({
         project_id: z.string().describe("The ID of the project."),
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
         meta_latest_issue_counts: z.boolean().optional().describe(
           "Include a summary count for the issues found in the most recent scan of this...",
         ),
         meta_latest_dependency_total: z.boolean().optional().describe(
-          "Include the total number of dependencies found in the most recent scan of this...",
+          "Include the total number of dependencies found in the most recent scan of...",
         ),
       }),
       execute: async (
@@ -439,17 +465,13 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["project_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(queryEntries(args, {
+          expand: { name: "expand", comma: true },
+          meta_latest_issue_counts: { name: "meta.latest_issue_counts" },
+          meta_latest_dependency_total: {
+            name: "meta.latest_dependency_total",
+          },
+        }));
         const result = await snykApi(
           apiToken,
           "GET",
@@ -458,6 +480,7 @@ export const model = {
           }${qs}`,
           version,
         );
+        requireBody(result, "get_org_project");
 
         const handle = await context.writeResource(
           "org_project",
@@ -472,7 +495,9 @@ export const model = {
       description: "Updates project by project ID.",
       arguments: z.object({
         project_id: z.string().describe("The ID of the project to patch."),
-        expand: z.string().optional().describe("Expand relationships."),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
         data: z.object({
           attributes: z.object({
             business_criticality: z.array(
@@ -531,13 +556,16 @@ export const model = {
         for (const [k, v] of Object.entries(args)) {
           if (!excludeKeys.has(k)) body[k] = v;
         }
+        const qs = toQueryString(
+          queryEntries(args, { expand: { name: "expand", comma: true } }),
+        );
 
         const result = await snykApi(
           apiToken,
           "PATCH",
           `/orgs/${encodeURIComponent(orgId)}/projects/${
             encodeURIComponent(String(args.project_id))
-          }`,
+          }${qs}`,
           version,
           body,
         );
@@ -597,7 +625,7 @@ export const model = {
           "cyclonedx1.4+xml",
           "spdx2.3+json",
         ]).optional().describe("The desired SBOM format of the response."),
-        exclude: z.string().optional().describe(
+        exclude: z.union([z.string(), z.array(z.string())]).optional().describe(
           "An array of features to be excluded from the generated SBOM.",
         ),
         go_module_level: z.boolean().optional().describe(
@@ -619,17 +647,13 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["project_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, {
+            format: { name: "format" },
+            exclude: { name: "exclude" },
+            go_module_level: { name: "go_module_level" },
+          }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -638,6 +662,7 @@ export const model = {
           }/sbom${qs}`,
           version,
         );
+        requireBody(result, "get_sbom");
 
         const handle = await context.writeResource(
           "sbom",

@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/assets";
 
@@ -23,219 +29,216 @@ const GlobalArgsSchema = z.object({
 });
 
 const ListAssetsSchema = z.object({
-  id: z.string(),
-  type: z.enum(["repository", "image", "package"]).optional(),
-  app_context: z.object({}).nullable().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  app_context: z.object({}).passthrough().nullable().nullish().describe(
     "asset metadata from App Context integrations",
   ),
-  archived: z.boolean().optional().describe(
+  archived: z.boolean().nullish().describe(
     "Indicates if the asset is archived",
   ),
-  base_image: z.string().nullable().optional().describe(
+  base_image: z.string().nullable().nullish().describe(
     "Base image of the container image",
   ),
-  browse_url: z.string().nullable().optional().describe(
+  browse_url: z.string().nullable().nullish().describe(
     "URL to browse the asset",
   ),
   class: z.object({
-    locked: z.boolean().optional(),
-    name: z.string().optional(),
-    rank: z.number().int().optional(),
-  }).optional(),
-  coverage_controls: z.array(z.unknown()).optional(),
-  created_at: z.string().optional().describe("Creation timestamp"),
-  default_branch_name: z.string().nullable().optional().describe(
+    locked: z.boolean().nullish(),
+    name: z.string().nullish(),
+    rank: z.number().nullish(),
+  }).passthrough().nullish(),
+  coverage_controls: z.array(z.unknown()).nullish(),
+  created_at: z.string().nullish().describe("Creation timestamp"),
+  default_branch_name: z.string().nullable().nullish().describe(
     "Default branch name of the repository",
   ),
-  developers: z.array(z.unknown()).optional().describe(
+  developers: z.array(z.unknown()).nullish().describe(
     "List of developers associated with the asset",
   ),
-  file_path: z.string().nullable().optional().describe(
-    "File path of the asset",
-  ),
-  image_digests: z.array(z.string()).nullable().optional().describe(
+  file_path: z.string().nullable().nullish().describe("File path of the asset"),
+  image_digests: z.array(z.string()).nullable().nullish().describe(
     "List of digests for the container image",
   ),
-  image_id: z.string().nullable().optional().describe(
+  image_id: z.string().nullable().nullish().describe(
     "ID of the container image",
   ),
-  image_registries: z.array(z.string()).nullable().optional().describe(
+  image_registries: z.array(z.string()).nullable().nullish().describe(
     "List of registries containing the container image",
   ),
-  image_repositories: z.array(z.string()).nullable().optional().describe(
+  image_repositories: z.array(z.string()).nullable().nullish().describe(
     "List of repositories containing the container image",
   ),
-  image_tags: z.array(z.string()).nullable().optional().describe(
+  image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
-  languages: z.record(z.string(), z.number().int()).nullable().optional()
-    .describe("Languages used in the asset with usage counts"),
-  name: z.string().nullable().optional().describe(
+  languages: z.record(z.string(), z.number()).nullable().nullish().describe(
+    "Languages used in the asset with usage counts",
+  ),
+  name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
-  repository_freshness: z.string().nullable().optional().describe(
+  repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
-  repository_url: z.string().nullable().optional().describe(
+  repository_url: z.string().nullable().nullish().describe(
     "URL to the asset's repository",
   ),
-  risk_factors: z.array(z.string()).optional().describe(
+  risk_factors: z.array(z.string()).nullish().describe(
     "Runtime context that indicates increased asset risk",
   ),
-  sources: z.array(z.string()).optional().describe(
+  sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).optional().describe(
+  tags: z.array(z.string()).nullish().describe(
     "Tags associated with the asset",
   ),
-  updated_at: z.string().optional().describe("Last update timestamp"),
-  assets_id: z.string().optional().describe("Related assets ID"),
-  organizations_id: z.string().optional().describe("Related organizations ID"),
-  projects_id: z.string().optional().describe("Related projects ID"),
+  updated_at: z.string().nullish().describe("Last update timestamp"),
+  assets_id: z.string().nullish().describe("Related assets ID"),
+  organizations_id: z.string().nullish().describe("Related organizations ID"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
 }).passthrough();
 
 const GetAssetSchema = z.object({
-  id: z.string(),
-  type: z.enum(["repository", "image", "package"]).optional(),
-  app_context: z.object({}).nullable().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  app_context: z.object({}).passthrough().nullable().nullish().describe(
     "asset metadata from App Context integrations",
   ),
-  archived: z.boolean().optional().describe(
+  archived: z.boolean().nullish().describe(
     "Indicates if the asset is archived",
   ),
-  base_image: z.string().nullable().optional().describe(
+  base_image: z.string().nullable().nullish().describe(
     "Base image of the container image",
   ),
-  browse_url: z.string().nullable().optional().describe(
+  browse_url: z.string().nullable().nullish().describe(
     "URL to browse the asset",
   ),
   class: z.object({
-    locked: z.boolean().optional(),
-    name: z.string().optional(),
-    rank: z.number().int().optional(),
-  }).optional(),
-  coverage_controls: z.array(z.unknown()).optional(),
-  created_at: z.string().optional().describe("Creation timestamp"),
-  default_branch_name: z.string().nullable().optional().describe(
+    locked: z.boolean().nullish(),
+    name: z.string().nullish(),
+    rank: z.number().nullish(),
+  }).passthrough().nullish(),
+  coverage_controls: z.array(z.unknown()).nullish(),
+  created_at: z.string().nullish().describe("Creation timestamp"),
+  default_branch_name: z.string().nullable().nullish().describe(
     "Default branch name of the repository",
   ),
-  developers: z.array(z.unknown()).optional().describe(
+  developers: z.array(z.unknown()).nullish().describe(
     "List of developers associated with the asset",
   ),
-  file_path: z.string().nullable().optional().describe(
-    "File path of the asset",
-  ),
-  image_digests: z.array(z.string()).nullable().optional().describe(
+  file_path: z.string().nullable().nullish().describe("File path of the asset"),
+  image_digests: z.array(z.string()).nullable().nullish().describe(
     "List of digests for the container image",
   ),
-  image_id: z.string().nullable().optional().describe(
+  image_id: z.string().nullable().nullish().describe(
     "ID of the container image",
   ),
-  image_registries: z.array(z.string()).nullable().optional().describe(
+  image_registries: z.array(z.string()).nullable().nullish().describe(
     "List of registries containing the container image",
   ),
-  image_repositories: z.array(z.string()).nullable().optional().describe(
+  image_repositories: z.array(z.string()).nullable().nullish().describe(
     "List of repositories containing the container image",
   ),
-  image_tags: z.array(z.string()).nullable().optional().describe(
+  image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
-  languages: z.record(z.string(), z.number().int()).nullable().optional()
-    .describe("Languages used in the asset with usage counts"),
-  name: z.string().nullable().optional().describe(
+  languages: z.record(z.string(), z.number()).nullable().nullish().describe(
+    "Languages used in the asset with usage counts",
+  ),
+  name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
-  repository_freshness: z.string().nullable().optional().describe(
+  repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
-  repository_url: z.string().nullable().optional().describe(
+  repository_url: z.string().nullable().nullish().describe(
     "URL to the asset's repository",
   ),
-  risk_factors: z.array(z.string()).optional().describe(
+  risk_factors: z.array(z.string()).nullish().describe(
     "Runtime context that indicates increased asset risk",
   ),
-  sources: z.array(z.string()).optional().describe(
+  sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).optional().describe(
+  tags: z.array(z.string()).nullish().describe(
     "Tags associated with the asset",
   ),
-  updated_at: z.string().optional().describe("Last update timestamp"),
-  assets_id: z.string().optional().describe("Related assets ID"),
-  organizations_id: z.string().optional().describe("Related organizations ID"),
-  projects_id: z.string().optional().describe("Related projects ID"),
+  updated_at: z.string().nullish().describe("Last update timestamp"),
+  assets_id: z.string().nullish().describe("Related assets ID"),
+  organizations_id: z.string().nullish().describe("Related organizations ID"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
 }).passthrough();
 
 const RelatedAssetsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["repository", "image", "package"]).optional(),
-  app_context: z.object({}).nullable().optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  app_context: z.object({}).passthrough().nullable().nullish().describe(
     "asset metadata from App Context integrations",
   ),
-  archived: z.boolean().optional().describe(
+  archived: z.boolean().nullish().describe(
     "Indicates if the asset is archived",
   ),
-  base_image: z.string().nullable().optional().describe(
+  base_image: z.string().nullable().nullish().describe(
     "Base image of the container image",
   ),
-  browse_url: z.string().nullable().optional().describe(
+  browse_url: z.string().nullable().nullish().describe(
     "URL to browse the asset",
   ),
   class: z.object({
-    locked: z.boolean().optional(),
-    name: z.string().optional(),
-    rank: z.number().int().optional(),
-  }).optional(),
-  coverage_controls: z.array(z.unknown()).optional(),
-  created_at: z.string().optional().describe("Creation timestamp"),
-  default_branch_name: z.string().nullable().optional().describe(
+    locked: z.boolean().nullish(),
+    name: z.string().nullish(),
+    rank: z.number().nullish(),
+  }).passthrough().nullish(),
+  coverage_controls: z.array(z.unknown()).nullish(),
+  created_at: z.string().nullish().describe("Creation timestamp"),
+  default_branch_name: z.string().nullable().nullish().describe(
     "Default branch name of the repository",
   ),
-  developers: z.array(z.unknown()).optional().describe(
+  developers: z.array(z.unknown()).nullish().describe(
     "List of developers associated with the asset",
   ),
-  file_path: z.string().nullable().optional().describe(
-    "File path of the asset",
-  ),
-  image_digests: z.array(z.string()).nullable().optional().describe(
+  file_path: z.string().nullable().nullish().describe("File path of the asset"),
+  image_digests: z.array(z.string()).nullable().nullish().describe(
     "List of digests for the container image",
   ),
-  image_id: z.string().nullable().optional().describe(
+  image_id: z.string().nullable().nullish().describe(
     "ID of the container image",
   ),
-  image_registries: z.array(z.string()).nullable().optional().describe(
+  image_registries: z.array(z.string()).nullable().nullish().describe(
     "List of registries containing the container image",
   ),
-  image_repositories: z.array(z.string()).nullable().optional().describe(
+  image_repositories: z.array(z.string()).nullable().nullish().describe(
     "List of repositories containing the container image",
   ),
-  image_tags: z.array(z.string()).nullable().optional().describe(
+  image_tags: z.array(z.string()).nullable().nullish().describe(
     "List of tags for the container image",
   ),
-  languages: z.record(z.string(), z.number().int()).nullable().optional()
-    .describe("Languages used in the asset with usage counts"),
-  name: z.string().nullable().optional().describe(
+  languages: z.record(z.string(), z.number()).nullable().nullish().describe(
+    "Languages used in the asset with usage counts",
+  ),
+  name: z.string().nullable().nullish().describe(
     "Name of the asset of the file path",
   ),
-  repository_freshness: z.string().nullable().optional().describe(
+  repository_freshness: z.string().nullable().nullish().describe(
     "Indicating the activity level of the repository",
   ),
-  repository_url: z.string().nullable().optional().describe(
+  repository_url: z.string().nullable().nullish().describe(
     "URL to the asset's repository",
   ),
-  risk_factors: z.array(z.string()).optional().describe(
+  risk_factors: z.array(z.string()).nullish().describe(
     "Runtime context that indicates increased asset risk",
   ),
-  sources: z.array(z.string()).optional().describe(
+  sources: z.array(z.string()).nullish().describe(
     "List of source identifiers for the asset",
   ),
-  tags: z.array(z.string()).optional().describe(
+  tags: z.array(z.string()).nullish().describe(
     "Tags associated with the asset",
   ),
-  updated_at: z.string().optional().describe("Last update timestamp"),
-  assets_id: z.string().optional().describe("Related assets ID"),
-  organizations_id: z.string().optional().describe("Related organizations ID"),
-  projects_id: z.string().optional().describe("Related projects ID"),
+  updated_at: z.string().nullish().describe("Last update timestamp"),
+  assets_id: z.string().nullish().describe("Related assets ID"),
+  organizations_id: z.string().nullish().describe("Related organizations ID"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
 }).passthrough();
 
 const ListRelatedAssetsSchema = z.object({
@@ -251,24 +254,24 @@ const ListRelatedAssetsSchema = z.object({
 });
 
 const AssetProjectsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum(["project"]).optional(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
   issues_counts: z.object({
-    critical: z.number().optional(),
-    high: z.number().optional(),
-    low: z.number().optional(),
-    medium: z.number().optional(),
-  }).optional(),
-  last_scan: z.string().optional(),
-  name: z.string().optional(),
-  organization_id: z.string().optional(),
-  organization_name: z.string().optional(),
-  project_type: z.string().optional(),
-  target_file: z.string().optional(),
-  target_id: z.string().optional(),
-  target_reference: z.string().optional(),
-  test_surface: z.string().optional(),
-  url: z.string().optional(),
+    critical: z.number().nullish(),
+    high: z.number().nullish(),
+    low: z.number().nullish(),
+    medium: z.number().nullish(),
+  }).passthrough().nullish(),
+  last_scan: z.string().nullish(),
+  name: z.string().nullish(),
+  organization_id: z.string().nullish(),
+  organization_name: z.string().nullish(),
+  project_type: z.string().nullish(),
+  target_file: z.string().nullish(),
+  target_id: z.string().nullish(),
+  target_reference: z.string().nullish(),
+  test_surface: z.string().nullish(),
+  url: z.string().nullish(),
 }).passthrough();
 
 const ListAssetProjectsSchema = z.object({
@@ -290,7 +293,7 @@ const ListAssetProjectsSchema = z.object({
 /** Snyk Assets — asset discovery and classification across the group */
 export const model = {
   type: "@webframp/snyk/assets",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -349,6 +352,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -451,6 +459,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_asset");
 
         const handle = await context.writeResource(
           "asset",
@@ -485,11 +494,7 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, { type: { name: "type" } });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -497,7 +502,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/assets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -542,11 +547,7 @@ export const model = {
       ) => {
         const { apiToken, groupId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -554,7 +555,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {

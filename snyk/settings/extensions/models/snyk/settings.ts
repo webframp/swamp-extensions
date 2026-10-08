@@ -8,7 +8,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi } from "./_lib/api.ts";
+import { requireBody, sanitizeInstanceName, snykApi } from "./_lib/api.ts";
 
 // =============================================================================
 // Schemas
@@ -21,16 +21,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetIacSettingsForGroupSchema = z.object({
-  id: z.string().describe("ID"),
-  type: z.string().optional().describe("Content type"),
+  id: z.string().nullish().describe("ID"),
+  type: z.string().nullish().describe("Content type"),
   custom_rules: z.object({
-    is_enabled: z.unknown().optional(),
-    oci_registry_tag: z.unknown().optional(),
-    oci_registry_url: z.unknown().optional(),
-  }).optional().describe(
+    is_enabled: z.unknown().nullish(),
+    oci_registry_tag: z.unknown().nullish(),
+    oci_registry_url: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
     "The Infrastructure as Code custom rules settings for a group.",
   ),
-  updated: z.string().optional().describe(
+  updated: z.string().nullish().describe(
     "The last time the settings were updated.",
   ),
 }).passthrough();
@@ -40,78 +40,72 @@ const GetOpensourceBrokerSettingForGroupSchema = z.object({}).passthrough();
 const EnableOpensourceBrokerForGroupSchema = z.object({}).passthrough();
 
 const GetPullRequestTemplateSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  commit_message: z.string().min(1).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  commit_message: z.string().nullish().describe(
     "The commit message that will be used when the pull request is created",
   ),
-  description: z.string().min(1).optional().describe(
+  description: z.string().nullish().describe(
     "The description of the pull request",
   ),
-  title: z.string().min(1).optional().describe(
-    "Specify a title for the pull request",
-  ),
+  title: z.string().nullish().describe("Specify a title for the pull request"),
 }).passthrough();
 
 const CreateOrUpdatePullRequestTemplateSchema = z.object({
-  id: z.string(),
-  type: z.string().regex(new RegExp("^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$"))
-    .optional(),
-  commit_message: z.string().min(1).optional().describe(
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  commit_message: z.string().nullish().describe(
     "The commit message that will be used when the pull request is created",
   ),
-  description: z.string().min(1).optional().describe(
+  description: z.string().nullish().describe(
     "The description of the pull request",
   ),
-  title: z.string().min(1).optional().describe(
-    "Specify a title for the pull request",
-  ),
+  title: z.string().nullish().describe("Specify a title for the pull request"),
 }).passthrough();
 
 const GetIacSettingsForOrgSchema = z.object({
-  id: z.string().describe("ID"),
-  type: z.string().optional().describe("Content type"),
+  id: z.string().nullish().describe("ID"),
+  type: z.string().nullish().describe("Content type"),
   custom_rules: z.object({
-    inherit_from_parent: z.unknown().optional(),
-    is_enabled: z.unknown().optional(),
-    oci_registry_tag: z.unknown().optional(),
-    oci_registry_url: z.unknown().optional(),
+    inherit_from_parent: z.unknown().nullish(),
+    is_enabled: z.unknown().nullish(),
+    oci_registry_tag: z.unknown().nullish(),
+    oci_registry_url: z.unknown().nullish(),
     parents: z.object({
       group: z.object({
         custom_rules: z.object({
-          is_enabled: z.unknown().optional(),
-          oci_registry_tag: z.unknown().optional(),
-          oci_registry_url: z.unknown().optional(),
-        }).optional(),
-        updated: z.unknown().optional(),
-      }).optional(),
-    }).optional(),
-    updated: z.unknown().optional(),
-  }).optional().describe(
+          is_enabled: z.unknown().nullish(),
+          oci_registry_tag: z.unknown().nullish(),
+          oci_registry_url: z.unknown().nullish(),
+        }).passthrough().nullish(),
+        updated: z.unknown().nullish(),
+      }).passthrough().nullish(),
+    }).passthrough().nullish(),
+    updated: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
     "The Infrastructure as Code custom rules settings for an org.",
   ),
 }).passthrough();
 
 const GetOrgLanguagesSettingsSchema = z.object({
-  id: z.string().describe("The organization's public ID."),
-  type: z.enum(["languages_settings"]).optional(),
+  id: z.string().nullish().describe("The organization's public ID."),
+  type: z.string().nullish(),
   languages: z.object({
-    dotnet: z.unknown(),
-    golang: z.unknown(),
-    java: z.unknown(),
-    javascript: z.unknown(),
-    php: z.unknown(),
-    python: z.unknown(),
-  }),
+    dotnet: z.unknown().nullish(),
+    golang: z.unknown().nullish(),
+    java: z.unknown().nullish(),
+    javascript: z.unknown().nullish(),
+    php: z.unknown().nullish(),
+    python: z.unknown().nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 
 const GetOpenSourceSettingsForOrgSchema = z.object({
-  id: z.string().describe("ID"),
-  type: z.string().optional().describe("Content type"),
+  id: z.string().nullish().describe("ID"),
+  type: z.string().nullish().describe("Content type"),
   reachability: z.object({
-    enabled: z.boolean().optional(),
-  }).optional().describe("The reachability setting for Org."),
+    enabled: z.boolean().nullish(),
+  }).passthrough().nullish().describe("The reachability setting for Org."),
 }).passthrough();
 
 const GetOpensourceBrokerSettingSchema = z.object({}).passthrough();
@@ -125,29 +119,29 @@ const GetOpensourcePrivateRegistryEcosystemSettingsForOrgSchema = z.object({})
   .passthrough();
 
 const GetSastSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  autofix_enabled: z.boolean().optional(),
-  sast_enabled: z.boolean(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  autofix_enabled: z.boolean().nullish(),
+  sast_enabled: z.boolean().nullish(),
 }).passthrough();
 
 const UpdateOrgSastSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  autofix_enabled: z.boolean().optional(),
-  sast_enabled: z.boolean(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  autofix_enabled: z.boolean().nullish(),
+  sast_enabled: z.boolean().nullish(),
 }).passthrough();
 
 const GetSecretsSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  secrets_enabled: z.boolean(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  secrets_enabled: z.boolean().nullish(),
 }).passthrough();
 
 const UpdateOrgSecretsSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  secrets_enabled: z.boolean(),
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  secrets_enabled: z.boolean().nullish(),
 }).passthrough();
 
 // =============================================================================
@@ -157,7 +151,7 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -213,6 +207,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -348,6 +347,7 @@ export const model = {
           `/groups/${encodeURIComponent(String(args.group_id))}/settings/iac`,
           version,
         );
+        requireBody(result, "get_iac_settings_for_group");
 
         const handle = await context.writeResource(
           "iac_settings_for_group",
@@ -432,6 +432,7 @@ export const model = {
           }/settings/opensource/broker`,
           version,
         );
+        requireBody(result, "get_opensource_broker_setting_for_group");
 
         const handle = await context.writeResource(
           "opensource_broker_setting_for_group",
@@ -542,6 +543,7 @@ export const model = {
           }/settings/pull_request_template`,
           version,
         );
+        requireBody(result, "get_pull_request_template");
 
         const handle = await context.writeResource(
           "pull_request_template",
@@ -591,6 +593,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_or_update_pull_request_template");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -663,6 +666,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/iac`,
           version,
         );
+        requireBody(result, "get_iac_settings_for_org");
 
         const handle = await context.writeResource(
           "iac_settings_for_org",
@@ -740,6 +744,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/open_source/languages`,
           version,
         );
+        requireBody(result, "get_org_languages_settings");
 
         const handle = await context.writeResource(
           "org_languages_settings",
@@ -823,6 +828,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/opensource`,
           version,
         );
+        requireBody(result, "get_open_source_settings_for_org");
 
         const handle = await context.writeResource(
           "open_source_settings_for_org",
@@ -857,6 +863,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/opensource/broker`,
           version,
         );
+        requireBody(result, "get_opensource_broker_setting");
 
         const handle = await context.writeResource(
           "opensource_broker_setting",
@@ -960,6 +967,7 @@ export const model = {
           }/broker`,
           version,
         );
+        requireBody(result, "get_opensource_broker_ecosystem_settings_for_org");
 
         const handle = await context.writeResource(
           "opensource_broker_ecosystem_settings_for_org",
@@ -1052,6 +1060,10 @@ export const model = {
           }/private-registries`,
           version,
         );
+        requireBody(
+          result,
+          "get_opensource_private_registry_ecosystem_settings_for_org",
+        );
 
         const handle = await context.writeResource(
           "opensource_private_registry_ecosystem_settings_for_org",
@@ -1139,6 +1151,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/sast`,
           version,
         );
+        requireBody(result, "get_sast_settings");
 
         const handle = await context.writeResource(
           "sast_settings",
@@ -1222,6 +1235,7 @@ export const model = {
           `/orgs/${encodeURIComponent(orgId)}/settings/secrets`,
           version,
         );
+        requireBody(result, "get_secrets_settings");
 
         const handle = await context.writeResource(
           "secrets_settings",

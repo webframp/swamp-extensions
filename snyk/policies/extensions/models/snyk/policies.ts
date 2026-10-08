@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/policies";
 
@@ -23,42 +29,30 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetOrgPoliciesItemSchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "A unique identifier for this particular occurrence of the policy.",
   ),
-  type: z.enum(["policy"]).optional(),
+  type: z.string().nullish(),
   action: z.object({
-    data: z.unknown(),
-  }),
-  action_type: z.enum(["ignore"]),
+    data: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  action_type: z.string().nullish(),
   conditions_group: z.object({
-    conditions: z.array(z.unknown()),
-    logical_operator: z.enum(["and"]),
-  }),
-  created_at: z.string(),
+    conditions: z.array(z.unknown()).nullish(),
+    logical_operator: z.string().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish(),
   created_by: z.object({
-    actor_source: z.enum(["snyk_user", "external_user"]).optional(),
-    email: z.string().optional(),
-    external_id: z.string().optional(),
-    id: z.string(),
-    name: z.string(),
-    origin: z.enum([
-      "bitbucket_cloud",
-      "bitbucket_connect_app",
-      "bitbucket_server",
-      "gitlab",
-      "github",
-      "github_enterprise",
-      "github_cloud_app",
-      "github_server_app",
-      "azure_repos",
-    ]).optional(),
-  }).optional(),
-  name: z.string(),
-  review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
-    "Review status.",
-  ),
-  updated_at: z.string(),
+    actor_source: z.string().nullish(),
+    email: z.string().nullish(),
+    external_id: z.string().nullish(),
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+    origin: z.string().nullish(),
+  }).passthrough().nullish(),
+  name: z.string().nullish(),
+  review: z.string().nullish().describe("Review status."),
+  updated_at: z.string().nullish(),
 }).passthrough();
 
 const GetOrgPoliciesSchema = z.object({
@@ -74,77 +68,55 @@ const GetOrgPoliciesSchema = z.object({
 });
 
 const CreateOrgPolicySchema = z.object({
-  id: z.string().describe(
+  id: z.string().nullish().describe(
     "A unique identifier for this particular occurrence of the policy.",
   ),
-  type: z.enum(["policy"]).optional(),
+  type: z.string().nullish(),
   action: z.object({
-    data: z.unknown(),
-  }),
-  action_type: z.enum(["ignore"]),
+    data: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  action_type: z.string().nullish(),
   conditions_group: z.object({
-    conditions: z.array(z.unknown()),
-    logical_operator: z.enum(["and"]),
-  }),
-  created_at: z.string(),
+    conditions: z.array(z.unknown()).nullish(),
+    logical_operator: z.string().nullish(),
+  }).passthrough().nullish(),
+  created_at: z.string().nullish(),
   created_by: z.object({
-    actor_source: z.enum(["snyk_user", "external_user"]).optional(),
-    email: z.string().optional(),
-    external_id: z.string().optional(),
-    id: z.string(),
-    name: z.string(),
-    origin: z.enum([
-      "bitbucket_cloud",
-      "bitbucket_connect_app",
-      "bitbucket_server",
-      "gitlab",
-      "github",
-      "github_enterprise",
-      "github_cloud_app",
-      "github_server_app",
-      "azure_repos",
-    ]).optional(),
-  }).optional(),
-  name: z.string(),
-  review: z.enum(["pending", "approved", "rejected", "not-required"]).describe(
-    "Review status.",
-  ),
-  updated_at: z.string(),
+    actor_source: z.string().nullish(),
+    email: z.string().nullish(),
+    external_id: z.string().nullish(),
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+    origin: z.string().nullish(),
+  }).passthrough().nullish(),
+  name: z.string().nullish(),
+  review: z.string().nullish().describe("Review status."),
+  updated_at: z.string().nullish(),
 }).passthrough();
 
 const GetOrgPolicyEventsItemSchema = z.object({
-  id: z.string().describe("A unique identifier for this event."),
-  type: z.enum(["approve", "reject", "cancel", "reopen", "edit", "create"]),
+  id: z.string().nullish().describe("A unique identifier for this event."),
+  type: z.string().nullish(),
   changes: z.object({
-    new_action: z.unknown().optional(),
-    new_conditions_group: z.unknown().optional(),
-    new_name: z.string().optional(),
-    new_review: z.unknown().optional(),
-    old_action: z.unknown().optional(),
-    old_conditions_group: z.unknown().optional(),
-    old_name: z.string().optional(),
-    old_review: z.unknown().optional(),
-  }),
-  comment: z.string().optional(),
-  created_at: z.string(),
+    new_action: z.unknown().nullish(),
+    new_conditions_group: z.unknown().nullish(),
+    new_name: z.string().nullish(),
+    new_review: z.unknown().nullish(),
+    old_action: z.unknown().nullish(),
+    old_conditions_group: z.unknown().nullish(),
+    old_name: z.string().nullish(),
+    old_review: z.unknown().nullish(),
+  }).passthrough().nullish(),
+  comment: z.string().nullish(),
+  created_at: z.string().nullish(),
   created_by: z.object({
-    actor_source: z.enum(["snyk_user", "external_user"]).optional(),
-    email: z.string().optional(),
-    external_id: z.string().optional(),
-    id: z.string(),
-    name: z.string(),
-    origin: z.enum([
-      "bitbucket_cloud",
-      "bitbucket_connect_app",
-      "bitbucket_server",
-      "gitlab",
-      "github",
-      "github_enterprise",
-      "github_cloud_app",
-      "github_server_app",
-      "azure_repos",
-    ]).optional(),
-  }),
+    actor_source: z.string().nullish(),
+    email: z.string().nullish(),
+    external_id: z.string().nullish(),
+    id: z.string().nullish(),
+    name: z.string().nullish(),
+    origin: z.string().nullish(),
+  }).passthrough().nullish(),
 }).passthrough();
 
 const GetOrgPolicyEventsSchema = z.object({
@@ -166,7 +138,7 @@ const GetOrgPolicyEventsSchema = z.object({
 /** Snyk Policies — security policy management and rule configuration */
 export const model = {
   type: "@webframp/snyk/policies",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -225,6 +197,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -253,14 +230,14 @@ export const model = {
       description: "Get org-level policies",
       arguments: z.object({
         search: z.string().optional().describe(
-          "Search keyword for searching fields ignored_by.name, ignored_by.",
+          "Search keyword for searching fields ignored_by.name, ignored_by.email,...",
         ),
         order_by: z.enum(["created", "expires", "ignore-type", "requested-by"])
           .optional().describe("The column name to sort on"),
         order_direction: z.enum(["asc", "desc"]).optional().describe(
           "Sorting direction ASC/DESC",
         ),
-        review: z.string().optional().describe(
+        review: z.union([z.string(), z.array(z.string())]).optional().describe(
           "Policy rule review state e.g. approved",
         ),
         expires_before: z.string().optional().describe(
@@ -289,17 +266,21 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          search: { name: "search" },
+          order_by: { name: "order_by" },
+          order_direction: { name: "order_direction" },
+          review: { name: "review", comma: true },
+          expires_before: { name: "expires_before" },
+          expires_after: { name: "expires_after" },
+          expires_never: { name: "expires_never" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/policies`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -360,6 +341,7 @@ export const model = {
           version,
           body,
         );
+        requireBody(result, "create_org_policy");
 
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
@@ -397,6 +379,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_org_policy");
 
         const handle = await context.writeResource(
           "org_policy",
@@ -512,11 +495,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["policy_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -524,7 +503,7 @@ export const model = {
             encodeURIComponent(String(args.policy_id))
           }/events`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {

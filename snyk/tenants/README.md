@@ -65,6 +65,8 @@ swamp model create @webframp/snyk/tenants snyk-tenants \
 | `get_tenant_memberships`                | Get all memberships of the tenant (Early Access)                          |
 | `update_tenant_membership`              | Update tenant membership (Early Access)                                   |
 | `delete_tenant_membership`              | Delete an individual tenant membership for a single user. (Early Access)  |
+| `list_models`                           | List models (Early Access)                                                |
+| `get_model`                             | Get a model (Early Access)                                                |
 | `list_tenant_roles`                     | List all available roles for a given tenant (Early Access)                |
 | `create_tenant_role`                    | Create a custom tenant role for a given tenant (Early Access)             |
 | `get_tenant_role`                       | Return a specific role by its id and its tenant id. (Early Access)        |

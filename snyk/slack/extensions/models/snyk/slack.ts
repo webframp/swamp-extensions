@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/slack";
 
@@ -23,25 +29,27 @@ const GlobalArgsSchema = z.object({
 });
 
 const GetSlackDefaultNotificationSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  severity_threshold: z.enum(["low", "medium", "high", "critical"]).describe(
-    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue b...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  severity_threshold: z.string().nullish().describe(
+    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue...",
   ),
-  target_channel_id: z.string(),
-  target_channel_name: z.string().min(1),
+  target_channel_id: z.string().nullish(),
+  target_channel_name: z.string().nullish(),
 }).passthrough();
 
 const GetSlackProjectNotificationSettingsCollectionItemSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  is_active: z.boolean().describe("Current status of the project settings."),
-  severity_threshold: z.enum(["low", "medium", "high", "critical"]).describe(
-    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue b...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  is_active: z.boolean().nullish().describe(
+    "Current status of the project settings.",
   ),
-  target_channel_id: z.string(),
-  target_channel_name: z.string().min(1),
-  target_project_name: z.string().describe(
+  severity_threshold: z.string().nullish().describe(
+    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue...",
+  ),
+  target_channel_id: z.string().nullish(),
+  target_channel_name: z.string().nullish(),
+  target_project_name: z.string().nullish().describe(
     "The target file name for the project.",
   ),
 }).passthrough();
@@ -59,28 +67,25 @@ const GetSlackProjectNotificationSettingsCollectionSchema = z.object({
 });
 
 const CreateSlackProjectNotificationSettingsSchema = z.object({
-  id: z.string(),
-  type: z.string().optional(),
-  is_active: z.boolean().describe("Current status of the project settings."),
-  severity_threshold: z.enum(["low", "medium", "high", "critical"]).describe(
-    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue b...",
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  is_active: z.boolean().nullish().describe(
+    "Current status of the project settings.",
   ),
-  target_channel_id: z.string(),
-  target_channel_name: z.string().min(1),
-  target_project_name: z.string().describe(
+  severity_threshold: z.string().nullish().describe(
+    "Minimum Snyk issue severity to send a notification for, messages will not be sent for any issue...",
+  ),
+  target_channel_id: z.string().nullish(),
+  target_channel_name: z.string().nullish(),
+  target_project_name: z.string().nullish().describe(
     "The target file name for the project.",
   ),
 }).passthrough();
 
 const ChannelsItemSchema = z.object({
-  id: z.string(),
-  type: z.enum([
-    "public",
-    "private",
-    "direct_message",
-    "multiparty_direct_message",
-  ]).optional().describe("Channel type"),
-  name: z.string().optional().describe("Name of the Slack Channel"),
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Channel type"),
+  name: z.string().nullish().describe("Name of the Slack Channel"),
 }).passthrough();
 
 const ListChannelsSchema = z.object({
@@ -96,14 +101,9 @@ const ListChannelsSchema = z.object({
 });
 
 const GetChannelNameByIdSchema = z.object({
-  id: z.string(),
-  type: z.enum([
-    "public",
-    "private",
-    "direct_message",
-    "multiparty_direct_message",
-  ]).optional().describe("Channel type"),
-  name: z.string().optional().describe("Name of the Slack Channel"),
+  id: z.string().nullish(),
+  type: z.string().nullish().describe("Channel type"),
+  name: z.string().nullish().describe("Name of the Slack Channel"),
 }).passthrough();
 
 // =============================================================================
@@ -113,7 +113,7 @@ const GetChannelNameByIdSchema = z.object({
 /** Snyk Slack Integration — Slack app configuration and channel management */
 export const model = {
   type: "@webframp/snyk/slack",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -164,6 +164,11 @@ export const model = {
     },
     {
       toVersion: "2026.09.27.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.07.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -231,6 +236,7 @@ export const model = {
           }`,
           version,
         );
+        requireBody(result, "get_slack_default_notification_settings");
 
         const handle = await context.writeResource(
           "slack_default_notification_settings",
@@ -347,11 +353,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["bot_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -359,7 +361,7 @@ export const model = {
             encodeURIComponent(String(args.bot_id))
           }/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -551,11 +553,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["tenant_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -563,7 +561,7 @@ export const model = {
             encodeURIComponent(String(args.tenant_id))
           }/channels`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -616,6 +614,7 @@ export const model = {
           }/channels/${encodeURIComponent(String(args.channel_id))}`,
           version,
         );
+        requireBody(result, "get_channel_name_by_id");
 
         const handle = await context.writeResource(
           "channel_name_by_id",

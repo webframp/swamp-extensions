@@ -8,7 +8,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { sanitizeInstanceName, snykApi, snykApiPaginated } from "./_lib/api.ts";
+import {
+  queryEntries,
+  requireBody,
+  sanitizeInstanceName,
+  snykApi,
+  snykApiPaginated,
+  toQueryString,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/snyk/inventory";
 
@@ -23,11 +30,10 @@ const GlobalArgsSchema = z.object({
 });
 
 const AssetsGroupItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const ListAssetsGroupSchema = z.object({
@@ -43,16 +49,17 @@ const ListAssetsGroupSchema = z.object({
 });
 
 const GetFilterFieldsGroupItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter field"),
-  type: z.enum(["string", "boolean", "datetime", "array", "object"]).describe(
+  id: z.string().nullish().describe("UUID identifier for the filter field"),
+  type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.enum(["container_images", "sboms", "repositories"]))
-    .describe("List of asset types this field applies to"),
-  name: z.string().describe(
+  asset_types: z.array(z.string()).nullish().describe(
+    "List of asset types this field applies to",
+  ),
+  name: z.string().nullish().describe(
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetFilterFieldsGroupSchema = z.object({
@@ -68,15 +75,13 @@ const GetFilterFieldsGroupSchema = z.object({
 });
 
 const GetFilterValuesGroupItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter value"),
-  type: z.enum(["filter_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  key: z.string().optional().describe(
+  id: z.string().nullish().describe("UUID identifier for the filter value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  key: z.string().nullish().describe(
     "For object-type filters (e.g., tags), the key name. Only present for object-type filter values.",
   ),
-  value: z.string().optional().describe(
-    "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
+  value: z.string().nullish().describe(
+    "The filter value. For simple filters, this is the value itself.",
   ),
 }).passthrough();
 
@@ -93,17 +98,15 @@ const GetFilterValuesGroupSchema = z.object({
 });
 
 const GetGroupFieldsGroupItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group field"),
-  type: z.enum(["group_fields"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  asset_types: z.array(z.string()).describe(
+  id: z.string().nullish().describe("UUID identifier for the group field"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  asset_types: z.array(z.string()).nullish().describe(
     "List of asset types this field applies to",
   ),
-  name: z.string().describe(
+  name: z.string().nullish().describe(
     'The field name used for grouping (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetGroupFieldsGroupSchema = z.object({
@@ -119,11 +122,9 @@ const GetGroupFieldsGroupSchema = z.object({
 });
 
 const GetGroupValuesGroupItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group value"),
-  type: z.enum(["group_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  value: z.string().describe("The grouped value"),
+  id: z.string().nullish().describe("UUID identifier for the group value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  value: z.string().nullish().describe("The grouped value"),
 }).passthrough();
 
 const GetGroupValuesGroupSchema = z.object({
@@ -139,11 +140,10 @@ const GetGroupValuesGroupSchema = z.object({
 });
 
 const GetAssetSearchResultsGroupItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const GetAssetSearchResultsGroupSchema = z.object({
@@ -159,102 +159,61 @@ const GetAssetSearchResultsGroupSchema = z.object({
 });
 
 const GetAssetGroupSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const AssetProjectsGroupItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
+  id: z.string().nullish().describe("The unique identifier of the project"),
+  type: z.string().nullish().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional(),
-    base_image_name: z.string(),
-    base_image_outdated: z.boolean().optional(),
-    code: z.string(),
-    distro_alert: z.string().optional(),
-    proposed_base_images: z.unknown().optional(),
-  }).optional().describe(
+    base_image: z.unknown().nullish(),
+    base_image_name: z.string().nullish(),
+    base_image_outdated: z.boolean().nullish(),
+    code: z.string().nullish(),
+    distro_alert: z.string().nullish(),
+    proposed_base_images: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
-  is_canonical: z.boolean().optional().describe(
-    "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
+  is_canonical: z.boolean().nullish().describe(
+    "Indicates whether this project is the canonical project for its target_file.",
   ),
   issues: z.object({
-    critical: z.number().int(),
-    high: z.number().int(),
-    low: z.number().int(),
-    medium: z.number().int(),
-  }).optional().describe("Issue counts by severity"),
-  monitor_created_at: z.string().optional().describe(
+    critical: z.number().nullish(),
+    high: z.number().nullish(),
+    low: z.number().nullish(),
+    medium: z.number().nullish(),
+  }).passthrough().nullish().describe("Issue counts by severity"),
+  monitor_created_at: z.string().nullish().describe(
     "Timestamp when the monitor was created",
   ),
-  monitor_id: z.string().optional().describe(
+  monitor_id: z.string().nullish().describe(
     "The ID of the monitor associated with this project",
   ),
-  org_id: z.string().optional().describe(
+  org_id: z.string().nullish().describe(
     "The ID of the organization that owns this project",
   ),
-  project_type: z.enum([
-    "rubygems",
-    "composer",
-    "sbt",
-    "maven",
-    "gomodules",
-    "poetry",
-    "cocoapods",
-    "pipenv",
-    "pnpm",
-    "pub",
-    "yarn",
-    "yarn-workspace",
-    "paket",
-    "pip",
-    "unmanaged",
-    "gradle",
-    "nuget",
-    "cpp",
-    "npm",
-    "conan",
-    "govendor",
-    "hex",
-    "golangdep",
-    "cargo",
-    "swift",
-    "golang",
-    "secrets",
-    "iac",
-    "uv",
-    "sast",
-    "armconfig",
-    "helmconfig",
-    "terraformconfig",
-    "cloudformationconfig",
-    "k8sconfig",
-    "cloudconfig",
-    "dockerfile",
-    "deb",
-    "apk",
-    "linux",
-    "rpm",
-  ]).optional().describe("Type of the project (e.g., npm, maven)"),
-  risk_score: z.number().int().optional().describe(
+  project_type: z.string().nullish().describe(
+    "Type of the project (e.g., npm, maven)",
+  ),
+  risk_score: z.number().nullish().describe(
     "The calculated risk score for this project",
   ),
-  snapshot_created_at: z.string().optional().describe(
+  snapshot_created_at: z.string().nullish().describe(
     "Timestamp when the snapshot was created",
   ),
-  snapshot_id: z.string().optional().describe("The ID of the snapshot"),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_id: z.string().optional().describe(
+  snapshot_id: z.string().nullish().describe("The ID of the snapshot"),
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_id: z.string().nullish().describe(
     "The ID of the target this project belongs to",
   ),
-  target_origin: z.string().optional().describe(
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -272,19 +231,19 @@ const ListAssetProjectsGroupSchema = z.object({
 });
 
 const AssetTargetsGroupItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the target"),
-  type: z.enum(["target"]).optional().describe("The JSON:API resource type"),
-  imported_at: z.string().optional().describe(
+  id: z.string().nullish().describe("The unique identifier of the target"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  imported_at: z.string().nullish().describe(
     "Timestamp when the target was imported",
   ),
-  integration_id: z.string().optional().describe(
+  integration_id: z.string().nullish().describe(
     "The ID of the integration associated with this target",
   ),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_origin: z.string().optional().describe(
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -302,11 +261,10 @@ const ListAssetTargetsGroupSchema = z.object({
 });
 
 const AssetsOrgItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const ListAssetsOrgSchema = z.object({
@@ -322,16 +280,17 @@ const ListAssetsOrgSchema = z.object({
 });
 
 const GetFilterFieldsOrgItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter field"),
-  type: z.enum(["string", "boolean", "datetime", "array", "object"]).describe(
+  id: z.string().nullish().describe("UUID identifier for the filter field"),
+  type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.enum(["container_images", "sboms", "repositories"]))
-    .describe("List of asset types this field applies to"),
-  name: z.string().describe(
+  asset_types: z.array(z.string()).nullish().describe(
+    "List of asset types this field applies to",
+  ),
+  name: z.string().nullish().describe(
     'The field name used in RSQL filters (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetFilterFieldsOrgSchema = z.object({
@@ -347,15 +306,13 @@ const GetFilterFieldsOrgSchema = z.object({
 });
 
 const GetFilterValuesOrgItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the filter value"),
-  type: z.enum(["filter_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  key: z.string().optional().describe(
+  id: z.string().nullish().describe("UUID identifier for the filter value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  key: z.string().nullish().describe(
     "For object-type filters (e.g., tags), the key name. Only present for object-type filter values.",
   ),
-  value: z.string().optional().describe(
-    "The filter value. For simple filters, this is the value itself. For object-type filters (e.g., ta...",
+  value: z.string().nullish().describe(
+    "The filter value. For simple filters, this is the value itself.",
   ),
 }).passthrough();
 
@@ -372,17 +329,15 @@ const GetFilterValuesOrgSchema = z.object({
 });
 
 const GetGroupFieldsOrgItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group field"),
-  type: z.enum(["group_fields"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  asset_types: z.array(z.string()).describe(
+  id: z.string().nullish().describe("UUID identifier for the group field"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  asset_types: z.array(z.string()).nullish().describe(
     "List of asset types this field applies to",
   ),
-  name: z.string().describe(
+  name: z.string().nullish().describe(
     'The field name used for grouping (e.g., "class", "registry")',
   ),
-  values_id: z.string().optional().describe("Related values ID"),
+  values_id: z.string().nullish().describe("Related values ID"),
 }).passthrough();
 
 const GetGroupFieldsOrgSchema = z.object({
@@ -398,11 +353,9 @@ const GetGroupFieldsOrgSchema = z.object({
 });
 
 const GetGroupValuesOrgItemSchema = z.object({
-  id: z.string().describe("UUID identifier for the group value"),
-  type: z.enum(["group_values"]).optional().describe(
-    "The JSON:API resource type",
-  ),
-  value: z.string().describe("The grouped value"),
+  id: z.string().nullish().describe("UUID identifier for the group value"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  value: z.string().nullish().describe("The grouped value"),
 }).passthrough();
 
 const GetGroupValuesOrgSchema = z.object({
@@ -418,11 +371,10 @@ const GetGroupValuesOrgSchema = z.object({
 });
 
 const GetAssetSearchResultsOrgItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const GetAssetSearchResultsOrgSchema = z.object({
@@ -438,102 +390,61 @@ const GetAssetSearchResultsOrgSchema = z.object({
 });
 
 const GetAssetOrgSchema = z.object({
-  id: z.string().describe("The unique identifier of the asset"),
-  type: z.enum(["container_images", "sboms", "repositories"]).optional()
-    .describe("The JSON:API resource type"),
-  projects_id: z.string().optional().describe("Related projects ID"),
-  targets_id: z.string().optional().describe("Related targets ID"),
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
 
 const AssetProjectsOrgItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the project"),
-  type: z.enum(["project"]).optional().describe("The JSON:API resource type."),
+  id: z.string().nullish().describe("The unique identifier of the project"),
+  type: z.string().nullish().describe("The JSON:API resource type."),
   base_image_remediation: z.object({
-    base_image: z.unknown().optional(),
-    base_image_name: z.string(),
-    base_image_outdated: z.boolean().optional(),
-    code: z.string(),
-    distro_alert: z.string().optional(),
-    proposed_base_images: z.unknown().optional(),
-  }).optional().describe(
+    base_image: z.unknown().nullish(),
+    base_image_name: z.string().nullish(),
+    base_image_outdated: z.boolean().nullish(),
+    code: z.string().nullish(),
+    distro_alert: z.string().nullish(),
+    proposed_base_images: z.unknown().nullish(),
+  }).passthrough().nullish().describe(
     "Base image upgrade recommendation data from container scanning",
   ),
-  is_canonical: z.boolean().optional().describe(
-    "Indicates whether this project is the canonical project for its target_file. Projects are grouped...",
+  is_canonical: z.boolean().nullish().describe(
+    "Indicates whether this project is the canonical project for its target_file.",
   ),
   issues: z.object({
-    critical: z.number().int(),
-    high: z.number().int(),
-    low: z.number().int(),
-    medium: z.number().int(),
-  }).optional().describe("Issue counts by severity"),
-  monitor_created_at: z.string().optional().describe(
+    critical: z.number().nullish(),
+    high: z.number().nullish(),
+    low: z.number().nullish(),
+    medium: z.number().nullish(),
+  }).passthrough().nullish().describe("Issue counts by severity"),
+  monitor_created_at: z.string().nullish().describe(
     "Timestamp when the monitor was created",
   ),
-  monitor_id: z.string().optional().describe(
+  monitor_id: z.string().nullish().describe(
     "The ID of the monitor associated with this project",
   ),
-  org_id: z.string().optional().describe(
+  org_id: z.string().nullish().describe(
     "The ID of the organization that owns this project",
   ),
-  project_type: z.enum([
-    "rubygems",
-    "composer",
-    "sbt",
-    "maven",
-    "gomodules",
-    "poetry",
-    "cocoapods",
-    "pipenv",
-    "pnpm",
-    "pub",
-    "yarn",
-    "yarn-workspace",
-    "paket",
-    "pip",
-    "unmanaged",
-    "gradle",
-    "nuget",
-    "cpp",
-    "npm",
-    "conan",
-    "govendor",
-    "hex",
-    "golangdep",
-    "cargo",
-    "swift",
-    "golang",
-    "secrets",
-    "iac",
-    "uv",
-    "sast",
-    "armconfig",
-    "helmconfig",
-    "terraformconfig",
-    "cloudformationconfig",
-    "k8sconfig",
-    "cloudconfig",
-    "dockerfile",
-    "deb",
-    "apk",
-    "linux",
-    "rpm",
-  ]).optional().describe("Type of the project (e.g., npm, maven)"),
-  risk_score: z.number().int().optional().describe(
+  project_type: z.string().nullish().describe(
+    "Type of the project (e.g., npm, maven)",
+  ),
+  risk_score: z.number().nullish().describe(
     "The calculated risk score for this project",
   ),
-  snapshot_created_at: z.string().optional().describe(
+  snapshot_created_at: z.string().nullish().describe(
     "Timestamp when the snapshot was created",
   ),
-  snapshot_id: z.string().optional().describe("The ID of the snapshot"),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_id: z.string().optional().describe(
+  snapshot_id: z.string().nullish().describe("The ID of the snapshot"),
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_id: z.string().nullish().describe(
     "The ID of the target this project belongs to",
   ),
-  target_origin: z.string().optional().describe(
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -551,19 +462,19 @@ const ListAssetProjectsOrgSchema = z.object({
 });
 
 const AssetTargetsOrgItemSchema = z.object({
-  id: z.string().describe("The unique identifier of the target"),
-  type: z.enum(["target"]).optional().describe("The JSON:API resource type"),
-  imported_at: z.string().optional().describe(
+  id: z.string().nullish().describe("The unique identifier of the target"),
+  type: z.string().nullish().describe("The JSON:API resource type"),
+  imported_at: z.string().nullish().describe(
     "Timestamp when the target was imported",
   ),
-  integration_id: z.string().optional().describe(
+  integration_id: z.string().nullish().describe(
     "The ID of the integration associated with this target",
   ),
-  target_file: z.string().optional().describe("Path to the manifest file"),
-  target_origin: z.string().optional().describe(
+  target_file: z.string().nullish().describe("Path to the manifest file"),
+  target_origin: z.string().nullish().describe(
     "Origin of the target (e.g., github, gitlab)",
   ),
-  target_ref: z.string().optional().describe(
+  target_ref: z.string().nullish().describe(
     "The target reference (e.g., branch name)",
   ),
 }).passthrough();
@@ -587,7 +498,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.09.27.1",
+  version: "2026.10.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -654,6 +565,11 @@ export const model = {
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -666,7 +582,7 @@ export const model = {
     },
     "assets_bulk_group": {
       description: "Bulk update asset attributes - Group scope (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -698,7 +614,7 @@ export const model = {
     "asset_search_group": {
       description:
         "Create an asset search (asynchronous) - Group scope (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -736,7 +652,7 @@ export const model = {
     },
     "assets_bulk_org": {
       description: "Bulk update asset attributes - Org scope (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -768,7 +684,7 @@ export const model = {
     "asset_search_org": {
       description:
         "Create an asset search (asynchronous) - Org scope (Early Access)",
-      schema: z.object({}),
+      schema: z.object({}).passthrough(),
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -834,11 +750,12 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+          meta_count: { name: "meta_count" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -846,7 +763,7 @@ export const model = {
             encodeURIComponent(String(args.group_id))
           }/inventory/assets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -940,11 +857,9 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -952,7 +867,7 @@ export const model = {
             encodeURIComponent(String(args.group_id))
           }/inventory/assets/filters`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1014,11 +929,11 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id", "filter_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          q: { name: "q" },
+          keys_only: { name: "keys_only" },
+          key: { name: "key" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1028,7 +943,7 @@ export const model = {
             encodeURIComponent(String(args.filter_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1080,11 +995,9 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1092,7 +1005,7 @@ export const model = {
             encodeURIComponent(String(args.group_id))
           }/inventory/assets/groups`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1136,9 +1049,10 @@ export const model = {
         sort: z.string().optional().describe(
           "Comma-separated sort fields for group values.",
         ),
-        meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified.",
-        ),
+        meta_fields: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Meta fields to include in the response. Multiple fields can be specified.",
+          ),
         aggregate: z.string().optional().describe(
           "Per-field aggregate function override for meta fields.",
         ),
@@ -1159,11 +1073,13 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id", "group_field_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          meta_fields: { name: "meta_fields", comma: true },
+          aggregate: { name: "aggregate" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1173,7 +1089,7 @@ export const model = {
             encodeURIComponent(String(args.group_field_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1290,11 +1206,10 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id", "search_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1304,7 +1219,7 @@ export const model = {
             encodeURIComponent(String(args.search_id))
           }/results`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1356,17 +1271,9 @@ export const model = {
         },
       ) => {
         const { apiToken, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, { fields: { name: "fields" } }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -1375,6 +1282,7 @@ export const model = {
           }/inventory/assets/${encodeURIComponent(String(args.asset_id))}${qs}`,
           version,
         );
+        requireBody(result, "get_asset_group");
 
         const handle = await context.writeResource(
           "asset_group",
@@ -1468,11 +1376,11 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          canonical: { name: "canonical" },
+          target_id: { name: "target_id" },
+          sort: { name: "sort" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1482,7 +1390,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1532,11 +1440,7 @@ export const model = {
       ) => {
         const { apiToken, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_id", "asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1546,7 +1450,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/targets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1607,17 +1511,18 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+          meta_count: { name: "meta_count" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/inventory/assets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1707,17 +1612,15 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/inventory/assets/filters`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1778,11 +1681,11 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["filter_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          q: { name: "q" },
+          keys_only: { name: "keys_only" },
+          key: { name: "key" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1790,7 +1693,7 @@ export const model = {
             encodeURIComponent(String(args.filter_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1841,17 +1744,15 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>([]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
           `/orgs/${encodeURIComponent(orgId)}/inventory/assets/groups`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -1894,9 +1795,10 @@ export const model = {
         sort: z.string().optional().describe(
           "Comma-separated sort fields for group values.",
         ),
-        meta_fields: z.string().optional().describe(
-          "Meta fields to include in the response. Multiple fields can be specified.",
-        ),
+        meta_fields: z.union([z.string(), z.array(z.string())]).optional()
+          .describe(
+            "Meta fields to include in the response. Multiple fields can be specified.",
+          ),
         aggregate: z.string().optional().describe(
           "Per-field aggregate function override for meta fields.",
         ),
@@ -1917,11 +1819,13 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["group_field_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          asset_types: { name: "asset_types" },
+          filter: { name: "filter" },
+          sort: { name: "sort" },
+          meta_fields: { name: "meta_fields", comma: true },
+          aggregate: { name: "aggregate" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -1929,7 +1833,7 @@ export const model = {
             encodeURIComponent(String(args.group_field_id))
           }/values`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2042,11 +1946,10 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["search_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          sort: { name: "sort" },
+          fields: { name: "fields" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2054,7 +1957,7 @@ export const model = {
             encodeURIComponent(String(args.search_id))
           }/results`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2105,17 +2008,9 @@ export const model = {
         },
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
-        const queryParts: string[] = [];
-        const excludeKeys = new Set<string>(["asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) {
-            queryParts.push(
-              `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
-            );
-          }
-        }
-        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-
+        const qs = toQueryString(
+          queryEntries(args, { fields: { name: "fields" } }),
+        );
         const result = await snykApi(
           apiToken,
           "GET",
@@ -2124,6 +2019,7 @@ export const model = {
           }${qs}`,
           version,
         );
+        requireBody(result, "get_asset_org");
 
         const handle = await context.writeResource(
           "asset_org",
@@ -2215,11 +2111,11 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {
+          canonical: { name: "canonical" },
+          target_id: { name: "target_id" },
+          sort: { name: "sort" },
+        });
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2227,7 +2123,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/projects`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
@@ -2276,11 +2172,7 @@ export const model = {
       ) => {
         const { apiToken, orgId, version } = context.globalArgs;
         const startMs = Date.now();
-        const params: Record<string, string> = {};
-        const excludeKeys = new Set<string>(["asset_id"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
-        }
+        const query = queryEntries(args, {});
 
         const { results, truncated } = await snykApiPaginated(
           apiToken,
@@ -2288,7 +2180,7 @@ export const model = {
             encodeURIComponent(String(args.asset_id))
           }/relationships/targets`,
           version,
-          params,
+          query,
         );
 
         if (truncated) {
