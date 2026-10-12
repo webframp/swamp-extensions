@@ -2,6 +2,30 @@ import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { extension } from "./triage.ts";
 
+type WrittenResource = { name: string; data: unknown };
+
+/**
+ * A repeated idempotency key must return a complete handle (the workflow
+ * runtime rejects name-only handles) that points at the unchanged record.
+ */
+function assertDedupHit(
+  written: WrittenResource[],
+  writtenBefore: number,
+  result: { dataHandles: Record<string, unknown>[] },
+) {
+  assertEquals(written.length, writtenBefore + 1);
+  const previous = written[writtenBefore - 1];
+  const replayed = written[writtenBefore];
+  assertEquals(replayed.name, previous.name);
+  assertEquals(replayed.data, previous.data);
+  assertEquals(result.dataHandles.length, 1);
+  const handle = result.dataHandles[0];
+  assertEquals(handle.name, previous.name);
+  assertEquals(typeof handle.dataId, "string");
+  assertEquals(typeof handle.version, "number");
+  assertEquals(typeof handle.tags, "object");
+}
+
 Deno.test("triage augmentation exposes only its scoped methods", () => {
   assertEquals(Object.keys(extension.methods[0]).sort(), [
     "add_issue_comment",
@@ -289,9 +313,12 @@ Deno.test("create_issue does not call gh twice for the same idempotency key", as
       idempotencyKey: "create-1",
     };
     await extension.methods[0].create_issue.execute(args, context as never);
-    await extension.methods[0].create_issue.execute(args, context as never);
+    const second = await extension.methods[0].create_issue.execute(
+      args,
+      context as never,
+    );
     assertEquals(callCount, 1);
-    assertEquals(getWrittenResources().length, 1);
+    assertDedupHit(getWrittenResources(), 1, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
@@ -327,12 +354,12 @@ Deno.test("add_issue_comment does not call gh twice for the same idempotency key
       args,
       context as never,
     );
-    await extension.methods[0].add_issue_comment.execute(
+    const second = await extension.methods[0].add_issue_comment.execute(
       args,
       context as never,
     );
     assertEquals(callCount, 1);
-    assertEquals(getWrittenResources().length, 1);
+    assertDedupHit(getWrittenResources(), 1, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
@@ -637,12 +664,12 @@ Deno.test("merge_pull_request does not repost the comment for the same idempoten
     );
     const callCountAfterFirst = callCount;
     const writtenAfterFirst = getWrittenResources().length;
-    await extension.methods[0].merge_pull_request.execute(
+    const second = await extension.methods[0].merge_pull_request.execute(
       args,
       context as never,
     );
     assertEquals(callCount, callCountAfterFirst);
-    assertEquals(getWrittenResources().length, writtenAfterFirst);
+    assertDedupHit(getWrittenResources(), writtenAfterFirst, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
@@ -856,12 +883,12 @@ Deno.test("retry_workflow_run does not call gh twice for the same idempotency ke
       args,
       context as never,
     );
-    await extension.methods[0].retry_workflow_run.execute(
+    const second = await extension.methods[0].retry_workflow_run.execute(
       args,
       context as never,
     );
     assertEquals(callCount, 1);
-    assertEquals(getWrittenResources().length, 1);
+    assertDedupHit(getWrittenResources(), 1, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
@@ -937,9 +964,12 @@ Deno.test("close_issue does not call gh twice for the same idempotency key", asy
       idempotencyKey: "close-7",
     };
     await extension.methods[0].close_issue.execute(args, context as never);
-    await extension.methods[0].close_issue.execute(args, context as never);
+    const second = await extension.methods[0].close_issue.execute(
+      args,
+      context as never,
+    );
     assertEquals(callCount, 1);
-    assertEquals(getWrittenResources().length, 1);
+    assertDedupHit(getWrittenResources(), 1, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
