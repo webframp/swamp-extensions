@@ -29,7 +29,14 @@ type Context = {
     spec: string,
     name: string,
     data: unknown,
-  ) => Promise<{ name: string }>;
+  ) => Promise<DataHandle>;
+};
+// The fields the workflow runtime requires on a returned handle.
+type DataHandle = {
+  name: string;
+  dataId: string;
+  version: number;
+  tags: Record<string, string>;
 };
 function url(host: string, path: string) {
   return `https://${
@@ -56,7 +63,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.09.18.1",
+  version: "2026.10.12.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -70,6 +77,11 @@ export const model = {
     toVersion: "2026.09.18.1",
     description:
       "Normalized zod dependency version to 4.6.5; no behavioral changes",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.10.12.1",
+    description:
+      "No schema changes — post_ripple returns a complete data handle on a repeated key",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {
@@ -155,8 +167,19 @@ export const model = {
         context: Context,
       ) => {
         const resourceName = `${issueNumber}-${idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          // The runtime rejects name-only handles, and writeResource is the
+          // only API that returns a complete one, so re-write the record
+          // unchanged. readResource resolves vault references and this
+          // writes the resolved values back; acceptable because ripple holds
+          // only the already-posted public comment and its identifiers.
+          const handle = await context.writeResource(
+            "ripple",
+            resourceName,
+            existing,
+          );
+          return { dataHandles: [handle] };
         }
         const marked = `${body}\n\n<!-- triage:${idempotencyKey} -->`;
         const response = await request(
