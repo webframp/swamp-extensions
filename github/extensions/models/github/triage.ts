@@ -21,6 +21,8 @@ const key = (repo: string) => encodeURIComponent(repo);
  * Return a full data handle for an idempotency marker that already exists.
  * The runtime rejects name-only handles, and writeResource is the only API
  * that produces a complete one, so the stored record is re-written unchanged.
+ * Safe only because triageAction has no sensitive fields: readResource
+ * resolves vault references, and this writes the resolved values back.
  */
 async function existingHandle(
   context: Ctx,

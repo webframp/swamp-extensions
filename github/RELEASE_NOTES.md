@@ -11,6 +11,6 @@ ever sent.
 
 **Changed:** A repeated key now re-writes the existing `triageAction` record
 unchanged and returns its full handle. Each repeat adds a version of that
-record (retention is still 20 versions) and restarts its 30-day lifetime, so a
-marker that a workflow keeps hitting no longer expires 30 days after it was
-first written. No `gh` command runs on a repeat.
+record (retention is still 20 versions) whose 30-day lifetime starts from the
+repeat, so a marker that a workflow keeps hitting stays current instead of
+aging out from its first write. No `gh` command runs on a repeat.

@@ -23,7 +23,11 @@ function assertDedupHit(
   assertEquals(handle.name, previous.name);
   assertEquals(typeof handle.dataId, "string");
   assertEquals(typeof handle.version, "number");
-  assertEquals(typeof handle.tags, "object");
+  assertEquals(
+    typeof handle.tags === "object" && handle.tags !== null &&
+      !Array.isArray(handle.tags),
+    true,
+  );
 }
 
 Deno.test("triage augmentation exposes only its scoped methods", () => {
@@ -597,15 +601,16 @@ Deno.test("merge_pull_request reports failed when the PR closes without merging"
     }
   };
   try {
+    const args = {
+      repo: "webframp/swamp-extensions",
+      number: 423,
+      approvalComment: "/shipit",
+      timeoutSeconds: 1,
+      pollIntervalSeconds: 1,
+      idempotencyKey: "merge-2",
+    };
     await extension.methods[0].merge_pull_request.execute(
-      {
-        repo: "webframp/swamp-extensions",
-        number: 423,
-        approvalComment: "/shipit",
-        timeoutSeconds: 1,
-        pollIntervalSeconds: 1,
-        idempotencyKey: "merge-2",
-      },
+      args,
       context as never,
     );
     const written = getWrittenResources();
@@ -613,6 +618,13 @@ Deno.test("merge_pull_request reports failed when the PR closes without merging"
       (written[written.length - 1].data as { result: { status: string } })
         .result;
     assertEquals(result.status, "failed");
+    // A failed terminal marker is a dedup hit too.
+    const writtenAfterFirst = written.length;
+    const second = await extension.methods[0].merge_pull_request.execute(
+      args,
+      context as never,
+    );
+    assertDedupHit(getWrittenResources(), writtenAfterFirst, second);
   } finally {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = originalCommand;
