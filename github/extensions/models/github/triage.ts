@@ -17,6 +17,22 @@ type Ctx = {
   };
 };
 const key = (repo: string) => encodeURIComponent(repo);
+/**
+ * Return a full data handle for an idempotency marker that already exists.
+ * The runtime rejects name-only handles, and writeResource is the only API
+ * that produces a complete one, so the stored record is re-written unchanged.
+ * Safe only because triageAction has no sensitive fields: readResource
+ * resolves vault references, and this writes the resolved values back.
+ */
+async function existingHandle(
+  context: Ctx,
+  name: string,
+  existing: Record<string, unknown>,
+): Promise<{ dataHandles: { name: string }[] }> {
+  return {
+    dataHandles: [await context.writeResource("triageAction", name, existing)],
+  };
+}
 const REDACTED_FLAGS = new Set(["--body", "--title"]);
 function redactArgs(args: string[]): string[] {
   return args.map((arg, index) =>
@@ -143,8 +159,9 @@ export const extension = {
         context: Ctx,
       ) => {
         const resourceName = `${key(args.repo)}-create-${args.idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          return await existingHandle(context, resourceName, existing);
         }
         const marker = `<!-- triage:${args.idempotencyKey} -->`;
         const result = await gh([
@@ -198,8 +215,9 @@ export const extension = {
         context: Ctx,
       ) => {
         const resourceName = `${key(args.repo)}-comment-${args.idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          return await existingHandle(context, resourceName, existing);
         }
         const result = await gh([
           "issue",
@@ -237,8 +255,9 @@ export const extension = {
         context: Ctx,
       ) => {
         const resourceName = `${key(args.repo)}-close-${args.idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          return await existingHandle(context, resourceName, existing);
         }
         const result = await gh([
           "issue",
@@ -309,8 +328,9 @@ export const extension = {
         context: Ctx,
       ) => {
         const resourceName = `${key(args.repo)}-retry-${args.idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          return await existingHandle(context, resourceName, existing);
         }
         const result = await gh([
           "run",
@@ -439,8 +459,11 @@ export const extension = {
           result?: { status?: string };
         } | null;
         const existingStatus = existing?.result?.status;
-        if (existingStatus === "succeeded" || existingStatus === "failed") {
-          return { dataHandles: [{ name: resourceName }] };
+        if (
+          existing &&
+          (existingStatus === "succeeded" || existingStatus === "failed")
+        ) {
+          return await existingHandle(context, resourceName, existing);
         }
         if (existingStatus !== "posted") {
           // Record that the comment was posted *before* polling, so a retry
