@@ -1684,7 +1684,11 @@ async function runBigQuery(
       throw new Error("BigQuery response has no jobReference.jobId to poll");
     }
     if (polls >= MAX_POLLS) {
-      throw new Error("BigQuery job did not complete in time");
+      throw new Error(
+        page.jobComplete === undefined
+          ? "BigQuery responses never reported jobComplete; cannot tell whether the job finished"
+          : "BigQuery job did not complete in time",
+      );
     }
     const loc = ref.location
       ? `&location=${encodeURIComponent(ref.location)}`

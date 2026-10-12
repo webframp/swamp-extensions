@@ -3,8 +3,10 @@
 **Fixed:** A Monitoring 401 or 403 whose message contained "Cannot find metric"
 marked the project `no_data`, so a project we could not read looked like a
 complete scan with zero tokens. Only a 404 or 400 with that message now counts
-as no data; anything else marks the project `error` and `scan_summary.complete`
-false.
+as no data. Any other status on the token metric marks the project `error` and
+`scan_summary.complete` false; on a request-count metric the project keeps its
+token rows with `requestsAvailable: false`; in the legacy `scan_projects` it
+sets `truncated: true`.
 
 **Fixed:** A BigQuery response that omitted `jobComplete` skipped polling and
 returned zero rows, so the billing methods reported an empty result. The job is
@@ -28,4 +30,5 @@ scoped `authorized_user` credentials, and for a scan in which every project is
 
 **Upgrade note:** `otherTokens` is optional in the legacy schemas, so stored
 resources from earlier versions still validate. No global argument changes and
-no co-upgrades.
+no co-upgrades. `@webframp/ai-usage` reads `scan_projects` totals, so its Vertex
+`totalTokens` now includes other tokens and can exceed input plus output.

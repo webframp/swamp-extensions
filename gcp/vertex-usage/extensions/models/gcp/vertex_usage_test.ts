@@ -2623,3 +2623,81 @@ Deno.test("a failing body cancel does not replace the retried error", async () =
     .data as { projects: Array<{ status: string }> };
   assertEquals(sum.projects[0].status, "no_data");
 });
+
+Deno.test("a 400 'Cannot find metric' is still no_data", async () => {
+  const f = createMockFetchFn((u) => {
+    if (url(u).includes("oauth2.googleapis.com/token")) return tokenResponse();
+    return new Response("Cannot find metric(s) that match type", {
+      status: 400,
+    });
+  });
+  const { ctx, getWrittenResources } = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.scan_usage.execute(
+    { days: 1, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const sum = getWrittenResources().find((w) => w.specName === "scan_summary")!
+    .data as { projects: Array<{ status: string }> };
+  assertEquals(sum.projects[0].status, "no_data");
+});
+
+Deno.test("a 403 quoting 'Cannot find metric' on request counts is not zero requests", async () => {
+  const f = createMockFetchFn((u) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("model_invocation_count")) {
+      return new Response(
+        "Permission denied: Cannot find metric model_invocation_count",
+        { status: 403 },
+      );
+    }
+    return monitoringResponse([
+      series({
+        model: "m",
+        direction: "input",
+        points: [["2026-09-28", "5"]],
+      }),
+    ]);
+  });
+  const { ctx, getWrittenResources } = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.scan_usage.execute(
+    { days: 7, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const usage = getWrittenResources().find((w) => w.specName === "usage")!
+    .data as { requestsAvailable: boolean };
+  assertEquals(usage.requestsAvailable, false);
+  const sum = getWrittenResources().find((w) => w.specName === "scan_summary")!
+    .data as { complete: boolean };
+  assertEquals(sum.complete, false);
+});
+
+Deno.test("BigQuery polls that never report jobComplete say so", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (init?.method === "POST") {
+      const body = JSON.parse(init.body as string);
+      if ((body.query as string).includes("MAX(usage_end_time)")) {
+        return bqResponse(["o_data_through"], [["2099-01-01T00:00:00Z"]]);
+      }
+    }
+    return new Response(
+      JSON.stringify({ jobReference: { projectId: "bill-proj", jobId: "j" } }),
+      { status: 200 },
+    );
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "never reported jobComplete",
+  );
+});
