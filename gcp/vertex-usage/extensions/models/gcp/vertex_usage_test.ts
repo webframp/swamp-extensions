@@ -2408,3 +2408,218 @@ Deno.test("BigQuery jobs.query carries a requestId for deduplication", async () 
   assertMatch(String(ids[0]), /^[0-9a-f-]{36}$/);
   assertEquals(ids[0] !== ids[1], true);
 });
+
+// ---- #469 follow-ups -------------------------------------------------------
+
+Deno.test("a 403 quoting 'Cannot find metric' is an error, not no_data", async () => {
+  const f = createMockFetchFn((u) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (s.includes("/projects/denied/")) {
+      return new Response(
+        "Permission denied: Cannot find metric " +
+          "aiplatform.googleapis.com/publisher/online_serving/token_count " +
+          "for project denied",
+        { status: 403 },
+      );
+    }
+    return monitoringResponse([]);
+  });
+  const { ctx, getWrittenResources } = ctxFor(
+    { projects: ["denied", "empty"] },
+    f,
+  );
+  await model.methods.scan_usage.execute(
+    { days: 1, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const sum = getWrittenResources().find((w) => w.specName === "scan_summary")!
+    .data as {
+      complete: boolean;
+      projects: Array<{ project: string; status: string }>;
+    };
+  const byProject = Object.fromEntries(
+    sum.projects.map((p) => [p.project, p.status]),
+  );
+  assertEquals(byProject.denied, "error");
+  assertEquals(byProject.empty, "no_data");
+  assertEquals(sum.complete, false);
+});
+
+Deno.test("a 404 'Cannot find metric' is still no_data", async () => {
+  const f = createMockFetchFn((u) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    return new Response(
+      JSON.stringify({
+        error: {
+          code: 404,
+          message: "Cannot find metric(s) that match type",
+          status: "NOT_FOUND",
+        },
+      }),
+      { status: 404 },
+    );
+  });
+  const { ctx, getWrittenResources } = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.scan_usage.execute(
+    { days: 1, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const sum = getWrittenResources().find((w) => w.specName === "scan_summary")!
+    .data as { complete: boolean; projects: Array<{ status: string }> };
+  assertEquals(sum.projects[0].status, "no_data");
+  assertEquals(sum.complete, true);
+});
+
+Deno.test("BigQuery response without jobComplete is polled, not read as empty", async () => {
+  const gets: string[] = [];
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (init?.method === "POST") {
+      const body = JSON.parse(init.body as string);
+      if ((body.query as string).includes("MAX(usage_end_time)")) {
+        return bqResponse(["o_data_through"], [["2099-01-01T00:00:00Z"]]);
+      }
+      // Neither jobComplete nor schema: the job is not known to be finished.
+      return new Response(
+        JSON.stringify({
+          jobReference: { projectId: "bill-proj", jobId: "job7" },
+        }),
+        { status: 200 },
+      );
+    }
+    gets.push(s);
+    return bqResponse(COST_FIELDS, [[
+      "2026-09-28",
+      "a",
+      "Vertex AI",
+      "s1",
+      "",
+      "regular",
+      "USD",
+      "",
+      "1",
+      "4",
+      "0",
+    ]]);
+  });
+  const { ctx, getWrittenResources } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await model.methods.get_billing_costs.execute(
+    { days: 7, services: ["Vertex AI"] },
+    ctx,
+  );
+  assertEquals(gets.length, 1);
+  assertMatch(gets[0], /queries\/job7\?/);
+  const a = getWrittenResources().find((w) => w.name === "billing-a")!.data as {
+    totals: Array<{ cost: number }>;
+  };
+  assertEquals(a.totals[0].cost, 4);
+});
+
+Deno.test("BigQuery response with neither jobComplete nor a job id fails", async () => {
+  const f = createMockFetchFn((u, init) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    if (init?.method === "POST") {
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    return bqResponse(COST_FIELDS, []);
+  });
+  const { ctx } = ctxFor(
+    { billingTable: BILLING_TABLE, billingSchema: "standard" },
+    f,
+  );
+  await assertRejects(
+    () =>
+      model.methods.get_billing_costs.execute(
+        { days: 1, services: ["Vertex AI"] },
+        ctx,
+      ),
+    Error,
+    "no jobReference.jobId",
+  );
+});
+
+Deno.test("legacy scans count other token directions in totalTokens", async () => {
+  const f = createMockFetchFn((u) => {
+    const s = url(u);
+    if (s.includes("oauth2.googleapis.com/token")) return tokenResponse();
+    return monitoringResponse([
+      {
+        metric: { labels: { type: "input" } },
+        resource: { labels: { model_user_id: "gemini-2.0" } },
+        points: [{ value: { int64Value: "100" } }],
+      },
+      {
+        metric: { labels: { type: "output" } },
+        resource: { labels: { model_user_id: "gemini-2.0" } },
+        points: [{ value: { int64Value: "20" } }],
+      },
+      {
+        metric: { labels: { type: "cached_input" } },
+        resource: { labels: { model_user_id: "gemini-2.0" } },
+        points: [{ value: { int64Value: "5" } }],
+      },
+    ]);
+  });
+
+  type Legacy = {
+    projects: Array<{
+      otherTokens: number;
+      totalTokens: number;
+      models: Array<{ otherTokens: number; totalTokens: number }>;
+    }>;
+    totals: { otherTokens: number; totalTokens: number };
+  };
+
+  const scan = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.scan_projects.execute(
+    { days: 7 },
+    scan.ctx as unknown as ScanContext,
+  );
+  const s = scan.getWrittenResources()[0].data as Legacy;
+  assertEquals(s.projects[0].models[0].otherTokens, 5);
+  assertEquals(s.projects[0].models[0].totalTokens, 125);
+  assertEquals(s.projects[0].otherTokens, 5);
+  assertEquals(s.projects[0].totalTokens, 125);
+  assertEquals(s.totals.otherTokens, 5);
+  assertEquals(s.totals.totalTokens, 125);
+
+  const single = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.get_token_usage.execute(
+    { project: "p1", days: 7 },
+    single.ctx as unknown as UsageContext,
+  );
+  const g = single.getWrittenResources()[0].data as Legacy;
+  assertEquals(g.projects[0].totalTokens, 125);
+  assertEquals(g.totals.totalTokens, 125);
+});
+
+Deno.test("a failing body cancel does not replace the retried error", async () => {
+  let calls = 0;
+  const f = createMockFetchFn((u) => {
+    if (url(u).includes("oauth2.googleapis.com/token")) return tokenResponse();
+    calls++;
+    if (calls === 1) {
+      const resp = new Response("busy", { status: 503 });
+      Object.defineProperty(resp, "body", {
+        value: { cancel: () => Promise.reject(new Error("cancel failed")) },
+      });
+      return resp;
+    }
+    return monitoringResponse([]);
+  });
+  const { ctx, getWrittenResources } = ctxFor({ projects: ["p1"] }, f);
+  await model.methods.scan_usage.execute(
+    { days: 1, parents: [], concurrency: 1, maxRequestsPerMinute: 120 },
+    ctx,
+  );
+  const sum = getWrittenResources().find((w) => w.specName === "scan_summary")!
+    .data as { projects: Array<{ status: string }> };
+  assertEquals(sum.projects[0].status, "no_data");
+});

@@ -97,8 +97,12 @@ const ModelUsageSchema = z.object({
   outputTokens: z.number().describe(
     "Total output-direction tokens for this model over the scanned period",
   ),
+  otherTokens: z.number().optional().describe(
+    "Tokens whose direction label is neither input nor output (for example " +
+      "cached tokens). Absent on resources written before 2026.10.12.1.",
+  ),
   totalTokens: z.number().describe(
-    "Sum of inputTokens and outputTokens for this model",
+    "Sum of inputTokens, outputTokens and otherTokens for this model",
   ),
 });
 
@@ -111,8 +115,12 @@ const ProjectUsageSchema = z.object({
   outputTokens: z.number().describe(
     "Total output-direction tokens across all models over the scanned period",
   ),
+  otherTokens: z.number().optional().describe(
+    "Tokens across all models whose direction is neither input nor output. " +
+      "Absent on resources written before 2026.10.12.1.",
+  ),
   totalTokens: z.number().describe(
-    "Sum of inputTokens and outputTokens for this project",
+    "Sum of inputTokens, outputTokens and otherTokens for this project",
   ),
   models: z.array(ModelUsageSchema).describe(
     "Per-model token usage breakdown",
@@ -145,6 +153,9 @@ const ScanResultsSchema = z.object({
     inputTokens: z.number().describe("Sum of inputTokens across all projects"),
     outputTokens: z.number().describe(
       "Sum of outputTokens across all projects",
+    ),
+    otherTokens: z.number().optional().describe(
+      "Sum of otherTokens across all projects",
     ),
     totalTokens: z.number().describe("Sum of totalTokens across all projects"),
     inputTokensPerMinute: z.number().describe(
@@ -529,7 +540,11 @@ function makeRateLimiter(
   return async () => {
     for (;;) {
       const t = http.nowFn();
-      while (stamps.length > 0 && t - stamps[0] >= 60_000) stamps.shift();
+      let expired = 0;
+      while (expired < stamps.length && t - stamps[expired] >= 60_000) {
+        expired++;
+      }
+      if (expired > 0) stamps.splice(0, expired);
       if (stamps.length < perMinute) {
         stamps.push(t);
         return;
@@ -569,7 +584,8 @@ async function gcpFetch(
     const delay = Number.isFinite(retryAfter) && retryAfter > 0
       ? Math.min(retryAfter * 1000, 60_000)
       : Math.min(base * 2 ** attempt, 30_000);
-    await resp?.body?.cancel();
+    // A failed cancel must not replace the 429/5xx we are retrying.
+    await resp?.body?.cancel().catch(() => {});
     await http.sleepFn(delay);
   }
 }
@@ -1055,7 +1071,13 @@ async function listTimeSeries(
 
     if (!resp.ok) {
       const body = await resp.text();
-      if (body.includes("Cannot find metric")) {
+      // Only a not-found or invalid-filter response means the metric is
+      // absent. A 401/403 can quote the same text and must stay an error, or
+      // an unreadable project would read as zero usage.
+      if (
+        (resp.status === 404 || resp.status === 400) &&
+        body.includes("Cannot find metric")
+      ) {
         return { series: [], truncated: false };
       }
       throw new Error(
@@ -1654,7 +1676,10 @@ async function runBigQuery(
   );
 
   const ref = page.jobReference;
-  for (let polls = 0; page.jobComplete === false; polls++) {
+  // Poll until BigQuery says the job is complete. A response that omits
+  // jobComplete is not a finished job; without a job id it fails below rather
+  // than returning zero rows.
+  for (let polls = 0; page.jobComplete !== true; polls++) {
     if (!ref?.jobId) {
       throw new Error("BigQuery response has no jobReference.jobId to poll");
     }
@@ -1917,34 +1942,53 @@ async function queryTokenMetrics(
   return { data: results, truncated };
 }
 
-/** Aggregate raw data points into per-model input/output totals. */
+/**
+ * Aggregate raw data points into per-model totals. Directions other than input
+ * and output go to otherTokens and count toward totalTokens, matching
+ * scan_usage, so both paths agree on totals for the same window.
+ */
 function aggregateModels(data: TokenData[]): {
   models: z.infer<typeof ModelUsageSchema>[];
   inputTokens: number;
   outputTokens: number;
+  otherTokens: number;
+  totalTokens: number;
 } {
-  const modelMap = new Map<string, { input: number; output: number }>();
+  const modelMap = new Map<
+    string,
+    { input: number; output: number; other: number }
+  >();
   for (const d of data) {
-    const existing = modelMap.get(d.model) || { input: 0, output: 0 };
+    const existing = modelMap.get(d.model) ?? { input: 0, output: 0, other: 0 };
     if (d.direction === "input") existing.input += d.tokens;
     else if (d.direction === "output") existing.output += d.tokens;
+    else existing.other += d.tokens;
     modelMap.set(d.model, existing);
   }
   const models: z.infer<typeof ModelUsageSchema>[] = [];
   let inputTokens = 0;
   let outputTokens = 0;
+  let otherTokens = 0;
   for (const [modelId, usage] of modelMap) {
     models.push({
       modelId,
       inputTokens: usage.input,
       outputTokens: usage.output,
-      totalTokens: usage.input + usage.output,
+      otherTokens: usage.other,
+      totalTokens: usage.input + usage.output + usage.other,
     });
     inputTokens += usage.input;
     outputTokens += usage.output;
+    otherTokens += usage.other;
   }
   models.sort((a, b) => b.totalTokens - a.totalTokens);
-  return { models, inputTokens, outputTokens };
+  return {
+    models,
+    inputTokens,
+    outputTokens,
+    otherTokens,
+    totalTokens: inputTokens + outputTokens + otherTokens,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1964,7 +2008,7 @@ const ProjectsFilterArg = z.array(z.string().min(1)).optional().describe(
 /** GCP Vertex AI usage and cost analysis model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.10.01.1",
+  version: "2026.10.12.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -2027,6 +2071,12 @@ export const model = {
       toVersion: "2026.10.01.1",
       description:
         "projects is now optional (runtime discovery); added optional billingTable and billingQueryProject, and new usage, Gemini and billing resources. Existing definitions are unchanged.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.12.1",
+      description:
+        "No global argument changes; legacy scan resources gain optional otherTokens fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2693,12 +2743,19 @@ FROM \`${table}\` WHERE ${where}`,
             if (data.length === 0) continue;
             if (pageTruncated) anyTruncated = true;
 
-            const { models, inputTokens, outputTokens } = aggregateModels(data);
+            const {
+              models,
+              inputTokens,
+              outputTokens,
+              otherTokens,
+              totalTokens,
+            } = aggregateModels(data);
             projects.push({
               project,
               inputTokens,
               outputTokens,
-              totalTokens: inputTokens + outputTokens,
+              otherTokens,
+              totalTokens,
               models,
               periodMinutes,
               inputTokensPerMinute: inputTokens / periodMinutes,
@@ -2707,7 +2764,7 @@ FROM \`${table}\` WHERE ${where}`,
 
             context.logger.info("Scanned project", {
               project,
-              totalTokens: inputTokens + outputTokens,
+              totalTokens,
             });
           } catch (err) {
             // A failed project makes the scan incomplete, not empty.
@@ -2723,6 +2780,10 @@ FROM \`${table}\` WHERE ${where}`,
 
         const totalInput = projects.reduce((s, p) => s + p.inputTokens, 0);
         const totalOutput = projects.reduce((s, p) => s + p.outputTokens, 0);
+        const totalOther = projects.reduce(
+          (s, p) => s + (p.otherTokens ?? 0),
+          0,
+        );
 
         const handle = await context.writeResource(
           "scan_results",
@@ -2736,7 +2797,8 @@ FROM \`${table}\` WHERE ${where}`,
             totals: {
               inputTokens: totalInput,
               outputTokens: totalOutput,
-              totalTokens: totalInput + totalOutput,
+              otherTokens: totalOther,
+              totalTokens: totalInput + totalOutput + totalOther,
               inputTokensPerMinute: totalInput / periodMinutes,
               outputTokensPerMinute: totalOutput / periodMinutes,
             },
@@ -2779,7 +2841,8 @@ FROM \`${table}\` WHERE ${where}`,
           args.days,
           http,
         );
-        const { models, inputTokens, outputTokens } = aggregateModels(data);
+        const { models, inputTokens, outputTokens, otherTokens, totalTokens } =
+          aggregateModels(data);
 
         const handle = await context.writeResource(
           "single_scan",
@@ -2794,7 +2857,8 @@ FROM \`${table}\` WHERE ${where}`,
                 project: args.project,
                 inputTokens,
                 outputTokens,
-                totalTokens: inputTokens + outputTokens,
+                otherTokens,
+                totalTokens,
                 models,
                 periodMinutes,
                 inputTokensPerMinute: inputTokens / periodMinutes,
@@ -2804,7 +2868,8 @@ FROM \`${table}\` WHERE ${where}`,
             totals: {
               inputTokens,
               outputTokens,
-              totalTokens: inputTokens + outputTokens,
+              otherTokens,
+              totalTokens,
               inputTokensPerMinute: inputTokens / periodMinutes,
               outputTokensPerMinute: outputTokens / periodMinutes,
             },
