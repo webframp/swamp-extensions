@@ -165,9 +165,27 @@ Deno.test("post_ripple does not post twice for the same idempotency key", async 
       idempotencyKey: "ripple-12",
     };
     await model.methods.post_ripple.execute(args, context as never);
-    await model.methods.post_ripple.execute(args, context as never);
+    const second = await model.methods.post_ripple.execute(
+      args,
+      context as never,
+    );
     assertEquals(callCount, 1);
-    assertEquals(getWrittenResources().length, 1);
+    // A repeated key must return a complete handle (the workflow runtime
+    // rejects name-only handles) that points at the unchanged record.
+    const written = getWrittenResources();
+    assertEquals(written.length, 2);
+    assertEquals(written[1].name, written[0].name);
+    assertEquals(written[1].data, written[0].data);
+    assertEquals(second.dataHandles.length, 1);
+    const handle = second.dataHandles[0] as Record<string, unknown>;
+    assertEquals(handle.name, written[0].name);
+    assertEquals(typeof handle.dataId, "string");
+    assertEquals(typeof handle.version, "number");
+    assertEquals(
+      typeof handle.tags === "object" && handle.tags !== null &&
+        !Array.isArray(handle.tags),
+      true,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
