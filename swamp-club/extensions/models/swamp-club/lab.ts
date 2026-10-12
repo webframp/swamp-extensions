@@ -56,7 +56,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.09.18.1",
+  version: "2026.10.12.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -70,6 +70,11 @@ export const model = {
     toVersion: "2026.09.18.1",
     description:
       "Normalized zod dependency version to 4.6.5; no behavioral changes",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.10.12.1",
+    description:
+      "No schema changes — post_ripple returns a complete data handle on a repeated key",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {
@@ -155,8 +160,17 @@ export const model = {
         context: Context,
       ) => {
         const resourceName = `${issueNumber}-${idempotencyKey}`;
-        if (await context.readResource(resourceName)) {
-          return { dataHandles: [{ name: resourceName }] };
+        const existing = await context.readResource(resourceName);
+        if (existing) {
+          // The runtime rejects name-only handles, and writeResource is the
+          // only API that returns a complete one, so re-write the record
+          // unchanged. Safe because ripple has no sensitive fields.
+          const handle = await context.writeResource(
+            "ripple",
+            resourceName,
+            existing,
+          );
+          return { dataHandles: [handle] };
         }
         const marked = `${body}\n\n<!-- triage:${idempotencyKey} -->`;
         const response = await request(
