@@ -29,7 +29,14 @@ type Context = {
     spec: string,
     name: string,
     data: unknown,
-  ) => Promise<{ name: string }>;
+  ) => Promise<DataHandle>;
+};
+// The fields the workflow runtime requires on a returned handle.
+type DataHandle = {
+  name: string;
+  dataId: string;
+  version: number;
+  tags: Record<string, string>;
 };
 function url(host: string, path: string) {
   return `https://${
@@ -164,7 +171,9 @@ export const model = {
         if (existing) {
           // The runtime rejects name-only handles, and writeResource is the
           // only API that returns a complete one, so re-write the record
-          // unchanged. Safe because ripple has no sensitive fields.
+          // unchanged. readResource resolves vault references and this
+          // writes the resolved values back; acceptable because ripple holds
+          // only the already-posted public comment and its identifiers.
           const handle = await context.writeResource(
             "ripple",
             resourceName,
