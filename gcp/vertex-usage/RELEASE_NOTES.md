@@ -1,53 +1,34 @@
-## 2026.10.01.1
+## 2026.10.12.1
 
-**Fixed:** `scan_projects` set no flag when a project failed to scan, so a
-partial scan looked complete. A failed project now sets `truncated: true`.
-Monitoring requests that hit a 429 or 5xx are retried with backoff instead of
-failing the project on the first response. `billing_summary.complete` is now
-`false` when no billing rows match the filters, so a wrong service name no
-longer reads as a valid empty result.
+**Fixed:** A Monitoring 401 or 403 whose message contained "Cannot find metric"
+marked the project `no_data`, so a project we could not read looked like a
+complete scan with zero tokens. Only a 404 or 400 with that message now counts
+as no data. Any other status on the token metric marks the project `error` and
+`scan_summary.complete` false; on a request-count metric the project keeps its
+token rows with `requestsAvailable: false`; in the legacy `scan_projects` it
+sets `truncated: true`.
 
-**Added:** Gemini API coverage and cost analysis alongside Vertex AI.
+**Fixed:** A BigQuery response that omitted `jobComplete` skipped polling and
+returned zero rows, so the billing methods reported an empty result. The job is
+now polled until `jobComplete` is true, and a response with no job id to poll
+fails with a clear error.
 
-- `discover_projects`, and project discovery in every scan, find ACTIVE projects
-  through Cloud Resource Manager. `projects` is now optional.
-- `scan_usage` writes daily token and request rows per project, location,
-  publisher, model and request type, with error and 429 counts, as one
-  `usage-<project>` instance per project. `scan_summary` records every project
-  as `ok`, `no_data` or `error`, and `complete` is false if any project failed.
-- `scan_gemini_api_usage` does the same for the Gemini API: daily output tokens
-  by model, and API-wide request counts by method, response code and API key.
-  Monitoring has no input-token metric for this API, so input volume comes from
-  billing. `gemini_usage.requestsAvailable` is false when request counts could
-  not be read, and the scan's `complete` follows it.
-- BigQuery queries fail with the job's error when the response carries an
-  `errors` array, instead of returning zero rows.
-- Daily Monitoring points are assigned to a day by the midpoint of their
-  interval, so an inclusive or missing `endTime` cannot shift a point to the
-  neighbouring day.
-- `discover_billing_services` and `get_billing_costs` read the Cloud Billing
-  export in BigQuery. Gross cost, credits and net cost are reported per day,
-  project and SKU, never mixing currencies or cost types. Both the standard and
-  the FOCUS export are supported (`billingSchema`, auto-detected). The standard
-  export path is covered by unit tests only.
-- Authentication also accepts `GCP_ACCESS_TOKEN` and `authorized_user` files
-  named by `GOOGLE_APPLICATION_CREDENTIALS`.
-- New optional global arguments: `billingTable`, `billingSchema`,
-  `billingQueryProject`.
+**Fixed:** If a retried 429 or 5xx response failed to cancel its body, the
+cancel error replaced the retry and failed the request. The cancel is now
+best-effort.
 
-**Changed:** `scan_projects` and `get_token_usage` keep their output schemas.
-`scan_projects` now discovers projects when none are configured. Scans pace
-Monitoring calls with `maxRequestsPerMinute` (default 120) to stay under the
-default quota of 180 requests per minute per user. A `GCP_ACCESS_TOKEN`
-environment variable now takes precedence over `GOOGLE_APPLICATION_CREDENTIALS`
-when both are set, so unset a stale token if a host exports one for another
-tool. `maxRequestsPerMinute` paces first attempts only: a retry no longer takes
-a limiter slot, but retries still count against Google's quota, so leave
-headroom below the real limit. A BigQuery response with no job id now fails with
-its own message instead of reporting a timeout or a page-cap error.
+**Changed:** `scan_projects` and `get_token_usage` dropped tokens whose
+direction label was neither input nor output (for example cached tokens), so
+their `totalTokens` could be lower than `scan_usage` for the same window. Those
+tokens now appear in a new `otherTokens` field on each model, each project and
+the totals, and count toward `totalTokens`. Legacy totals rise for any project
+that reports such a direction.
 
-**Upgrade note:** Existing definitions keep working without changes, and
-`@webframp/ai-usage` needs no co-upgrade. The billing methods need
-`billingTable`, BigQuery Data Viewer on the export dataset and BigQuery Job User
-on the project that runs the query. Project discovery needs
-`resourcemanager.projects.get`.
+**Added:** README troubleshooting entries for a BigQuery 403 with narrowly
+scoped `authorized_user` credentials, and for a scan in which every project is
+`no_data`.
+
+**Upgrade note:** `otherTokens` is optional in the legacy schemas, so stored
+resources from earlier versions still validate. No global argument changes and
+no co-upgrades. `@webframp/ai-usage` reads `scan_projects` totals, so its Vertex
+`totalTokens` now includes other tokens and can exceed input plus output.

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/gcp/vertex-usage"
-version: "2026.10.01.1"
+version: "2026.10.12.1"
 description: |
   GCP Vertex AI and Gemini API usage and cost analysis. Reads token and request
   volume from Cloud Monitoring and dollar cost from the Cloud Billing export in

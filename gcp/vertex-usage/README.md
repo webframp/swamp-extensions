@@ -159,7 +159,9 @@ rows matched.
 
 Single-bucket totals per model with no daily detail, kept for existing
 workflows. Prefer `scan_usage`. A project that fails in `scan_projects` now sets
-`truncated: true`.
+`truncated: true`. Tokens whose direction is neither input nor output (for
+example cached tokens) are reported as `otherTokens` and included in
+`totalTokens`, so the legacy totals match `scan_usage` for the same window.
 
 ## Querying
 
@@ -204,7 +206,9 @@ only.
 ## Troubleshooting
 
 - **A project shows `no_data`.** Its Vertex metric is empty for the window,
-  which is normal for a project that never called Vertex AI.
+  which is normal for a project that never called Vertex AI. If every project
+  shows `no_data`, `scan_summary.complete` is still true; check the project IDs
+  before reading that as zero usage.
 - **A project shows `error`.** The message is in `scan_summary`. A 403 usually
   means a missing `roles/monitoring.viewer` binding.
 - **`requestsAvailable: false`.** Token counts were read but the invocation
@@ -219,3 +223,9 @@ only.
 - **`GCP token exchange failed`.** The OAuth endpoint rejected the credential,
   most often a revoked service account key. The error includes the HTTP status
   and body.
+- **BigQuery returns 403 with `authorized_user` credentials.** An
+  `authorized_user` refresh token carries only the scopes granted at login, and
+  the refresh does not request more. The default
+  `gcloud auth application-default login` grants `cloud-platform`, which covers
+  BigQuery. A login with a narrower `--scopes` list must include
+  `https://www.googleapis.com/auth/bigquery` for the billing methods.
