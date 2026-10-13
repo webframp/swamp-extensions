@@ -1,0 +1,60 @@
+manifestVersion: 1
+name: "@webframp/aws/acm-diagnostics"
+version: "2026.10.13.1"
+description: |
+  Read-only diagnostics for AWS Certificate Manager issuance and validation problems.
+  Reports per-domain validation status, the exact DNS CNAME records ACM expects, failure
+  reasons, and which resources still use a certificate, for many certificates in one call.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Set the optional `profile` global argument to
+  resolve credentials from a named AWS shared-config profile (SSO token cache / fromIni),
+  enabling multi-account use within a single swamp repo. Only ListCertificates and
+  DescribeCertificate are called, so a read-only profile is sufficient.
+
+  ## Required IAM Permissions
+
+  - `acm:ListCertificates`
+  - `acm:DescribeCertificate`
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/acm-diagnostics acm-prod \
+    --global-arg region=us-east-1 --global-arg profile=prod-account
+
+  # Find certificates stuck waiting on validation
+  swamp model method run acm-prod list_certificates \
+    --input 'statuses=["PENDING_VALIDATION","VALIDATION_TIMED_OUT"]'
+
+  # Which domain failed validation, and what record does ACM want?
+  swamp model method run acm-prod describe_certificates \
+    --input 'certificateArns=["arn:aws:acm:us-east-1:123456789012:certificate/00000000-0000-0000-0000-000000000000"]'
+  ```
+
+  ## Methods
+
+  - **list_certificates** - List certificates, filtered by status and domain substring
+  - **describe_certificates** - Fan-out DescribeCertificate over many ARNs: validation
+    status per domain, expected DNS records, failure reason, in-use resources, plus a
+    roll-up of pending, in-use, missing, and errored certificates. Fails if no
+    certificate could be described.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/acm_diagnostics.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - acm
+  - aws
+  - certificates
+  - incident-response
+  - infrastructure
+  - troubleshooting
