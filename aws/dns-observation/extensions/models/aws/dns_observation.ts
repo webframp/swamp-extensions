@@ -499,7 +499,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.09.24.1",
+  version: "2026.10.13.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -599,6 +599,12 @@ export const model = {
     {
       toVersion: "2026.09.24.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.13.1",
+      description:
+        "Data names changed (latest -> zone-scan / orphan-scan); no attribute schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -726,7 +732,7 @@ export const model = {
             },
           };
 
-          const handle = await context.writeResource("zones", "latest", {
+          const handle = await context.writeResource("zones", "zone-scan", {
             ...result,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
@@ -981,7 +987,7 @@ export const model = {
           context.logger.warn("No record data available", {
             hint: "Run list_records first",
           });
-          const handle = await context.writeResource("orphans", "latest", {
+          const handle = await context.writeResource("orphans", "orphan-scan", {
             fetchedAt: new Date().toISOString(),
             accountId,
             truncated: false,
@@ -1087,7 +1093,7 @@ export const model = {
           },
         };
 
-        const handle = await context.writeResource("orphans", "latest", {
+        const handle = await context.writeResource("orphans", "orphan-scan", {
           ...result,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,

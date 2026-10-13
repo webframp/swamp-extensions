@@ -1,3 +1,18 @@
+## 2026.10.13.1
+
+**Fixed:** `list_zones` and `detect_orphans` failed on current swamp with
+`Data name 'latest' is reserved for internal use`. `list_zones` now writes its
+`zones` resource as `zone-scan` and `detect_orphans` writes `orphans` as
+`orphan-scan`, matching `list_records`' `record-scan`. `list_records` is
+unchanged.
+
+**Changed:** The stored data names changed. Anything that addressed the old
+`latest` data name, for example `data.latest("<model>", "latest")` or
+`name == "latest"`, must use `zone-scan` / `orphan-scan`. The README query
+examples named the spec (`zones`, `orphans`) rather than the data name, so they
+never matched; they now use the real names. Resource specs and schemas are
+unchanged, so consumers that select by spec are unaffected.
+
 ## 2026.09.24.1
 
 **Changed:** Bump @aws-sdk/* 3.1133.0 → 3.1139.0 (3 packages)
