@@ -15,6 +15,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/aws/inventory`](aws/inventory/) | EC2, RDS, DynamoDB, Lambda, and S3 inventory discovery | `@aws-sdk/client-ec2`, `@aws-sdk/client-rds`, and others |
 | [`@webframp/aws/logs`](aws/logs/) | CloudWatch Logs queries and analysis | `@aws-sdk/client-cloudwatch-logs` |
 | [`@webframp/aws/acm-diagnostics`](aws/acm-diagnostics/) | ACM certificate validation diagnostics — per-domain status, expected DNS records, failure reasons, in-use resources | `@aws-sdk/client-acm` |
+| [`@webframp/aws/cfn-diagnostics`](aws/cfn-diagnostics/) | CloudFormation failure diagnostics — stack events with root-cause extraction, nested stacks, and CloudTrail event lookup | `@aws-sdk/client-cloudformation`, `@aws-sdk/client-cloudtrail` |
 | [`@webframp/aws/metrics`](aws/metrics/) | CloudWatch Metrics retrieval and anomaly analysis | `@aws-sdk/client-cloudwatch` |
 | [`@webframp/aws/alarms`](aws/alarms/) | CloudWatch Alarms status, history, and active alerts | `@aws-sdk/client-cloudwatch` |
 | [`@webframp/aws/traces`](aws/traces/) | X-Ray distributed tracing and error analysis | `@aws-sdk/client-xray` |
@@ -197,6 +198,7 @@ swamp extension pull @webframp/aws/pricing
 swamp extension pull @webframp/aws/inventory
 swamp extension pull @webframp/aws/logs
 swamp extension pull @webframp/aws/acm-diagnostics
+swamp extension pull @webframp/aws/cfn-diagnostics
 swamp extension pull @webframp/aws/metrics
 swamp extension pull @webframp/aws/alarms
 swamp extension pull @webframp/aws/traces

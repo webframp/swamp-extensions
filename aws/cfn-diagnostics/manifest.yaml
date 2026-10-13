@@ -1,0 +1,69 @@
+manifestVersion: 1
+name: "@webframp/aws/cfn-diagnostics"
+version: "2026.10.13.1"
+description: |
+  Read-only diagnostics for failed or rolled-back CloudFormation stack operations.
+  Pulls stack event history, separates root-cause failures from cancellation
+  cascades and rollback blockers, follows nested stacks, and looks up the CloudTrail
+  API calls behind a failure (AccessDenied, ExpiredToken, and similar).
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Set the optional `profile` global argument to
+  resolve credentials from a named AWS shared-config profile (SSO token cache / fromIni),
+  enabling multi-account use within a single swamp repo. Only Describe*, List* and
+  LookupEvents calls are made, so a read-only profile is sufficient.
+
+  ## Required IAM Permissions
+
+  - `cloudformation:ListStacks`
+  - `cloudformation:DescribeStacks`
+  - `cloudformation:DescribeStackEvents`
+  - `cloudformation:ListStackResources`
+  - `cloudtrail:LookupEvents`
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/cfn-diagnostics cfn-prod \
+    --global-arg region=us-east-1 --global-arg profile=prod-account
+
+  # Find the stack
+  swamp model method run cfn-prod list_stacks --input nameContains=my-app
+
+  # What failed, and which failure is the root cause?
+  swamp model method run cfn-prod list_stack_events \
+    --input stackName=my-app --input since=7d
+
+  # Which API call was denied, and as which principal?
+  swamp model method run cfn-prod lookup_events \
+    --input startTime=2026-10-09T18:00:00Z --input endTime=2026-10-09T18:15:00Z \
+    --input lookupAttribute=EventSource --input lookupValue=rds.amazonaws.com
+  ```
+
+  ## Methods
+
+  - **list_stacks** - List stacks, optionally filtered by name substring and status
+  - **describe_stack** - Stack status, parameters, tags, and every resource's state
+  - **list_stack_events** - Events in a time window with failed events, root-cause
+    candidates, and rollback blockers extracted; follows nested stacks
+  - **lookup_events** - CloudTrail LookupEvents (management events, last 90 days)
+    with principal extraction and an error roll-up
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/cfn_diagnostics.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - aws
+  - cloudformation
+  - cloudtrail
+  - incident-response
+  - infrastructure
+  - troubleshooting
