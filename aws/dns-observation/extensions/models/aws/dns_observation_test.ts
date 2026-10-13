@@ -222,6 +222,8 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zones");
+      // "latest" is reserved by swamp for internal use and is rejected.
+      assertEquals(resources[0].name, "zone-scan");
 
       const data = resources[0].data as {
         zones: Array<{
@@ -390,6 +392,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      assertEquals(resources[0].name, "orphan-scan");
       const data = resources[0].data as {
         orphans: unknown[];
         summary: { totalOrphans: number };
@@ -459,6 +462,7 @@ Deno.test({
       const resources = getWrittenResources();
       const orphanReport = resources.find((r) => r.specName === "orphans");
       assertExists(orphanReport);
+      assertEquals(orphanReport.name, "orphan-scan");
 
       const data = orphanReport.data as {
         orphans: Array<{

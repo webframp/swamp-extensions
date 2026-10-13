@@ -59,15 +59,15 @@ Records of type NS, SOA, TXT, MX, SRV are skipped by default.
 ```bash
 # Find all orphaned records
 swamp data query aws-dns-observation \
-  'data.latest("aws-dns-observation", "orphans").attributes.orphans'
+  'data.latest("aws-dns-observation", "orphan-scan").attributes.orphans'
 
 # Count orphans by reason
 swamp data query aws-dns-observation \
-  'data.latest("aws-dns-observation", "orphans").attributes.summary.byReason'
+  'data.latest("aws-dns-observation", "orphan-scan").attributes.summary.byReason'
 
 # List all public zones
 swamp data query aws-dns-observation \
-  'data.latest("aws-dns-observation", "zones").attributes.zones.filter(z, !z.isPrivate)'
+  'data.latest("aws-dns-observation", "zone-scan").attributes.zones.filter(z, !z.isPrivate)'
 ```
 
 ## Troubleshooting
