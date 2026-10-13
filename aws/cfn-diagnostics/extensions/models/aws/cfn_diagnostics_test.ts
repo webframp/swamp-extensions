@@ -1762,3 +1762,69 @@ Deno.test(
     assertEquals(d.rootCauseCandidates.map((e) => e.eventId), ["3"]);
   },
 );
+
+Deno.test(
+  "list_stack_events: a failing nested-stack resource named like its parent is a root cause, not a cascade",
+  { sanitizeResources: false },
+  async () => {
+    // Template logical id "app" inside stack "app": a nested stack resource. Its
+    // physical id is the NESTED stack's ARN, so it is not the parent's own row.
+    const { data: d } = await runEvents(
+      (cmd) =>
+        cmd === "DescribeStacksCommand"
+          ? describeStacksReply("CREATE_FAILED")
+          : {
+            StackEvents: [
+              ev(
+                "2",
+                "2026-10-09T10:01:00Z",
+                "app",
+                "CREATE_FAILED",
+                "AccessDenied: iam:PassRole",
+                {
+                  ResourceType: STACK,
+                  PhysicalResourceId: NESTED_ARN,
+                  ClientRequestToken: "c1",
+                },
+              ),
+              ev(
+                "1",
+                "2026-10-09T10:00:00Z",
+                "app",
+                "CREATE_IN_PROGRESS",
+                undefined,
+                {
+                  ...own,
+                  ClientRequestToken: "c1",
+                },
+              ),
+            ],
+          },
+      { followNested: false },
+    );
+    assertEquals(d.rootCauseCandidates.map((e) => e.eventId), ["2"]);
+    // The parent's own failing row (physical id is its own ARN) is still a cascade.
+    const own2 = await runEvents(
+      (cmd) =>
+        cmd === "DescribeStacksCommand"
+          ? describeStacksReply("CREATE_FAILED")
+          : {
+            StackEvents: [
+              ev(
+                "3",
+                "2026-10-09T10:02:00Z",
+                "app",
+                "CREATE_FAILED",
+                "The following resource(s) failed to create: [Db].",
+                {
+                  ...own,
+                  ClientRequestToken: "c1",
+                },
+              ),
+            ],
+          },
+      { followNested: false },
+    );
+    assertEquals(own2.data.rootCauseCandidates, []);
+  },
+);

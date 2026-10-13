@@ -402,11 +402,13 @@ const CASCADE_REASONS = [
 
 /**
  * A failure that restates another one: a cancellation, a wrapper row, or the
- * stack's own status row (its logical id is its own name). A nested stack that
+ * stack's own status row (see isOwnRow). A nested stack that
  * fails for its OWN reason (bad TemplateURL, validation error) is not a cascade.
  */
 function isCascade(e: Event): boolean {
-  if (e.resourceType === STACK_TYPE && e.logicalId === e.stackName) return true;
+  // The precise own-row check, which also looks at the physical id: a nested
+  // stack resource that merely shares the parent's name is a real failure.
+  if (isOwnRow(e)) return true;
   return CASCADE_REASONS.some((p) => p.test(e.statusReason ?? ""));
 }
 
