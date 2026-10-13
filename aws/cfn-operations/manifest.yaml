@@ -1,0 +1,59 @@
+manifestVersion: 1
+name: "@webframp/aws/cfn-operations"
+version: "2026.10.13.1"
+description: |
+  Mutating CloudFormation recovery operations, kept apart from the read-only
+  `@webframp/aws/cfn-diagnostics`. Resumes a stack stuck in
+  UPDATE_ROLLBACK_FAILED with ContinueUpdateRollback, refuses any other stack
+  status, optionally skips resources that cannot be rolled back, and waits for
+  the rollback to settle.
+
+  ## Authentication
+
+  Uses the default AWS credential chain. Set the optional `profile` global argument to
+  resolve credentials from a named AWS shared-config profile (SSO token cache / fromIni).
+  This extension WRITES: use a profile that may update the stack. CloudFormation
+  performs the rollback with the caller's credentials unless the stack has a service role.
+
+  ## Required IAM Permissions
+
+  - `cloudformation:DescribeStacks`
+  - `cloudformation:ContinueUpdateRollback`
+  - plus whatever the rollback itself needs on the stack's resources
+
+  ## Usage
+
+  ```bash
+  swamp model create @webframp/aws/cfn-operations cfn-ops \
+    --global-arg region=us-east-1 --global-arg profile=prod-account/Administrator
+
+  swamp model method run cfn-ops continue_update_rollback \
+    --input stackName=my-app
+
+  # Skip a resource the rollback cannot restore
+  swamp model method run cfn-ops continue_update_rollback \
+    --input stackName=my-app --input 'resourcesToSkip=["Db"]'
+  ```
+
+  ## Methods
+
+  - **continue_update_rollback** - Resume an UPDATE_ROLLBACK_FAILED stack and wait
+    (default 300s) for it to settle. The result records `succeeded`; a rollback
+    that fails again is recorded with its status reason, not raised as an error.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/cfn_operations.ts
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - aws
+  - cloudformation
+  - incident-response
+  - infrastructure
+  - recovery
