@@ -71,3 +71,74 @@ Deno.test("does not flag a validator that rejects the reserved name", () => {
     0,
   );
 });
+
+Deno.test("flags a reserved name in a ternary or ?? fallback, any case", () => {
+  assertEquals(
+    scanSource("a.ts", `writeResource("s", ok ? "latest" : "x", d)`).length,
+    1,
+  );
+  assertEquals(
+    scanSource("a.ts", `writeResource("s", name ?? "latest", d)`).length,
+    1,
+  );
+  assertEquals(
+    scanSource("a.ts", `writeResource("s", "Latest", d)`).length,
+    1,
+  );
+  assertEquals(
+    scanSource("a.ts", `readResource(name ?? "latest")`).length,
+    1,
+  );
+});
+
+Deno.test("a dot directory above the scan root does not hide files", async () => {
+  const base = await Deno.makeTempDir();
+  try {
+    const root = `${base}/.hidden/repo`;
+    await Deno.mkdir(`${root}/ext`, { recursive: true });
+    await Deno.mkdir(`${root}/.worktrees/x`, { recursive: true });
+    await Deno.writeTextFile(
+      `${root}/ext/m.ts`,
+      `writeResource("a", "latest", d);`,
+    );
+    await Deno.writeTextFile(
+      `${root}/.worktrees/x/m.ts`,
+      `writeResource("a", "latest", d);`,
+    );
+    const out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        new URL("./main.ts", import.meta.url).pathname,
+        root,
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    const text = new TextDecoder().decode(out.stdout) +
+      new TextDecoder().decode(out.stderr);
+    assertEquals(out.code, 1);
+    assertEquals(text.includes("scanned 1 files, 1 finding(s)"), true, text);
+  } finally {
+    await Deno.remove(base, { recursive: true });
+  }
+});
+
+Deno.test("a scan that finds no files fails instead of passing", async () => {
+  const root = await Deno.makeTempDir();
+  try {
+    const out = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "run",
+        "--allow-read",
+        new URL("./main.ts", import.meta.url).pathname,
+        root,
+      ],
+      stdout: "null",
+      stderr: "null",
+    }).output();
+    assertEquals(out.code, 2);
+  } finally {
+    await Deno.remove(root, { recursive: true });
+  }
+});

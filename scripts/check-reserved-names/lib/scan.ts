@@ -9,6 +9,11 @@
  * `deno task test` and `swamp extension quality` both pass. Only a live swamp
  * run fails. This scan closes that gap statically.
  *
+ * Limits: it matches quoted literals inside the data-name argument of
+ * `writeResource`/`writeFile`/`readResource`/`readFile`. A name held in a
+ * variable (`const n = "latest"`) or built by concatenation is not detected;
+ * generators under `scripts/` get a stricter any-quoted-literal check.
+ *
  * @module
  */
 
@@ -31,19 +36,23 @@ function reservedAlternation(): string {
     .join("|");
 }
 
-/** `writeResource(<spec>, "<reserved>"` — the data name is the second argument. */
+/**
+ * `writeResource(<spec>, ..."<reserved>"...` — the data name is the second
+ * argument, so a quoted reserved literal anywhere in that argument (plain,
+ * ternary branch, `??` fallback) is reported. Case-insensitive.
+ */
 function writeCall(): RegExp {
   return new RegExp(
-    `\\b(writeResource|writeFile)\\(\\s*(?:"[^"]*"|'[^']*'|\`[^\`]*\`|[\\w.$]+)\\s*,\\s*${QUOTE}(${reservedAlternation()})\\2`,
-    "g",
+    `\\b(writeResource|writeFile)\\(\\s*(?:"[^"]*"|'[^']*'|\`[^\`]*\`|[\\w.$]+)\\s*,\\s*[^,()]*?${QUOTE}(${reservedAlternation()})\\2`,
+    "gi",
   );
 }
 
-/** `readResource("<reserved>"` — the data name is the first argument. */
+/** `readResource(..."<reserved>"...)` — the data name is the first argument. */
 function readCall(): RegExp {
   return new RegExp(
-    `\\b(readResource|readFile)\\(\\s*${QUOTE}(${reservedAlternation()})\\2`,
-    "g",
+    `\\b(readResource|readFile)\\(\\s*[^,()]*?${QUOTE}(${reservedAlternation()})\\2`,
+    "gi",
   );
 }
 

@@ -11,10 +11,18 @@ import { walk } from "@std/fs/walk";
 import { relative, resolve } from "@std/path";
 import { scanSource } from "./lib/scan.ts";
 
-const SKIP_DIRS = [
-  /(^|\/)node_modules(\/|$)/,
-  /(^|\/)\.[^/]+(\/|$)/, // .git, .swamp, .worktrees, .claude, .cache, ...
-];
+/**
+ * Directories to skip, matched against the path *below the scan root* so a dot
+ * directory above the root (`~/.cache/...`, a self-hosted runner path) cannot
+ * make the scan skip everything.
+ */
+function skipPatterns(root: string): RegExp[] {
+  const prefix = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [
+    // .git, .swamp, .worktrees, .claude, .cache, ...
+    new RegExp(`^${prefix}/(.*/)?(\\.[^/]+|node_modules)(/|$)`),
+  ];
+}
 
 async function main(): Promise<number> {
   const root = resolve(Deno.args[0] ?? Deno.cwd());
@@ -24,7 +32,7 @@ async function main(): Promise<number> {
     const entry of walk(root, {
       exts: [".ts"],
       includeDirs: false,
-      skip: SKIP_DIRS,
+      skip: skipPatterns(root),
     })
   ) {
     const file = relative(root, entry.path);
@@ -42,6 +50,11 @@ async function main(): Promise<number> {
   console.log(
     `check-reserved-names: scanned ${scanned} files, ${findings.length} finding(s)`,
   );
+  if (scanned === 0) {
+    // A scan that read nothing proves nothing; never let it pass.
+    console.error(`check-reserved-names: no .ts files found under ${root}`);
+    return 2;
+  }
   return findings.length === 0 ? 0 : 1;
 }
 

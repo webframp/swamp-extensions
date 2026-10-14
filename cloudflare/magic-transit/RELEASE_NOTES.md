@@ -4,9 +4,17 @@
 `Data name 'latest' is reserved for internal use`.
 
 **Changed:** Singleton get and action methods now write their data under
-`<resource>-current` instead of `latest`. Anything that read
-`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
-new name.
+`bulkcreateprefixes-current`, `catalog_syncs_refresh-current`,
+`create_cf1_site_ramps-current`, `create_cf1_sites-current`,
+`getprotectionstatus-current`, `list_gre_tunnels-current`,
+`list_interconnects-current`, `list_ipsec_tunnels-current`,
+`list_redundancy_groups-current`, `list_routes-current`,
+`magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels-current`,
+`onramps_apply-current`, `onramps_mwan_addr_space_read-current`,
+`onramps_plan-current`, `providers_discover-current`,
+`providers_discover_all-current`, `settings-current` instead of `latest`.
+Anything that read `data.latest("<model>", "latest")` or queried
+`name == "latest"` must use the new name.
 
 **Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate `<resource>-current`. No attribute schemas changed.
+the method to populate the new name. No attribute schemas changed.
