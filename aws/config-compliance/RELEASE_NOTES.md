@@ -1,8 +1,13 @@
-## 2026.09.24.1
+## 2026.10.14.1
 
-**Changed:** Bump @aws-sdk/* 3.1133.0 → 3.1139.0 (3 packages)
+**Fixed:** `get_non_compliant` and `get_summary` failed on current swamp with
+`Data name 'latest' is reserved for internal use`.
 
-## 2026.09.18.1
+**Changed:** Results are now written as `compliance-current` (spec `compliance`)
+and `summary-current` (spec `summary`) instead of `latest`. Anything that read
+`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
+new names. The README query examples now use `compliance-current`.
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** Data stored under `latest` is not migrated; re-run the methods
+to populate the new names. `aws/drift-state` reads this model by spec and needs
+no change. No attribute schemas changed.

@@ -83,7 +83,10 @@ swamp workflow run @webframp/drift-state-refresh
 
 **`get_drifted` / `get_drift_velocity` return empty results.** These methods
 read the last stored `compute_drift` output — they don't compute anything
-themselves. Run `compute_drift` at least once first.
+themselves. Run `compute_drift` at least once first. After upgrading to
+2026.10.14.1, run `compute_drift` (or `refresh`) once more: results are now
+stored as `drift-result-current` instead of `latest`, so earlier results are not
+found.
 
 **Every resource shows `driftStatus: "unknown"`.** No baseline has been set for
 that source yet, so there's nothing to diff against. Run `set_baseline` before

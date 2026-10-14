@@ -195,7 +195,7 @@ type MethodContext = {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.09.30.1",
+  version: "2026.10.14.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -278,6 +278,12 @@ export const model = {
       toVersion: "2026.09.30.1",
       description: "No schema changes — generated deno.json pins the current " +
         "@swamp-club/swamp-testing release",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "Scaffold result renamed from the reserved data name 'latest' to 'scaffold-current'; attributes unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -822,7 +828,7 @@ Each generated file includes TODO comments marking where the user adds real logi
 
         const handle = await context.writeResource(
           "scaffold",
-          "latest",
+          "scaffold-current",
           {
             files,
             generatedFrom: extName,

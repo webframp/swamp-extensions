@@ -167,7 +167,7 @@ async function getAccountId(globalArgs: GlobalArgs): Promise<string> {
 /** AWS Config compliance observation model — stores evaluation results as typed queryable data. */
 export const model = {
   type: "@webframp/aws/config-compliance",
-  version: "2026.09.24.1",
+  version: "2026.10.14.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -257,6 +257,12 @@ export const model = {
     {
       toVersion: "2026.09.24.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "Stored results renamed from the reserved data name 'latest' to 'compliance-current' / 'summary-current'; attributes unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -410,7 +416,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "compliance",
-            "latest",
+            "compliance-current",
             {
               ...result,
               fetchedAt: new Date().toISOString(),
@@ -534,7 +540,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "summary",
-            "latest",
+            "summary-current",
             {
               ...result,
               fetchedAt: new Date().toISOString(),

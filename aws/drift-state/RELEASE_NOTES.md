@@ -1,5 +1,16 @@
-## 2026.09.25.1
+## 2026.10.14.1
 
-**Upgrade note:** Updated the required `@webframp/aws/adopt` and
-`@webframp/aws/inventory` dependencies to 2026.09.24.1. Pull all three
-extensions together.
+**Fixed:** `compute_drift` and `get_drift_velocity` failed on current swamp with
+`Data name 'latest' is reserved for internal use`. The two results also shared
+one data name; they no longer do.
+
+**Changed:** Stored results are now written as `drift-result-current` (spec
+`driftResult`) and `velocity-current` (spec `velocity`) instead of `latest`.
+`get_drifted` and `get_drift_velocity` read `drift-result-current`. Anything
+that read `data.latest("<model>", "latest")` or queried `name == "latest"` must
+use the new names.
+
+**Upgrade note:** Data stored under `latest` is not migrated. Run
+`compute_drift` (or `refresh`) once after upgrading; until then `get_drifted`
+and `get_drift_velocity` return empty results. Baselines and timelines keep
+their names and are unaffected. No attribute schemas changed.
