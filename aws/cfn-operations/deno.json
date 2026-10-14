@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "check": "deno check extensions/models/aws/cfn_operations.ts",
+    "lint": "deno lint extensions/models/",
+    "fmt": "deno fmt extensions/models/",
+    "fmt:check": "deno fmt --check extensions/models/",
+    "test": "deno test --allow-env --allow-net --allow-sys extensions/models/"
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-import-prefix"
+      ]
+    }
+  },
+  "imports": {
+    "@swamp-club/swamp-testing": "jsr:@swamp-club/swamp-testing@0.20260928.39"
+  }
+}
