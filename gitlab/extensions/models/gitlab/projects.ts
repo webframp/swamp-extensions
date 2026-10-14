@@ -23,6 +23,12 @@ const MAX_REF_CANDIDATES = 10;
 /** Cap on pages fetched by list_repository_tree (100 entries/page) — guards against unbounded pagination on a huge monorepo directory. */
 const REPOSITORY_TREE_MAX_PAGES = 20;
 
+/** Cap on pages fetched by search (100 results/page) — bounds `limit` so a broad term can't trigger unbounded pagination. */
+const SEARCH_MAX_PAGES = 10;
+
+/** Search scopes for which GitLab honors the `ref` parameter. */
+const SEARCH_REF_SCOPES = ["blobs", "commits", "wiki_blobs"];
+
 // =============================================================================
 // Schemas
 // =============================================================================
@@ -1088,6 +1094,47 @@ const RepositoryTreeSchema = z.object({
     "Whether more entries exist beyond the pages fetched",
   ),
   fetchedAt: z.string().describe("Timestamp the tree was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const SearchScopeSchema = z.enum([
+  "blobs",
+  "commits",
+  "issues",
+  "merge_requests",
+  "milestones",
+  "notes",
+  "projects",
+  "snippet_titles",
+  "users",
+  "wiki_blobs",
+]);
+
+const SearchResultsSchema = z.object({
+  query: z.string().describe("Search term"),
+  scope: SearchScopeSchema.describe("Search scope"),
+  project: z.string().nullable().describe(
+    "Project the search was limited to, null if not project-scoped",
+  ),
+  group: z.string().nullable().describe(
+    "Group the search was limited to, null if not group-scoped",
+  ),
+  state: z.string().nullable().describe(
+    "State filter applied (issues/merge_requests only), null if none",
+  ),
+  results: z.array(z.record(z.string(), z.unknown())).describe(
+    "Raw GitLab search result objects; their shape depends on scope",
+  ),
+  count: z.number().describe("Number of results returned"),
+  truncated: z.boolean().describe(
+    "Whether more results exist beyond the limit or page cap",
+  ),
+  fetchedAt: z.string().describe("Timestamp the search ran"),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
   ),
@@ -2530,7 +2577,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.14.1",
+  version: "2026.10.14.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2725,6 +2772,14 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.2",
+      description:
+        "Added a search method wrapping the GitLab REST search API at " +
+        "instance, group, or project level (new resource: searchResults). " +
+        "No globalArguments change; additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2934,6 +2989,12 @@ export const model = {
     repositoryTree: {
       description: "Entries in a repository directory at a given ref",
       schema: RepositoryTreeSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    searchResults: {
+      description: "Results of a GitLab search (REST search API)",
+      schema: SearchResultsSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -6527,6 +6588,153 @@ export const model = {
           count: entries.length,
           path: args.path || "/",
           project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    search: {
+      description:
+        "Search GitLab via the REST search API — instance-wide, within a " +
+        "group, or within a project. Scope picks what is searched (blobs = " +
+        "code). Instances without Advanced Search only support blobs, " +
+        "commits, notes, and wiki_blobs in a project search, and an " +
+        "administrator can disable individual scopes for instance and group " +
+        "searches. Results are raw GitLab objects whose shape depends on " +
+        "scope. Follows x-next-page until `limit` " +
+        `(capped at ${SEARCH_MAX_PAGES} pages of 100).`,
+      arguments: z.object({
+        query: z.string().trim().min(2).describe(
+          "Search term (GitLab requires at least 2 characters)",
+        ),
+        scope: SearchScopeSchema.default("blobs").describe(
+          "What to search (blobs = code)",
+        ),
+        project: z.string().default("").describe(
+          "Limit to a project path (e.g. group/repo); empty = not limited",
+        ),
+        group: z.string().default("").describe(
+          "Limit to a group path; empty = not limited. Mutually exclusive with project",
+        ),
+        ref: z.string().default("").describe(
+          "Branch or tag for blobs/commits/wiki_blobs; requires project",
+        ),
+        state: z.enum(["", "opened", "closed", "merged"]).default("")
+          .describe(
+            "State filter for issues/merge_requests scopes; empty = any state",
+          ),
+        limit: z.number().int().min(1).max(SEARCH_MAX_PAGES * 100).default(100)
+          .describe("Maximum results to return"),
+      }),
+      execute: async (
+        args: {
+          query: string;
+          scope: z.infer<typeof SearchScopeSchema>;
+          project: string;
+          group: string;
+          ref: string;
+          state: "" | "opened" | "closed" | "merged";
+          limit: number;
+        },
+        ctx: ModelContext,
+      ) => {
+        if (args.project && args.group) {
+          throw new Error("search: set project or group, not both");
+        }
+        if (args.ref && !args.project) {
+          throw new Error("search: ref requires project");
+        }
+        if (
+          args.state &&
+          args.scope !== "issues" && args.scope !== "merge_requests"
+        ) {
+          throw new Error(
+            `search: state only applies to issues and merge_requests, not ${args.scope}`,
+          );
+        }
+        if (args.ref && !SEARCH_REF_SCOPES.includes(args.scope)) {
+          throw new Error(
+            `search: ref only applies to ${
+              SEARCH_REF_SCOPES.join(", ")
+            }, not ${args.scope}`,
+          );
+        }
+        if (args.state === "merged" && args.scope !== "merge_requests") {
+          throw new Error(
+            "search: state=merged only applies to merge_requests",
+          );
+        }
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const path = args.project
+          ? `/projects/${encodeURIComponent(args.project)}/search`
+          : args.group
+          ? `/groups/${encodeURIComponent(args.group)}/search`
+          : "/search";
+        const results: Array<Record<string, unknown>> = [];
+        let hasMore = false;
+        for (
+          let page = 1;
+          page <= SEARCH_MAX_PAGES && results.length < args.limit;
+          page++
+        ) {
+          const params: Record<string, string> = {
+            scope: args.scope,
+            search: args.query,
+            per_page: String(Math.min(100, args.limit)),
+            page: String(page),
+          };
+          if (args.ref) params.ref = args.ref;
+          if (args.state) params.state = args.state;
+          const { data, truncated } = await client.getInstanceList(
+            path,
+            params,
+          );
+          if (!Array.isArray(data)) {
+            throw new Error(
+              `search: expected an array from GitLab ${path}, got ${typeof data}`,
+            );
+          }
+          results.push(...data);
+          hasMore = truncated;
+          if (!hasMore) break;
+        }
+        const truncated = hasMore || results.length > args.limit;
+        results.length = Math.min(results.length, args.limit);
+        const handle = await ctx.writeResource(
+          "searchResults",
+          `search-${await shortHash(
+            [
+              args.scope,
+              args.query,
+              args.project,
+              args.group,
+              args.ref,
+              args.state,
+              String(args.limit),
+            ].join("\0"),
+          )}`,
+          {
+            query: args.query,
+            scope: args.scope,
+            project: args.project || null,
+            group: args.group || null,
+            state: args.state || null,
+            results,
+            count: results.length,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Found {count} {scope} results for {query}", {
+          count: results.length,
+          scope: args.scope,
+          query: args.query,
         });
         return { dataHandles: [handle] };
       },

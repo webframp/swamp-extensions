@@ -41,6 +41,11 @@ swamp model method run gitlab list_labels --input project=group/repo
 swamp model method run gitlab list_members --input project=group/repo
 swamp model method run gitlab list_branches --input project=group/repo
 
+# Search (REST search API)
+swamp model method run gitlab search --input query=getUser --input project=group/repo
+swamp model method run gitlab search --input query=timeout --input scope=issues --input project=group/repo --input state=opened
+swamp model method run gitlab search --input query=api --input scope=projects --input group=group
+
 # Write operations
 swamp model method run gitlab create_issue --input project=group/repo --input title="New issue"
 swamp model method run gitlab update_issue --input project=group/repo --input iid=1 --input stateEvent=close
@@ -100,6 +105,7 @@ fires the `@webframp/review-dashboard` report automatically.
 | `list_members`        | Project members                                                  | `project`                                      |
 | `list_branches`       | Repository branches                                              | `project`                                      |
 | `get_file`            | Raw file content at a ref, parsed from a pasted blob URL         | `url`                                          |
+| `search`              | REST search; scope = blobs (code), commits, issues, merge_requests, notes, wiki_blobs, projects, milestones, snippet_titles, users | `query`, `scope?`, `project?` or `group?`, `ref?`, `state?`, `limit?` |
 
 ### Write (REST)
 
@@ -156,6 +162,15 @@ view:
 | **members**       | Project members                   | username, accessLevel                                     |
 | **branches**      | Repository branches               | name, protected, default                                  |
 | **fileContent**   | Raw file content at a ref         | project, ref, path, content, truncated                    |
+| **searchResults** | Raw GitLab search results         | query, scope, project, group, results, count, truncated   |
+
+### Search scope availability
+
+`search` uses GitLab's REST search API. Without Advanced Search (Elasticsearch
+or Zoekt), `blobs`, `commits`, `notes`, and `wiki_blobs` only work in a project
+search. An administrator can also disable individual scopes for instance and
+group searches, which GitLab reports as `Scope '<scope>' is not available for
+this search`. In both cases, set `project` and search each project separately.
 
 ## Global Arguments
 
