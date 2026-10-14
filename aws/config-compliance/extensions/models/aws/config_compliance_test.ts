@@ -189,7 +189,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "compliance");
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "compliance-current");
 
       const data = resources[0].data as {
         accountId: string;
@@ -310,6 +310,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "summary");
+      assertEquals(resources[0].name, "summary-current");
 
       const data = resources[0].data as {
         rules: {

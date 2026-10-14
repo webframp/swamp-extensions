@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/claude-cost-reconciliation"
-version: "2026.10.07.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Monthly reconciliation of the AWS Marketplace "Claude Enterprise" invoice
   line against Anthropic's own post-discount paid total for the same calendar

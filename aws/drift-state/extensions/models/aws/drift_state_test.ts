@@ -178,6 +178,10 @@ Deno.test({
     };
     assertEquals(data.summary.unavailableSources.length, 6);
     assertEquals(data.summary.totalResources, 0);
+    // swamp reserves the data name "latest"; the mock context accepts any name.
+    assertEquals(driftResult.name, "drift-result-current");
+    assertEquals(resources.some((r) => r.name === "latest"), false);
+    assertEquals(new Set(resources.map((r) => r.name)).size, resources.length);
   },
 });
 
@@ -761,7 +765,7 @@ Deno.test({
     const { context, getWrittenResources } = createDriftContext(
       {},
       {
-        latest: {
+        "drift-result-current": {
           computedAt: "2026-06-27T10:00:00Z",
           summary: {},
           resources: [
@@ -819,7 +823,7 @@ Deno.test({
     const { context, getWrittenResources } = createDriftContext(
       {},
       {
-        latest: {
+        "drift-result-current": {
           computedAt: "2026-06-27T10:00:00Z",
           summary: {},
           resources: [
@@ -990,6 +994,8 @@ Deno.test({
     const resources = getWrittenResources();
     const velocity = resources.find((r) => r.specName === "velocity");
     assertExists(velocity);
+    assertEquals(velocity.name, "velocity-current");
+    assertEquals(resources.some((r) => r.name === "latest"), false);
     const data = velocity.data as {
       byResourceType: Record<string, unknown>;
       byTimeWindow: { last24h: number; last7d: number; last30d: number };
@@ -1010,7 +1016,7 @@ Deno.test({
     const { context, getWrittenResources } = createDriftContext(
       {},
       {
-        latest: {
+        "drift-result-current": {
           computedAt: now,
           summary: {},
           resources: [

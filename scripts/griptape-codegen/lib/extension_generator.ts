@@ -31,6 +31,7 @@ export function generateManifest(
 ): string {
   return `manifestVersion: 1
 name: "@webframp/griptape/${config.name}"
+license: Apache-2.0
 version: "${version}"
 description: "${config.description}"
 repository: "https://github.com/webframp/swamp-extensions"

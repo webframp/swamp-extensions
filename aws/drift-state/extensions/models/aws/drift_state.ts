@@ -493,7 +493,7 @@ const NORMALIZERS: Record<
 /** Unified drift detection model composing upstream observations into queryable state. */
 export const model = {
   type: "@webframp/aws/drift-state",
-  version: "2026.09.25.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -586,6 +586,12 @@ export const model = {
       toVersion: "2026.09.25.1",
       description:
         "Updated @webframp/aws/adopt and @webframp/aws/inventory dependencies; no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "Stored results renamed from the reserved data name 'latest' to 'drift-result-current' / 'velocity-current'; attributes unchanged",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -985,7 +991,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "driftResult",
-          "latest",
+          "drift-result-current",
           {
             ...result,
             fetchedAt: new Date().toISOString(),
@@ -1168,7 +1174,7 @@ export const model = {
         let driftResult: z.infer<typeof DriftResultSchema> | null = null;
 
         try {
-          const stored = await context.readResource("latest");
+          const stored = await context.readResource("drift-result-current");
           if (stored) {
             driftResult = stored.attributes as unknown as z.infer<
               typeof DriftResultSchema
@@ -1176,7 +1182,7 @@ export const model = {
           }
         } catch (err) {
           context.logger.warn(
-            "Failed to read stored drift result 'latest': {error}",
+            "Failed to read stored drift result 'drift-result-current': {error}",
             { error: err instanceof Error ? err.message : String(err) },
           );
         }
@@ -1294,7 +1300,7 @@ export const model = {
         // Read latest drift result for current state
         let driftResult: z.infer<typeof DriftResultSchema> | null = null;
         try {
-          const stored = await context.readResource("latest");
+          const stored = await context.readResource("drift-result-current");
           if (stored) {
             driftResult = stored.attributes as unknown as z.infer<
               typeof DriftResultSchema
@@ -1302,21 +1308,25 @@ export const model = {
           }
         } catch (err) {
           context.logger.warn(
-            "Failed to read stored drift result 'latest' for velocity: {error}",
+            "Failed to read stored drift result 'drift-result-current' for velocity: {error}",
             { error: err instanceof Error ? err.message : String(err) },
           );
         }
 
         if (!driftResult) {
           context.logger.warn("No drift result available for velocity", {});
-          const handle = await context.writeResource("velocity", "latest", {
-            computedAt: now.toISOString(),
-            byResourceType: {},
-            byTimeWindow: { last24h: 0, last7d: 0, last30d: 0 },
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-            fetchedAt: new Date().toISOString(),
-          });
+          const handle = await context.writeResource(
+            "velocity",
+            "velocity-current",
+            {
+              computedAt: now.toISOString(),
+              byResourceType: {},
+              byTimeWindow: { last24h: 0, last7d: 0, last30d: 0 },
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+              fetchedAt: new Date().toISOString(),
+            },
+          );
           return { dataHandles: [handle] };
         }
 
@@ -1377,7 +1387,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "velocity",
-          "latest",
+          "velocity-current",
           {
             ...velocity,
             fetchedAt: new Date().toISOString(),

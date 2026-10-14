@@ -63,7 +63,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.10.12.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -82,6 +82,11 @@ export const model = {
     toVersion: "2026.10.12.1",
     description:
       "No schema changes — post_ripple returns a complete data handle on a repeated key",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.10.14.1",
+    description:
+      "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {

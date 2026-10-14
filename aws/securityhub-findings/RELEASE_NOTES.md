@@ -1,3 +1,9 @@
+## 2026.10.14.1
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+
+**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+
 ## 2026.10.06.1
 
 **Changed:** Workflow step names are now kebab-case (`severity-summary`, `critical-findings`, `high-findings`, `diff-findings`, `by-type`) instead of snake_case, following the direction of swamp-club lab #3060. The triage report matches both forms, so runs recorded before this version still render.

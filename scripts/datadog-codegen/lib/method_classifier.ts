@@ -623,7 +623,7 @@ function generateGetBody(
   ];
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+    : `"${resourceName}-current"`;
 
   const hasQueryParams = method.operation.queryParams.length > 0;
   const pathParamNames = method.operation.pathParams.map((p) =>
@@ -1049,7 +1049,7 @@ function sanitizeFieldName(name: string): string {
  * MUST stay in lockstep with the body generators:
  *   - create: always (wraps the API-returned id, falling back to "created")
  *   - get / update: only when a trailing path param supplies the instance id
- *     (otherwise the body uses the constant "latest"/"updated")
+ *     (otherwise the body uses the constant "<resource>-current"/"updated")
  *   - list, action, delete: never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {

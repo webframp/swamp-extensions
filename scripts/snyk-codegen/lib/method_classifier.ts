@@ -621,7 +621,7 @@ function generateGetBody(
   ];
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+    : `"${resourceName}-current"`;
 
   const qsSetup = querySetup(method.operation, indent);
   const qsSuffix = qsSetup ? "${qs}" : "";
@@ -795,7 +795,7 @@ ${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      version,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
+${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -903,7 +903,7 @@ function sanitizeFieldName(name: string): string {
  * MUST stay in lockstep with the body generators:
  *   - create: always (wraps the API-returned id, falling back to "created")
  *   - get / update: only when a trailing path param supplies the instance id
- *     (otherwise the body uses the constant "latest"/"updated")
+ *     (otherwise the body uses the constant "<resource>-current"/"updated")
  *   - list, action, delete: never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {

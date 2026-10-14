@@ -317,7 +317,9 @@ ${reqAsserts(isWrite)}
     const responseBody = method.operation.isJsonApi
       ? { data: fixture }
       : fixture;
-    const expectedInstance = hasPathParam ? "test-id-123" : "latest";
+    const expectedInstance = hasPathParam
+      ? "test-id-123"
+      : `${resourceName}-current`;
     return `Deno.test({
   name: "${config.name} model: ${method.name} fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope

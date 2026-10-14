@@ -452,10 +452,10 @@ ${footer}`;
   const expectedInstance = method.type === "create"
     ? (noBody ? "created" : "new-123")
     : method.type === "get"
-    ? (hasPathParam ? "test-id-123" : "latest")
+    ? (hasPathParam ? "test-id-123" : `${resourceName}-current`)
     : method.type === "update"
     ? (hasPathParam ? "test-id-123" : "updated")
-    : "latest";
+    : `${resourceName}-current`;
   const dataAssert = noBody
     ? ""
     : method.type === "get"

@@ -111,7 +111,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [cloudflare-codegen, ci-discover, datadog-codegen, snyk-codegen, griptape-codegen]
+        dir: [cloudflare-codegen, ci-discover, check-reserved-names, datadog-codegen, falai-codegen, snyk-codegen, griptape-codegen]
         task: [check, lint, fmt:check, test]
     defaults:
       run:
@@ -132,6 +132,30 @@ jobs:
         # have no test files yet; their test task carries --permit-no-files so
         # the gate is a no-op there and starts working when a test is added.
         run: deno task ${{ matrix.task }}
+
+  reserved-data-names:
+    # swamp rejects reserved data names (currently `latest`) at method run time,
+    # but the test context accepts any name, so check, lint, test and the
+    # registry quality rubric all pass. This scan fails the build when a
+    # non-test source file (or a code generator) writes one.
+    needs: [discover]
+    # Not gated on discover's success: this scan reads no discover output, so a
+    # discover failure must not silently skip it.
+    if: ${{ !cancelled() }}
+    name: reserved data names
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Scan for reserved data names
+        run: deno task --cwd scripts/check-reserved-names scan "$GITHUB_WORKSPACE"
 
   quality-gate:
     # Registry quality rubric, per extension, scoped to the PR diff via the

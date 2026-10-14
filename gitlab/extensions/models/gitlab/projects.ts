@@ -2530,7 +2530,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2719,6 +2719,12 @@ export const model = {
         "Fixed get_pipeline_by_iid failing on GitLab schemas without " +
         "Pipeline.webUrl: the URL is now built from host, project, and id. " +
         "No schema or globalArguments change.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

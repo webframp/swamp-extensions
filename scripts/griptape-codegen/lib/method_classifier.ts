@@ -725,7 +725,7 @@ function generateGetBody(
   const idParam = lastPathParam(method);
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+    : `"${resourceName}-current"`;
   const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
 
   return `${qsStmt}
@@ -889,11 +889,11 @@ function generateActionBody(
   // Key the instance on the acted-on resource's path param (structure_id,
   // structure_run_id, ...) so distinct targets do not collide. Only actions
   // with NO path param (a genuine singleton/collection-level action) fall back
-  // to the constant "latest".
+  // to the constant "<resource>-current".
   const idParam = lastPathParam(method);
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+    : `"${resourceName}-current"`;
   const { stmt: qsStmt, urlSuffix } = buildQueryString(method, indent);
 
   return `${bodyFilter}${qsStmt}

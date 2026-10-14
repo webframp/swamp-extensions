@@ -432,7 +432,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -508,6 +508,12 @@ export const model = {
       toVersion: "2026.10.07.1",
       description:
         "Fixed directory pagination (page/next_page) and user field mapping; collect_activities gains actor_ids/until/after_id/max_pages; additive schema fields only",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

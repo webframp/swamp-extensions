@@ -1,17 +1,14 @@
-## 2026.10.07.1
+## 2026.10.14.1
 
-**Fixed:** `get_test_file_download_url` and
-`get_test_file_multipart_presigned_urls` wrote their results under resource
-names (`get_test_file_download_url`, `get_test_file_multipart_presigned_urls`)
-that the model never declared. They now write to the declared
-`test_file_download_url` and `test_file_multipart_presigned_urls` resources, and
-their log messages use the new names.
+**Fixed:** Methods that write a singleton resource failed on current swamp with
+`Data name 'latest' is reserved for internal use`.
 
-**Fixed:** The shared API helper no longer throws on a successful response with
-an empty body (such as 202 Accepted); it returns an empty result. Paginated list
-requests tolerate an empty page body the same way. A body that is not valid JSON
-now fails with an error naming the HTTP method, path, and status, with a snippet
-of the body.
+**Changed:** Singleton get and action methods now write their data under
+`on_demand_concurrency_cap-current`, `search_suites-current` instead of
+`latest`. Anything that read `data.latest("<model>", "latest")` or queried
+`name == "latest"` must use the new name.
 
-**Upgrade note:** No methods, arguments, or schemas changed. If you read results
-of the two methods above by resource name, use the new names.
+**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
+the method to populate the new name. No attribute schemas changed.
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

@@ -2012,7 +2012,7 @@ const ProjectsFilterArg = z.array(z.string().min(1)).optional().describe(
 /** GCP Vertex AI usage and cost analysis model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.10.12.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -2081,6 +2081,12 @@ export const model = {
       toVersion: "2026.10.12.1",
       description:
         "No global argument changes; legacy scan resources gain optional otherTokens fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

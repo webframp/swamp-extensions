@@ -78,3 +78,28 @@ Deno.test("generated model: writeResource names are declared resources", () => {
     assertEquals(declared.has(name), true, `undeclared resource: ${name}`);
   }
 });
+
+Deno.test("generated model: singleton get never writes the reserved name 'latest'", () => {
+  // swamp rejects the data name "latest"; a singleton instance must be keyed
+  // "<resource>-current" instead.
+  const group: ServiceGroup = {
+    config: {
+      name: "demo",
+      description: "Demo",
+      tags: ["T"],
+      labels: [],
+    },
+    operations: [],
+  };
+  const methods: ClassifiedMethod[] = [
+    {
+      name: "get_thing",
+      type: "get",
+      description: "d",
+      operation: op("get", "/api/v2/thing"),
+    },
+  ];
+  const src = generateModelSource(group, methods, "2026.01.01.1");
+  assertEquals(/["']latest["']/.test(src), false);
+  assertEquals(src.includes('writeResource("thing", "thing-current"'), true);
+});

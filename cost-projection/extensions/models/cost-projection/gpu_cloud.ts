@@ -232,7 +232,7 @@ function computeProjection(s: ScenarioInput) {
 /** GPU cloud inference cost projection model. */
 export const model = {
   type: "@webframp/cost-projection/gpu-cloud",
-  version: "2026.09.19.1",
+  version: "2026.10.14.1",
   globalArguments: z.object({}),
   reports: ["@webframp/cost-projection-comparison"],
 

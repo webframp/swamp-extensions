@@ -729,7 +729,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "on_demand_concurrency_cap");
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "on_demand_concurrency_cap-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {

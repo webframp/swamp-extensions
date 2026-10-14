@@ -1,20 +1,14 @@
-## 2026.10.07.1
+## 2026.10.14.1
 
-**Fixed:** A stalled fal.ai request no longer hangs the method. Every request
-now has a 60-second deadline that covers the response body, and a timeout raises
-an error naming the HTTP method and URL.
+**Fixed:** Methods that write a singleton resource failed on current swamp with
+`Data name 'latest' is reserved for internal use`.
 
-**Fixed:** An empty 2xx response body (such as a 202 or 204) is handled
-explicitly. Paginated list calls treat it as an empty page instead of failing
-with a bare `SyntaxError`. Methods that must return data (get, create, update,
-and unpaginated list) raise an error naming the HTTP method and path instead of
-failing later with a `TypeError`. Delete and action methods still accept an
-empty body. A malformed JSON body now raises an error that names the HTTP
-method, path, and status code.
+**Changed:** Singleton get and action methods now write their data under
+`account_billing-current` instead of `latest`. Anything that read
+`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
+new name.
 
-**Changed:** A `Retry-After` header on a 429 response is capped at 30 seconds
-per retry, so a large value can no longer stall a call for minutes. Retry count
-is unchanged.
+**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
+the method to populate the new name. No attribute schemas changed.
 
-No methods, arguments, or resource schemas changed. Apart from the hardening
-above, behavior is the same as the previous version.
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

@@ -232,7 +232,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.09.19.1",
+  version: "2026.10.14.1",
 
   upgrades: [
     {
@@ -349,6 +349,12 @@ export const model = {
       toVersion: "2026.09.19.1",
       description:
         "No schema changes — redmineApi/redmineApiPaginated now retry 429/502/503/504 with Retry-After and exponential backoff",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

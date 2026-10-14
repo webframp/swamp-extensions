@@ -36,11 +36,11 @@ swamp model method run aws-config-compliance get_compliance_summary
 ```bash
 # Find all non-compliant S3 buckets
 swamp data query aws-config-compliance \
-  'data.latest("aws-config-compliance", "compliance").attributes.evaluations.filter(e, e.resourceType == "AWS::S3::Bucket")'
+  'data.latest("aws-config-compliance", "compliance-current").attributes.evaluations.filter(e, e.resourceType == "AWS::S3::Bucket")'
 
 # Count non-compliant resources by type
 swamp data query aws-config-compliance \
-  'data.latest("aws-config-compliance", "compliance").attributes.summary.nonCompliantResources'
+  'data.latest("aws-config-compliance", "compliance-current").attributes.summary.nonCompliantResources'
 ```
 
 ## Integration with drift-state

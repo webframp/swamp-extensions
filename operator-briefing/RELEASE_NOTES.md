@@ -1,3 +1,9 @@
+## 2026.10.14.1
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+
+**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+
 ## 2026.10.06.1
 
 **Changed:** The `daily-briefing-typesafe` workflow step `triage_reviews` is now `triage-reviews`, following the direction of swamp-club lab #3060 (kebab-case step names). Anything that references the step by name, such as `steps.triage_reviews` expressions or `workflow resume --from triage_reviews`, must use the new name.

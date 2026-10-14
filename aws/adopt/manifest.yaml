@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
-version: "2026.09.26.2"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Brownfield adoption of AWS resources into swamp models, whatever created
   them. plan_account_sweep enumerates about 40 resource types in a region

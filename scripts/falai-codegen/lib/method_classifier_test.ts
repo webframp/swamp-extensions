@@ -328,3 +328,21 @@ Deno.test("generateModelSource: create method sanitizes the returned id into the
   assertStringIncludes(source, "sanitizeInstanceName");
   assertStringIncludes(source, "POST");
 });
+
+Deno.test("generateModelSource: singleton get/action never write the reserved name 'latest'", () => {
+  // swamp rejects the data name "latest"; a singleton instance must be keyed
+  // "<resource>-current" instead.
+  const group: ServiceGroup = {
+    config: CONFIG,
+    operations: [
+      op({ httpMethod: "get", path: "/status", operationId: "getStatus" }),
+      op({ httpMethod: "post", path: "/run", operationId: "runThing" }),
+    ],
+  };
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(/["']latest["']/.test(src), false);
+  assertEquals(
+    /writeResource\("[a-z0-9_-]+", "[a-z0-9_-]+-current"/.test(src),
+    true,
+  );
+});

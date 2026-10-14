@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/cfn-operations"
-version: "2026.10.13.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Mutating CloudFormation recovery operations, kept apart from the read-only
   `@webframp/aws/cfn-diagnostics`. Resumes a stack stuck in

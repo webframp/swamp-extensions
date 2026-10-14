@@ -853,3 +853,30 @@ Deno.test("next throws when no landscape exists", async () => {
     "No landscape found",
   );
 });
+
+Deno.test("scaffold writes 'scaffold-current', never the reserved name 'latest'", async () => {
+  const { context, getWrittenResources } = createAdoptionContext({
+    "current-design": {
+      name: "@webframp/demo",
+      description: "Demo",
+      globalArguments: [],
+      methods: [],
+      resources: [],
+      dependencies: [],
+      vaultNeeded: false,
+      labels: [],
+      designedAt: "2026-06-05T00:00:00Z",
+    },
+  });
+
+  await model.methods.scaffold.execute(
+    { outputFormat: "resource" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+
+  const resources = getWrittenResources();
+  assertEquals(resources[0].specName, "scaffold");
+  assertEquals(resources[0].name, "scaffold-current");
+  assertEquals(resources.some((r) => r.name === "latest"), false);
+});

@@ -312,7 +312,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "group");
       assertValidResource("group", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "group-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -394,7 +394,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "list_group_audit_logs");
       assertValidResource("list_group_audit_logs", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "list_group_audit_logs-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -462,7 +462,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "group_export");
       assertValidResource("group_export", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "group_export-current");
       assertExists(resources[0].data);
     } finally {
       uninstall();

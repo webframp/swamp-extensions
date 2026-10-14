@@ -110,7 +110,7 @@ const CreateAuthConfigSchema = z.looseObject({
 /** Griptape Cloud Models — model configurations and provider auth configs */
 export const model = {
   type: "@webframp/griptape/models",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -134,6 +134,12 @@ export const model = {
       toVersion: "2026.10.07.1",
       description:
         "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
