@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.14.2"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -57,6 +57,7 @@ description: |
   - list_pipeline_bridges (a pipeline's trigger jobs and the downstream pipelines they fan out to)
   - list_repository_tree (directory listing at a ref, paginated past GitLab's per-page cap)
   - check_mr_merge_endpoint (diagnostic: OPTIONS-probes an MR's merge endpoint to distinguish a proxy 405 from GitLab's own)
+  - search (REST search API — code, commits, issues, MRs, notes, wiki, and more, instance-wide or within a group or project)
 
   **Write:**
   - create_issue, update_issue (both accept assignees, milestone, dueDate,
@@ -105,3 +106,4 @@ labels:
   - api
   - graphql
   - dashboard
+  - search
