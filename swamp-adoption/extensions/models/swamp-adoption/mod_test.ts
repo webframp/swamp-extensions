@@ -981,6 +981,11 @@ Deno.test("scaffold rejects invalid SPDX values", () => {
       "MIT)",
       "MIT Apache-2.0",
       "MIT WITH Bogus-exception",
+      "MIT\nOR\nApache-2.0",
+      "MIT\tOR Apache-2.0",
+      "MIT\u2028OR\u2029Apache-2.0",
+      "MIT\u00a0OR Apache-2.0",
+      "   ",
     ]
   ) {
     const result = model.methods.scaffold.arguments.safeParse({ license });
@@ -1000,4 +1005,43 @@ Deno.test("scaffold execute rejects an invalid license even without schema parsi
     Error,
     "LicenseRef",
   );
+});
+
+Deno.test("scaffold execute rejects interior non-space whitespace and empty license", async () => {
+  for (
+    const license of ["MIT\nOR\nApache-2.0", "MIT\u2028OR Apache-2.0", "", "  "]
+  ) {
+    const { context } = createAdoptionContext(LICENSE_TEST_DESIGN);
+    await assertRejects(
+      () =>
+        model.methods.scaffold.execute(
+          { license },
+          // deno-lint-ignore no-explicit-any
+          context as any,
+        ),
+      Error,
+      "Invalid license",
+    );
+  }
+});
+
+Deno.test("scaffold emits a canonical single-spaced license in every file", async () => {
+  const { files } = await scaffoldFiles("  MIT   OR  Apache-2.0 ");
+  const manifest = files.find((f) => f.path === "manifest.yaml")!.content;
+  assertEquals(manifest.split("\n")[2], "license: MIT OR Apache-2.0");
+  const mod = files.find((f) => f.path.endsWith("/mod.ts"))!.content;
+  assertEquals(
+    mod.split("\n")[1],
+    "// SPDX-License-Identifier: MIT OR Apache-2.0",
+  );
+});
+
+Deno.test("scaffold stdout format with a license returns no handles", async () => {
+  const { context } = createAdoptionContext(LICENSE_TEST_DESIGN);
+  const result = await model.methods.scaffold.execute(
+    { outputFormat: "stdout", license: "MIT" },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  assertEquals(result.dataHandles.length, 0);
 });

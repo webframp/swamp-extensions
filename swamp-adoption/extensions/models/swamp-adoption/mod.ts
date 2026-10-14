@@ -235,6 +235,11 @@ const SPDX_EXCEPTION_IDS = new Set([
  * parentheses), or null when valid.
  */
 function validateSpdxExpression(expr: string): string | null {
+  // Only literal spaces: newlines, tabs, NBSP and U+2028/2029 would survive
+  // tokenizing and break the YAML manifest and the TS header comment.
+  if (!/^[A-Za-z0-9.\- ()]*$/.test(expr)) {
+    return "license may contain only letters, digits, '.', '-', spaces and parentheses";
+  }
   const tokens = expr.match(/\(|\)|[^\s()]+/g) ?? [];
   if (tokens.length === 0) return "license must not be empty";
   if (tokens.join(" ").length > 200) return "license expression is too long";
@@ -815,7 +820,10 @@ Each generated file includes TODO comments marking where the user adds real logi
       ) => {
         const startMs = Date.now();
         // execute() can be called without schema parsing, so re-validate.
-        const license = args.license?.trim() || undefined;
+        // Canonical form (trimmed, single-spaced) is what gets emitted.
+        const license = args.license === undefined
+          ? undefined
+          : args.license.trim().replace(/ {2,}/g, " ");
         if (license !== undefined) {
           const licenseError = validateSpdxExpression(license);
           if (licenseError) throw new Error(`Invalid license: ${licenseError}`);
