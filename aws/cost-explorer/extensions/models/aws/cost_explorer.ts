@@ -269,7 +269,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/cost-explorer",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -476,6 +476,12 @@ export const model = {
         "Add get_cost_for_period method and costForPeriod spec for " +
         "calendar-month / explicit date-range queries with optional SERVICE " +
         "filter. Additive — existing stored resources are unaffected.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

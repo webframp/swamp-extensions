@@ -11,3 +11,5 @@ new names. The README query examples now use `compliance-current`.
 **Upgrade note:** Data stored under `latest` is not migrated; re-run the methods
 to populate the new names. `aws/drift-state` reads this model by spec and needs
 no change. No attribute schemas changed.
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

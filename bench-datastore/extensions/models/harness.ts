@@ -190,7 +190,7 @@ async function runModelMethod(
 /** Harness model definition. */
 export const model = {
   type: "@webframp/bench-datastore/harness",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -252,6 +252,12 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

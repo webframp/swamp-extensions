@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/falai/organization"
-version: "2026.10.07.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: "fal.ai Organization — teams, usage, billing events, focus reports"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

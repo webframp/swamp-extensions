@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/acm-diagnostics"
-version: "2026.10.13.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Read-only diagnostics for AWS Certificate Manager issuance and validation problems.
   Reports per-domain validation status, the exact DNS CNAME records ACM expects, failure

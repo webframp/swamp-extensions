@@ -503,7 +503,7 @@ async function authorizeAction(
 /** Deterministic cross-provider triage policy model. */
 export const model = {
   type: "@webframp/triage",
-  version: "2026.09.24.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -525,6 +525,11 @@ export const model = {
   }, {
     toVersion: "2026.09.24.1",
     description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.10.14.1",
+    description:
+      "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {

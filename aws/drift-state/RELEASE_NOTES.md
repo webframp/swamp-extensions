@@ -14,3 +14,5 @@ use the new names.
 `compute_drift` (or `refresh`) once after upgrading; until then `get_drifted`
 and `get_drift_velocity` return empty results. Baselines and timelines keep
 their names and are unaffected. No attribute schemas changed.
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

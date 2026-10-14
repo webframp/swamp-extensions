@@ -176,7 +176,7 @@ const ListToolRunsSchema = z.object({
 /** Griptape Cloud Tools — hosted tools, activities, deployments, and tool runs */
 export const model = {
   type: "@webframp/griptape/tools",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -200,6 +200,12 @@ export const model = {
       toVersion: "2026.10.07.1",
       description:
         "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

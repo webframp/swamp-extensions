@@ -1173,7 +1173,7 @@ function slugify(label: string): string {
 /** Organization design simulation model. */
 export const model = {
   type: "@webframp/org-simulation",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   upgrades: [
     {
       toVersion: "2026.07.23.1",
@@ -1236,6 +1236,12 @@ export const model = {
     {
       toVersion: "2026.09.18.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description:
+        "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

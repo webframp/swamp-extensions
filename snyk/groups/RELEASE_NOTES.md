@@ -10,3 +10,5 @@ of `latest`. Anything that read `data.latest("<model>", "latest")` or queried
 
 **Upgrade note:** Data previously stored under `latest` is not migrated; re-run
 the method to populate the new name. No attribute schemas changed.
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

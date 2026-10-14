@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/typesafe-batch"
-version: "2026.09.26.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Bounded batch triage for `@swamp/typesafe-ai`. Adds one method,
   `triage_batch`, that evaluates many compact `{id, state}` items against one

@@ -34,8 +34,8 @@ Deno.test("generateManifest: uses the @webframp/falai/<name> naming convention",
   assertStringIncludes(manifest, "- falai/assets.ts");
   assertStringIncludes(manifest, "- README.md");
   assertStringIncludes(manifest, "- LICENSE.md");
-  // No top-level `license:` field per the project's licensing rule.
-  assertEquals(/^license:/m.test(manifest), false);
+  // The registry has-license point needs a top-level SPDX `license:` field.
+  assertEquals(/^license: Apache-2\.0$/m.test(manifest), true);
 });
 
 Deno.test("generateDenoJson: pins swamp-testing via jsr and excludes no-import-prefix", () => {

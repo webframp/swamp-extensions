@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
-version: "2026.10.07.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Observe Claude Enterprise analytics via the Enterprise Analytics API
   (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending

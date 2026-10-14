@@ -9,3 +9,5 @@
 
 **Upgrade note:** Data stored under `latest` is not migrated; re-run the method
 to populate `scaffold-current`. No attribute schemas changed.
+
+**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.

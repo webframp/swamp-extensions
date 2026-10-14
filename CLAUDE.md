@@ -76,12 +76,19 @@ Every extension is licensed under **Apache-2.0**, matching the repository root
 - **Copyright line:** exactly `Copyright 2026 Sean Escriva` (Apache style, no
   `(c)`). This is the only accepted holder string — not `webframp`, not a
   variant with `(c)`.
-- **`LICENSE.md` is bundled, not the manifest `license:` field.** The registry
-  quality rubric earns the `has-license` point from a shipped license file at
-  the tarball root, so every extension lists `LICENSE.md` under
-  `additionalFiles:` (or the `paths.base: manifest` opt-in). Do **not** add a
-  top-level `license:` field to `manifest.yaml` — it is redundant with the
-  shipped file and creates drift.
+- **Two separate rubric points, both required.** Since swamp
+  `20261014.121640.0` (swamp-club#3324, commit `8dd0e86e`) the registry quality
+  rubric scores license in two rows: `has-license` needs a valid SPDX
+  `license:` in `manifest.yaml`, and `license-file` needs a shipped license
+  file at the tarball root. So every manifest declares
+  `license: Apache-2.0` (exact SPDX case, directly after `name:`) **and** lists
+  `LICENSE.md` under `additionalFiles:` (or the `paths.base: manifest` opt-in).
+  Omitting `license:` scores 92% and fails the quality gate. Before that
+  release the bundled file alone earned the `has-license` point and a manifest
+  `license:` was forbidden; that guidance is obsolete.
+- **Generators and scaffolds.** The five `scripts/*-codegen` generators emit
+  `license: Apache-2.0` in every manifest they write; keep that in sync if the
+  manifest template changes.
 
 To verify repo-wide uniformity:
 
@@ -90,9 +97,11 @@ To verify repo-wide uniformity:
 grep -rl "MIT License" --include=LICENSE.md . | grep -v .swamp/    # → empty
 grep -rhoE "^Copyright .*" --include=LICENSE.md . | grep -v .swamp/ | sort -u
 # → exactly: Copyright 2026 Sean Escriva
+# Every manifest declares the SPDX license (count must equal the manifest count):
+git ls-files '*manifest.yaml' | xargs grep -L '^license: Apache-2.0$'   # → empty
 ```
 
-A LICENSE.md change is a shipped-file change: bump the version, add the
+A LICENSE.md or manifest `license:` change is a shipped-file change: bump the version, add the
 `RELEASE_NOTES.md` entry, and — for model extensions with an `upgrades:` array —
 append a no-op upgrade entry (identity `upgradeAttributes`) so the chain's final
 `toVersion` matches the new `version`.
@@ -142,7 +151,7 @@ When building models that wrap external APIs:
 - **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
 - **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
 - **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
-- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score 14/14 (100%) on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.6.5"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
+- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score `passed` / 100% on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.6.5"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
 - **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
 - **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
 - **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
@@ -191,7 +200,7 @@ Why this is non-negotiable:
 
 - **The registry quality scorer cannot resolve bare specifiers.** An extension
   that imports `from "zod"` publishes but scores as **unscored** — it fails the
-  14/14 rubric. `swamp extension quality` reports:
+  quality rubric. `swamp extension quality` reports:
   `Extension uses bare import specifiers that cannot be resolved by the
   server-side scorer: "zod". Use explicit npm: or jsr: prefixes.`
 - Local `deno task check`/`lint`/`test` all PASS with bare imports (Deno

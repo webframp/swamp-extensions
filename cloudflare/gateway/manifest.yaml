@@ -1,5 +1,6 @@
 manifestVersion: 1
 name: "@webframp/cloudflare/gateway"
+license: Apache-2.0
 version: "2026.10.14.1"
 description: "Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints"
 repository: "https://github.com/webframp/swamp-extensions"

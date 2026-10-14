@@ -1,5 +1,6 @@
 manifestVersion: 1
 name: "@webframp/swamp-adoption"
+license: Apache-2.0
 version: "2026.10.14.1"
 description: |
   Guides new users through mapping their domain onto swamp primitives.

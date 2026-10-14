@@ -1,5 +1,6 @@
 manifestVersion: 1
 name: "@webframp/aws/drift-state"
+license: Apache-2.0
 version: "2026.10.14.1"
 description: |
   Unified drift detection surface that composes observations from existing

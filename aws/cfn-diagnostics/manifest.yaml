@@ -1,6 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/cfn-diagnostics"
-version: "2026.10.13.1"
+license: Apache-2.0
+version: "2026.10.14.1"
 description: |
   Read-only diagnostics for failed or rolled-back CloudFormation stack operations.
   Pulls stack event history, separates root-cause failures from cancellation
