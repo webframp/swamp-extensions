@@ -139,6 +139,9 @@ jobs:
     # registry quality rubric all pass. This scan fails the build when a
     # non-test source file (or a code generator) writes one.
     needs: [discover]
+    # Not gated on discover's success: this scan reads no discover output, so a
+    # discover failure must not silently skip it.
+    if: ${{ !cancelled() }}
     name: reserved data names
     runs-on: ubuntu-latest
     steps:

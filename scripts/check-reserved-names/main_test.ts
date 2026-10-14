@@ -10,7 +10,7 @@ Deno.test("flags a literal reserved name passed to writeResource", () => {
   assertEquals(f[0].line, 1);
 });
 
-Deno.test("flags a multi-line writeResource call and reports its line", () => {
+Deno.test("flags a multi-line writeResource call and reports the literal's line", () => {
   const src = [
     "const h = await context.writeResource(",
     '  "compliance",',
@@ -20,7 +20,9 @@ Deno.test("flags a multi-line writeResource call and reports its line", () => {
   ].join("\n");
   const f = scanSource("ext/model.ts", src);
   assertEquals(f.length, 1);
-  assertEquals(f[0].line, 1);
+  // The reserved literal is on line 3 of the call; that is the line reported.
+  assertEquals(f[0].line, 3);
+  assertEquals(f[0].text, '"latest",');
 });
 
 Deno.test("flags readResource and writeFile of a reserved name", () => {

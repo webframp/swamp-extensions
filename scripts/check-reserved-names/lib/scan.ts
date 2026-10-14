@@ -85,7 +85,10 @@ export function scanSource(file: string, source: string): Finding[] {
   const lines = source.split("\n");
   for (const re of [writeCall(), readCall()]) {
     for (const m of source.matchAll(re)) {
-      const line = lineOf(source, m.index ?? 0);
+      // Report the line of the reserved literal itself, not the line where a
+      // multi-line call starts. The literal is the last thing the match consumes.
+      const literalStart = (m.index ?? 0) + m[0].length - (m[3].length + 2);
+      const line = lineOf(source, literalStart);
       findings.push({
         file,
         line,
