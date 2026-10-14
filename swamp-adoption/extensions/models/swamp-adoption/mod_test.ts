@@ -880,3 +880,124 @@ Deno.test("scaffold writes 'scaffold-current', never the reserved name 'latest'"
   assertEquals(resources[0].name, "scaffold-current");
   assertEquals(resources.some((r) => r.name === "latest"), false);
 });
+
+// =============================================================================
+// Scaffold license argument
+// =============================================================================
+
+const LICENSE_TEST_DESIGN = {
+  "current-design": {
+    name: "@webframp/demo",
+    description: "Demo",
+    globalArguments: [],
+    methods: [],
+    resources: [],
+    dependencies: [],
+    vaultNeeded: false,
+    labels: [],
+    designedAt: "2026-06-05T00:00:00Z",
+  },
+};
+
+async function scaffoldFiles(license?: string) {
+  const { context, getWrittenResources, getLogsByLevel } =
+    createAdoptionContext(LICENSE_TEST_DESIGN);
+  await model.methods.scaffold.execute(
+    { outputFormat: "resource", license },
+    // deno-lint-ignore no-explicit-any
+    context as any,
+  );
+  const resources = getWrittenResources();
+  const data = resources[0].data as {
+    files: { path: string; content: string }[];
+  };
+  return { resources, files: data.files, getLogsByLevel };
+}
+
+Deno.test("scaffold with license emits license: right after name:", async () => {
+  const { files } = await scaffoldFiles("MIT");
+  const manifest = files.find((f) => f.path === "manifest.yaml")!.content;
+  const lines = manifest.split("\n");
+  assertEquals(lines[1].startsWith("name:"), true);
+  assertEquals(lines[2], "license: MIT");
+  assertEquals(manifest.includes("additionalFiles:\n  - LICENSE.md"), true);
+});
+
+Deno.test("scaffold with license emits a non-empty LICENSE.md and matching mod.ts header", async () => {
+  const { files } = await scaffoldFiles("MIT OR Apache-2.0");
+  const license = files.find((f) => f.path === "LICENSE.md");
+  assertExists(license);
+  assertEquals(license.content.trim().length > 0, true);
+  assertEquals(license.content.includes("MIT OR Apache-2.0"), true);
+  const mod = files.find((f) => f.path.endsWith("/mod.ts"))!.content;
+  assertEquals(
+    mod.includes("// SPDX-License-Identifier: MIT OR Apache-2.0"),
+    true,
+  );
+});
+
+Deno.test("scaffold without license omits license fields, LICENSE.md and Apache header, and warns", async () => {
+  const { files, getLogsByLevel } = await scaffoldFiles();
+  const manifest = files.find((f) => f.path === "manifest.yaml")!.content;
+  assertEquals(manifest.includes("license:"), false);
+  assertEquals(manifest.includes("additionalFiles"), false);
+  assertEquals(files.some((f) => f.path === "LICENSE.md"), false);
+  const mod = files.find((f) => f.path.endsWith("/mod.ts"))!.content;
+  assertEquals(mod.includes("SPDX-License-Identifier"), false);
+  assertEquals(getLogsByLevel("warning").length > 0, true);
+});
+
+Deno.test("scaffold with license writes 'scaffold-current', never 'latest'", async () => {
+  const { resources } = await scaffoldFiles("Apache-2.0");
+  assertEquals(resources[0].name, "scaffold-current");
+  assertEquals(resources.some((r) => r.name === "latest"), false);
+});
+
+Deno.test("scaffold accepts valid SPDX expressions", () => {
+  for (
+    const license of [
+      "Apache-2.0",
+      "MIT",
+      "(MIT OR Apache-2.0) AND BSD-3-Clause",
+      "GPL-2.0-only WITH Classpath-exception-2.0",
+    ]
+  ) {
+    const result = model.methods.scaffold.arguments.safeParse({ license });
+    assertEquals(result.success, true, license);
+  }
+});
+
+Deno.test("scaffold rejects invalid SPDX values", () => {
+  for (
+    const license of [
+      "",
+      "LicenseRef-Proprietary",
+      "MIT OR LicenseRef-x",
+      "apache-2.0",
+      "Apache 2.0",
+      "NotALicense",
+      "MIT AND",
+      "(MIT",
+      "MIT)",
+      "MIT Apache-2.0",
+      "MIT WITH Bogus-exception",
+    ]
+  ) {
+    const result = model.methods.scaffold.arguments.safeParse({ license });
+    assertEquals(result.success, false, license);
+  }
+});
+
+Deno.test("scaffold execute rejects an invalid license even without schema parsing", async () => {
+  const { context } = createAdoptionContext(LICENSE_TEST_DESIGN);
+  await assertRejects(
+    () =>
+      model.methods.scaffold.execute(
+        { license: "LicenseRef-Custom" },
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "LicenseRef",
+  );
+});

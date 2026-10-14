@@ -69,7 +69,16 @@ Once a design is finalized, `scaffold` produces working starter files:
 ```bash
 swamp model method run adoption scaffold
 swamp model method run adoption scaffold --arg outputFormat=stdout
+swamp model method run adoption scaffold --arg license=Apache-2.0
 ```
+
+Pass `license` (an SPDX expression such as `MIT` or `MIT OR Apache-2.0`) to get a
+`license:` line in `manifest.yaml`, a `LICENSE.md` placeholder listed under
+`additionalFiles`, and a matching SPDX header in `mod.ts`. Replace the
+placeholder with the full license text before publishing. There is no default:
+without `license` the scaffold logs a warning and emits none of these, and the
+extension will not pass `swamp extension quality` until you add them.
+`LicenseRef-*` is rejected because the registry gives it no license credit.
 
 ### Get next suggestion
 

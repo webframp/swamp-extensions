@@ -170,6 +170,7 @@ type MethodContext = {
   globalArgs: z.infer<typeof GlobalArgsSchema>;
   logger: {
     info: (msg: string, meta?: Record<string, unknown>) => void;
+    warn: (msg: string, meta?: Record<string, unknown>) => void;
   };
   writeResource: (
     specName: string,
@@ -189,13 +190,114 @@ type MethodContext = {
 };
 
 // =============================================================================
+// License validation
+// =============================================================================
+
+/**
+ * SPDX identifiers the scaffold accepts. Deliberately a short allow-list of
+ * common licenses: the registry rubric needs a valid SPDX expression, and
+ * LicenseRef-* earns no credit, so anything outside this list is rejected
+ * rather than guessed at. Matching is case-sensitive (exact SPDX case).
+ */
+const SPDX_LICENSE_IDS = new Set([
+  "0BSD",
+  "AGPL-3.0-only",
+  "AGPL-3.0-or-later",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "EPL-2.0",
+  "GPL-2.0-only",
+  "GPL-2.0-or-later",
+  "GPL-3.0-only",
+  "GPL-3.0-or-later",
+  "ISC",
+  "LGPL-2.1-only",
+  "LGPL-2.1-or-later",
+  "LGPL-3.0-only",
+  "LGPL-3.0-or-later",
+  "MIT",
+  "MPL-2.0",
+  "Unlicense",
+  "Zlib",
+]);
+
+const SPDX_EXCEPTION_IDS = new Set([
+  "Classpath-exception-2.0",
+  "LLVM-exception",
+]);
+
+/**
+ * Returns an error message when `expr` is not an accepted SPDX license
+ * expression (ids from the allow-list combined with AND / OR / WITH and
+ * parentheses), or null when valid.
+ */
+function validateSpdxExpression(expr: string): string | null {
+  const tokens = expr.match(/\(|\)|[^\s()]+/g) ?? [];
+  if (tokens.length === 0) return "license must not be empty";
+  if (tokens.join(" ").length > 200) return "license expression is too long";
+  let i = 0;
+  let error: string | null = null;
+  const fail = (msg: string) => {
+    error ??= msg;
+    return false;
+  };
+
+  const parseId = (): boolean => {
+    const tok = tokens[i++];
+    if (tok === undefined) return fail("unexpected end of license expression");
+    if (/^(LicenseRef|DocumentRef)-/i.test(tok)) {
+      return fail(
+        `"${tok}": LicenseRef-* identifiers earn no registry license credit; use a real SPDX id`,
+      );
+    }
+    if (!SPDX_LICENSE_IDS.has(tok)) {
+      return fail(
+        `"${tok}" is not a recognised SPDX license id (exact SPDX case required, e.g. Apache-2.0, MIT)`,
+      );
+    }
+    if (tokens[i] === "WITH") {
+      i++;
+      const exc = tokens[i++];
+      if (exc === undefined || !SPDX_EXCEPTION_IDS.has(exc)) {
+        return fail(`"${exc ?? ""}" is not a recognised SPDX exception id`);
+      }
+    }
+    return true;
+  };
+  const parseTerm = (): boolean => {
+    if (tokens[i] === "(") {
+      i++;
+      if (!parseExpr()) return false;
+      if (tokens[i++] !== ")") return fail("unbalanced parentheses");
+      return true;
+    }
+    return parseId();
+  };
+  const parseExpr = (): boolean => {
+    if (!parseTerm()) return false;
+    while (tokens[i] === "AND" || tokens[i] === "OR") {
+      i++;
+      if (!parseTerm()) return false;
+    }
+    return true;
+  };
+
+  if (!parseExpr()) return error;
+  if (i < tokens.length) return `unexpected token "${tokens[i]}"`;
+  return null;
+}
+
+// =============================================================================
 // Model Definition
 // =============================================================================
 
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.10.14.1",
+  version: "2026.10.14.2",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -284,6 +386,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "Scaffold result renamed from the reserved data name 'latest' to 'scaffold-current'; attributes unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.2",
+      description:
+        "No schema changes — scaffold gains an optional license argument",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -678,6 +786,11 @@ Reads the extensionDesign resource and produces:
 - deno.json with standard task configuration
 - extensions/models/<name>/mod.ts with Zod schemas, resource definitions, method stubs
 - extensions/models/<name>/mod_test.ts with structure and argument validation tests
+- With the optional license argument (SPDX expression, no default): a
+  'license:' line in manifest.yaml, a LICENSE.md placeholder listed under
+  additionalFiles (replace it with the real license text), and a matching
+  SPDX header in mod.ts. Without it, none of these are emitted and a warning
+  is logged; the extension will not pass the registry quality rubric.
 
 The scaffold provides a working starting point that passes deno check and deno lint.
 Each generated file includes TODO comments marking where the user adds real logic.`,
@@ -686,12 +799,33 @@ Each generated file includes TODO comments marking where the user adds real logi
           .describe(
             "Whether to write files as a resource or print to stdout",
           ),
+        license: z.string().superRefine((val, ctx) => {
+          const err = validateSpdxExpression(val);
+          if (err) ctx.addIssue({ code: "custom", message: err });
+        }).optional().describe(
+          "SPDX license expression for the generated extension (e.g. " +
+            "Apache-2.0, MIT, 'MIT OR Apache-2.0'). No default: when omitted " +
+            "the manifest has no license and will fail the registry quality " +
+            "rubric until you add one. LicenseRef-* is rejected.",
+        ),
       }),
       execute: async (
-        args: { outputFormat?: "resource" | "stdout" },
+        args: { outputFormat?: "resource" | "stdout"; license?: string },
         context: MethodContext,
       ) => {
         const startMs = Date.now();
+        // execute() can be called without schema parsing, so re-validate.
+        const license = args.license?.trim() || undefined;
+        if (license !== undefined) {
+          const licenseError = validateSpdxExpression(license);
+          if (licenseError) throw new Error(`Invalid license: ${licenseError}`);
+        } else {
+          context.logger.warn(
+            "No license given: the scaffolded manifest.yaml has no 'license:' " +
+              "and no LICENSE.md, so it will not pass 'swamp extension quality'. " +
+              "Re-run with --arg license=<SPDX id> or add them by hand.",
+          );
+        }
         const design = await context.readResource(
           "current-design",
         ) as Record<string, unknown> | null;
@@ -730,6 +864,7 @@ Each generated file includes TODO comments marking where the user adds real logi
         const manifestContent = [
           "manifestVersion: 1",
           `name: "${safeExtName}"`,
+          ...(license ? [`license: ${license}`] : []),
           `version: "${calver}.1"`,
           `description: "${
             sanitizeYamlString(
@@ -745,11 +880,12 @@ Each generated file includes TODO comments marking where the user adds real logi
           "  - linux-aarch64",
           "  - darwin-x86_64",
           "  - darwin-aarch64",
+          ...(license ? ["additionalFiles:", "  - LICENSE.md"] : []),
         ].join("\n");
 
         const modContent = [
           `// ${safeExtName} Model`,
-          "// SPDX-License-Identifier: Apache-2.0",
+          ...(license ? [`// SPDX-License-Identifier: ${license}`] : []),
           "",
           'import { z } from "npm:zod@4.6.5";',
           "",
@@ -803,6 +939,21 @@ Each generated file includes TODO comments marking where the user adds real logi
           2,
         );
 
+        const licenseStub = (spdx: string): string =>
+          [
+            `# License: ${spdx}`,
+            "",
+            "Copyright <year> <copyright holder>",
+            "",
+            "SPDX-License-Identifier: " + spdx,
+            "",
+            "TODO: this is a placeholder, not the license text. Replace this " +
+            "file with the full text of the license(s) above before publishing " +
+            "(texts and templates: https://spdx.org/licenses/), and fill in " +
+            "the copyright line.",
+            "",
+          ].join("\n");
+
         const files = [
           { path: "manifest.yaml", content: manifestContent },
           {
@@ -814,6 +965,9 @@ Each generated file includes TODO comments marking where the user adds real logi
             content: testContent,
           },
           { path: "deno.json", content: denoJsonContent },
+          ...(license
+            ? [{ path: "LICENSE.md", content: licenseStub(license) }]
+            : []),
         ];
 
         const outputFormat = args.outputFormat ?? "resource";
