@@ -981,6 +981,12 @@ Deno.test("scaffold rejects invalid SPDX values", () => {
       "MIT)",
       "MIT Apache-2.0",
       "MIT WITH Bogus-exception",
+      "()",
+      "MIT ()",
+      "WITH MIT",
+      "MIT WITH",
+      "MIT\u200bOR Apache-2.0",
+      "MIT OR ".repeat(40) + "MIT",
       "MIT\nOR\nApache-2.0",
       "MIT\tOR Apache-2.0",
       "MIT\u2028OR\u2029Apache-2.0",
@@ -1044,4 +1050,26 @@ Deno.test("scaffold stdout format with a license returns no handles", async () =
     context as any,
   );
   assertEquals(result.dataHandles.length, 0);
+});
+
+Deno.test("scaffold LICENSE.md is canonical and carries the replace-me sentinel", async () => {
+  const { files } = await scaffoldFiles("  MIT   OR  Apache-2.0 ");
+  const license = files.find((f) => f.path === "LICENSE.md")!.content;
+  assertEquals(license.includes("# License: MIT OR Apache-2.0"), true);
+  assertEquals(license.includes("TODO-REPLACE-LICENSE-TEXT"), true);
+});
+
+Deno.test("scaffold without license and without design fails on the design, not with a warning", async () => {
+  const { context, getLogsByLevel } = createAdoptionContext();
+  await assertRejects(
+    () =>
+      model.methods.scaffold.execute(
+        {},
+        // deno-lint-ignore no-explicit-any
+        context as any,
+      ),
+    Error,
+    "No extension design found",
+  );
+  assertEquals(getLogsByLevel("warning").length, 0);
 });

@@ -204,9 +204,12 @@ const SPDX_LICENSE_IDS = new Set([
   "AGPL-3.0-only",
   "AGPL-3.0-or-later",
   "Apache-2.0",
+  "Artistic-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
+  "BSD-3-Clause-Clear",
   "BSL-1.0",
+  "CC-BY-4.0",
   "CC0-1.0",
   "EPL-2.0",
   "GPL-2.0-only",
@@ -220,6 +223,7 @@ const SPDX_LICENSE_IDS = new Set([
   "LGPL-3.0-or-later",
   "MIT",
   "MPL-2.0",
+  "Python-2.0",
   "Unlicense",
   "Zlib",
 ]);
@@ -242,7 +246,9 @@ function validateSpdxExpression(expr: string): string | null {
   }
   const tokens = expr.match(/\(|\)|[^\s()]+/g) ?? [];
   if (tokens.length === 0) return "license must not be empty";
-  if (tokens.join(" ").length > 200) return "license expression is too long";
+  if (expr.trim().replace(/ {2,}/g, " ").length > 200) {
+    return "license expression is too long";
+  }
   let i = 0;
   let error: string | null = null;
   const fail = (msg: string) => {
@@ -260,7 +266,7 @@ function validateSpdxExpression(expr: string): string | null {
     }
     if (!SPDX_LICENSE_IDS.has(tok)) {
       return fail(
-        `"${tok}" is not a recognised SPDX license id (exact SPDX case required, e.g. Apache-2.0, MIT)`,
+        `"${tok}" is not a recognised SPDX license id (exact SPDX case required, e.g. Apache-2.0, MIT; the scaffold accepts a closed list of common ids, so edit manifest.yaml by hand for others)`,
       );
     }
     if (tokens[i] === "WITH") {
@@ -827,12 +833,6 @@ Each generated file includes TODO comments marking where the user adds real logi
         if (license !== undefined) {
           const licenseError = validateSpdxExpression(license);
           if (licenseError) throw new Error(`Invalid license: ${licenseError}`);
-        } else {
-          context.logger.warn(
-            "No license given: the scaffolded manifest.yaml has no 'license:' " +
-              "and no LICENSE.md, so it will not pass 'swamp extension quality'. " +
-              "Re-run with --arg license=<SPDX id> or add them by hand.",
-          );
         }
         const design = await context.readResource(
           "current-design",
@@ -841,6 +841,14 @@ Each generated file includes TODO comments marking where the user adds real logi
         if (!design) {
           throw new Error(
             "No extension design found. Run 'design' method first.",
+          );
+        }
+
+        if (license === undefined) {
+          context.logger.warn(
+            "No license given: the scaffolded manifest.yaml has no 'license:' " +
+              "and no LICENSE.md, so it will not pass 'swamp extension quality'. " +
+              "Re-run with --arg license=<SPDX id> or add them by hand.",
           );
         }
 
@@ -955,7 +963,7 @@ Each generated file includes TODO comments marking where the user adds real logi
             "",
             "SPDX-License-Identifier: " + spdx,
             "",
-            "TODO: this is a placeholder, not the license text. Replace this " +
+            "TODO-REPLACE-LICENSE-TEXT: this is a placeholder, not the license text. Replace this " +
             "file with the full text of the license(s) above before publishing " +
             "(texts and templates: https://spdx.org/licenses/), and fill in " +
             "the copyright line.",
