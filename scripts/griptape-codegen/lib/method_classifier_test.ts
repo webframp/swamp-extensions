@@ -470,9 +470,9 @@ Deno.test("generateModelSource: action guards against a 204 undefined result", (
   assertStringIncludes(src, "if (result === undefined || result === null)");
 });
 
-Deno.test("generateModelSource: action with a path param keys instance on it, not 'latest'", () => {
+Deno.test("generateModelSource: action with a path param keys instance on it, not '<resource>-current'", () => {
   // InvokeStructureWebhookPost = POST /api/structures/{structure_id}/webhook.
-  // Distinct structures must not collide onto one "latest" instance.
+  // Distinct structures must not collide onto one singleton instance.
   const config: ServiceConfig = {
     name: "structures",
     description: "Griptape Cloud Structures",
@@ -583,4 +583,39 @@ Deno.test("generateModelSource: emits a well-formed model", () => {
   assertStringIncludes(src, "griptapeApiPaginated");
   assertStringIncludes(src, `"threads",`); // itemsKey passed to paginator
   assertStringIncludes(src, `const idCandidates = ["thread_id","id"]`); // create key resolution
+});
+
+Deno.test("generateModelSource: singleton get/action never write the reserved name 'latest'", () => {
+  // swamp rejects the data name "latest"; a singleton instance must be keyed
+  // "<resource>-current" instead.
+  const group: ServiceGroup = {
+    config: {
+      name: "demo",
+      description: "Demo",
+      pathPrefixes: ["/api/demo"],
+      labels: ["griptape"],
+    },
+    operations: [
+      makeOp({
+        httpMethod: "get",
+        path: "/api/demo/status",
+        operationId: "GetDemoStatus",
+      }),
+      makeOp({
+        httpMethod: "post",
+        path: "/api/demo/run",
+        operationId: "RunDemo",
+      }),
+    ],
+  };
+  const src = generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+  assertEquals(/["']latest["']/.test(src), false);
+  assertEquals(
+    /writeResource\("[a-z0-9_-]+", "[a-z0-9_-]+-current"/.test(src),
+    true,
+  );
 });

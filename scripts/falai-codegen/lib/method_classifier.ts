@@ -658,7 +658,7 @@ function generateGetBody(
   const resourceName = method.name.replace(/^get_/, "");
   const instanceExpr = buildPathParamInstanceExpr(
     method.operation.pathParams,
-    '"latest"',
+    `"${resourceName}-current"`,
   );
   const { queryBuild, pathSuffix } = buildQueryString(method, indent);
 
@@ -1000,7 +1000,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
+${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -1032,7 +1032,7 @@ export function sanitizeFieldName(name: string): string {
  * True when a method's generated body references sanitizeInstanceName.
  *   - create: always
  *   - get / update: only when a trailing path param supplies the instance id
- *   - list ("main"), action ("latest"), delete (no resource): never
+ *   - list ("main"), action ("<resource>-current"), delete (no resource): never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   if (method.type === "create") return true;

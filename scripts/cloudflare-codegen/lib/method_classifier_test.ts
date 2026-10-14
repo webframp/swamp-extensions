@@ -493,3 +493,35 @@ Deno.test("generateModelSource: cursor-paginated list uses cfApiPaginatedCursor,
   assertEquals(src.includes("truncated: false,"), false);
   assertEquals(src.includes("import { cfApiPaginatedCursor }"), true);
 });
+
+Deno.test("generateModelSource: singleton get/action never write the reserved name 'latest'", () => {
+  // swamp rejects the data name "latest"; a singleton instance must be keyed
+  // "<resource>-current" instead.
+  const group: ServiceGroup = {
+    config: {
+      name: "demo",
+      description: "Demo",
+      pathPrefixes: ["/accounts/{account_id}/demo"],
+      scope: "account",
+      labels: ["cloudflare"],
+    },
+    operations: [
+      makeOp({
+        httpMethod: "get",
+        path: "/accounts/{account_id}/demo/status",
+        operationId: "demo-get-status",
+      }),
+      makeOp({
+        httpMethod: "post",
+        path: "/accounts/{account_id}/demo/run",
+        operationId: "demo-run",
+      }),
+    ],
+  };
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(/["']latest["']/.test(src), false);
+  assertEquals(
+    /writeResource\("[a-z0-9_-]+", "[a-z0-9_-]+-current"/.test(src),
+    true,
+  );
+});

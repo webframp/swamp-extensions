@@ -500,13 +500,13 @@ function expectedInstanceName(method: ClassifiedMethod): string {
     case "list":
       return fromPath ?? "main";
     case "get":
-      return fromPath ?? "latest";
+      return fromPath ?? `${resourceNameFor(method)}-current`;
     case "create":
       return CREATED_ID_TEST_VALUE;
     case "update":
       return fromPath ?? "updated";
     default:
-      return fromPath ?? "latest";
+      return fromPath ?? `${resourceNameFor(method)}-current`;
   }
 }
 

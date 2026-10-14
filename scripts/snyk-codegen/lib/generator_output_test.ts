@@ -458,3 +458,25 @@ Deno.test("a resource written by a list and a get/create accepts every writer's 
     await Deno.remove(dir, { recursive: true });
   }
 });
+
+Deno.test("generateModelSource: singleton get/action never write the reserved name 'latest'", () => {
+  // swamp rejects the data name "latest"; a singleton instance must be keyed
+  // "<resource>-current" instead.
+  const group: ServiceGroup = {
+    config: CONFIG,
+    operations: [
+      op({ operationId: "getStatus", path: "/status" }),
+      op({ operationId: "runThing", httpMethod: "post", path: "/run" }),
+    ],
+  };
+  const src = generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+  assertEquals(/["']latest["']/.test(src), false);
+  assertEquals(
+    /writeResource\("[a-z0-9_-]+", "[a-z0-9_-]+-current"/.test(src),
+    true,
+  );
+});

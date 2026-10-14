@@ -199,7 +199,7 @@ export function generateModelSource(
   if (usesCfApiPaginatedCursor) apiImports.push("cfApiPaginatedCursor");
   // sanitizeInstanceName is emitted only by bodies that build an instance name
   // from an API-influenced value: every `create`, and any `get`/`update`
-  // targeting a resource by a path id. `list` ("main") and `action` ("latest")
+  // targeting a resource by a path id. `list` ("main") and `action` ("<resource>-current")
   // use constant instance names and never call it. Import it only when a body
   // actually references it, or deno lint fails with no-unused-vars.
   const usesSanitize = methods.some(methodEmitsSanitize);
@@ -706,7 +706,7 @@ function generateGetBody(
   ];
   const instanceExpr = idParam
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
-    : '"latest"';
+    : `"${resourceName}-current"`;
 
   return `${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
@@ -967,7 +967,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "latest", result ?? {});
+${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -1011,8 +1011,8 @@ function sanitizeFieldName(name: string): string {
  * MUST stay in lockstep with the body generators:
  *   - create: always (wraps the API-returned id, falling back to "created")
  *   - get / update: only when a trailing path param supplies the instance id
- *     (otherwise the body uses the constant "latest"/"updated")
- *   - list ("main"), action ("latest"), delete (no resource): never
+ *     (otherwise the body uses the constant "<resource>-current"/"updated")
+ *   - list ("main"), action ("<resource>-current"), delete (no resource): never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   if (method.type === "create") return true;
