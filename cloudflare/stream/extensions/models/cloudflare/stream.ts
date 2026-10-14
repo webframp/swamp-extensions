@@ -621,7 +621,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -673,6 +673,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1003,7 +1008,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_videos_initiate_video_uploads_using_tus",
-          "latest",
+          "stream_videos_initiate_video_uploads_using_tus-current",
           result ?? {},
         );
         context.logger.info(
@@ -1270,7 +1275,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_signing_keys",
-          "latest",
+          "create_signing_keys-current",
           result ?? {},
         );
         context.logger.info("Executed create_signing_keys", {});
@@ -1336,7 +1341,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_live_inputs",
-          "latest",
+          "list_live_inputs-current",
           result,
         );
         context.logger.info("Fetched list_live_inputs", {});
@@ -1535,7 +1540,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_live_inputs_disable_a_live_input",
-          "latest",
+          "stream_live_inputs_disable_a_live_input-current",
           result ?? {},
         );
         context.logger.info(
@@ -1574,7 +1579,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_live_inputs_enable_a_live_input",
-          "latest",
+          "stream_live_inputs_enable_a_live_input-current",
           result ?? {},
         );
         context.logger.info(
@@ -1812,7 +1817,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_live_inputs_rotate_keys_for_a_live_input",
-          "latest",
+          "stream_live_inputs_rotate_keys_for_a_live_input-current",
           result ?? {},
         );
         context.logger.info(
@@ -1850,7 +1855,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_videos_storage_usage",
-          "latest",
+          "stream_videos_storage_usage-current",
           result,
         );
         context.logger.info("Fetched stream_videos_storage_usage", {});
@@ -2120,7 +2125,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_webhook_view_webhooks",
-          "latest",
+          "stream_webhook_view_webhooks-current",
           result,
         );
         context.logger.info("Fetched stream_webhook_view_webhooks", {});
@@ -2288,7 +2293,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "update_video_details",
-          "latest",
+          "update_video_details-current",
           result ?? {},
         );
         context.logger.info("Executed update_video_details", {});
@@ -2650,7 +2655,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "stream_subtitles_captions_generate_caption_or_subtitle_for_language",
-          "latest",
+          "stream_subtitles_captions_generate_caption_or_subtitle_for_language-current",
           result ?? {},
         );
         context.logger.info(
@@ -2724,7 +2729,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_downloads",
-          "latest",
+          "create_downloads-current",
           result ?? {},
         );
         context.logger.info("Executed create_downloads", {});
@@ -2792,7 +2797,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_type_specific_downloads",
-          "latest",
+          "create_type_specific_downloads-current",
           result ?? {},
         );
         context.logger.info("Executed create_type_specific_downloads", {});

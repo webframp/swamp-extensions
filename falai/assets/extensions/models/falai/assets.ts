@@ -624,7 +624,7 @@ const AssignAssetTagSchema = z.object({
 /** fal.ai Assets — media library, characters, collections, tags, uploads, favorites */
 export const model = {
   type: "@webframp/falai/assets",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -676,6 +676,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -1293,7 +1298,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "favorite_asset_collection",
-          "latest",
+          "favorite_asset_collection-current",
           result ?? {},
         );
         context.logger.info("Executed favorite_asset_collection", {});
@@ -1331,7 +1336,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "unfavorite_asset_collection",
-          "latest",
+          "unfavorite_asset_collection-current",
           result ?? {},
         );
         context.logger.info("Executed unfavorite_asset_collection", {});
@@ -1883,7 +1888,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "favorite_asset_character",
-          "latest",
+          "favorite_asset_character-current",
           result ?? {},
         );
         context.logger.info("Executed favorite_asset_character", {});
@@ -1921,7 +1926,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "unfavorite_asset_character",
-          "latest",
+          "unfavorite_asset_character-current",
           result ?? {},
         );
         context.logger.info("Executed unfavorite_asset_character", {});

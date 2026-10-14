@@ -143,7 +143,7 @@ const VectorizeUpsertVectorSchema = z.object({
 /** Cloudflare Vectorize — vector indexes, insert/query/delete operations */
 export const model = {
   type: "@webframp/cloudflare/vectorize",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -200,6 +200,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -619,7 +624,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "vectorize_insert_vector",
-          "latest",
+          "vectorize_insert_vector-current",
           result ?? {},
         );
         context.logger.info("Executed vectorize_insert_vector", {});
@@ -898,7 +903,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "vectorize_upsert_vector",
-          "latest",
+          "vectorize_upsert_vector-current",
           result ?? {},
         );
         context.logger.info("Executed vectorize_upsert_vector", {});

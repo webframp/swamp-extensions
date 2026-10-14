@@ -3409,7 +3409,7 @@ const GetToMarkdownSupportedSchema = z.object({
 /** Cloudflare Workers AI — model inference, fine-tuning, LoRA adapters */
 export const model = {
   type: "@webframp/cloudflare/workers-ai",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3461,6 +3461,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -4652,7 +4657,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "credit_balance",
-          "latest",
+          "credit_balance-current",
           result,
         );
         context.logger.info("Fetched credit_balance", {});
@@ -4689,7 +4694,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "invoice_history",
-          "latest",
+          "invoice_history-current",
           result,
         );
         context.logger.info("Fetched invoice_history", {});
@@ -4722,7 +4727,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "invoice_preview",
-          "latest",
+          "invoice_preview-current",
           result,
         );
         context.logger.info("Fetched invoice_preview", {});
@@ -4755,7 +4760,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "spending_limit",
-          "latest",
+          "spending_limit-current",
           result,
         );
         context.logger.info("Fetched spending_limit", {});
@@ -4857,7 +4862,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "topup_config",
-          "latest",
+          "topup_config-current",
           result,
         );
         context.logger.info("Fetched topup_config", {});
@@ -4968,7 +4973,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "topup_limits",
-          "latest",
+          "topup_limits-current",
           result,
         );
         context.logger.info("Fetched topup_limits", {});
@@ -5057,7 +5062,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "usage_history",
-          "latest",
+          "usage_history-current",
           result,
         );
         context.logger.info("Fetched usage_history", {});
@@ -10546,7 +10551,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_finetunes",
-          "latest",
+          "list_finetunes-current",
           result,
         );
         context.logger.info("Fetched list_finetunes", {});
@@ -10680,7 +10685,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "model_schema",
-          "latest",
+          "model_schema-current",
           result,
         );
         context.logger.info("Fetched model_schema", {});
@@ -10729,7 +10734,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_search_model",
-          "latest",
+          "workers_ai_search_model-current",
           result,
         );
         context.logger.info("Fetched workers_ai_search_model", {});
@@ -11163,7 +11168,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it",
-          "latest",
+          "workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it-current",
           result ?? {},
         );
         context.logger.info(
@@ -11226,7 +11231,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_base_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_bge_base_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -11289,7 +11294,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_large_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_bge_large_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -11368,7 +11373,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_m3",
-          "latest",
+          "workers_ai_post_run_cf_baai_bge_m3-current",
           result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_cf_baai_bge_m3", {});
@@ -11497,7 +11502,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_bge_small_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_bge_small_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -11560,7 +11565,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -11623,7 +11628,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -11702,7 +11707,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_m3",
-          "latest",
+          "workers_ai_post_run_cf_baai_nonomni_bge_m3-current",
           result ?? {},
         );
         context.logger.info(
@@ -11765,7 +11770,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5",
-          "latest",
+          "workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -12142,7 +12147,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura-current",
           result,
         );
         context.logger.info(
@@ -12178,7 +12183,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_1-current",
           result,
         );
         context.logger.info(
@@ -12306,7 +12311,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_1_internal-current",
           result,
         );
         context.logger.info(
@@ -12342,7 +12347,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_2-current",
           result,
         );
         context.logger.info(
@@ -12379,7 +12384,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en-current",
           result,
         );
         context.logger.info(
@@ -12537,7 +12542,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws-current",
           result,
         );
         context.logger.info(
@@ -12574,7 +12579,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_aura_2_es",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_aura_2_es-current",
           result,
         );
         context.logger.info(
@@ -12701,7 +12706,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_flux",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_flux-current",
           result,
         );
         context.logger.info(
@@ -12819,7 +12824,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_nova_3-current",
           result,
         );
         context.logger.info(
@@ -13032,7 +13037,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_nova_3_internal-current",
           result,
         );
         context.logger.info(
@@ -13069,7 +13074,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws",
-          "latest",
+          "workers_ai_post_websocket_run_cf_deepgram_nova_3_ws-current",
           result,
         );
         context.logger.info(
@@ -13199,7 +13204,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -13330,7 +13335,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b",
-          "latest",
+          "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b-current",
           result ?? {},
         );
         context.logger.info(
@@ -13460,7 +13465,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_defog_sqlcoder_7b_2",
-          "latest",
+          "workers_ai_post_run_cf_defog_sqlcoder_7b_2-current",
           result ?? {},
         );
         context.logger.info(
@@ -13718,7 +13723,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16",
-          "latest",
+          "workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16-current",
           result ?? {},
         );
         context.logger.info(
@@ -13907,7 +13912,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_2b_it_lora",
-          "latest",
+          "workers_ai_post_run_cf_google_gemma_2b_it_lora-current",
           result ?? {},
         );
         context.logger.info(
@@ -14033,7 +14038,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_3_12b_it",
-          "latest",
+          "workers_ai_post_run_cf_google_gemma_3_12b_it-current",
           result ?? {},
         );
         context.logger.info(
@@ -14088,7 +14093,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it",
-          "latest",
+          "workers_ai_post_run_cf_google_gemma_4_26b_a4b_it-current",
           result ?? {},
         );
         context.logger.info(
@@ -14218,7 +14223,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_google_gemma_7b_it_lora",
-          "latest",
+          "workers_ai_post_run_cf_google_gemma_7b_it_lora-current",
           result ?? {},
         );
         context.logger.info(
@@ -14528,7 +14533,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro",
-          "latest",
+          "workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro-current",
           result ?? {},
         );
         context.logger.info(
@@ -14907,7 +14912,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora-current",
           result ?? {},
         );
         context.logger.info(
@@ -15037,7 +15042,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16-current",
           result ?? {},
         );
         context.logger.info(
@@ -15167,7 +15172,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_2_7b_chat_int8-current",
           result ?? {},
         );
         context.logger.info(
@@ -15297,7 +15302,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_8b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -15427,7 +15432,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -15557,7 +15562,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast-current",
           result ?? {},
         );
         context.logger.info(
@@ -15687,7 +15692,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -15817,7 +15822,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8-current",
           result ?? {},
         );
         context.logger.info(
@@ -15947,7 +15952,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast-current",
           result ?? {},
         );
         context.logger.info(
@@ -16081,7 +16086,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -16211,7 +16216,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_2_1b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -16341,7 +16346,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_2_3b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -16489,7 +16494,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast-current",
           result ?? {},
         );
         context.logger.info(
@@ -16692,7 +16697,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct",
-          "latest",
+          "workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -16832,7 +16837,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_meta_m2m100_1_2b",
-          "latest",
+          "workers_ai_post_run_cf_meta_m2m100_1_2b-current",
           result ?? {},
         );
         context.logger.info(
@@ -16962,7 +16967,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_microsoft_phi_2",
-          "latest",
+          "workers_ai_post_run_cf_microsoft_phi_2-current",
           result ?? {},
         );
         context.logger.info(
@@ -17092,7 +17097,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1",
-          "latest",
+          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1-current",
           result ?? {},
         );
         context.logger.info(
@@ -17222,7 +17227,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora",
-          "latest",
+          "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora-current",
           result ?? {},
         );
         context.logger.info(
@@ -17357,7 +17362,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -17412,7 +17417,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_5",
-          "latest",
+          "workers_ai_post_run_cf_moonshotai_kimi_k2_5-current",
           result ?? {},
         );
         context.logger.info(
@@ -17467,7 +17472,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_6",
-          "latest",
+          "workers_ai_post_run_cf_moonshotai_kimi_k2_6-current",
           result ?? {},
         );
         context.logger.info(
@@ -17522,7 +17527,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code",
-          "latest",
+          "workers_ai_post_run_cf_moonshotai_kimi_k2_7_code-current",
           result ?? {},
         );
         context.logger.info(
@@ -18025,7 +18030,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b",
-          "latest",
+          "workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b-current",
           result ?? {},
         );
         context.logger.info(
@@ -18063,7 +18068,7 @@ export const model = {
 
           const handle = await context.writeResource(
             "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-            "latest",
+            "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b-current",
             result,
           );
           context.logger.info(
@@ -18130,7 +18135,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b",
-          "latest",
+          "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b-current",
           result ?? {},
         );
         context.logger.info(
@@ -18272,7 +18277,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_120b",
-          "latest",
+          "workers_ai_post_run_cf_openai_gpt_oss_120b-current",
           result ?? {},
         );
         context.logger.info(
@@ -18414,7 +18419,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openai_gpt_oss_20b",
-          "latest",
+          "workers_ai_post_run_cf_openai_gpt_oss_20b-current",
           result ?? {},
         );
         context.logger.info(
@@ -18642,7 +18647,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_openchat_openchat_3_5_0106",
-          "latest",
+          "workers_ai_post_run_cf_openchat_openchat_3_5_0106-current",
           result ?? {},
         );
         context.logger.info(
@@ -18740,7 +18745,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2",
-          "latest",
+          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2-current",
           result,
         );
         context.logger.info(
@@ -18777,7 +18782,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3",
-          "latest",
+          "workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3-current",
           result,
         );
         context.logger.info(
@@ -18907,7 +18912,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat-current",
           result ?? {},
         );
         context.logger.info(
@@ -19037,7 +19042,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat-current",
           result ?? {},
         );
         context.logger.info(
@@ -19167,7 +19172,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -19297,7 +19302,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -19421,7 +19426,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -19608,7 +19613,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8-current",
           result ?? {},
         );
         context.logger.info(
@@ -19809,7 +19814,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_qwen_qwq_32b",
-          "latest",
+          "workers_ai_post_run_cf_qwen_qwq_32b-current",
           result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_cf_qwen_qwq_32b", {});
@@ -20118,7 +20123,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_sven_test_pipe_http",
-          "latest",
+          "workers_ai_post_websocket_run_cf_sven_test_pipe_http-current",
           result,
         );
         context.logger.info(
@@ -20155,7 +20160,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_websocket_run_cf_test_hello_world_cog",
-          "latest",
+          "workers_ai_post_websocket_run_cf_test_hello_world_cog-current",
           result,
         );
         context.logger.info(
@@ -20285,7 +20290,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq",
-          "latest",
+          "workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -20415,7 +20420,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct",
-          "latest",
+          "workers_ai_post_run_cf_tiiuae_falcon_7b_instruct-current",
           result ?? {},
         );
         context.logger.info(
@@ -20545,7 +20550,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0",
-          "latest",
+          "workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0-current",
           result ?? {},
         );
         context.logger.info(
@@ -20984,7 +20989,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_4_7_flash",
-          "latest",
+          "workers_ai_post_run_cf_zai_org_glm_4_7_flash-current",
           result ?? {},
         );
         context.logger.info(
@@ -21039,7 +21044,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_cf_zai_org_glm_5_2",
-          "latest",
+          "workers_ai_post_run_cf_zai_org_glm_5_2-current",
           result ?? {},
         );
         context.logger.info(
@@ -21169,7 +21174,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_google_gemma_7b_it",
-          "latest",
+          "workers_ai_post_run_hf_google_gemma_7b_it-current",
           result ?? {},
         );
         context.logger.info(
@@ -21299,7 +21304,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2",
-          "latest",
+          "workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2-current",
           result ?? {},
         );
         context.logger.info(
@@ -21429,7 +21434,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta",
-          "latest",
+          "workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta-current",
           result ?? {},
         );
         context.logger.info(
@@ -21559,7 +21564,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b",
-          "latest",
+          "workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b-current",
           result ?? {},
         );
         context.logger.info(
@@ -21689,7 +21694,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -21820,7 +21825,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -21950,7 +21955,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -22080,7 +22085,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -22210,7 +22215,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -22340,7 +22345,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -22470,7 +22475,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq",
-          "latest",
+          "workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq-current",
           result ?? {},
         );
         context.logger.info(
@@ -22697,7 +22702,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "workers_ai_post_run_model",
-          "latest",
+          "workers_ai_post_run_model-current",
           result ?? {},
         );
         context.logger.info("Executed workers_ai_post_run_model", {});

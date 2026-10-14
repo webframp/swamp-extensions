@@ -1040,7 +1040,7 @@ const PatchGlobalVariableSchema = z.object({
 /** Datadog Synthetics — synthetic monitoring tests, results, and locations */
 export const model = {
   type: "@webframp/datadog/synthetics",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1096,6 +1096,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -1777,7 +1782,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "on_demand_concurrency_cap",
-          "latest",
+          "on_demand_concurrency_cap-current",
           result,
         );
         context.logger.info("Fetched on_demand_concurrency_cap", {});
@@ -2004,7 +2009,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "search_suites",
-          "latest",
+          "search_suites-current",
           result,
         );
         context.logger.info("Fetched search_suites", {});

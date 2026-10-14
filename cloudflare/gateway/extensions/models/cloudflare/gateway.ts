@@ -806,7 +806,7 @@ const ZeroTrustGatewayRulesResetExpirationZeroTrustGatewayRuleSchema = z.object(
 /** Cloudflare Gateway — DNS/HTTP policies, locations, proxy endpoints */
 export const model = {
   type: "@webframp/cloudflare/gateway",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -863,6 +863,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1127,7 +1132,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_account_information",
-          "latest",
+          "zero_trust_account_information-current",
           result,
         );
         context.logger.info("Fetched zero_trust_account_information", {});
@@ -1161,7 +1166,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_zero_trust_account",
-          "latest",
+          "create_zero_trust_account-current",
           result ?? {},
         );
         context.logger.info("Executed create_zero_trust_account", {});
@@ -1251,7 +1256,11 @@ export const model = {
           `/accounts/${accountId}/gateway/apps/review_status`,
         );
 
-        const handle = await context.writeResource("list", "latest", result);
+        const handle = await context.writeResource(
+          "list",
+          "list-current",
+          result,
+        );
         context.logger.info("Fetched list", {});
         return { dataHandles: [handle] };
       },
@@ -1319,7 +1328,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "audit_ssh_settings",
-          "latest",
+          "audit_ssh_settings-current",
           result,
         );
         context.logger.info("Fetched audit_ssh_settings", {});
@@ -1392,7 +1401,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_rotate_ssh_account_seed",
-          "latest",
+          "zero_trust_rotate_ssh_account_seed-current",
           result ?? {},
         );
         context.logger.info("Executed zero_trust_rotate_ssh_account_seed", {});
@@ -1655,7 +1664,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_certificates_activate_zero_trust_certificate",
-          "latest",
+          "zero_trust_certificates_activate_zero_trust_certificate-current",
           result ?? {},
         );
         context.logger.info(
@@ -1694,7 +1703,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_certificates_deactivate_zero_trust_certificate",
-          "latest",
+          "zero_trust_certificates_deactivate_zero_trust_certificate-current",
           result ?? {},
         );
         context.logger.info(
@@ -1730,7 +1739,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_account_configuration",
-          "latest",
+          "zero_trust_account_configuration-current",
           result,
         );
         context.logger.info("Fetched zero_trust_account_configuration", {});
@@ -2362,7 +2371,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "logging_settings_for_the_zero_trust_account",
-          "latest",
+          "logging_settings_for_the_zero_trust_account-current",
           result,
         );
         context.logger.info(
@@ -3267,7 +3276,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule",
-          "latest",
+          "zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule-current",
           result ?? {},
         );
         context.logger.info(

@@ -403,7 +403,7 @@ const SearchRequestsSchema = z.object({
 /** fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search */
 export const model = {
   type: "@webframp/falai/models",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -460,6 +460,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -805,7 +810,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "estimate_pricing",
-          "latest",
+          "estimate_pricing-current",
           result ?? {},
         );
         context.logger.info("Executed estimate_pricing", {});

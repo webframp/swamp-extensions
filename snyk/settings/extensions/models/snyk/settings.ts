@@ -151,7 +151,7 @@ const UpdateOrgSecretsSettingsSchema = z.object({
 /** Snyk Settings — organization and group setting management */
 export const model = {
   type: "@webframp/snyk/settings",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -212,6 +212,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -475,7 +480,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "enable_opensource_broker_for_group",
-          "latest",
+          "enable_opensource_broker_for_group-current",
           result ?? {},
         );
         context.logger.info("Executed enable_opensource_broker_for_group", {});
@@ -670,7 +675,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "iac_settings_for_org",
-          "latest",
+          "iac_settings_for_org-current",
           result,
         );
         context.logger.info("Fetched iac_settings_for_org", {});
@@ -748,7 +753,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "org_languages_settings",
-          "latest",
+          "org_languages_settings-current",
           result,
         );
         context.logger.info("Fetched org_languages_settings", {});
@@ -832,7 +837,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "open_source_settings_for_org",
-          "latest",
+          "open_source_settings_for_org-current",
           result,
         );
         context.logger.info("Fetched open_source_settings_for_org", {});
@@ -867,7 +872,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "opensource_broker_setting",
-          "latest",
+          "opensource_broker_setting-current",
           result,
         );
         context.logger.info("Fetched opensource_broker_setting", {});
@@ -902,7 +907,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "enable_opensource_broker_for_org",
-          "latest",
+          "enable_opensource_broker_for_org-current",
           result ?? {},
         );
         context.logger.info("Executed enable_opensource_broker_for_org", {});
@@ -1155,7 +1160,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "sast_settings",
-          "latest",
+          "sast_settings-current",
           result,
         );
         context.logger.info("Fetched sast_settings", {});
@@ -1239,7 +1244,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "secrets_settings",
-          "latest",
+          "secrets_settings-current",
           result,
         );
         context.logger.info("Fetched secrets_settings", {});

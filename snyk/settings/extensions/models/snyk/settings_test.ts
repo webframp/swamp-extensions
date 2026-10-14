@@ -475,7 +475,10 @@ Deno.test({
         "enable_opensource_broker_for_group",
         resources[0].data,
       );
-      assertEquals(resources[0].name, "latest");
+      assertEquals(
+        resources[0].name,
+        "enable_opensource_broker_for_group-current",
+      );
       assertExists(resources[0].data);
     } finally {
       uninstall();
@@ -826,7 +829,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "iac_settings_for_org");
       assertValidResource("iac_settings_for_org", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "iac_settings_for_org-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -985,7 +988,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "org_languages_settings");
       assertValidResource("org_languages_settings", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "org_languages_settings-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -1129,7 +1132,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "open_source_settings_for_org");
       assertValidResource("open_source_settings_for_org", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "open_source_settings_for_org-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -1193,7 +1196,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "opensource_broker_setting");
       assertValidResource("opensource_broker_setting", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "opensource_broker_setting-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -1260,7 +1263,10 @@ Deno.test({
         "enable_opensource_broker_for_org",
         resources[0].data,
       );
-      assertEquals(resources[0].name, "latest");
+      assertEquals(
+        resources[0].name,
+        "enable_opensource_broker_for_org-current",
+      );
       assertExists(resources[0].data);
     } finally {
       uninstall();
@@ -1679,7 +1685,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "sast_settings");
       assertValidResource("sast_settings", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "sast_settings-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {
@@ -1816,7 +1822,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "secrets_settings");
       assertValidResource("secrets_settings", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "secrets_settings-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {

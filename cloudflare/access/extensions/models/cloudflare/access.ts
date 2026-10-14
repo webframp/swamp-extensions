@@ -3660,7 +3660,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3717,6 +3717,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -4672,7 +4677,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "mcp_portals_api_sync_server",
-          "latest",
+          "mcp_portals_api_sync_server-current",
           result ?? {},
         );
         context.logger.info("Executed mcp_portals_api_sync_server", {});
@@ -4772,7 +4777,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_applications_add_an_application",
-          "latest",
+          "access_applications_add_an_application-current",
           result ?? {},
         );
         context.logger.info(
@@ -5015,7 +5020,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_a_short_lived_certificate_ca",
-          "latest",
+          "create_a_short_lived_certificate_ca-current",
           result ?? {},
         );
         context.logger.info("Executed create_a_short_lived_certificate_ca", {});
@@ -5357,7 +5362,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_applications_revoke_service_tokens",
-          "latest",
+          "access_applications_revoke_service_tokens-current",
           result ?? {},
         );
         context.logger.info(
@@ -6117,7 +6122,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_gateway_ca_add_an_ssh_ca",
-          "latest",
+          "access_gateway_ca_add_an_ssh_ca-current",
           result ?? {},
         );
         context.logger.info("Executed access_gateway_ca_add_an_ssh_ca", {});
@@ -6463,7 +6468,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_identity_providers_add_an_access_identity_provider",
-          "latest",
+          "access_identity_providers_add_an_access_identity_provider-current",
           result ?? {},
         );
         context.logger.info(
@@ -6613,7 +6618,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_saml_certificate_for_identity_provider",
-          "latest",
+          "create_saml_certificate_for_identity_provider-current",
           result ?? {},
         );
         context.logger.info(
@@ -6893,7 +6898,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "the_access_key_configuration",
-          "latest",
+          "the_access_key_configuration-current",
           result,
         );
         context.logger.info("Fetched the_access_key_configuration", {});
@@ -6966,7 +6971,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_key_configuration_rotate_access_keys",
-          "latest",
+          "access_key_configuration_rotate_access_keys-current",
           result ?? {},
         );
         context.logger.info(
@@ -7185,7 +7190,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "your_zero_trust_organization",
-          "latest",
+          "your_zero_trust_organization-current",
           result,
         );
         context.logger.info("Fetched your_zero_trust_organization", {});
@@ -7330,7 +7335,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "your_zero_trust_organization_doh_settings",
-          "latest",
+          "your_zero_trust_organization_doh_settings-current",
           result,
         );
         context.logger.info(
@@ -7940,7 +7945,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_saml_certificates_rotate_certificate",
-          "latest",
+          "access_saml_certificates_rotate_certificate-current",
           result ?? {},
         );
         context.logger.info(
@@ -8235,7 +8240,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "access_service_tokens_refresh_a_service_token",
-          "latest",
+          "access_service_tokens_refresh_a_service_token-current",
           result ?? {},
         );
         context.logger.info(

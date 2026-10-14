@@ -409,7 +409,7 @@ const GetPublicgetsuppressionzonesendingSchema = z.object({
 /** Cloudflare Email Routing — rules, addresses, catch-all, DNS setup */
 export const model = {
   type: "@webframp/cloudflare/email-routing",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -466,6 +466,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -638,7 +643,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "dmarc_reports_status",
-          "latest",
+          "dmarc_reports_status-current",
           result,
         );
         context.logger.info("Fetched dmarc_reports_status", {});
@@ -715,7 +720,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "inspect_spf",
-          "latest",
+          "inspect_spf-current",
           result,
         );
         context.logger.info("Fetched inspect_spf", {});
@@ -748,7 +753,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "email_routing_settings",
-          "latest",
+          "email_routing_settings-current",
           result,
         );
         context.logger.info("Fetched email_routing_settings", {});
@@ -886,7 +891,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "email_routing_settings_email_routing_dns_settings",
-          "latest",
+          "email_routing_settings_email_routing_dns_settings-current",
           result,
         );
         context.logger.info(
@@ -1143,7 +1148,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "catch_all_rule",
-          "latest",
+          "catch_all_rule-current",
           result,
         );
         context.logger.info("Fetched catch_all_rule", {});
@@ -1840,7 +1845,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "email_sending_subdomains_fix_sending_subdomain_dns",
-          "latest",
+          "email_sending_subdomains_fix_sending_subdomain_dns-current",
           result ?? {},
         );
         context.logger.info(

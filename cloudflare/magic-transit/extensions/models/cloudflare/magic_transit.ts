@@ -1675,7 +1675,7 @@ const PatchWanSchema = z.object({
 /** Cloudflare Magic Transit — GRE tunnels, static routes, health checks, IPsec */
 export const model = {
   type: "@webframp/cloudflare/magic-transit",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -1732,6 +1732,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3103,7 +3108,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "bulkcreateprefixes",
-          "latest",
+          "bulkcreateprefixes-current",
           result ?? {},
         );
         context.logger.info("Executed bulkcreateprefixes", {});
@@ -4346,7 +4351,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "getprotectionstatus",
-          "latest",
+          "getprotectionstatus-current",
           result,
         );
         context.logger.info("Fetched getprotectionstatus", {});
@@ -4869,7 +4874,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "settings",
-          "latest",
+          "settings-current",
           result,
         );
         context.logger.info("Fetched settings", {});
@@ -5004,7 +5009,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_cf1_sites",
-          "latest",
+          "create_cf1_sites-current",
           result ?? {},
         );
         context.logger.info("Executed create_cf1_sites", {});
@@ -5216,7 +5221,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_cf1_site_ramps",
-          "latest",
+          "create_cf1_site_ramps-current",
           result ?? {},
         );
         context.logger.info("Executed create_cf1_site_ramps", {});
@@ -5317,7 +5322,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_interconnects",
-          "latest",
+          "list_interconnects-current",
           result,
         );
         context.logger.info("Fetched list_interconnects", {});
@@ -5739,7 +5744,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "catalog_syncs_refresh",
-          "latest",
+          "catalog_syncs_refresh-current",
           result ?? {},
         );
         context.logger.info("Executed catalog_syncs_refresh", {});
@@ -5772,7 +5777,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "onramps_mwan_addr_space_read",
-          "latest",
+          "onramps_mwan_addr_space_read-current",
           result,
         );
         context.logger.info("Fetched onramps_mwan_addr_space_read", {});
@@ -5847,7 +5852,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "onramps_apply",
-          "latest",
+          "onramps_apply-current",
           result ?? {},
         );
         context.logger.info("Executed onramps_apply", {});
@@ -5883,7 +5888,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "onramps_plan",
-          "latest",
+          "onramps_plan-current",
           result ?? {},
         );
         context.logger.info("Executed onramps_plan", {});
@@ -5917,7 +5922,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "providers_discover_all",
-          "latest",
+          "providers_discover_all-current",
           result ?? {},
         );
         context.logger.info("Executed providers_discover_all", {});
@@ -5998,7 +6003,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "providers_discover",
-          "latest",
+          "providers_discover-current",
           result ?? {},
         );
         context.logger.info("Executed providers_discover", {});
@@ -6239,7 +6244,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_gre_tunnels",
-          "latest",
+          "list_gre_tunnels-current",
           result,
         );
         context.logger.info("Fetched list_gre_tunnels", {});
@@ -6478,7 +6483,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_ipsec_tunnels",
-          "latest",
+          "list_ipsec_tunnels-current",
           result,
         );
         context.logger.info("Fetched list_ipsec_tunnels", {});
@@ -6783,7 +6788,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels",
-          "latest",
+          "magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels-current",
           result ?? {},
         );
         context.logger.info(
@@ -6819,7 +6824,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_redundancy_groups",
-          "latest",
+          "list_redundancy_groups-current",
           result,
         );
         context.logger.info("Fetched list_redundancy_groups", {});
@@ -7022,7 +7027,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_routes",
-          "latest",
+          "list_routes-current",
           result,
         );
         context.logger.info("Fetched list_routes", {});

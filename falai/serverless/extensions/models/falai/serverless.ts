@@ -369,7 +369,7 @@ const GetUsageSchema = z.object({
 /** fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage */
 export const model = {
   type: "@webframp/falai/serverless",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -421,6 +421,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -1069,7 +1074,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_root",
-          "latest",
+          "list_root-current",
           result,
         );
         context.logger.info("Fetched list_root", {});
@@ -1149,7 +1154,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "upload_from_url",
-          "latest",
+          "upload_from_url-current",
           result ?? {},
         );
         context.logger.info("Executed upload_from_url", {});
@@ -1250,7 +1255,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "serverless_logs_history",
-          "latest",
+          "serverless_logs_history-current",
           result ?? {},
         );
         context.logger.info("Executed serverless_logs_history", {});
@@ -1289,7 +1294,7 @@ export const model = {
           "Filter by specific request ID",
         ),
         expand: z.union([z.string(), z.array(z.string())]).optional().describe(
-          "Fields to expand in the response. Use payloads to include input and output payloads. Use billing to include billable_units per request.",
+          "Fields to expand in the response. Use payloads to include input and output payloads. Use billing to include billable_units per request; billing also requires the `billing:usage:read` permission.",
         ),
         sort_by: z.enum(["ended_at", "duration"]).optional().describe(
           "Sort results by end time or duration",

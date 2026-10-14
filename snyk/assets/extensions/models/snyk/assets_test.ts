@@ -238,7 +238,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "list_assets");
       assertValidResource("list_assets", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "list_assets-current");
       assertExists(resources[0].data);
     } finally {
       uninstall();

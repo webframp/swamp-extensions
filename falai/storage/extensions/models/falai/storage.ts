@@ -80,7 +80,7 @@ const GetStorageSettingsSchema = z.object({
 /** fal.ai Storage — file ACLs, signed URLs, storage settings */
 export const model = {
   type: "@webframp/falai/storage",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -127,6 +127,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -384,7 +389,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "storage_settings",
-          "latest",
+          "storage_settings-current",
           result,
         );
         context.logger.info("Fetched storage_settings", {});

@@ -180,7 +180,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -237,6 +237,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -393,7 +398,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "analytics_by_time",
-          "latest",
+          "analytics_by_time-current",
           result,
         );
         context.logger.info("Fetched analytics_by_time", {});
@@ -433,7 +438,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "analytics_summary",
-          "latest",
+          "analytics_summary-current",
           result,
         );
         context.logger.info("Fetched analytics_summary", {});
@@ -477,7 +482,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_spectrum_applications",
-          "latest",
+          "list_spectrum_applications-current",
           result,
         );
         context.logger.info("Fetched list_spectrum_applications", {});
@@ -542,7 +547,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "create_spectrum_application_using_a_name_for_the_origin",
-          "latest",
+          "create_spectrum_application_using_a_name_for_the_origin-current",
           result ?? {},
         );
         context.logger.info(

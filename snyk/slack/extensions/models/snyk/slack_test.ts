@@ -303,7 +303,10 @@ Deno.test({
         "slack_default_notification_settings",
         resources[0].data,
       );
-      assertEquals(resources[0].name, "latest");
+      assertEquals(
+        resources[0].name,
+        "slack_default_notification_settings-current",
+      );
       assertExists(resources[0].data);
     } finally {
       uninstall();
@@ -519,7 +522,10 @@ Deno.test({
         "slack_project_notification_settings",
         resources[0].data,
       );
-      assertEquals(resources[0].name, "latest");
+      assertEquals(
+        resources[0].name,
+        "slack_project_notification_settings-current",
+      );
       assertExists(resources[0].data);
     } finally {
       uninstall();

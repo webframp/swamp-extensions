@@ -208,7 +208,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "self");
       assertValidResource("self", resources[0].data);
-      assertEquals(resources[0].name, "latest");
+      assertEquals(resources[0].name, "self-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
     } finally {

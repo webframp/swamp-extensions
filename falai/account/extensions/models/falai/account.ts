@@ -53,7 +53,7 @@ const GetMetaSchema = z.object({
 /** fal.ai Account — billing, focus reports, model access controls, and account metadata */
 export const model = {
   type: "@webframp/falai/account",
-  version: "2026.10.07.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -100,6 +100,11 @@ export const model = {
     },
     {
       toVersion: "2026.10.07.1",
+      description: "Regenerated from updated API spec; no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
       description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
@@ -165,7 +170,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "account_billing",
-          "latest",
+          "account_billing-current",
           result,
         );
         context.logger.info("Fetched account_billing", {});

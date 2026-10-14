@@ -686,7 +686,7 @@ const PatchLoadBalancerSchema = z.object({
 /** Cloudflare Load Balancing — pools, monitors, load balancers, steering policies */
 export const model = {
   type: "@webframp/cloudflare/load-balancing",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -743,6 +743,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2379,7 +2384,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_regions",
-          "latest",
+          "list_regions-current",
           result,
         );
         context.logger.info("Fetched list_regions", {});
@@ -2452,7 +2457,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "account_load_balancer_search_search_resources",
-          "latest",
+          "account_load_balancer_search_search_resources-current",
           result,
         );
         context.logger.info(
@@ -2488,7 +2493,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "list_load_balancer_usage",
-          "latest",
+          "list_load_balancer_usage-current",
           result,
         );
         context.logger.info("Fetched list_load_balancer_usage", {});

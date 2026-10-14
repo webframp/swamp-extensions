@@ -145,7 +145,7 @@ const D1TimeTravelRestoreSchema = z.object({
 /** Cloudflare D1 serverless SQL databases — databases, queries */
 export const model = {
   type: "@webframp/cloudflare/d1",
-  version: "2026.09.18.1",
+  version: "2026.10.14.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -197,6 +197,11 @@ export const model = {
       toVersion: "2026.09.18.1",
       description:
         "Normalized zod dependency version to 4.6.5; no behavioral changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.14.1",
+      description: "Regenerated from updated API spec; no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -619,7 +624,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "d1_import_database",
-          "latest",
+          "d1_import_database-current",
           result ?? {},
         );
         context.logger.info("Executed d1_import_database", {});
@@ -667,7 +672,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "d1_query_database",
-          "latest",
+          "d1_query_database-current",
           result ?? {},
         );
         context.logger.info("Executed d1_query_database", {});
@@ -715,7 +720,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "d1_raw_database_query",
-          "latest",
+          "d1_raw_database_query-current",
           result ?? {},
         );
         context.logger.info("Executed d1_raw_database_query", {});
@@ -803,7 +808,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "d1_time_travel_restore",
-          "latest",
+          "d1_time_travel_restore-current",
           result ?? {},
         );
         context.logger.info("Executed d1_time_travel_restore", {});
