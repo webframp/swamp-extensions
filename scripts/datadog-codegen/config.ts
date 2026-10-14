@@ -143,6 +143,12 @@ export const SERVICES: ServiceConfig[] = [
     description:
       "Datadog On-Call — on-call schedules, escalation policies, and routing",
     tags: ["On-Call"],
+    // Schedule overrides are excluded until the generator can emit them
+    // correctly: the create endpoint is classified as a paginated POST-search
+    // (it would re-POST and could create duplicate overrides, and drops the
+    // JSON:API `data` body), and the list endpoint gets page_number pagination
+    // inferred without any page parameters in the spec.
+    excludePaths: ["/api/v2/on-call/schedules/{schedule_id}/overrides"],
     labels: ["datadog", "on-call", "paging", "incident-response"],
   },
   {
