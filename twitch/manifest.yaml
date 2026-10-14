@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@webframp/twitch"
-version: "2026.09.18.1"
+version: "2026.09.28.1"
 description: |
   Twitch Moderation Toolkit — cross-channel moderation visibility for Twitch moderators.
 
@@ -60,6 +60,12 @@ description: |
 
   The model refreshes expired access tokens automatically using the refresh token.
 
+  ## Jev moderation analysis
+
+  Run `@webframp/twitch-character-analysis` with an existing Twitch model and
+  a vault-backed `@swamp/typesafe-ai` model. The workflow scores observable
+  moderation signals only; it is not a personality or protected-trait profiler.
+
   ## Methods by Auth Level
 
   ### Moderator auth (works with any moderator token)
@@ -103,8 +109,10 @@ models:
   - twitch/mod.ts
 workflows:
   - workflow-35fcec1b-a4b7-466e-8a8d-a8c4a7a45220.yaml
+  - workflow-00253fdc-44f7-40ac-ba73-b42bad501ac6.yaml
 reports:
   - mod_report.ts
+  - character_analysis_report.ts
 additionalFiles:
   - README.md
   - LICENSE.md
