@@ -42,6 +42,9 @@ Deno.test("on-call model: has expected methods", () => {
   assertExists(model.methods.get_on_call_schedule);
   assertExists(model.methods.update_on_call_schedule);
   assertExists(model.methods.delete_on_call_schedule);
+  assertExists(model.methods.list_schedule_overrides);
+  assertExists(model.methods.create_schedule_overrides);
+  assertExists(model.methods.delete_schedule_override);
   assertExists(model.methods.get_schedule_on_call_responders);
   assertExists(model.methods.get_team_on_call_users);
   assertExists(model.methods.get_on_call_team_routing_rules);
@@ -62,6 +65,8 @@ Deno.test("on-call model: has expected resources", () => {
   assertExists(model.resources["on_call_escalation_policy"]);
   assertExists(model.resources["on_call_schedules"]);
   assertExists(model.resources["on_call_schedule"]);
+  assertExists(model.resources["schedule_overrides"]);
+  assertExists(model.resources["create_schedule_overrides"]);
   assertExists(model.resources["schedule_on_call_responders"]);
   assertExists(model.resources["team_on_call_users"]);
   assertExists(model.resources["on_call_team_routing_rules"]);
@@ -504,18 +509,24 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "on-call model: list_user_notification_channels fetches and writes resource",
+  name: "on-call model: list_schedule_overrides fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/test-id-123/notification-channels": {
+      "/test-id-123/overrides": {
         body: {
           "data": [{
             "id": "fixture-123",
             "type": "resource",
-            "attributes": { "active": true, "config": null },
+            "attributes": {
+              "end": "2024-01-01T00:00:00Z",
+              "inactive": true,
+              "start": "2024-01-01T00:00:00Z",
+              "overridden_user_id": "test-value",
+              "schedule_id": "test-value",
+              "user_id": "test-value",
+            },
           }],
           "meta": { "page": {} },
         },
@@ -546,8 +557,8 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_user_notification_channels.execute(
-        { "user_id": "test-id-123" },
+      >).list_schedule_overrides.execute(
+        { "schedule_id": "test-id-123" },
         context,
       );
       assertEquals(result.dataHandles.length, 1);
@@ -555,13 +566,13 @@ Deno.test({
       assertEquals(requests.length, 1);
       const req0 = requests[0];
       assertEquals(req0.method, "GET");
-      assertStringIncludes(req0.path, "/test-id-123/notification-channels");
+      assertStringIncludes(req0.path, "/test-id-123/overrides");
       assertEquals(req0.headers["dd-api-key"], "test-api-key");
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "user_notification_channels");
+      assertEquals(resources[0].specName, "schedule_overrides");
       const data = resources[0].data as {
         items: unknown[];
         truncated: boolean;
@@ -569,6 +580,83 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "on-call model: create_schedule_overrides creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/overrides": {
+        body: {
+          "data": [{
+            "id": "new-123",
+            "type": "resource",
+            "attributes": {
+              "end": "2024-01-01T00:00:00Z",
+              "inactive": true,
+              "start": "2024-01-01T00:00:00Z",
+              "overridden_user_id": "test-value",
+              "schedule_id": "test-value",
+              "user_id": "test-value",
+            },
+          }],
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_schedule_overrides.execute({
+        "schedule_id": "test-id-123",
+        "entries": [{ "type": "test-item", "attributes": {} }],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/test-id-123/overrides");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: [{ "type": "test-item", "attributes": {} }],
+      });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "create_schedule_overrides");
+      assertEquals(resources[0].name, "test-id-123");
     } finally {
       uninstall();
       await server.shutdown();

@@ -285,7 +285,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).bulk_edit_security_monitoring_signals_assignee.execute({
-        "name": "test-resource",
+        "entries": [{ "type": "test-item", "attributes": {} }],
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

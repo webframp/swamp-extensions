@@ -83,6 +83,8 @@ export interface SchemaObject {
   example?: unknown;
   minimum?: number;
   maximum?: number;
+  minItems?: number;
+  maxItems?: number;
   minLength?: number;
   maxLength?: number;
   pattern?: string;

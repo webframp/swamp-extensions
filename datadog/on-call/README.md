@@ -29,6 +29,9 @@ swamp model create @webframp/datadog/on-call dd-on-call \
 | `get_on_call_schedule`             | Get On-Call schedule                              |
 | `update_on_call_schedule`          | Update On-Call schedule                           |
 | `delete_on_call_schedule`          | Delete On-Call schedule                           |
+| `list_schedule_overrides`          | List On-Call schedule overrides                   |
+| `create_schedule_overrides`        | Create On-Call schedule overrides                 |
+| `delete_schedule_override`         | Delete On-Call schedule override                  |
 | `get_schedule_on_call_responders`  | Get on-call responders for a schedule             |
 | `get_team_on_call_users`           | Get team on-call users                            |
 | `get_on_call_team_routing_rules`   | Get On-Call team routing rules                    |

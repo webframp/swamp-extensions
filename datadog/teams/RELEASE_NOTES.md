@@ -1,21 +1,14 @@
-## 2026.10.14.1
+## 2026.10.14.2
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** `create_team_connections` and `delete_team_connections` now send the
+`entries` array as the `data` payload. `create_team_connections` previously ran
+as a paginated POST search and could re-send the request;
+`delete_team_connections` sent no body and so could not delete anything.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** `create_team_connections` is now a create method. It stores the raw
+API response (`{data: [...]}`) in the `create_team_connections` resource instead
+of the list-shaped `{items, truncated}` result, and its arguments changed from
+none to a required `entries` array.
 
-## 2026.10.07.1
-
-**Added:** Team notification rules accept a `servicenow` notification target
-(with `templates`) on `create_team_notification_rule` and
-`update_team_notification_rule`, and the stored rule schema includes it. Email
-notification settings gain an optional `recipient_email` field.
-
-**Fixed:** The shared API helper no longer throws on a successful response with
-an empty body (such as 202 Accepted); it returns an empty result. Paginated list
-requests tolerate an empty page body the same way. A body that is not valid JSON
-now fails with an error naming the HTTP method, path, and status, with a snippet
-of the body.
-
-**Upgrade note:** Additive changes only; existing stored resources remain valid
-and no migration is needed.
+**Upgrade note:** The resource schema accepts both shapes, so previously stored
+data still validates and no migration is needed.

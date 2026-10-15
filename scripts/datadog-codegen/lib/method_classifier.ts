@@ -51,6 +51,10 @@ export function classifyOperation(op: GroupedOperation): MethodType {
       if (lastSegment.startsWith("{")) return "action";
       // POST endpoints with "Delete" in operationId are bulk deletes
       if (op.operationId.toLowerCase().includes("delete")) return "action";
+      // A batch body ({data: [...]}) submits items to create; the collection
+      // response is the created items, not a query result. Treating it as a
+      // list would re-POST the body when the response carries a cursor.
+      if (op.requestBodyArrayWrapper) return "create";
       // POST endpoints that return collections are list operations
       if (op.isCollection) return "list";
       // POST endpoints with "List" or "Search" in operationId are queries
@@ -290,10 +294,14 @@ function generateGlobalArgsSchema(): string {
 }
 
 /** Get the resource name for a method */
-function getResourceName(method: ClassifiedMethod): string {
+export function getResourceName(method: ClassifiedMethod): string {
   if (method.type === "list") {
     return method.name.replace(/^(list|get)_/, "");
   }
+  // A batch write's result is the raw API response, so it must not share a
+  // spec with the list method of the same noun (create_x vs list_x), whose
+  // stored shape is {items, truncated, ...}. Keep the full method name.
+  if (method.operation.requestBodyArrayWrapper) return method.name;
   return method.name.replace(/^(get|create|update|action|delete)_/, "");
 }
 
@@ -348,6 +356,17 @@ function generateResponseSchemas(
       lines.push(`    "Extension that collected this data",`);
       lines.push(`  ),`);
       lines.push(`});`);
+    } else if (
+      method.operation.requestBodyArrayWrapper && method.operation.isCollection
+    ) {
+      // The API helper only flattens a single-object `data`; a collection
+      // comes back as the raw envelope with no top-level `id`. Everything is
+      // optional so previously stored resources of this name still validate.
+      lines.push(`const ${varName} = z.object({`);
+      lines.push(
+        `  data: z.array(z.record(z.string(), z.unknown())).optional(),`,
+      );
+      lines.push(`}).passthrough();`);
     } else {
       const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
       lines.push(`const ${varName} = ${zodStr};`);
@@ -429,6 +448,17 @@ function generateMethod(
   return lines.join("\n");
 }
 
+/**
+ * Expression for an array request body, re-wrapped in the envelope key when
+ * the API expects one (e.g. `{data: [...]}`). Undefined for non-array bodies.
+ */
+function arrayBodyExpr(op: GroupedOperation): string | undefined {
+  if (!op.requestBodyIsArray) return undefined;
+  return op.requestBodyArrayWrapper
+    ? `{ ${op.requestBodyArrayWrapper}: args.entries }`
+    : "args.entries";
+}
+
 /** Generate the arguments schema for a method */
 function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
@@ -472,8 +502,16 @@ function generateArgsSchema(op: GroupedOperation): string {
     // Array body (e.g., POST /v2/logs accepts [{message, ddsource}])
     if (!seenFields.has("entries")) {
       seenFields.add("entries");
+      // Batch bodies keep the API's size bounds so a bad request fails at
+      // validation rather than as a 400 from the API.
+      const body = op.requestBody;
+      const entriesZod = op.requestBodyArrayWrapper && body
+        ? `${schemaToZod(body, { indent: 2 }, 2)}${
+          body.minItems !== undefined ? `.min(${body.minItems})` : ""
+        }${body.maxItems !== undefined ? `.max(${body.maxItems})` : ""}`
+        : "z.array(z.record(z.string(), z.unknown()))";
       fields.push(
-        `  entries: z.array(z.record(z.string(), z.unknown())).describe("Array of items to submit"),`,
+        `  entries: ${entriesZod}.describe("Array of items to submit"),`,
       );
     }
   } else if (op.requestBody?.properties) {
@@ -503,6 +541,7 @@ function generateArgsSchema(op: GroupedOperation): string {
 function methodUsesArgs(method: ClassifiedMethod): boolean {
   const { type, operation } = method;
   if (type === "list") return true;
+  if (operation.requestBodyIsArray) return true;
   if (operation.pathParams.length > 0) return true;
   if (type === "create" || type === "update") return true;
   if (type === "action" && operation.requestBody) return true;
@@ -740,16 +779,26 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
   }
 
   if (method.operation.requestBodyIsArray) {
+    const arrayBody = arrayBodyExpr(method.operation);
+    // A batch response has no single id; key the instance on the parent path
+    // param (e.g. the schedule) so repeat creates for it replace one resource
+    // rather than all colliding on a constant.
+    const lastPathParam = method.operation.pathParams.at(-1);
+    const batchIdExpr = method.operation.requestBodyArrayWrapper
+      ? lastPathParam
+        ? `args.${sanitizeFieldName(lastPathParam.name)}`
+        : '"created"'
+      : '(result as { id?: unknown }).id ?? "created"';
     return `${querySetup}${indent}    const result = await ddApi(
 ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "POST",
 ${indent}      \`${apiPath}${urlSuffix}\`,
-${indent}      args.entries,
+${indent}      ${arrayBody},
 ${indent}    );
 ${indent}
-${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
+${indent}    const id = sanitizeInstanceName(String(${batchIdExpr}));
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
@@ -831,6 +880,22 @@ function generateUpdateBody(
     ? `"${method.operation.requestBodyType}"`
     : null;
 
+  const arrayBody = arrayBodyExpr(method.operation);
+  if (arrayBody) {
+    return `${indent}    const result = await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}\`,
+${indent}      ${arrayBody},
+${indent}    );
+${indent}
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${indent}    context.logger.info("Updated ${resourceName}", {});
+${indent}    return { dataHandles: [handle] };`;
+  }
+
   if (isJsonApi) {
     return `${indent}    const attrs: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
@@ -897,6 +962,10 @@ function generateDeleteBody(
     sanitizeFieldName(p.name)
   );
 
+  // Batch deletes carry the items to remove in the request body.
+  const deleteBody = arrayBodyExpr(method.operation);
+  const bodyArg = deleteBody ? `\n${indent}      ${deleteBody},` : "";
+
   if (hasQueryParams) {
     // Build name mapping for bracket-notation params
     const paramNameMap: Record<string, string> = {};
@@ -931,7 +1000,7 @@ ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "DELETE",
-${indent}      \`${apiPath}\${qs}\`,
+${indent}      \`${apiPath}\${qs}\`,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
@@ -943,7 +1012,7 @@ ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "DELETE",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}\`,${bodyArg}
 ${indent}    );
 ${indent}
 ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
@@ -970,7 +1039,11 @@ function generateActionBody(
   let bodySetup = "";
   let bodyArg = "";
   let urlSuffix = "";
-  if (hasBody) {
+  if (hasBody && method.operation.requestBodyIsArray) {
+    // Array bodies are submitted whole, re-wrapped in the envelope key if the
+    // API expects one (e.g. {data: [...]}); never spread into an object.
+    bodyArg = `\n${indent}      ${arrayBodyExpr(method.operation)},`;
+  } else if (hasBody) {
     bodySetup = `${indent}    const body: Record<string, unknown> = {};
 ${indent}    const excludeKeys = new Set<string>(${
       JSON.stringify(excludeNames)
