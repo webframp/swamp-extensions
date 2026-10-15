@@ -258,6 +258,86 @@ Deno.test({
 
 Deno.test({
   name:
+    "synthetics model: get_api_multistep_subtest_parents fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/parents": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "child_name": "My API Subtest",
+              "child_public_id": "xyz-uvw-789",
+              "monitor_id": 12345678,
+              "name": "My Multistep Test",
+              "overall_state": 0,
+              "overall_state_modified": "2024-01-01T00:00:00+00:00",
+              "public_id": "abc-def-123",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_api_multistep_subtest_parents.execute({
+        "public_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/parents");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "api_multistep_subtest_parents");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "synthetics model: list_synthetics_downtimes fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -682,6 +762,155 @@ Deno.test({
 
 Deno.test({
   name:
+    "synthetics model: add_test_to_synthetics_downtime executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/tests/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "createdAt": "2024-01-15T10:30:00Z",
+              "createdBy": "00000000-0000-0000-0000-000000000003",
+              "createdByName": "Jane Doe",
+              "description": "Scheduled weekly maintenance window.",
+              "isEnabled": true,
+              "name": "Weekly maintenance",
+              "tags": ["team:backend", "env:prod"],
+              "testIds": ["abc-def-123", "xyz-uvw-456"],
+              "timeSlots": [{
+                "duration": 3600,
+                "id": "00000000-0000-0000-0000-000000000002",
+                "start": {
+                  "day": 15,
+                  "hour": 10,
+                  "minute": 30,
+                  "month": 1,
+                  "year": 2024,
+                },
+                "timezone": "Europe/Paris",
+              }],
+              "updatedAt": "2024-01-15T10:30:00Z",
+              "updatedBy": "00000000-0000-0000-0000-000000000003",
+              "updatedByName": "Jane Doe",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).add_test_to_synthetics_downtime.execute({
+        "downtime_id": "test-id-123",
+        "test_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PUT");
+      assertStringIncludes(req0.path, "/tests/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "add_test_to_synthetics_downtime");
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: remove_test_from_synthetics_downtime executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/tests/test-id-123": { body: {}, status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).remove_test_from_synthetics_downtime.execute({
+        "downtime_id": "test-id-123",
+        "test_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "DELETE");
+      assertStringIncludes(req0.path, "/tests/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "synthetics model: get_on_demand_concurrency_cap fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -732,6 +961,143 @@ Deno.test({
       assertEquals(resources[0].name, "on_demand_concurrency_cap-current");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: set_on_demand_concurrency_cap creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/settings/on_demand_concurrency_cap": {
+        body: { "id": "new-123", "attributes": null, "type": null },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).set_on_demand_concurrency_cap.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/settings/on_demand_concurrency_cap");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "set_on_demand_concurrency_cap");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: create_synthetics_suite creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/synthetics/suites": {
+        body: {
+          "data": {
+            "id": "new-123",
+            "type": "resource",
+            "attributes": {
+              "message": "Notification message",
+              "monitor_id": 12345678,
+              "name": "Example suite name",
+              "options": { "alerting_threshold": 0 },
+              "public_id": "123-abc-456",
+              "tags": ["env:production"],
+              "tests": [],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_synthetics_suite.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/synthetics/suites");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_suite");
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -811,6 +1177,1182 @@ Deno.test({
 });
 
 Deno.test({
+  name: "synthetics model: search_suites fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/suites/search": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "suites": [], "total": 1 },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).search_suites.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/suites/search");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "search_suites");
+      assertEquals(resources[0].name, "search_suites-current");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: get_synthetics_suite fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/suites/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "message": "Notification message",
+              "monitor_id": 12345678,
+              "name": "Example suite name",
+              "options": { "alerting_threshold": 0 },
+              "public_id": "123-abc-456",
+              "tags": ["env:production"],
+              "tests": [],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_suite.execute(
+        { "public_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/suites/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_suite");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: edit_synthetics_suite executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/suites/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "message": "Notification message",
+              "monitor_id": 12345678,
+              "name": "Example suite name",
+              "options": { "alerting_threshold": 0 },
+              "public_id": "123-abc-456",
+              "tags": ["env:production"],
+              "tests": [],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).edit_synthetics_suite.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PUT");
+      assertStringIncludes(req0.path, "/suites/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "edit_synthetics_suite");
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: patch_test_suite executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/jsonpatch": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "message": "Notification message",
+              "monitor_id": 12345678,
+              "name": "Example suite name",
+              "options": { "alerting_threshold": 0 },
+              "public_id": "123-abc-456",
+              "tags": ["env:production"],
+              "tests": [],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).patch_test_suite.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/test-id-123/jsonpatch");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "patch_test_suite");
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: list_synthetics_browser_test_latest_results fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/results": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "execution_info": {
+                "duration": null,
+                "error_message": "Connection timed out",
+                "is_fast_retry": true,
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "tunnel": false,
+                "unhealthy": false,
+              },
+              "finished_at": 1,
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "run_type": "scheduled",
+              "started_at": 1,
+              "status": "passed",
+              "steps_info": { "completed": 6, "errors": 0, "total": 6 },
+              "test_sub_type": "http",
+              "test_type": "api",
+              "test_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_synthetics_browser_test_latest_results.execute({
+        "public_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/results");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "synthetics_browser_test_latest_results",
+      );
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_synthetics_browser_test_result fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/results/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "batch": { "id": "batch-abc-123" },
+              "ci": {
+                "pipeline": null,
+                "provider": null,
+                "stage": null,
+                "workspace_path": "/home/runner/work/example",
+              },
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "git": {
+                "branch": "main",
+                "commit": null,
+                "repository_url": "https://github.com/DataDog/example",
+              },
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "result": {
+                "assertions": [],
+                "bucket_keys": null,
+                "call_type": "unary",
+                "cert": null,
+                "compressed_json_descriptor": "compressedJsonDescriptorValue",
+                "compressed_steps": "eJzLSM3JyQcABiwCFQ==",
+                "connection_outcome": "established",
+                "dns_resolution": null,
+                "duration": 380.7,
+                "exited_on_step_success": false,
+                "failure": null,
+                "finished_at": 1723782422760,
+                "handshake": null,
+                "id": "5158904793181869365",
+                "initial_id": "5158904793181869365",
+                "is_fast_retry": true,
+                "is_last_retry": true,
+                "netpath": null,
+                "netstats": null,
+                "ocsp": null,
+                "ping": null,
+                "received_email_count": 1,
+                "received_message": "UDP echo: b'Test message'",
+                "request": null,
+                "resolved_ip": "54.243.255.141",
+                "response": null,
+                "run_type": null,
+                "sent_message": "udp mess",
+                "start_url": "http://34.95.79.70/prototype",
+                "started_at": 1723782422750,
+                "status": null,
+                "steps": [],
+                "time_to_interactive": 183,
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "trace": null,
+                "traceroute": [],
+                "triggered_at": 1723782422715,
+                "tunnel": false,
+                "turns": [],
+                "unhealthy": false,
+                "variables": null,
+              },
+              "test_sub_type": "http",
+              "test_type": "api",
+              "test_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_browser_test_result.execute({
+        "public_id": "test-id-123",
+        "result_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/results/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_browser_test_result");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: delete_synthetics_tests executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/tests/bulk-delete": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "deleted_at": "test-value",
+              "public_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_synthetics_tests.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/tests/bulk-delete");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_tests");
+      assertExists(resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_synthetics_fast_test_result fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/fast/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "result": {
+                "assertions": [],
+                "call_type": "unary",
+                "cert": null,
+                "duration": 150.5,
+                "failure": null,
+                "finished_at": 1679328001000,
+                "id": "abc12345-1234-1234-1234-abc123456789",
+                "is_fast_retry": false,
+                "request": null,
+                "resolved_ip": "1.2.3.4",
+                "response": null,
+                "run_type": null,
+                "started_at": 1679328000000,
+                "status": "passed",
+                "steps": [],
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "traceroute": [],
+                "triggered_at": 1679327999000,
+                "tunnel": false,
+              },
+              "test_sub_type": "http",
+              "test_type": "fast-api",
+              "test_version": 1,
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_fast_test_result.execute(
+        { "id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/fast/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_fast_test_result");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: create_synthetics_network_test creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/tests/network": {
+        body: {
+          "data": {
+            "id": "new-123",
+            "type": "resource",
+            "attributes": {
+              "config": {
+                "assertions": [{
+                  "operator": "lessThan",
+                  "property": "avg",
+                  "target": 500,
+                  "type": "latency",
+                }],
+                "request": null,
+              },
+              "locations": ["aws:us-east-1", "agent:my-agent-name"],
+              "message": "Network Path test notification",
+              "monitor_id": 12345678,
+              "name": "Example Network Path test",
+              "options": {
+                "min_failure_duration": 1,
+                "min_location_failed": 1,
+                "monitor_name": "test-value",
+                "monitor_options": null,
+                "monitor_priority": 1,
+                "restricted_roles": null,
+                "retry": null,
+                "scheduling": null,
+                "tick_every": 30,
+              },
+              "public_id": "abc-def-123",
+              "status": "live",
+              "subtype": "tcp",
+              "tags": ["env:production"],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_synthetics_network_test.execute(
+        { "name": "test-resource" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/tests/network");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_network_test");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_synthetics_network_test fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/network/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "config": {
+                "assertions": [{
+                  "operator": "lessThan",
+                  "property": "avg",
+                  "target": 500,
+                  "type": "latency",
+                }],
+                "request": null,
+              },
+              "locations": ["aws:us-east-1", "agent:my-agent-name"],
+              "message": "Network Path test notification",
+              "monitor_id": 12345678,
+              "name": "Example Network Path test",
+              "options": {
+                "min_failure_duration": 1,
+                "min_location_failed": 1,
+                "monitor_name": "test-value",
+                "monitor_options": null,
+                "monitor_priority": 1,
+                "restricted_roles": null,
+                "retry": null,
+                "scheduling": null,
+                "tick_every": 30,
+              },
+              "public_id": "abc-def-123",
+              "status": "live",
+              "subtype": "tcp",
+              "tags": ["env:production"],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_network_test.execute(
+        { "public_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/network/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_network_test");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: update_synthetics_network_test executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/network/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "config": {
+                "assertions": [{
+                  "operator": "lessThan",
+                  "property": "avg",
+                  "target": 500,
+                  "type": "latency",
+                }],
+                "request": null,
+              },
+              "locations": ["aws:us-east-1", "agent:my-agent-name"],
+              "message": "Network Path test notification",
+              "monitor_id": 12345678,
+              "name": "Example Network Path test",
+              "options": {
+                "min_failure_duration": 1,
+                "min_location_failed": 1,
+                "monitor_name": "test-value",
+                "monitor_options": null,
+                "monitor_priority": 1,
+                "restricted_roles": null,
+                "retry": null,
+                "scheduling": null,
+                "tick_every": 30,
+              },
+              "public_id": "abc-def-123",
+              "status": "live",
+              "subtype": "tcp",
+              "tags": ["env:production"],
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_synthetics_network_test.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PUT");
+      assertStringIncludes(req0.path, "/network/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_network_test");
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: poll_synthetics_test_results fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/tests/poll_results": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "batch": { "id": "batch-abc-123" },
+              "ci": {
+                "pipeline": null,
+                "provider": null,
+                "stage": null,
+                "workspace_path": "/home/runner/work/example",
+              },
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "git": {
+                "branch": "main",
+                "commit": null,
+                "repository_url": "https://github.com/DataDog/example",
+              },
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "result": {
+                "assertions": [],
+                "bucket_keys": null,
+                "call_type": "unary",
+                "cert": null,
+                "compressed_json_descriptor": "compressedJsonDescriptorValue",
+                "compressed_steps": "eJzLSM3JyQcABiwCFQ==",
+                "connection_outcome": "established",
+                "dns_resolution": null,
+                "duration": 380.7,
+                "exited_on_step_success": false,
+                "failure": null,
+                "finished_at": 1723782422760,
+                "handshake": null,
+                "id": "5158904793181869365",
+                "initial_id": "5158904793181869365",
+                "is_fast_retry": true,
+                "is_last_retry": true,
+                "netpath": null,
+                "netstats": null,
+                "ocsp": null,
+                "ping": null,
+                "received_email_count": 1,
+                "received_message": "UDP echo: b'Test message'",
+                "request": null,
+                "resolved_ip": "54.243.255.141",
+                "response": null,
+                "run_type": null,
+                "sent_message": "udp mess",
+                "start_url": "http://34.95.79.70/prototype",
+                "started_at": 1723782422750,
+                "status": null,
+                "steps": [],
+                "time_to_interactive": 183,
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "trace": null,
+                "traceroute": [],
+                "triggered_at": 1723782422715,
+                "tunnel": false,
+                "turns": [],
+                "unhealthy": false,
+                "variables": null,
+              },
+              "test_sub_type": "http",
+              "test_type": "api",
+              "test_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).poll_synthetics_test_results.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/tests/poll_results");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "poll_synthetics_test_results");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name:
     "synthetics model: get_test_file_download_url creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
@@ -868,6 +2410,772 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "test_file_download_url");
       assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_test_file_multipart_presigned_urls creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/files/multipart-presigned-urls": {
+        body: {
+          "id": "new-123",
+          "bucketKey":
+            "api-upload-file/abc-def-123/2024-01-01T00:00:00_uuid.json",
+          "multipart_presigned_urls_params": null,
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_test_file_multipart_presigned_urls.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/files/multipart-presigned-urls");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "test_file_multipart_presigned_urls");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: abort_test_file_multipart_upload creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/files/multipart-upload-abort": { body: { "id": "new-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).abort_test_file_multipart_upload.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/files/multipart-upload-abort");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "abort_test_file_multipart_upload");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: complete_test_file_multipart_upload creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/files/multipart-upload-complete": { body: { "id": "new-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).complete_test_file_multipart_upload.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/files/multipart-upload-complete");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "complete_test_file_multipart_upload",
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: get_test_parent_suites fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/parent-suites": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "child_name": "My API Test",
+              "child_public_id": "xyz-uvw-789",
+              "monitor_id": 12345678,
+              "name": "My Suite",
+              "overall_state": 0,
+              "overall_state_modified": "2024-01-01T00:00:00+00:00",
+              "public_id": "abc-def-123",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_test_parent_suites.execute(
+        { "public_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/parent-suites");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "test_parent_suites");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: list_synthetics_test_latest_results fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/results": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "execution_info": {
+                "duration": null,
+                "error_message": "Connection timed out",
+                "is_fast_retry": true,
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "tunnel": false,
+                "unhealthy": false,
+              },
+              "finished_at": 1,
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "run_type": "scheduled",
+              "started_at": 1,
+              "status": "passed",
+              "steps_info": { "completed": 6, "errors": 0, "total": 6 },
+              "test_sub_type": "http",
+              "test_type": "api",
+              "test_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_synthetics_test_latest_results.execute({
+        "public_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/results");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_test_latest_results");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_synthetics_test_result fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/results/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "batch": { "id": "batch-abc-123" },
+              "ci": {
+                "pipeline": null,
+                "provider": null,
+                "stage": null,
+                "workspace_path": "/home/runner/work/example",
+              },
+              "device": {
+                "browser": null,
+                "id": "chrome.laptop_large",
+                "name": "Chrome - Laptop Large",
+                "platform": null,
+                "resolution": null,
+                "type": "browser",
+              },
+              "git": {
+                "branch": "main",
+                "commit": null,
+                "repository_url": "https://github.com/DataDog/example",
+              },
+              "location": {
+                "id": "aws:us-east-1",
+                "name": "N. Virginia (AWS)",
+                "version": "1.0.0",
+                "worker_id": "worker-abc-123",
+              },
+              "result": {
+                "assertions": [],
+                "bucket_keys": null,
+                "call_type": "unary",
+                "cert": null,
+                "compressed_json_descriptor": "compressedJsonDescriptorValue",
+                "compressed_steps": "eJzLSM3JyQcABiwCFQ==",
+                "connection_outcome": "established",
+                "dns_resolution": null,
+                "duration": 380.7,
+                "exited_on_step_success": false,
+                "failure": null,
+                "finished_at": 1723782422760,
+                "handshake": null,
+                "id": "5158904793181869365",
+                "initial_id": "5158904793181869365",
+                "is_fast_retry": true,
+                "is_last_retry": true,
+                "netpath": null,
+                "netstats": null,
+                "ocsp": null,
+                "ping": null,
+                "received_email_count": 1,
+                "received_message": "UDP echo: b'Test message'",
+                "request": null,
+                "resolved_ip": "54.243.255.141",
+                "response": null,
+                "run_type": null,
+                "sent_message": "udp mess",
+                "start_url": "http://34.95.79.70/prototype",
+                "started_at": 1723782422750,
+                "status": null,
+                "steps": [],
+                "time_to_interactive": 183,
+                "timings": {
+                  "dns": 2.9,
+                  "download": 2.1,
+                  "firstByte": 95.2,
+                  "ssl": 187.9,
+                  "tcp": 92.6,
+                  "total": 380.7,
+                },
+                "trace": null,
+                "traceroute": [],
+                "triggered_at": 1723782422715,
+                "tunnel": false,
+                "turns": [],
+                "unhealthy": false,
+                "variables": null,
+              },
+              "test_sub_type": "http",
+              "test_type": "api",
+              "test_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_test_result.execute({
+        "public_id": "test-id-123",
+        "result_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/results/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_test_result");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: list_synthetics_test_versions fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/version_history": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "author_uuid": "00000000-0000-0000-0000-000000000000",
+              "change_metadata": [],
+              "version_number": 5,
+              "version_payload_created_at": "2024-01-01T00:00:00+00:00",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_synthetics_test_versions.execute(
+        { "public_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/version_history");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_test_versions");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_synthetics_test_version fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/version_history/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "author": {
+                "email": "john.doe@example.com",
+                "handle": "john.doe",
+                "id": "00000000-0000-0000-0000-000000000000",
+                "name": "John Doe",
+              },
+              "change_metadata": [],
+              "payload": {},
+              "version_payload_created_at": "2024-01-01T00:00:00+00:00",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_synthetics_test_version.execute({
+        "public_id": "test-id-123",
+        "version_number": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/version_history/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "synthetics_test_version");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "synthetics model: patch_global_variable executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/jsonpatch": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "attributes": { "restricted_roles": null },
+              "description": "Example description",
+              "is_fido": true,
+              "is_totp": true,
+              "name": "MY_VARIABLE",
+              "parse_test_options": {
+                "field": "content-type",
+                "localVariableName": "LOCAL_VARIABLE",
+                "parser": null,
+                "type": null,
+              },
+              "parse_test_public_id": "abc-def-123",
+              "tags": ["team:front", "test:workflow-1"],
+              "value": { "secure": true, "value": "value" },
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).patch_global_variable.execute({
+        "variable_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/test-id-123/jsonpatch");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "patch_global_variable");
+      assertEquals(resources[0].name, "test-id-123");
     } finally {
       uninstall();
       await server.shutdown();

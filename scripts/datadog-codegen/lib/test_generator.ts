@@ -118,23 +118,9 @@ export function generateTestSource(
   lines.push(generateMockServer());
   lines.push(``);
 
-  // One execution test per method type (distinguish GET-list from POST-list)
-  const testedTypes = new Set<string>();
+  // One execution test per method, so adding a method never displaces the
+  // coverage of another.
   for (const method of methods) {
-    // Distinguish POST-list from GET-list, and path-param from path-less
-    // variants (e.g. PATCH /x vs PATCH /x/{id}) so each request shape keeps
-    // its own execution test.
-    const baseKey =
-      method.type === "list" && method.operation.httpMethod === "post"
-        ? "list_post"
-        : method.type;
-    // Batch-body methods send a different request shape, so they keep their
-    // own test instead of displacing the plain one of the same kind.
-    const typeKey = `${baseKey}:${method.operation.pathParams.length > 0}:${
-      method.operation.requestBodyArrayWrapper ? "batch" : "plain"
-    }`;
-    if (testedTypes.has(typeKey)) continue;
-    testedTypes.add(typeKey);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);
   }

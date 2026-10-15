@@ -224,3 +224,12 @@ Deno.test("generated batch method tests do not pass a stray name arg", async () 
   const src = generateTestSource(group.config, methods, "things");
   assertEquals(src.includes("test-resource"), false);
 });
+
+Deno.test("every method gets its own execution test", async () => {
+  const { group, methods } = build();
+  const { generateTestSource } = await import("./test_generator.ts");
+  const src = generateTestSource(group.config, methods, "things");
+  for (const m of methods) {
+    assertStringIncludes(src, `things model: ${m.name} `);
+  }
+});

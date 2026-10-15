@@ -511,6 +511,68 @@ Deno.test({
 
 Deno.test({
   name:
+    "security-suppressions model: validate_security_monitoring_suppression creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/suppressions/validation": { body: { "id": "new-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-suppressions",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).validate_security_monitoring_suppression.execute({
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/suppressions/validation");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "validate_security_monitoring_suppression",
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "security-suppressions model: get_security_monitoring_suppression fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -738,6 +800,78 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-suppressions model: get_suppression_version_history fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/version_history": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "count": 1, "data": {} },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-suppressions",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_suppression_version_history.execute({
+        "suppression_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/version_history");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "suppression_version_history");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
     } finally {
       uninstall();
       await server.shutdown();

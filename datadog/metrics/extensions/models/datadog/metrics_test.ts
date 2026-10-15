@@ -355,6 +355,289 @@ Deno.test({
 });
 
 Deno.test({
+  name: "metrics model: list_metric_assets fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/assets": {
+        body: { "id": "fixture-123", "relationships": null, "type": null },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_metric_assets.execute(
+        { "metric_name": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/assets");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "list_metric_assets");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: estimate_metrics_output_series fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/estimate": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "estimate_type": "distribution",
+              "estimated_at": "2022-04-27T09:48:37.463835Z",
+              "estimated_output_series": 50,
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).estimate_metrics_output_series.execute({
+        "metric_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/estimate");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "estimate_metrics_output_series");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: get_metric_tag_cardinality_details fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/tag-cardinalities": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "cardinality_delta": 1 },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_metric_tag_cardinality_details.execute({
+        "metric_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/tag-cardinalities");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "metric_tag_cardinality_details");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: list_tag_configuration_by_name fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/tags": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "aggregations": [{ "space": "sum", "time": "sum" }, {
+                "space": "sum",
+                "time": "count",
+              }],
+              "created_at": "2020-03-25T09:48:37.463835Z",
+              "exclude_tags_mode": true,
+              "include_percentiles": true,
+              "metric_type": "count",
+              "modified_at": "2020-03-25T09:48:37.463835Z",
+              "tags": ["app", "datacenter"],
+              "metric_volumes_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_tag_configuration_by_name.execute({
+        "metric_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/tags");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "list_tag_configuration_by_name");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "metrics model: create_tag_configuration creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -568,6 +851,74 @@ Deno.test({
 });
 
 Deno.test({
+  name:
+    "metrics model: list_volumes_by_metric_name fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/volumes": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "distinct_volume": 10 },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_volumes_by_metric_name.execute(
+        { "metric_name": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/volumes");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "list_volumes_by_metric_name");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "metrics model: query_scalar_data creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -617,6 +968,120 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "query_scalar_data");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "metrics model: query_timeseries_data creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/query/timeseries": {
+        body: { "id": "new-123", "attributes": null, "type": null },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).query_timeseries_data.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/query/timeseries");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "query_timeseries_data");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "metrics model: submit_metrics creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/series": { body: { "id": "new-123", "errors": [] } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).submit_metrics.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/series");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "submit_metrics");
       assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
