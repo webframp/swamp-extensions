@@ -442,7 +442,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "teams model: create_team_connections fetches and writes resource",
+  name: "teams model: create_team_connections creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
@@ -450,7 +450,7 @@ Deno.test({
       "/team/connections": {
         body: {
           "data": [{
-            "id": "fixture-123",
+            "id": "new-123",
             "type": "resource",
             "attributes": {
               "managed_by": "github_sync",
@@ -459,7 +459,6 @@ Deno.test({
               "team_id": "test-value",
             },
           }],
-          "meta": { "page": {} },
         },
       },
     });
@@ -483,7 +482,9 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_team_connections.execute({}, context);
+      >).create_team_connections.execute({
+        "entries": [{ "type": "test-item", "attributes": {} }],
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
@@ -494,17 +495,14 @@ Deno.test({
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
       assertEquals(req0.headers["content-type"], "application/json");
       assertExists(req0.body);
+      assertEquals(req0.body, {
+        data: [{ "type": "test-item", "attributes": {} }],
+      });
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "create_team_connections");
-      const data = resources[0].data as {
-        items: unknown[];
-        truncated: boolean;
-      };
-      assertEquals(Array.isArray(data.items), true);
-      assertEquals(data.items.length, 1);
-      assertEquals(typeof data.truncated, "boolean");
+      assertEquals(resources[0].name, "created");
     } finally {
       uninstall();
       await server.shutdown();
@@ -540,7 +538,9 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).delete_team_connections.execute({}, context);
+      >).delete_team_connections.execute({
+        "entries": [{ "type": "test-item", "attributes": {} }],
+      }, context);
       assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);

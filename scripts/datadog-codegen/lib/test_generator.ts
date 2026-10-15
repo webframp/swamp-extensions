@@ -9,6 +9,7 @@
  * (JSON:API where applicable, flat JSON otherwise).
  */
 
+import { getResourceName } from "./method_classifier.ts";
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
@@ -88,12 +89,7 @@ export function generateTestSource(
   const uniqueResources: string[] = [];
   for (const m of methods) {
     if (m.type === "delete") continue;
-    let resourceName: string;
-    if (m.type === "list") {
-      resourceName = m.name.replace(/^(list|get)_/, "");
-    } else {
-      resourceName = m.name.replace(/^(get|create|update|action|delete)_/, "");
-    }
+    const resourceName = getResourceName(m);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
       uniqueResources.push(resourceName);
@@ -132,7 +128,11 @@ export function generateTestSource(
       method.type === "list" && method.operation.httpMethod === "post"
         ? "list_post"
         : method.type;
-    const typeKey = `${baseKey}:${method.operation.pathParams.length > 0}`;
+    // Batch-body methods send a different request shape, so they keep their
+    // own test instead of displacing the plain one of the same kind.
+    const typeKey = `${baseKey}:${method.operation.pathParams.length > 0}:${
+      method.operation.requestBodyArrayWrapper ? "batch" : "plain"
+    }`;
     if (testedTypes.has(typeKey)) continue;
     testedTypes.add(typeKey);
     lines.push(generateExecutionTest(config, method));
@@ -356,10 +356,26 @@ ${reqAsserts(false)}
   }
 
   if (method.type === "create") {
-    const responseBody = method.operation.isJsonApi
+    const batchWrapper = method.operation.requestBodyArrayWrapper;
+    const responseBody = batchWrapper
+      ? { data: [{ ...fixture, id: "new-123" }] }
+      : method.operation.isJsonApi
       ? { data: { ...fixture, id: "new-123" } }
       : { ...fixture, id: "new-123" };
-    const createArgs = { ...testArgs, name: "test-resource" };
+    const createArgs = batchWrapper
+      ? testArgs
+      : { ...testArgs, name: "test-resource" };
+    // A batch response has no top-level id, so the instance is keyed on the
+    // parent path param ("created" without one); the request body must keep
+    // the envelope around the array.
+    const expectedName = batchWrapper
+      ? (method.operation.pathParams.length > 0 ? "test-id-123" : "created")
+      : "new-123";
+    const batchAsserts = batchWrapper
+      ? `\n      assertEquals(req0.body, { ${batchWrapper}: ${
+        JSON.stringify(testArgs.entries)
+      } });`
+      : "";
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
@@ -379,12 +395,12 @@ ${reqAsserts(false)}
       const result = await ${execCall(method.name, JSON.stringify(createArgs))};
       assertEquals(result.dataHandles.length, 1);
 
-${reqAsserts(true)}
+${reqAsserts(true)}${batchAsserts}
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "${resourceName}");
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources[0].name, "${expectedName}");
     } finally {
       uninstall();
       await server.shutdown();
@@ -511,8 +527,7 @@ function execCall(methodName: string, argsStr: string): string {
 
 /** Resource key (specName) a method writes — mirrors the model generator. */
 function testResourceName(method: ClassifiedMethod): string {
-  if (method.type === "list") return method.name.replace(/^(list|get)_/, "");
-  return method.name.replace(/^(get|create|update|action|delete)_/, "");
+  return getResourceName(method);
 }
 
 /** Args passed to execute() in tests, including the write-method name field. */
@@ -664,7 +679,9 @@ function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
   }
   // Array-body methods need entries arg
   if (method.operation.requestBodyIsArray) {
-    args.entries = [{ message: "test log", ddsource: "test" }];
+    args.entries = method.operation.requestBodyArrayWrapper
+      ? [{ type: "test-item", attributes: {} }]
+      : [{ message: "test log", ddsource: "test" }];
   }
   return args;
 }

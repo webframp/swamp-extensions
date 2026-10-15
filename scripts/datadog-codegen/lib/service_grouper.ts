@@ -51,6 +51,11 @@ export interface GroupedOperation {
   requestBodyType?: string;
   /** Whether the request body is a raw array (e.g., POST /v2/logs) */
   requestBodyIsArray: boolean;
+  /**
+   * Set when the array body is wrapped in a JSON:API envelope key
+   * (e.g. `{data: [...]}` for batch creates). Absent for raw array bodies.
+   */
+  requestBodyArrayWrapper?: string;
   /** Resolved success response schema */
   responseSchema?: SchemaObject;
   /** Whether the response is a collection (array in data) */
@@ -63,6 +68,32 @@ export interface GroupedOperation {
   deprecated: boolean;
   /** Tags from the OpenAPI spec */
   tags: string[];
+}
+
+/**
+ * Inline `$ref`s in `items` and `properties` down to `depth` levels.
+ * `resolveSchema` only resolves the top level, and the type mapper reads
+ * nested refs as `z.unknown()`; batch bodies need their item shape typed.
+ */
+function resolveNested(
+  spec: OpenAPISpec,
+  schema: SchemaObject,
+  depth: number,
+): SchemaObject {
+  const resolved = resolveSchema(spec, schema);
+  if (depth <= 0) return resolved;
+  const out: SchemaObject = { ...resolved };
+  if (resolved.items) {
+    out.items = resolveNested(spec, resolved.items, depth - 1);
+  }
+  if (resolved.properties) {
+    out.properties = Object.fromEntries(
+      Object.entries(resolved.properties).map((
+        [k, v],
+      ) => [k, resolveNested(spec, v, depth - 1)]),
+    );
+  }
+  return out;
 }
 
 /** A complete service group ready for code generation */
@@ -235,6 +266,7 @@ function extractOperation(
   let requestBody: SchemaObject | undefined;
   let requestBodyIsJsonApi = false;
   let requestBodyIsArray = false;
+  let requestBodyArrayWrapper: string | undefined;
   let requestBodyType: string | undefined;
   if (operation.requestBody?.content) {
     const jsonContent = operation.requestBody.content["application/json"];
@@ -244,7 +276,14 @@ function extractOperation(
       // Check for JSON:API pattern: {data: {type, attributes: {...}}}
       if (fullBody.properties?.data) {
         const dataSchema = resolveSchema(spec, fullBody.properties.data);
-        if (dataSchema.properties?.attributes) {
+        if (dataSchema.type === "array") {
+          // Batch body: {data: [{type, attributes, ...}, ...]}. Keep the
+          // array schema whole so items are validated and the envelope is
+          // rebuilt on send; unwrapping a single item would drop the payload.
+          requestBody = resolveNested(spec, dataSchema, 6);
+          requestBodyIsArray = true;
+          requestBodyArrayWrapper = "data";
+        } else if (dataSchema.properties?.attributes) {
           // Unwrap: expose attributes fields as the user-facing schema
           const attrsSchema = resolveSchema(
             spec,
@@ -302,6 +341,7 @@ function extractOperation(
     requestBody,
     requestBodyIsJsonApi,
     requestBodyIsArray,
+    requestBodyArrayWrapper,
     requestBodyType,
     responseSchema,
     isCollection,
