@@ -6,6 +6,7 @@
  */
 
 import { assertEquals, assertStringIncludes } from "@std/assert";
+import { z } from "zod";
 import {
   classifyServiceMethods,
   generateModelSource,
@@ -197,7 +198,7 @@ Deno.test("batch write and list of the same noun use distinct resource specs", (
   assertEquals(declared.has("create_thing_overrides"), true);
 });
 
-Deno.test("batch create resource schema accepts the raw collection response", async () => {
+Deno.test("batch create resource schema accepts the raw collection response", () => {
   const { source } = build();
   // Collection responses are not flattened by the API helper, so the spec must
   // validate {data: [...]} and still accept previously stored list-shaped data.
@@ -209,7 +210,6 @@ Deno.test("batch create resource schema accepts the raw collection response", as
     /const CreateThingOverridesSchema = (z\.object\(\{[\s\S]*?\}\)\.passthrough\(\));/,
   );
   assertEquals(m !== null, true);
-  const { z } = await import("npm:zod@4.6.5");
   const schema = new Function("z", `return ${m![1]}`)(z);
   assertEquals(
     schema.safeParse({ data: [{ id: "x", type: "things" }] }).success,
