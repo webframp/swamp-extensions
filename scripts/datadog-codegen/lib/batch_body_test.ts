@@ -217,3 +217,10 @@ Deno.test("batch create resource schema accepts the raw collection response", ()
   );
   assertEquals(schema.safeParse({ items: [], truncated: false }).success, true);
 });
+
+Deno.test("generated batch method tests do not pass a stray name arg", async () => {
+  const { group, methods } = build();
+  const { generateTestSource } = await import("./test_generator.ts");
+  const src = generateTestSource(group.config, methods, "things");
+  assertEquals(src.includes("test-resource"), false);
+});

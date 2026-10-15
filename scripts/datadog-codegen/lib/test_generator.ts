@@ -362,9 +362,7 @@ ${reqAsserts(false)}
       : method.operation.isJsonApi
       ? { data: { ...fixture, id: "new-123" } }
       : { ...fixture, id: "new-123" };
-    const createArgs = batchWrapper
-      ? testArgs
-      : { ...testArgs, name: "test-resource" };
+    const createArgs = withName(method, testArgs);
     // A batch response has no top-level id, so the instance is keyed on the
     // parent path param ("created" without one); the request body must keep
     // the envelope around the array.
@@ -443,7 +441,7 @@ ${reqAsserts(false)}
 
   if (method.type === "update") {
     const responseBody = mockResponseBody(method, fixture);
-    const updateArgs = { ...testArgs, name: "test-resource" };
+    const updateArgs = withName(method, testArgs);
     const expectedInstance = hasPathParam ? "test-id-123" : "updated";
     return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
@@ -480,7 +478,7 @@ ${reqAsserts(true)}
 
   // Default: action
   const responseBody = mockResponseBody(method, fixture);
-  const actionArgs = { ...testArgs, name: "test-resource" };
+  const actionArgs = withName(method, testArgs);
   const actionHasBody = method.operation.requestBody !== undefined;
   return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
@@ -537,7 +535,7 @@ function buildExecuteArgs(method: ClassifiedMethod): Record<string, unknown> {
     method.type === "create" || method.type === "update" ||
     method.type === "action"
   ) {
-    return { ...testArgs, name: "test-resource" };
+    return withName(method, testArgs);
   }
   return testArgs;
 }
@@ -667,6 +665,19 @@ function extractPathPattern(path: string): string {
     return "/" + segments.slice(-2).join("/");
   }
   return result || "/";
+}
+
+/**
+ * Plain write methods get a `name` arg. Batch-body methods take only path
+ * params and `entries`, so an extra `name` would fail argument validation.
+ */
+function withName(
+  method: ClassifiedMethod,
+  testArgs: Record<string, unknown>,
+): Record<string, unknown> {
+  return method.operation.requestBodyArrayWrapper
+    ? testArgs
+    : { ...testArgs, name: "test-resource" };
 }
 
 /** Build test args that include path param values */
