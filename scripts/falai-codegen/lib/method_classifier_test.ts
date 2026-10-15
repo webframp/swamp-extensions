@@ -346,3 +346,26 @@ Deno.test("generateModelSource: singleton get/action never write the reserved na
     true,
   );
 });
+
+Deno.test("generateModelSource: action resources keep API fields and are keyed by path param", () => {
+  const group: ServiceGroup = {
+    config: CONFIG,
+    operations: [
+      op({
+        httpMethod: "post",
+        path: "/keys/{key_id}/revoke",
+        operationId: "revokeKey",
+        pathParams: [{ name: "key_id", in: "path", required: true }],
+      }),
+    ],
+  };
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  // An empty strict z.object({}) would strip every field the API returns.
+  assertStringIncludes(src, "schema: z.object({}).passthrough()");
+  // A fixed "-current" instance would overwrite each prior action's record.
+  assertStringIncludes(
+    src,
+    "sanitizeInstanceName(String(args.key_id))",
+  );
+  assertEquals(/revoke[a-z_]*-current/.test(src), false);
+});

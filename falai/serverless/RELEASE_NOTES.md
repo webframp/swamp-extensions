@@ -1,15 +1,8 @@
-## 2026.10.14.1
+## 2026.10.14.2
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Fixed:** `upload_from_url` now writes one resource per `file` path instead of
+overwriting a single `upload_from_url-current` instance.
 
-**Changed:** Singleton get and action methods now write their data under
-`list_root-current`, `serverless_logs_history-current`,
-`upload_from_url-current` instead of `latest`. Anything that read
-`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
-new name.
-
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Upgrade note:** No methods or arguments changed. Data previously stored under
+`upload_from_url-current` is not moved; re-run the action to write the new
+instance.

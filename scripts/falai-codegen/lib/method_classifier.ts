@@ -217,7 +217,7 @@ export function generateModelSource(
   const usesShortHash = methods.some(
     (m) =>
       (m.type === "create" && resolveIdAccessor(m) === undefined) ||
-      ((m.type === "get" || m.type === "update") &&
+      ((m.type === "get" || m.type === "update" || m.type === "action") &&
         m.operation.pathParams.length > 1),
   );
   if (usesShortHash) apiImports.push("shortHash");
@@ -274,7 +274,9 @@ export function generateModelSource(
     lines.push(`    "${resourceName}": {`);
     lines.push(`      description: "${escapeStr(method.description)}",`);
     lines.push(
-      `      schema: ${schemaNames.get(method.name) ?? "z.object({})"},`,
+      `      schema: ${
+        schemaNames.get(method.name) ?? "z.object({}).passthrough()"
+      },`,
     );
     lines.push(`      lifetime: "infinite" as const,`);
     lines.push(
@@ -333,7 +335,8 @@ function generateResponseSchemas(
   for (const method of methodsWithResources) {
     const schema = method.operation.responseSchema;
     if (!schema) {
-      schemaNames.set(method.name, "z.object({})");
+      // No response schema in the spec: keep whatever the API returns.
+      schemaNames.set(method.name, "z.object({}).passthrough()");
       continue;
     }
 
@@ -378,8 +381,8 @@ function generateResponseSchemas(
     schemaNames.set(
       method.name,
       primary
-        ? (schemaNames.get(primary.name) ?? "z.object({})")
-        : "z.object({})",
+        ? (schemaNames.get(primary.name) ?? "z.object({}).passthrough()")
+        : "z.object({}).passthrough()",
     );
   }
 
@@ -987,6 +990,10 @@ function generateActionBody(
   indent: string,
 ): string {
   const resourceName = method.name.replace(/^action_/, "");
+  const instanceExpr = buildPathParamInstanceExpr(
+    method.operation.pathParams,
+    `"${resourceName}-current"`,
+  );
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const { queryBuild, pathSuffix, bodySetup, bodyArg } = buildParamAndBodySetup(
     method,
@@ -1000,7 +1007,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
+${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -1032,11 +1039,15 @@ export function sanitizeFieldName(name: string): string {
  * True when a method's generated body references sanitizeInstanceName.
  *   - create: always
  *   - get / update: only when a trailing path param supplies the instance id
- *   - list ("main"), action ("<resource>-current"), delete (no resource): never
+ *   - action: only when path params supply the instance id (else "<resource>-current")
+ *   - list ("main"), delete (no resource): never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   if (method.type === "create") return true;
-  if (method.type === "get" || method.type === "update") {
+  if (
+    method.type === "get" || method.type === "update" ||
+    method.type === "action"
+  ) {
     return method.operation.pathParams.length > 0;
   }
   return false;

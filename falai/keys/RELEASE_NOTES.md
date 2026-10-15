@@ -1,26 +1,26 @@
-## 2026.10.14.1
+## 2026.10.14.3
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed (breaking):** `delete_api_key` is removed. The fal.ai API now revokes
+keys with `POST /keys/{key_id}/revoke`, and the generated method is
+`revoke_api_key`, which takes the same `key_id` argument. Revoking is a
+different operation from deleting: the API may keep a revoked key in listings.
+The model keeps no `delete_api_key` alias. Workflows and scripts that call
+`delete_api_key` must switch to `revoke_api_key`.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Fixed:** `revoke_api_key` writes the API response to a `revoke_api_key`
+resource keyed by `key_id`, so revoking several keys keeps a record of each
+instead of overwriting one `-current` instance. The resource schema keeps the
+fields the API returns rather than storing an empty object. `delete_api_key`
+wrote no data.
 
-## 2026.10.07.1
+**Added:** `create_api_key` accepts optional `description`, `preset`
+(`FULL`, `AGENT`, `API`, `DEPLOY`, `READONLY`, `BILLING`, `COMPUTE`,
+`SERVERLESS`; the API defaults to `API`), `permissions` (an explicit list, used
+instead of a preset), and `expires_at` (ISO8601). The model does not enforce
+that `preset` and `permissions` are exclusive; the API decides. Listed keys now
+report `description`, `mode`, `preset`, `permissions`, and `expires_at`, and
+`scope` may be `ADMIN` in addition to `API`.
 
-**Fixed:** A stalled fal.ai request no longer hangs the method. Every request
-now has a 60-second deadline that covers the response body, and a timeout raises
-an error naming the HTTP method and URL.
-
-**Fixed:** An empty 2xx response body (such as a 202 or 204) is handled
-explicitly. Paginated list calls treat it as an empty page instead of failing
-with a bare `SyntaxError`. Methods that must return data (get, create, update,
-and unpaginated list) raise an error naming the HTTP method and path instead of
-failing later with a `TypeError`. Delete and action methods still accept an
-empty body. A malformed JSON body now raises an error that names the HTTP
-method, path, and status code.
-
-**Changed:** A `Retry-After` header on a 429 response is capped at 30 seconds
-per retry, so a large value can no longer stall a call for minutes. Retry count
-is unchanged.
-
-No methods, arguments, or resource schemas changed. Apart from the hardening
-above, behavior is the same as the previous version.
+**Upgrade note:** The new key fields are optional, so stored resources remain
+valid and the model's upgrade chain gains identity steps. Only the method
+rename needs action.

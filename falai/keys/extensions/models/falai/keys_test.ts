@@ -29,13 +29,14 @@ Deno.test("keys model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_api_keys);
   assertExists(model.methods.create_api_key);
-  assertExists(model.methods.delete_api_key);
+  assertExists(model.methods.revoke_api_key);
 });
 
 Deno.test("keys model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["api_keys"]);
   assertExists(model.resources["api_key"]);
+  assertExists(model.resources["revoke_api_key"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -89,6 +90,11 @@ Deno.test({
         "alias": "Production Key",
         "scope": "API",
         "created_at": "2025-01-15T12:00:00Z",
+        "description": "CI deploy key for the main environment",
+        "mode": "preset",
+        "preset": "API",
+        "permissions": ["models:requests:read", "models:requests:write"],
+        "expires_at": "2025-07-15T12:00:00Z",
         "creator_nickname": "developer",
         "creator_email": "developer@example.com",
       }],
@@ -153,7 +159,13 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).create_api_key.execute({ "alias": "Production Key" }, context);
+      >).create_api_key.execute({
+        "alias": "Production Key",
+        "description": "CI deploy key for the main environment",
+        "preset": "API",
+        "permissions": ["models:requests:read", "models:requests:write"],
+        "expires_at": "2025-07-15T12:00:00Z",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -166,16 +178,17 @@ Deno.test({
 });
 
 Deno.test({
-  name: "keys model: delete_api_key executes successfully",
+  name: "keys model: revoke_api_key executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
+    const mockBody = { "id": "fixture-123" };
     const { url, server } = startMockFalServer({
-      "/keys/test-id-123": { body: { id: "test-id-123" } },
+      "/keys/test-id-123/revoke": { body: mockBody },
     });
     const uninstall = installFetchMock(url);
 
     try {
-      const { context } = createModelTestContext({
+      const { context, getWrittenResources } = createModelTestContext({
         globalArgs: { "apiToken": "test-token" },
         definition: { id: "test-id", name: "test-keys", version: 1, tags: {} },
       });
@@ -188,8 +201,11 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).delete_api_key.execute({ "key_id": "test-id-123" }, context);
-      assertEquals(result.dataHandles.length, 0);
+      >).revoke_api_key.execute({ "key_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
     } finally {
       uninstall();
       await server.shutdown();

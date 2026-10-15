@@ -23,7 +23,7 @@ variable (fal.ai's standard SDK env var).
 | ---------------- | -------------- |
 | `list_api_keys`  | List API Keys  |
 | `create_api_key` | Create API Key |
-| `delete_api_key` | Delete API Key |
+| `revoke_api_key` | Revoke API Key |
 
 ## Development
 
