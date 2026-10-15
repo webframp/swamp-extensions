@@ -37,11 +37,29 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
+      # Needed to compare manifest versions against the registry (see below).
+      - name: Install swamp
+        id: setup_swamp
+        continue-on-error: true
+        uses: swamp-club/setup-swamp@17127b7554de0c07aa413ace39fcf6c104ffc3f7 # v0.1.1
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Wait before swamp install retry
+        if: steps.setup_swamp.outcome == 'failure'
+        run: sleep 5
+      - name: Install swamp (retry)
+        if: steps.setup_swamp.outcome == 'failure'
+        uses: swamp-club/setup-swamp@17127b7554de0c07aa413ace39fcf6c104ffc3f7 # v0.1.1
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
       - id: changes
         name: Find extensions with changes
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SWAMP_SIGNIN_TOKEN: ${{ secrets.SWAMP_SIGNIN_TOKEN }}
         run: |
           # Determine channel: stable if the commit is on main, beta otherwise.
           # workflow_run.head_branch is unreliable for squash merges (reports
@@ -56,8 +74,26 @@ jobs:
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "Channel: $CHANNEL (branch: $HEAD_BRANCH, sha: ${HEAD_SHA:0:8})"
 
-          # Compare against the parent commit
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          # Diff window. Publishing is triggered by a successful CI run, but CI
+          # runs can be cancelled or fail, and a manifest bump in such a commit
+          # is invisible to the next run's single-commit diff. On the stable
+          # channel, diff from the last publish run that completed successfully
+          # on main (it examined everything up to its own head), falling back to
+          # the parent commit. Beta publishes only ever consider the one commit.
+          BASE="HEAD~1"
+          if [ "$CHANNEL" = "stable" ]; then
+            LAST=$(gh api "repos/$REPO/actions/workflows/publish.yml/runs?branch=main&status=success&per_page=30" \
+              --jq '.workflow_runs[].head_sha' | while read -r sha; do
+                if [ "$sha" != "$HEAD_SHA" ] && git merge-base --is-ancestor "$sha" "$HEAD_SHA" 2>/dev/null; then
+                  echo "$sha"; break
+                fi
+              done)
+            if [ -n "$LAST" ]; then
+              BASE="$LAST"
+            fi
+          fi
+          echo "Diff base: $BASE"
+          CHANGED_FILES=$(git diff --name-only "$BASE" "$HEAD_SHA")
 
           echo "Changed files:"
           echo "$CHANGED_FILES"
@@ -65,13 +101,26 @@ jobs:
           EXTENSIONS="[]"
 
           # Find extensions where manifest.yaml itself changed (version bump required to publish)
-          for manifest in $(find . -name "manifest.yaml" -not -path "./.git/*"); do
+          while read -r manifest; do
             dir=$(dirname "$manifest" | sed 's|^\./||')
             if echo "$CHANGED_FILES" | grep -q "^${dir}/manifest\.yaml$"; then
+              # The window can span several commits, so skip anything the
+              # registry already has on stable. Versions on beta stay in: the
+              # publish job promotes them. If the lookup fails (e.g. a brand
+              # new extension), keep the candidate.
+              NAME=$(yq -r '.name' "$dir/manifest.yaml")
+              VERSION=$(yq -r '.version' "$dir/manifest.yaml")
+              if [ "$CHANNEL" = "stable" ]; then
+                STABLE=$(swamp extension info "$NAME" --json 2>/dev/null | jq -r '.latestVersion // empty' || true)
+                if [ -n "$STABLE" ] && [ "$STABLE" = "$VERSION" ]; then
+                  echo "Already stable: ${dir} ($NAME@$VERSION)"
+                  continue
+                fi
+              fi
               EXTENSIONS=$(echo "$EXTENSIONS" | jq -c ". + [\"${dir}\"]")
               echo "Extension changed: ${dir}"
             fi
-          done
+          done < <(find . -name "manifest.yaml" -not -path "./.git/*")
 
           echo "extensions=$EXTENSIONS" >> "$GITHUB_OUTPUT"
           echo "Extensions to publish: $EXTENSIONS (channel: $CHANNEL)"
