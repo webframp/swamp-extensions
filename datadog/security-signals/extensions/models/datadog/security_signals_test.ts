@@ -314,6 +314,144 @@ Deno.test({
 
 Deno.test({
   name:
+    "security-signals model: bulk_edit_security_monitoring_signals_state executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/bulk/state": {
+        body: {
+          "id": "fixture-123",
+          "result": null,
+          "status": "done",
+          "type": "status",
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).bulk_edit_security_monitoring_signals_state.execute({
+        "entries": [{ "type": "test-item", "attributes": {} }],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/bulk/state");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "bulk_edit_security_monitoring_signals_state",
+      );
+      assertEquals(resources[0].name, "updated");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-signals model: bulk_edit_security_monitoring_signals executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/bulk/update": {
+        body: {
+          "id": "fixture-123",
+          "result": null,
+          "status": "done",
+          "type": "status",
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).bulk_edit_security_monitoring_signals.execute({
+        "entries": [{ "type": "test-item", "attributes": {} }],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/bulk/update");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "bulk_edit_security_monitoring_signals",
+      );
+      assertEquals(resources[0].name, "updated");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "security-signals model: search_security_monitoring_signals fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -606,6 +744,105 @@ Deno.test({
 
 Deno.test({
   name:
+    "security-signals model: edit_security_monitoring_signal_incidents executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/incidents": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "archive_comment": "test-value",
+              "archive_comment_timestamp": 0,
+              "archive_comment_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "archive_reason": "none",
+              "assignee": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "incident_ids": [2066],
+              "state": "open",
+              "state_update_timestamp": 0,
+              "state_update_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).edit_security_monitoring_signal_incidents.execute({
+        "signal_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/test-id-123/incidents");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "edit_security_monitoring_signal_incidents",
+      );
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "security-signals model: get_investigation_log_queries_matching_signal fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -680,6 +917,281 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-signals model: edit_security_monitoring_signal_state executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/state": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "archive_comment": "test-value",
+              "archive_comment_timestamp": 0,
+              "archive_comment_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "archive_reason": "none",
+              "assignee": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "incident_ids": [2066],
+              "state": "open",
+              "state_update_timestamp": 0,
+              "state_update_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).edit_security_monitoring_signal_state.execute({
+        "signal_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/test-id-123/state");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(
+        resources[0].specName,
+        "edit_security_monitoring_signal_state",
+      );
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-signals model: get_suggested_actions_matching_signal fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/suggested_actions": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "name": "Cloudtrail events for user ARN",
+              "query_filter": 'source:cloudtrail @userIdentity.arn:"foo"',
+              "template_variables": { "@userIdentity.arn": ["foo"] },
+              "title":
+                "Monitor Okta logs to track system access and unusual activity",
+              "url":
+                "/logs?query=source%3Acloudtrail+%40userIdentity.arn%3A%22foo%22",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_suggested_actions_matching_signal.execute({
+        "signal_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/suggested_actions");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "suggested_actions_matching_signal");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-signals model: edit_security_monitoring_signal executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/update": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "archive_comment": "test-value",
+              "archive_comment_timestamp": 0,
+              "archive_comment_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "archive_reason": "none",
+              "assignee": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+              "incident_ids": [2066],
+              "state": "open",
+              "state_update_timestamp": 0,
+              "state_update_user": {
+                "handle": "test-value",
+                "icon": "/path/to/matching/gravatar/icon",
+                "id": 1,
+                "name": "test-value",
+                "uuid": "773b045d-ccf8-4808-bd3b-955ef6a8c940",
+              },
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-signals",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).edit_security_monitoring_signal.execute({
+        "signal_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "PATCH");
+      assertStringIncludes(req0.path, "/test-id-123/update");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "edit_security_monitoring_signal");
+      assertEquals(resources[0].name, "test-id-123");
     } finally {
       uninstall();
       await server.shutdown();
