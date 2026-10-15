@@ -1,3 +1,14 @@
+## 2026.10.15.1
+
+**Added:** `remove_work_item_parent` and `convert_work_item_type`, using the
+work-item GraphQL API (`workItemUpdate` hierarchy widget, `workItemConvert`)
+that the REST issues API lacks. Removing a parent leaves a work item with no
+ancestor; converting a Task to an Issue makes it show on issue boards. Type
+names resolve case-insensitively against the project's work item types. Both
+are no-ops when the work item is already in the requested state. Results
+land in the new `workItemParent` and `workItemType` resources. No
+globalArguments change.
+
 ## 2026.10.14.2
 
 **Added:** `search` method wrapping the GitLab REST search API at instance,

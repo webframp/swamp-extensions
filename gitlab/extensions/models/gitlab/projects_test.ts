@@ -72,6 +72,7 @@ Deno.test("model has all expected methods", () => {
     "cancel_pipeline",
     "check_mr_merge_endpoint",
     "commit_file",
+    "convert_work_item_type",
     "create_branch",
     "create_issue",
     "create_label",
@@ -113,6 +114,7 @@ Deno.test("model has all expected methods", () => {
     "play_pipeline_schedule",
     "rebase_merge_request",
     "remove_mr_reviewers",
+    "remove_work_item_parent",
     "resolve_mr_discussion",
     "retry_job",
     "retry_pipeline",
@@ -179,6 +181,8 @@ Deno.test("model has all expected resources", () => {
     "snippetList",
     "todoList",
     "unassignResult",
+    "workItemParent",
+    "workItemType",
   ]);
 });
 
@@ -7579,5 +7583,185 @@ Deno.test("delete_snippet throws a descriptive error on a non-2xx response (e.g.
     );
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+// =============================================================================
+// Work Item Hierarchy and Type Tests
+// =============================================================================
+
+// One canned body answers both the lookup query and the mutation, since
+// mockGraphqlCapture returns the same response to every GraphQL call.
+function workItemResponse(opts: {
+  type?: string;
+  parent?: string | null;
+  mutation?: Record<string, unknown>;
+}) {
+  return {
+    data: {
+      project: {
+        workItems: {
+          nodes: [{
+            id: "gid://gitlab/WorkItem/42",
+            workItemType: { name: opts.type ?? "Task" },
+            widgets: [
+              {},
+              { parent: opts.parent ? { reference: opts.parent } : null },
+            ],
+          }],
+        },
+        workItemTypes: {
+          nodes: [
+            { id: "gid://gitlab/WorkItems::Type/1", name: "Issue" },
+            { id: "gid://gitlab/WorkItems::Type/5", name: "Task" },
+          ],
+        },
+      },
+      ...opts.mutation,
+    },
+  };
+}
+
+Deno.test("remove_work_item_parent clears the parent and records it", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    parent: "group/proj#1",
+    mutation: {
+      workItemUpdate: {
+        workItem: { widgets: [{ parent: null }] },
+        errors: [],
+      },
+    },
+  }));
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_work_item_parent.execute(
+      { project: "group/proj", iid: 7 },
+      context as any,
+    );
+    assertEquals(m.bodies().length, 2);
+    assertEquals(m.vars(), { id: "gid://gitlab/WorkItem/42" });
+    const d = getWrittenResources().find((x) =>
+      x.specName === "workItemParent"
+    )!.data as any;
+    assertEquals(d.previousParent, "group/proj#1");
+    assertEquals(d.parent, null);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent skips the mutation when there is no parent", async () => {
+  const m = mockGraphqlCapture(workItemResponse({ parent: null }));
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.remove_work_item_parent.execute(
+      { project: "group/proj", iid: 7 },
+      context as any,
+    );
+    assertEquals(m.bodies().length, 1);
+    const d = getWrittenResources().find((x) =>
+      x.specName === "workItemParent"
+    )!.data as any;
+    assertEquals(d.previousParent, null);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent throws when GitLab keeps the parent", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    parent: "group/proj#1",
+    mutation: {
+      workItemUpdate: {
+        workItem: { widgets: [{ parent: { reference: "group/proj#1" } }] },
+        errors: [],
+      },
+    },
+  }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.remove_work_item_parent.execute(
+          { project: "group/proj", iid: 7 },
+          context as any,
+        ),
+      Error,
+      "kept parent",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type resolves the type name to its ID", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    mutation: {
+      workItemConvert: {
+        workItem: { workItemType: { name: "Issue" } },
+        errors: [],
+      },
+    },
+  }));
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.convert_work_item_type.execute(
+      { project: "group/proj", iid: 7, type: "issue" },
+      context as any,
+    );
+    assertEquals(m.vars(), {
+      id: "gid://gitlab/WorkItem/42",
+      typeId: "gid://gitlab/WorkItems::Type/1",
+    });
+    const d = getWrittenResources().find((x) => x.specName === "workItemType")!
+      .data as any;
+    assertEquals(d.previousType, "Task");
+    assertEquals(d.type, "Issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type skips the mutation when the type already matches", async () => {
+  const m = mockGraphqlCapture(workItemResponse({ type: "Issue" }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.convert_work_item_type.execute(
+      { project: "group/proj", iid: 7, type: "Issue" },
+      context as any,
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type rejects an unknown type name", async () => {
+  const m = mockGraphqlCapture(workItemResponse({}));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.convert_work_item_type.execute(
+          { project: "group/proj", iid: 7, type: "Epic" },
+          context as any,
+        ),
+      Error,
+      'unknown type "Epic" (available: Issue, Task)',
+    );
+  } finally {
+    m.restore();
   }
 });

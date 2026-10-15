@@ -429,6 +429,38 @@ const IssueAssigneesSchema = z.object({
   ),
 });
 
+const WorkItemParentSchema = z.object({
+  project: z.string().describe("Project the work item belongs to"),
+  iid: z.number().describe("Work item internal ID (project-scoped)"),
+  previousParent: z.string().nullable().describe(
+    "Full reference of the parent before removal (null when it had none)",
+  ),
+  parent: z.string().nullable().describe(
+    "Full reference of the parent after the operation (null when detached)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the change was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const WorkItemTypeSchema = z.object({
+  project: z.string().describe("Project the work item belongs to"),
+  iid: z.number().describe("Work item internal ID (project-scoped)"),
+  previousType: z.string().describe("Work item type before the conversion"),
+  type: z.string().describe("Work item type after the conversion"),
+  fetchedAt: z.string().describe("Timestamp the change was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const IssueUnassignResultSchema = z.object({
   project: z.string().describe("Project the issues belong to"),
   // The user removed from each issue (the authenticated user unless overridden).
@@ -1839,6 +1871,39 @@ mutation labelCreate($projectPath: ID!, $title: String!, $color: String!, $descr
   }
 }`;
 
+// Work items: the REST issues API cannot touch hierarchy or type, so these
+// go through the work-item GraphQL API. The lookup also returns the
+// namespace's work item types so a type name can resolve to its global ID.
+const WORK_ITEM_QUERY = `
+query workItem($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    workItems(iid: $iid) {
+      nodes {
+        id
+        workItemType { name }
+        widgets { ... on WorkItemWidgetHierarchy { parent { reference(full: true) } } }
+      }
+    }
+    workItemTypes { nodes { id name } }
+  }
+}`;
+
+const REMOVE_WORK_ITEM_PARENT_MUTATION = `
+mutation removeWorkItemParent($id: WorkItemID!) {
+  workItemUpdate(input: { id: $id, hierarchyWidget: { parentId: null } }) {
+    workItem { widgets { ... on WorkItemWidgetHierarchy { parent { reference(full: true) } } } }
+    errors
+  }
+}`;
+
+const CONVERT_WORK_ITEM_MUTATION = `
+mutation convertWorkItem($id: WorkItemID!, $typeId: WorkItemsTypeID!) {
+  workItemConvert(input: { id: $id, workItemTypeId: $typeId }) {
+    workItem { workItemType { name } }
+    errors
+  }
+}`;
+
 // Helpers for extracting GraphQL global IDs
 const ISSUE_ID_QUERY = `
 query issueId($fullPath: ID!, $iid: String!) {
@@ -1849,6 +1914,33 @@ const MR_ID_QUERY = `
 query mrId($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) { mergeRequest(iid: $iid) { id } }
 }`;
+
+// The hierarchy widget is the only widget carrying `parent`; other widgets
+// come back as empty objects from the inline fragment.
+function workItemParentRef(workItem: any): string | null {
+  const hierarchy = (workItem?.widgets ?? []).find((w: any) =>
+    w && "parent" in w
+  );
+  return hierarchy?.parent?.reference ?? null;
+}
+
+async function lookupWorkItem(
+  host: string,
+  token: string,
+  project: string,
+  iid: number,
+  method: string,
+): Promise<{ workItem: any; types: Array<{ id: string; name: string }> }> {
+  const data = await graphqlRequest(host, token, WORK_ITEM_QUERY, {
+    fullPath: project,
+    iid: String(iid),
+  });
+  const workItem = data.project?.workItems?.nodes?.[0];
+  if (!workItem) {
+    throw new Error(`${method}: work item ${project}#${iid} not found`);
+  }
+  return { workItem, types: data.project.workItemTypes?.nodes ?? [] };
+}
 
 // =============================================================================
 // GraphQL Mappers
@@ -2914,6 +3006,20 @@ export const model = {
     issueAssignees: {
       description: "Assignees of an issue after a set/unassign",
       schema: IssueAssigneesSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    workItemParent: {
+      description:
+        "Parent of a work item before and after remove_work_item_parent",
+      schema: WorkItemParentSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    workItemType: {
+      description:
+        "Type of a work item before and after convert_work_item_type",
+      schema: WorkItemTypeSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -4217,6 +4323,153 @@ export const model = {
             : "Unassigned issue #{iid}",
           { iid: args.iid, who: assignees.join(", ") },
         );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    remove_work_item_parent: {
+      description:
+        "Detach a work item (issue, task, ...) from its parent so it has no ancestor. No-op when it has no parent.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const { workItem } = await lookupWorkItem(
+          host,
+          token,
+          args.project,
+          args.iid,
+          "remove_work_item_parent",
+        );
+        const previousParent = workItemParentRef(workItem);
+        let parent: string | null = null;
+        if (previousParent) {
+          const data = await graphqlRequest(
+            host,
+            token,
+            REMOVE_WORK_ITEM_PARENT_MUTATION,
+            { id: workItem.id },
+          );
+          const result = data.workItemUpdate;
+          if (!result) {
+            throw new Error(
+              "remove_work_item_parent: workItemUpdate returned null (permission denied or work item not found)",
+            );
+          }
+          if (result.errors?.length) {
+            throw new Error(
+              `workItemUpdate failed: ${result.errors.join("; ")}`,
+            );
+          }
+          parent = workItemParentRef(result.workItem);
+          if (parent) {
+            throw new Error(
+              `remove_work_item_parent: GitLab kept parent ${parent}`,
+            );
+          }
+        }
+        const handle = await ctx.writeResource(
+          "workItemParent",
+          `${sanitizeName(args.project)}-work-item-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            previousParent,
+            parent,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          previousParent
+            ? "Removed parent {parent} from work item #{iid}"
+            : "Work item #{iid} has no parent",
+          { iid: args.iid, parent: previousParent },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    convert_work_item_type: {
+      description:
+        "Change a work item's type (e.g. Task to Issue) by type name, as listed in the project's work item types. No-op when it already has that type.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number(),
+        type: z.string().min(1).describe(
+          "Target type name, case-insensitive (e.g. Issue, Task, Incident)",
+        ),
+      }),
+      execute: async (
+        args: { project: string; iid: number; type: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const { workItem, types } = await lookupWorkItem(
+          host,
+          token,
+          args.project,
+          args.iid,
+          "convert_work_item_type",
+        );
+        const target = types.find((t) =>
+          t.name.toLowerCase() === args.type.toLowerCase()
+        );
+        if (!target) {
+          throw new Error(
+            `convert_work_item_type: unknown type "${args.type}" (available: ${
+              types.map((t) => t.name).join(", ")
+            })`,
+          );
+        }
+        const previousType: string = workItem.workItemType.name;
+        let type = previousType;
+        if (previousType !== target.name) {
+          const data = await graphqlRequest(
+            host,
+            token,
+            CONVERT_WORK_ITEM_MUTATION,
+            { id: workItem.id, typeId: target.id },
+          );
+          const result = data.workItemConvert;
+          if (!result) {
+            throw new Error(
+              "convert_work_item_type: workItemConvert returned null (permission denied or work item not found)",
+            );
+          }
+          if (result.errors?.length) {
+            throw new Error(
+              `workItemConvert failed: ${result.errors.join("; ")}`,
+            );
+          }
+          type = result.workItem.workItemType.name;
+        }
+        const handle = await ctx.writeResource(
+          "workItemType",
+          `${sanitizeName(args.project)}-work-item-${args.iid}`,
+          {
+            project: args.project,
+            iid: args.iid,
+            previousType,
+            type,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Work item #{iid} type: {from} -> {to}", {
+          iid: args.iid,
+          from: previousType,
+          to: type,
+        });
         return { dataHandles: [handle] };
       },
     },

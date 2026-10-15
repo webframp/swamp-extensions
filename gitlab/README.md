@@ -52,6 +52,8 @@ swamp model method run gitlab update_issue --input project=group/repo --input ii
 swamp model method run gitlab add_issue_note --input project=group/repo --input iid=1 --input body="Comment"
 swamp model method run gitlab set_issue_assignees --input project=group/repo --input iid=1 --input usernames='["alice"]'
 swamp model method run gitlab unassign_from_issues --input project=group/repo --input iids='[1,2,3]'
+swamp model method run gitlab remove_work_item_parent --input project=group/repo --input iid=1
+swamp model method run gitlab convert_work_item_type --input project=group/repo --input iid=1 --input type=Issue
 swamp model method run gitlab create_merge_request --input project=group/repo --input title="MR" --input sourceBranch=feature
 swamp model method run gitlab merge --input project=group/repo --input iid=10
 swamp model method run gitlab add_mr_note --input project=group/repo --input iid=10 --input body="Approved"
@@ -118,6 +120,8 @@ fires the `@webframp/review-dashboard` report automatically.
 | `delete_issue_note`     | Delete a comment on an issue                                      | `project`, `iid`, `noteId`                                           |
 | `set_issue_assignees`   | Set (replace) an issue's assignees                                | `project`, `iid`, `usernames`                                        |
 | `unassign_from_issues`  | Remove a user (default: you) from multiple issues in one fan-out  | `project`, `iids`, `username?`                                       |
+| `remove_work_item_parent` | Detach a work item from its parent (GraphQL)                    | `project`, `iid`                                                     |
+| `convert_work_item_type` | Change a work item's type, e.g. Task to Issue (GraphQL)          | `project`, `iid`, `type`                                             |
 | `create_merge_request`  | Create a merge request                                            | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
 | `merge`                 | Merge a merge request                                             | `project`, `iid`, `squash?`                                          |
 | `add_mr_note`           | Comment on a merge request, or reply into a thread                | `project`, `iid`, `body`, `discussionId?`                            |
@@ -155,6 +159,8 @@ view:
 | **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
 | **issueAssignees** | Assignees of an issue after a set/unassign | iid, assignees                                    |
 | **issueUnassignResult** | Fan-out unassign result across issues | username, results, failed                            |
+| **workItemParent** | Parent of a work item before/after detaching | previousParent, parent                          |
+| **workItemType** | Type of a work item before/after converting | previousType, type                                 |
 | **issueDiscussions** | Discussion threads on an issue  | iid, discussions, truncated                               |
 | **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
 | **pipelines**     | CI/CD pipeline runs               | status, source, ref, truncated                            |
