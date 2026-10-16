@@ -7,11 +7,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Supersede in-flight runs for the same ref. Safe here because CI only reads —
-# nothing it does is destructive or partially observable if cancelled.
+# Supersede in-flight runs for the same ref on pull requests only. CI itself
+# only reads, but a successful CI run on main is what triggers publish.yml
+# (workflow_run), and publish diffs HEAD~1..HEAD. Cancelling a main run when
+# the next merge lands within the CI window drops that commit's publish with no
+# retry, leaving its version stranded on beta. Every push to main must
+# complete.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Single source of truth for the Deno version. Referenced by every setup-deno
 # invocation AND by the actions/cache key so bumping this one value stays
