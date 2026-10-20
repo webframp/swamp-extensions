@@ -40,6 +40,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/gcp/vertex-usage`](gcp/vertex-usage/) | Multi-project GCP Vertex AI token-usage monitor via Cloud Monitoring API, with per-model input/output breakdowns | None (uses fetch) |
 | [`@webframp/anthropic/compliance`](anthropic/compliance/) | Syncs a Claude Enterprise account's org directory, effective runtime settings, and 6-year audit activity feed via the Compliance API | None (uses fetch) |
 | [`@webframp/anthropic/analytics`](anthropic/analytics/) | Pulls Claude Enterprise seat, adoption, and cost/usage analytics (DAU/WAU/MAU, feature adoption, token cost) via the Enterprise Analytics API | None (uses fetch) |
+| [`@webframp/anthropic/admin`](anthropic/admin/) | Manages Claude Enterprise members through the Admin API: reads members, custom roles, and RBAC groups, adds members to groups, and switches members between the User and Custom roles with dry runs, coverage guards, and rollback records | None (uses fetch) |
 | [`@webframp/microsoft/teams`](microsoft/teams/) | Read-only Microsoft Teams integration (channels, chats, mentions) via the Graph API using device-code auth | None (uses fetch) |
 | [`@webframp/datadog/monitors`](datadog/monitors/) | Datadog Monitors — notification rules, config policies, muting | None (uses fetch) |
 | [`@webframp/datadog/incidents`](datadog/incidents/) | Datadog Incidents — attachments and related APIs | None (uses fetch) |
@@ -218,6 +219,7 @@ swamp extension pull @webframp/aws/guardduty
 # Anthropic extensions
 swamp extension pull @webframp/anthropic/compliance
 swamp extension pull @webframp/anthropic/analytics
+swamp extension pull @webframp/anthropic/admin
 
 # Microsoft extensions
 swamp extension pull @webframp/microsoft/teams
@@ -412,6 +414,26 @@ swamp model method run falai-compute list_compute_instances
 
 If `apiToken` is omitted, every `@webframp/falai/*` model falls back to the
 `FAL_KEY` environment variable (fal.ai's standard SDK env var).
+
+### Claude Enterprise User → Custom role migration
+
+```bash
+swamp extension pull @webframp/anthropic/admin
+swamp vault put anthropic ADMIN_KEY   # read/write:members, read/write:rbac_groups
+swamp model create @webframp/anthropic/admin claude-admin \
+  --global-arg 'adminKey=${{ vault.get("anthropic", "ADMIN_KEY") }}'
+
+swamp model method run claude-admin sync_access
+
+# Dry run: who would move to Custom (only members of a group carrying the role)
+swamp model method run claude-admin set_member_roles \
+  --input role=managed --input 'fromRoles:json=["user"]' \
+  --input requireRoleId=rbac_role_...
+# Apply with --input dryRun=false
+```
+
+Write methods are dry runs by default, never target owners or membership
+admins, and keep a per-run record with each member's previous role.
 
 ### Terraform state reader
 

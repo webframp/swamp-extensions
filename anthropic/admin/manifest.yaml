@@ -1,0 +1,73 @@
+manifestVersion: 1
+name: "@webframp/anthropic/admin"
+license: Apache-2.0
+version: "2026.10.20.1"
+description: |
+  Manage the people in a Claude Enterprise organization through the Admin API
+  user-management endpoints: read members, custom roles, and RBAC groups with
+  their attached roles and members, add members to a group, and switch members
+  between the User and Custom (`managed`) organization roles.
+
+  ## Authentication
+
+  Requires an Admin API key (`sk-ant-api01-...`) created by the primary owner
+  in claude.ai → Organization settings → API, for all linked organizations,
+  with the scopes `read:members`, `write:members`, `read:rbac_groups`, and
+  `write:rbac_groups`. Store it in a swamp vault.
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/anthropic/admin
+  swamp model create @webframp/anthropic/admin claude-admin \
+    --global-arg 'adminKey=${{ vault.get("anthropic", "ADMIN_KEY") }}'
+
+  # Observe (read-only)
+  swamp model method run claude-admin sync_access
+
+  # Put every User and Custom member in a group (dry run by default)
+  swamp model method run claude-admin add_group_members \
+    --input groupId=rbac_group_... --input expectRoleId=rbac_role_... \
+    --input 'roles:json=["user","managed"]'
+
+  # Switch User members to Custom, only those already in the group
+  # (dry run by default; add --input dryRun=false to apply)
+  swamp model method run claude-admin set_member_roles \
+    --input role=managed --input requireGroupId=rbac_group_... \
+    --input expectRoleId=rbac_role_... --input 'fromRoles:json=["user"]'
+  ```
+
+  ## Methods
+
+  - sync_members — read the member roster with organization roles
+  - sync_access — fan-out read: members, custom roles, and groups with their
+    roles and members
+  - add_group_members — add members (by role or user ID) to a direct group;
+    dry run by default
+  - set_member_roles — set user or managed (by current role or user ID);
+    managed requires coverage (requireGroupId + expectRoleId, or
+    requireRoleId for any group carrying the role); records previous roles
+    for rollback; dry run by default
+
+  Only user and managed members are ever targeted: the API cannot modify
+  owner, primary_owner, or membership_admin. Every write run adds a
+  version to its audit record.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - anthropic/admin.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - ai
+  - anthropic
+  - claude
+  - directory
+  - enterprise
+  - rbac
+  - user-management
