@@ -35,6 +35,13 @@ vaults:
 # Optional: extra environment variable names to forward to the pass
 # subprocess, for GPG or pinentry setups that need something unusual
 # extraEnv: ["MY_PINENTRY_SOCKET"]
+
+# Optional: return only line 1 of each entry (defaults to false)
+# passwordOnly: true
+
+# Optional: enable per-key field selection, e.g. "smtp/example#login"
+# (unset by default, so keys are taken literally)
+# fieldSeparator: "#"
 ```
 
 With the default `prefix: "swamp"`, a secret named `db/password` is stored as
@@ -44,6 +51,53 @@ namespace.
 Keys are validated before the CLI runs. A key must be relative, non-empty, and
 free of `.` or `..` path segments, so it cannot reach a secret outside the
 configured prefix.
+
+## Multiline entries
+
+By default `get` returns the whole decrypted entry, every line of it, with only
+the final newline removed. pass convention puts the password on line 1 and
+optional `name: value` metadata on the lines after it:
+
+```text
+s3cr3t-value
+login: user@example.com
+host: smtp.example.com
+```
+
+Wiring that entry into a password or API token hands the consumer the secret
+plus all its metadata, which looks like a wrong password at the far end. Two
+opt-in settings narrow what `get` returns.
+
+**`passwordOnly: true`** returns line 1 only (`s3cr3t-value` above), for every
+key the vault serves. Spaces and tabs on that line are kept; the line terminator
+is not.
+
+**`fieldSeparator`** lets each key select a metadata field. With
+`fieldSeparator: "#"`:
+
+| Key                  | Returns                                        |
+| -------------------- | ---------------------------------------------- |
+| `smtp/example`       | the whole entry, or line 1 with `passwordOnly` |
+| `smtp/example#login` | `user@example.com`                             |
+| `smtp/example#host`  | `smtp.example.com`                             |
+
+Field names match case-insensitively, and only lines after line 1 are searched,
+so a password containing a colon is never read as a field. The first matching
+line wins. Whitespace after the colon is dropped. A field the entry lacks is an
+error that names the entry and field but never quotes the entry.
+
+The key splits at the last occurrence of the separator. While `fieldSeparator`
+is set, any key containing it is read as a field selection, so choose a
+separator that never appears in your entry names. `put` refuses a key that
+selects a field, since writing it would replace the whole entry.
+
+```yaml
+globalArgs:
+  smtpUser:
+    source: vault
+    vault: my-secrets
+    key: smtp/example#login
+```
 
 ## Subprocess environment
 
@@ -95,9 +149,9 @@ The provider emits OpenTelemetry spans for every vault operation — `pass get`,
 configures a TracerProvider; the swamp host does that. With no provider
 configured the tracer is a no-op.
 
-Attributes: `vault.name`, `vault.secret_key`, `vault.prefix` when a prefix is
-configured, `rpc.system`, `rpc.service`, `rpc.method`, and `vault.keys_returned`
-on `list`.
+Attributes: `vault.name`, `vault.secret_key`, `vault.secret_field` when a get
+selects a field, `vault.prefix` when a prefix is configured, `rpc.system`,
+`rpc.service`, `rpc.method`, and `vault.keys_returned` on `list`.
 
 These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
 spans when you run a `swamp vault` subcommand, but they carry no attributes, and

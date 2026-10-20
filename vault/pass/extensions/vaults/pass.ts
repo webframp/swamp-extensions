@@ -3,7 +3,9 @@
  *
  * Stores and retrieves secrets using the `pass` CLI with GPG encryption.
  * Supports configurable key prefixing for namespace isolation and custom
- * PASSWORD_STORE_DIR paths.
+ * PASSWORD_STORE_DIR paths. Multiline entries can optionally be narrowed to
+ * their first line (the password, by pass convention) or to a named
+ * `name: value` metadata field.
  *
  * @module
  */
@@ -146,6 +148,39 @@ function assertSafeKey(key: string): void {
   }
 }
 
+/**
+ * Returns the first line of an entry — the password, by pass convention.
+ *
+ * Only the line terminator is removed. Spaces and tabs are kept for the same
+ * reason {@linkcode stripTrailingNewline} keeps them.
+ */
+function firstLine(content: string): string {
+  const end = content.indexOf("\n");
+  const line = end === -1 ? content : content.slice(0, end);
+  return line.endsWith("\r") ? line.slice(0, -1) : line;
+}
+
+/**
+ * Returns the value of a `name: value` metadata line, matching the name
+ * case-insensitively as browserpass does.
+ *
+ * Line 1 is the password and is never searched, so a password that happens to
+ * contain a colon cannot be mistaken for a field. The first matching line
+ * wins. Whitespace after the colon is dropped; trailing whitespace is kept.
+ * Returns `undefined` when no line carries the field.
+ */
+function extractField(content: string, field: string): string | undefined {
+  const wanted = field.trim().toLowerCase();
+  for (const raw of content.split("\n").slice(1)) {
+    const line = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    const colon = line.indexOf(":");
+    if (colon === -1) continue;
+    if (line.slice(0, colon).trim().toLowerCase() !== wanted) continue;
+    return line.slice(colon + 1).replace(/^[ \t]+/, "");
+  }
+  return undefined;
+}
+
 const ConfigSchema = z.object({
   storeDir: z.string().optional().describe(
     "PASSWORD_STORE_DIR override (defaults to ~/.password-store)",
@@ -161,7 +196,48 @@ const ConfigSchema = z.object({
       "Use this if an unusual pinentry or GPG setup requires a variable that " +
       "is not on the default list.",
   ),
+  passwordOnly: z.boolean().default(false).describe(
+    "Return only the first line of an entry (the password, by pass " +
+      "convention) instead of the whole decrypted file. Defaults to false, " +
+      "which returns every line, including metadata such as 'login:'.",
+  ),
+  fieldSeparator: z.string().min(1).refine((s) => !s.includes("/"), {
+    message: "fieldSeparator must not contain '/'",
+  }).optional().describe(
+    "Enables per-key field selection. With fieldSeparator '#', the key " +
+      "'smtp/example#login' returns the value of the 'login:' line of " +
+      "'smtp/example'. Unset by default, so keys are taken literally; pick a " +
+      "separator that never appears in your entry names.",
+  ),
 });
+
+/**
+ * Splits a key into the entry path and the field it selects, if any.
+ *
+ * The split is at the last occurrence of the separator, so a separator inside
+ * a directory name still leaves the field at the end. The field is not
+ * validated here; {@linkcode assertSafeField} does that inside the span, so a
+ * bad selector is recorded as a failed operation like a bad key is.
+ */
+function splitFieldSelector(
+  key: string,
+  separator: string | undefined,
+): { path: string; field?: string } {
+  if (separator === undefined) return { path: key };
+  const at = key.lastIndexOf(separator);
+  if (at === -1) return { path: key };
+  return { path: key.slice(0, at), field: key.slice(at + separator.length) };
+}
+
+/** Rejects a field name that no `name: value` line could carry. */
+function assertSafeField(key: string, field: string): void {
+  if (field.trim().length === 0 || field.includes("/") || field.includes(":")) {
+    throw new Error(
+      `pass key "${key}" selects an invalid field: a field name must be ` +
+        "non-blank and contain no '/' or ':'",
+    );
+  }
+}
 
 /** Pass vault provider — delegates to the `pass` CLI for GPG-encrypted secret storage. */
 export const vault = {
@@ -245,11 +321,22 @@ export const vault = {
 
     return {
       get: (key: string): Promise<string> => {
-        return withVaultSpan(
-          "pass get",
-          spanAttributes("get", key),
-          async () => await runPass(["show", prefixKey(key)]),
-        );
+        const { path, field } = splitFieldSelector(key, parsed.fieldSeparator);
+        const attrs = spanAttributes("get", path);
+        if (field !== undefined) attrs[Attr.VAULT_SECRET_FIELD] = field;
+        return withVaultSpan("pass get", attrs, async () => {
+          if (field !== undefined) assertSafeField(key, field);
+          const content = await runPass(["show", prefixKey(path)]);
+          if (field !== undefined) {
+            const value = extractField(content, field);
+            if (value === undefined) {
+              // Name the field and entry only. Never quote the content.
+              throw new Error(`pass entry "${path}" has no "${field}:" field`);
+            }
+            return value;
+          }
+          return parsed.passwordOnly ? firstLine(content) : content;
+        });
       },
 
       put: (key: string, value: string): Promise<void> => {
@@ -257,6 +344,16 @@ export const vault = {
           "pass put",
           spanAttributes("put", key),
           async () => {
+            if (
+              splitFieldSelector(key, parsed.fieldSeparator).field !==
+                undefined
+            ) {
+              // Writing would replace the whole entry, not one field of it.
+              throw new Error(
+                `pass put cannot write a single field; "${key}" selects a ` +
+                  `field with "${parsed.fieldSeparator}"`,
+              );
+            }
             // Use -m for multiline and -f to force overwrite
             await runPass(["insert", "-m", "-f", prefixKey(key)], value);
           },

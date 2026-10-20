@@ -36,10 +36,15 @@ Deno.test("vault export conforms to VaultProvider contract", () => {
       { storeDir: "/home/user/.password-store" },
       { prefix: "custom" },
       { prefix: "" },
+      { passwordOnly: true },
+      { fieldSeparator: "#" },
     ],
     invalidConfigs: [
       { storeDir: 123 }, // Wrong type
       { prefix: 123 }, // Wrong type
+      { passwordOnly: "yes" }, // Wrong type
+      { fieldSeparator: "" }, // Empty separator would split every key
+      { fieldSeparator: "/" }, // Would split on path segments
     ],
   });
 });
@@ -608,6 +613,181 @@ Deno.test({
 });
 
 // ---------------------------------------------------------------------------
+// Multiline entries: passwordOnly and field selection
+//
+// pass convention puts the password on line 1 and `name: value` metadata on
+// the lines after it. The default still returns the whole entry, so existing
+// consumers see no change.
+// ---------------------------------------------------------------------------
+
+const MULTILINE_ENTRY = "s3cr3t-value\n" +
+  "login: user@example.com\n" +
+  "host: smtp.example.com\n";
+
+Deno.test("multiline: the default returns the whole entry", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    mockSecrets.set("swamp/example", MULTILINE_ENTRY);
+    assertEquals(
+      await provider.get("example"),
+      "s3cr3t-value\nlogin: user@example.com\nhost: smtp.example.com",
+    );
+  });
+});
+
+Deno.test("multiline: passwordOnly returns line 1 only", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      passwordOnly: true,
+    });
+    mockSecrets.set("swamp/example", MULTILINE_ENTRY);
+    assertEquals(await provider.get("example"), "s3cr3t-value");
+  });
+});
+
+Deno.test("multiline: passwordOnly keeps edge whitespace and drops CRLF", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      passwordOnly: true,
+    });
+    mockSecrets.set("swamp/crlf", "  pad ded \r\nlogin: x\r\n");
+    mockSecrets.set("swamp/single", "only-line\n");
+    assertEquals(await provider.get("crlf"), "  pad ded ");
+    assertEquals(await provider.get("single"), "only-line");
+  });
+});
+
+Deno.test("multiline: fieldSeparator selects a named field", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set("swamp/smtp/example", MULTILINE_ENTRY);
+    assertEquals(await provider.get("smtp/example#login"), "user@example.com");
+    assertEquals(await provider.get("smtp/example#host"), "smtp.example.com");
+    // Field names match case-insensitively, as browserpass matches them.
+    assertEquals(await provider.get("smtp/example#LOGIN"), "user@example.com");
+    // A key without the separator still returns the whole entry.
+    assertEquals(
+      await provider.get("smtp/example"),
+      "s3cr3t-value\nlogin: user@example.com\nhost: smtp.example.com",
+    );
+  });
+});
+
+Deno.test("multiline: field parsing never treats line 1 as a field", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set("swamp/tricky", "url: not-a-field\nurl: https://x.test\n");
+    assertEquals(await provider.get("tricky#url"), "https://x.test");
+  });
+});
+
+Deno.test("multiline: a field value keeps colons and the first match wins", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set(
+      "swamp/svc",
+      "pw\nurl:https://a.test:8443/x\nurl: https://b.test\n",
+    );
+    assertEquals(await provider.get("svc#url"), "https://a.test:8443/x");
+  });
+});
+
+Deno.test("multiline: the separator splits at its last occurrence", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set("swamp/team#a/entry", "pw\nlogin: me\n");
+    assertEquals(await provider.get("team#a/entry#login"), "me");
+  });
+});
+
+Deno.test("multiline: fieldSeparator works with passwordOnly and a multi-char separator", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      passwordOnly: true,
+      fieldSeparator: "::",
+    });
+    mockSecrets.set("swamp/example", MULTILINE_ENTRY);
+    assertEquals(await provider.get("example"), "s3cr3t-value");
+    assertEquals(await provider.get("example::login"), "user@example.com");
+  });
+});
+
+Deno.test("multiline: without fieldSeparator a # in a key is literal", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    mockSecrets.set("swamp/a#b", "literal");
+    assertEquals(await provider.get("a#b"), "literal");
+  });
+});
+
+Deno.test("multiline: a missing field fails without quoting the entry", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set("swamp/example", MULTILINE_ENTRY);
+    const err = await assertRejects(
+      () => provider.get("example#otp"),
+      Error,
+      'pass entry "example" has no "otp:" field',
+    );
+    assertEquals(err.message.includes("s3cr3t-value"), false);
+    assertEquals(err.message.includes("user@example.com"), false);
+  });
+});
+
+Deno.test("multiline: invalid field selectors are rejected before the CLI runs", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    for (const key of ["example#", "example# ", "example#a:b"]) {
+      lastOptions = undefined;
+      await assertRejects(() => provider.get(key), Error, "invalid field");
+      assertEquals(lastOptions, undefined, `CLI ran for "${key}"`);
+    }
+    // An empty entry path still fails the key check.
+    await assertRejects(
+      () => provider.get("#login"),
+      Error,
+      "must not be empty",
+    );
+  });
+});
+
+Deno.test("multiline: put refuses a key that selects a field", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    await assertRejects(
+      () => provider.put("example#login", "x"),
+      Error,
+      "cannot write a single field",
+    );
+    assertEquals(mockSecrets.size, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // OpenTelemetry spans
 //
 // The absence assertions matter as much as the presence ones: a span that
@@ -788,4 +968,27 @@ Deno.test("otel: a rejected key is still recorded as a failed span", async () =>
   const span = spanNamed(spans, "pass get");
   assertEquals(span.status.code, SpanStatusCode.ERROR);
   assertEquals(span.attributes["vault.secret_key"], "../escape");
+});
+
+Deno.test("otel: a field selection records the entry and field, never the value", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", {
+        storeDir: "/tmp/store",
+        fieldSeparator: "#",
+      });
+      mockSecrets.set(
+        "swamp/smtp",
+        "PW-CANARY-1f2e\nlogin: LOGIN-CANARY-3a4b\n",
+      );
+      assertEquals(await provider.get("smtp#login"), "LOGIN-CANARY-3a4b");
+    })
+  );
+
+  const span = spanNamed(spans, "pass get");
+  assertEquals(span.attributes["vault.secret_key"], "smtp");
+  assertEquals(span.attributes["vault.secret_field"], "login");
+  const text = spanText(span);
+  assertEquals(text.includes("PW-CANARY-1f2e"), false);
+  assertEquals(text.includes("LOGIN-CANARY-3a4b"), false);
 });
