@@ -8,7 +8,12 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { model, searchDataName, servedHtmlInsteadOf } from "./redmine.ts";
+import {
+  model,
+  searchDataName,
+  servedHtmlInsteadOf,
+  UPLOAD_TIMEOUT_MS,
+} from "./redmine.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Server Helpers
@@ -2417,4 +2422,22 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test("redmine model: list_time_entries rejects dates that are not YYYY-MM-DD", () => {
+  const schema = model.methods.list_time_entries.arguments;
+  assertEquals(schema.safeParse({ from: "2026-01-01" }).success, true);
+  for (
+    const bad of [
+      { from: "01/01/2026" },
+      { to: "2026-01-01-to:2026-02-01" },
+      { from: "yesterday" },
+    ]
+  ) {
+    assertEquals(schema.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+});
+
+Deno.test("redmine model: upload_file's upload deadline is 10 minutes", () => {
+  assertEquals(UPLOAD_TIMEOUT_MS, 600_000);
 });

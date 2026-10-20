@@ -850,20 +850,111 @@ for (const method of ["PUT", "DELETE", "POST"]) {
   });
 }
 
+for (const status of [502, 503, 504]) {
+  Deno.test({
+    name: `redmineApi: retries a GET after a ${status}`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      const { url, server } = startMockServer(() =>
+        ++count === 1
+          ? new Response(null, { status, headers: { "Retry-After": "0" } })
+          : Response.json({ ok: true })
+      );
+      try {
+        await redmineApi(url, "k", "GET", "/x.json");
+        assertEquals(count, 2);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
 Deno.test({
-  name: "redmineApi: retries a GET after a 502",
+  name: "redmineFetch: retries a HEAD after a 502 and keeps HEAD on a 303",
   // Server creates connection pool resources that outlive the test
   sanitizeResources: false,
   fn: async () => {
     let count = 0;
-    const { url, server } = startMockServer(() =>
-      ++count === 1
-        ? new Response(null, { status: 502, headers: { "Retry-After": "0" } })
-        : Response.json({ ok: true })
-    );
+    const { url, server, requests } = startMockServer((req) => {
+      count++;
+      if (count === 1) {
+        return new Response(null, {
+          status: 502,
+          headers: { "Retry-After": "0" },
+        });
+      }
+      return new URL(req.url).pathname === "/a"
+        ? new Response(null, { status: 303, headers: { Location: "/b" } })
+        : new Response(null);
+    });
+    try {
+      await redmineFetch(`${url}/a`, { method: "HEAD" });
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["HEAD", "/a"],
+        ["HEAD", "/a"],
+        ["HEAD", "/b"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+for (const method of ["PUT", "DELETE", "POST"]) {
+  Deno.test({
+    name: `redmineApi: retries a ${method} after a 503 with Retry-After only`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      let headers: Record<string, string> = { "Retry-After": "0" };
+      const { url, server } = startMockServer(() =>
+        ++count === 1
+          ? new Response(null, { status: 503, headers })
+          : Response.json({ ok: true })
+      );
+      try {
+        await redmineApi(url, "k", method, "/issues/1.json", { issue: {} });
+        assertEquals(count, 2);
+        count = 0;
+        headers = {};
+        await assertRejects(
+          () => redmineApi(url, "k", method, "/issues/1.json", { issue: {} }),
+          Error,
+          "failed (503)",
+        );
+        assertEquals(count, 1);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineApi: waits the Retry-After delay before retrying",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const times: number[] = [];
+    const { url, server } = startMockServer(() => {
+      times.push(performance.now());
+      return times.length === 1
+        ? new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "0.3" },
+        })
+        : Response.json({ ok: true });
+    });
     try {
       await redmineApi(url, "k", "GET", "/x.json");
-      assertEquals(count, 2);
+      assertEquals(times.length, 2);
+      const waited = times[1] - times[0];
+      // Honors 0.3 s, and not the 1 s exponential default.
+      assertEquals(waited >= 280 && waited < 900, true, `waited ${waited}ms`);
     } finally {
       await server.shutdown();
     }

@@ -131,11 +131,14 @@ capped at 500 items maximum. The output's `totalCount` reflects fetched count,
 not the API's total. There is no `truncated` field — you cannot distinguish
 "exactly 500 items exist" from "more than 500 were truncated."
 
-### All errors throw — no graceful degradation
+### All errors throw after retries run out
 
-Every API failure (network error, non-2xx response) throws immediately. There is
-no retry logic, no backoff, and no partial-result path. Transient Redmine
-outages or 429 responses crash the method execution.
+A 429 or a 503 with `Retry-After` (any method), or a 502, 503 or 504 on a read,
+is retried up to 4 times with backoff, honoring `Retry-After`; see
+[Redirects, retries and timeouts](#redirects-retries-and-timeouts). Any other
+failure (network error, timeout, non-2xx response), or one that outlasts the
+retries, throws. There is no partial-result path, except that
+`download_attachments` records which attachments failed.
 
 ### `project` global arg is optional but required by some methods
 
@@ -151,9 +154,9 @@ succeeded but the method throws (no resource written).
 
 ### `upload_file` reads the local file path
 
-The `filePath` argument must be an absolute path readable by the swamp process.
-If the file cannot be read, the method throws with the path in the error
-message.
+The `filePath` argument must be a path relative to the working directory, with
+no `..` and no leading `/` or `~`, readable by the swamp process. If the file
+cannot be read, the method throws with the path in the error message.
 
 ### `download_attachments` skips files over `maxBytes` and fails on errors
 
@@ -171,13 +174,14 @@ Redirects are followed by hand. A same-origin redirect, or an http→https upgra
 of the same host, keeps `X-Redmine-API-Key` and `X-Redmine-Username`. Any other
 redirect fails an API call with a message naming the URL to set as `host`;
 `download_attachments` follows it without the credentials, for storage backends
-that redirect to S3 or a CDN. Every request retries a 429. Only reads (GET) also
-retry a 502, 503 or 504: the gateway can time out after Redmine committed a
-write, and retrying a POST, PUT or DELETE then creates a duplicate issue or
-upload, adds a second journal note, or reports a 404 for a delete that
-succeeded. JSON requests time out after 120 seconds per attempt, downloads after
-60 seconds without data, and `upload_file`'s upload after 10 minutes per
-attempt.
+that redirect to S3 or a CDN. Every request retries a 429, and a 503 that
+carries `Retry-After` (a throttle such as nginx `limit_req` rejecting before any
+work). Only reads (GET) also retry a 502, a 504 or a bare 503: the gateway can
+time out after Redmine committed a write, and retrying a POST, PUT or DELETE
+then creates a duplicate issue or upload, adds a second journal note, or reports
+a 404 for a delete that succeeded. JSON requests time out after 120 seconds per
+attempt, downloads after 60 seconds without data, and `upload_file`'s upload
+after 10 minutes per attempt.
 
 ### Data names
 
@@ -185,10 +189,14 @@ Swamp stores data by name with no spec component, so every name carries a spec
 prefix. Before 2026.10.20.1, `list_statuses`, `list_trackers`, `list_projects`,
 `list_custom_fields`, and unfiltered `list_issues` and `list_time_entries` all
 wrote `all`; `get_issue`, `list_relations`, `list_time_entries` (by issue) and
-`get_version` wrote bare numeric IDs; and `list_users`, `list_versions`,
+`create_issue`, `update_issue`, `get_version` and `create_version` wrote bare
+numeric IDs; `search` wrote the bare sanitized query (a search for `all` or `42`
+collided with the others); and `list_users`, `list_versions`,
 `list_time_entries` and `list_issue_categories` wrote the bare project
 identifier. Each overwrote the others. Within a method, the name includes every
-filter, so different filters do not overwrite each other either.
+filter, so different filters do not overwrite each other either. `limit` and
+`sort` are not filters and are not in the name: runs that differ only in those
+share it.
 
 | Method                                      | Spec               | Data name                                           |
 | ------------------------------------------- | ------------------ | --------------------------------------------------- |

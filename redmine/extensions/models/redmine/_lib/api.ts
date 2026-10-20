@@ -11,13 +11,16 @@
 const MAX_RETRIES = 4;
 const BASE_RETRY_DELAY_MS = 1000;
 
-// Only a read is safe to repeat after a 502/503/504: the gateway can time
-// out after Redmine committed the write. A retried POST creates a second
-// issue or upload, a retried PUT with notes adds a second journal entry, and
-// a retried DELETE reports 404 for a delete that succeeded. A 429 is
-// rejected before any work, so every method retries that.
-function isRetryableStatus(status: number, method: string): boolean {
+// Only a read is safe to repeat after a 502/504 or a bare 503: the gateway
+// can time out after Redmine committed the write. A retried POST creates a
+// second issue or upload, a retried PUT with notes adds a second journal
+// entry, and a retried DELETE reports 404 for a delete that succeeded. A 429,
+// and a 503 with Retry-After (a throttle such as nginx limit_req), are
+// rejected before any work, so every method retries those.
+function isRetryableStatus(response: Response, method: string): boolean {
+  const { status } = response;
   if (status === 429) return true;
+  if (status === 503 && response.headers.has("Retry-After")) return true;
   if (method !== "GET" && method !== "HEAD") return false;
   return status === 502 || status === 503 || status === 504;
 }
@@ -144,7 +147,7 @@ export async function redmineFetch(
       signal: makeSignal(),
     }, crossOrigin);
     if (
-      !isRetryableStatus(response.status, method) || attempt === MAX_RETRIES
+      !isRetryableStatus(response, method) || attempt === MAX_RETRIES
     ) {
       return response;
     }

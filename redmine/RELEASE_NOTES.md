@@ -25,12 +25,13 @@ on a cross-origin redirect.
 **Fixed:** Methods overwrote each other's stored data. Swamp stores data by
 name, not by spec. `list_statuses`, `list_trackers`, `list_projects`,
 `list_custom_fields`, and unfiltered `list_issues` and `list_time_entries` all
-wrote `all`. `get_issue`, `list_relations`, `list_time_entries` by issue and
-`get_version` wrote bare numeric IDs. `list_users`, `list_versions`,
-`list_time_entries` and `list_issue_categories` wrote the bare project. Within
-one method, `list_time_entries` ignored the user and date filters, and `search`
-mapped `foo bar` and `foo-bar` to the same name. Every data name now carries a
-spec prefix and every filter (see **Upgrade note**).
+wrote `all`. `get_issue`, `create_issue`, `update_issue`, `list_relations`,
+`list_time_entries` by issue, `get_version` and `create_version` wrote bare
+numeric IDs, and `search` wrote the bare sanitized query. `list_users`,
+`list_versions`, `list_time_entries` and `list_issue_categories` wrote the bare
+project. Within one method, `list_time_entries` ignored the user and date
+filters, and `search` mapped `foo bar` and `foo-bar` to the same name. Every
+data name now carries a spec prefix and every filter (see **Upgrade note**).
 
 **Fixed:** The SPDX header in `redmine.ts` and its test said AGPL-3.0-or-later.
 Every source file now says Apache-2.0, matching `LICENSE.md` and the manifest.
@@ -40,11 +41,15 @@ naming the URL to set as `host`. A same-origin redirect, or an http→https
 upgrade of the same host, still works. `download_attachments` follows other
 redirects without the credentials (S3 or CDN storage backends).
 
-**Changed:** Only reads (GET) retry a 502, 503 or 504. A gateway can time out
-after Redmine committed a write, so retrying created a duplicate issue or
-upload, added a second journal note, or reported a 404 for a delete that
-succeeded. Every method still retries a 429. `upload_file`'s upload now uses the
-same retry and redirect handling as every other call.
+**Changed:** Only reads (GET) retry a 502, a 504 or a 503 without `Retry-After`.
+A gateway can time out after Redmine committed a write, so retrying created a
+duplicate issue or upload, added a second journal note, or reported a 404 for a
+delete that succeeded. Every method still retries a 429, and a 503 that carries
+`Retry-After` (a throttle rejecting before any work). `upload_file`'s upload now
+uses the same retry and redirect handling as every other call.
+
+**Changed:** `list_time_entries` rejects `from` and `to` values that are not
+`YYYY-MM-DD`. Redmine ignored a malformed date and returned unfiltered entries.
 
 **Changed:** Requests no longer wait forever on a server that stops answering.
 JSON requests time out after 120 seconds per attempt, downloads after 60 seconds

@@ -242,11 +242,13 @@ export async function searchDataName(
   return `search-${query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}-${hash}`;
 }
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** Default `maxBytes` for download_attachments (20 MiB). */
 export const DEFAULT_MAX_DOWNLOAD_BYTES = 20_971_520;
 
 /** Per-attempt deadline for upload_file's binary POST. */
-const UPLOAD_TIMEOUT_MS = 600_000;
+export const UPLOAD_TIMEOUT_MS = 600_000;
 
 /** Status of one attachment in the attachments resource. */
 export type AttachmentStatus =
@@ -1210,8 +1212,6 @@ export const model = {
       },
     },
 
-    // ── Stub methods (not yet implemented) ────────────────────────────────
-
     list_issues: {
       description: "List issues matching filters",
       arguments: z.object({
@@ -1837,8 +1837,10 @@ export const model = {
           "Filter by project identifier",
         ),
         userId: z.number().optional().describe("Filter by user ID"),
-        from: z.string().optional().describe("Start date (YYYY-MM-DD)"),
-        to: z.string().optional().describe("End date (YYYY-MM-DD)"),
+        from: z.string().regex(ISO_DATE, "from must be YYYY-MM-DD").optional()
+          .describe("Start date (YYYY-MM-DD)"),
+        to: z.string().regex(ISO_DATE, "to must be YYYY-MM-DD").optional()
+          .describe("End date (YYYY-MM-DD)"),
         limit: z.number().optional().describe("Max results (default 25)"),
       }),
       execute: async (
