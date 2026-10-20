@@ -163,6 +163,9 @@ export async function redmineFetch(
       ...init,
       signal: makeSignal(),
     }, crossOrigin);
+    // Retryability is judged by the method we sent first, not by what a
+    // redirect turned it into: a retry restarts from `url` with `init`, so a
+    // POST that a 303 turned into a GET would be POSTed again.
     if (
       !isRetryableStatus(response, method) || attempt === MAX_RETRIES
     ) {
@@ -375,6 +378,10 @@ export async function redmineDownload(
     headers["X-Redmine-Username"] = username;
   }
 
+  // Each attempt gets its own controller. A timer still pending from an
+  // earlier attempt (it can fire during the retry backoff) aborts only that
+  // attempt's controller, whose response is already discarded, so it cannot
+  // cut short a later attempt.
   let controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const resetIdle = () => {

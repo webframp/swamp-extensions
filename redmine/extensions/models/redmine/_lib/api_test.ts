@@ -718,6 +718,11 @@ Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => 
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
     true,
   );
+  // URL normalizes an explicit default port away, so :443 still counts.
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp:443/a")),
+    true,
+  );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://www.r.corp/a")),
     false,
@@ -1123,4 +1128,34 @@ Deno.test("retryDelayMs: parses seconds and HTTP dates, caps, and falls back", (
   const soon = new Date(Date.now() + 30_000).toUTCString();
   const delay = retryDelayMs(withHeader(soon), 0)!;
   assertEquals(delay > 28_000 && delay <= 30_000, true, `delay ${delay}`);
+});
+
+Deno.test({
+  name:
+    "redmineApi: does not retry a POST whose redirected GET fails, since a retry would POST again",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/issues.json"
+        ? new Response(null, {
+          status: 303,
+          headers: { Location: "/issues/99.json" },
+        })
+        : new Response(null, { status: 502 })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+        Error,
+        "failed (502)",
+      );
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/issues.json"],
+        ["GET", "/issues/99.json"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
 });
