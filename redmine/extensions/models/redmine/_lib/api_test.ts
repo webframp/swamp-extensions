@@ -9,6 +9,7 @@ import {
   redmineDownload,
   RedmineDownloadTooLargeError,
   redmineFetch,
+  retryDelayMs,
 } from "./api.ts";
 
 // ---------------------------------------------------------------------------
@@ -1050,4 +1051,76 @@ Deno.test({
       await storage.server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name: "redmineApi: retries a GET after a bare 503 (no Retry-After)",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() =>
+      ++count === 1
+        ? new Response(null, { status: 503 })
+        : Response.json({ ok: true })
+    );
+    try {
+      await redmineApi(url, "k", "GET", "/x.json");
+      assertEquals(count, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: does not wait out a Retry-After longer than the cap",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return new Response(null, {
+        status: 429,
+        headers: { "Retry-After": "3600" },
+      });
+    });
+    try {
+      const started = performance.now();
+      await assertRejects(
+        () => redmineApi(url, "k", "GET", "/x.json"),
+        Error,
+        "failed (429)",
+      );
+      assertEquals(count, 1);
+      assertEquals(performance.now() - started < 1000, true);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("retryDelayMs: parses seconds and HTTP dates, caps, and falls back", () => {
+  const withHeader = (value?: string) =>
+    new Response(null, {
+      status: 429,
+      headers: value === undefined ? {} : { "Retry-After": value },
+    });
+  assertEquals(retryDelayMs(withHeader(), 0), 1000);
+  assertEquals(retryDelayMs(withHeader(), 2), 4000);
+  assertEquals(retryDelayMs(withHeader("1.5"), 0), 1500);
+  assertEquals(retryDelayMs(withHeader(" 2 "), 0), 2000);
+  assertEquals(retryDelayMs(withHeader("60"), 0), 60_000);
+  assertEquals(retryDelayMs(withHeader("61"), 0), null);
+  assertEquals(retryDelayMs(withHeader("86400"), 0), null);
+  assertEquals(retryDelayMs(withHeader("-5"), 1), 2000);
+  assertEquals(retryDelayMs(withHeader("soon"), 0), 1000);
+  const past = new Date(Date.now() - 60_000).toUTCString();
+  assertEquals(retryDelayMs(withHeader(past), 0), 1000);
+  const tomorrow = new Date(Date.now() + 86_400_000).toUTCString();
+  assertEquals(retryDelayMs(withHeader(tomorrow), 0), null);
+  const soon = new Date(Date.now() + 30_000).toUTCString();
+  const delay = retryDelayMs(withHeader(soon), 0)!;
+  assertEquals(delay > 28_000 && delay <= 30_000, true, `delay ${delay}`);
 });

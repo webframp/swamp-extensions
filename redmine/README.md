@@ -175,9 +175,11 @@ of the same host, keeps `X-Redmine-API-Key` and `X-Redmine-Username`. Any other
 redirect fails an API call with a message naming the URL to set as `host`;
 `download_attachments` follows it without the credentials, for storage backends
 that redirect to S3 or a CDN. Every request retries a 429, and a 503 that
-carries `Retry-After` (a throttle such as nginx `limit_req` rejecting before any
-work). Only reads (GET) also retry a 502, a 504 or a bare 503: the gateway can
-time out after Redmine committed a write, and retrying a POST, PUT or DELETE
+carries `Retry-After` (a throttle or maintenance responder that sets the header,
+rejecting before any work; nginx `limit_req` does not set it by default). A
+`Retry-After` longer than 60 seconds is not waited out: the response is returned
+as an error. Only reads (GET) also retry a 502, a 504 or a bare 503: the gateway
+can time out after Redmine committed a write, and retrying a POST, PUT or DELETE
 then creates a duplicate issue or upload, adds a second journal note, or reports
 a 404 for a delete that succeeded. JSON requests time out after 120 seconds per
 attempt, downloads after 60 seconds without data, and `upload_file`'s upload

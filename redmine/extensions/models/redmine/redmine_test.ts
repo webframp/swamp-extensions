@@ -9,6 +9,7 @@ import {
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
 import {
+  isIsoDate,
   model,
   searchDataName,
   servedHtmlInsteadOf,
@@ -2432,12 +2433,53 @@ Deno.test("redmine model: list_time_entries rejects dates that are not YYYY-MM-D
       { from: "01/01/2026" },
       { to: "2026-01-01-to:2026-02-01" },
       { from: "yesterday" },
+      { from: "2026-02-31" },
+      { to: "2026-13-01" },
     ]
   ) {
     assertEquals(schema.safeParse(bad).success, false, JSON.stringify(bad));
   }
 });
 
-Deno.test("redmine model: upload_file's upload deadline is 10 minutes", () => {
-  assertEquals(UPLOAD_TIMEOUT_MS, 600_000);
+Deno.test({
+  name: "redmine model: upload_file gives the upload a 10-minute deadline",
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(UPLOAD_TIMEOUT_MS, 600_000);
+    const { url, server } = startMockRedmine((req) =>
+      new URL(req.url).pathname === "/uploads.json"
+        ? Response.json({ upload: { id: 1, token: "tok" } })
+        : new Response(null, { status: 204 })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    const timeouts: number[] = [];
+    const originalTimeout = AbortSignal.timeout;
+    AbortSignal.timeout = (ms: number) => {
+      timeouts.push(ms);
+      return originalTimeout.call(AbortSignal, ms);
+    };
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        await model.methods.upload_file.execute(
+          { issueId: 1, filePath: path },
+          context as unknown as UploadCtx,
+        );
+      });
+      // The upload POST, then the attach PUT with the JSON default.
+      assertEquals(timeouts, [UPLOAD_TIMEOUT_MS, 120_000]);
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: isIsoDate accepts only real calendar dates", () => {
+  assertEquals(isIsoDate("2026-02-28"), true);
+  assertEquals(isIsoDate("2028-02-29"), true);
+  assertEquals(isIsoDate("2026-02-29"), false);
+  assertEquals(isIsoDate("2026-00-10"), false);
+  assertEquals(isIsoDate("2026-1-01"), false);
 });

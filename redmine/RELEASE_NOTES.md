@@ -45,11 +45,18 @@ redirects without the credentials (S3 or CDN storage backends).
 A gateway can time out after Redmine committed a write, so retrying created a
 duplicate issue or upload, added a second journal note, or reported a 404 for a
 delete that succeeded. Every method still retries a 429, and a 503 that carries
-`Retry-After` (a throttle rejecting before any work). `upload_file`'s upload now
-uses the same retry and redirect handling as every other call.
+`Retry-After` (a throttle rejecting before any work). A `Retry-After` longer
+than 60 seconds is no longer slept on (it blocked the method for up to 4 × the
+value); the request fails instead. An HTTP-date `Retry-After` is now honored.
+`upload_file`'s upload now uses the same retry and redirect handling as every
+other call.
 
 **Changed:** `list_time_entries` rejects `from` and `to` values that are not
-`YYYY-MM-DD`. Redmine ignored a malformed date and returned unfiltered entries.
+real `YYYY-MM-DD` dates. Redmine ignored a malformed date and returned
+unfiltered entries.
+
+**Fixed:** The `limit` descriptions of `list_issues` and `list_time_entries`
+said "default 25"; the default is 100, the maximum 500.
 
 **Changed:** Requests no longer wait forever on a server that stops answering.
 JSON requests time out after 120 seconds per attempt, downloads after 60 seconds

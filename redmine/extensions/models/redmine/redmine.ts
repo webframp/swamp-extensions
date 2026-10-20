@@ -242,7 +242,13 @@ export async function searchDataName(
   return `search-${query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}-${hash}`;
 }
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A real calendar date as YYYY-MM-DD (rejects 2026-02-31). */
+export function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value;
+}
 
 /** Default `maxBytes` for download_attachments (20 MiB). */
 export const DEFAULT_MAX_DOWNLOAD_BYTES = 20_971_520;
@@ -1230,7 +1236,7 @@ export const model = {
           .describe("Filter by assignee ID or 'me'"),
         parentId: z.number().optional().describe("Filter by parent issue ID"),
         limit: z.number().optional().describe(
-          "Max results (default 25, max 100)",
+          "Max results (default 100, max 500)",
         ),
         sort: z.string().optional().describe(
           "Sort field (e.g., 'updated_on:desc')",
@@ -1837,11 +1843,13 @@ export const model = {
           "Filter by project identifier",
         ),
         userId: z.number().optional().describe("Filter by user ID"),
-        from: z.string().regex(ISO_DATE, "from must be YYYY-MM-DD").optional()
-          .describe("Start date (YYYY-MM-DD)"),
-        to: z.string().regex(ISO_DATE, "to must be YYYY-MM-DD").optional()
-          .describe("End date (YYYY-MM-DD)"),
-        limit: z.number().optional().describe("Max results (default 25)"),
+        from: z.string().refine(isIsoDate, "from must be a YYYY-MM-DD date")
+          .optional().describe("Start date (YYYY-MM-DD)"),
+        to: z.string().refine(isIsoDate, "to must be a YYYY-MM-DD date")
+          .optional().describe("End date (YYYY-MM-DD)"),
+        limit: z.number().optional().describe(
+          "Max results (default 100, max 500)",
+        ),
       }),
       execute: async (
         args: {

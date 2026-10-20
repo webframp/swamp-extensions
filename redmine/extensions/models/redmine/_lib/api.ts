@@ -15,8 +15,9 @@ const BASE_RETRY_DELAY_MS = 1000;
 // can time out after Redmine committed the write. A retried POST creates a
 // second issue or upload, a retried PUT with notes adds a second journal
 // entry, and a retried DELETE reports 404 for a delete that succeeded. A 429,
-// and a 503 with Retry-After (a throttle such as nginx limit_req), are
-// rejected before any work, so every method retries those.
+// and a 503 with Retry-After (a throttle or maintenance responder that sets
+// the header; nginx limit_req does not by default), are rejected before any
+// work, so every method retries those.
 function isRetryableStatus(response: Response, method: string): boolean {
   const { status } = response;
   if (status === 429) return true;
@@ -25,13 +26,29 @@ function isRetryableStatus(response: Response, method: string): boolean {
   return status === 502 || status === 503 || status === 504;
 }
 
-function retryDelayMs(response: Response, attempt: number): number {
-  const retryAfter = response.headers.get("Retry-After");
-  if (retryAfter) {
-    const seconds = Number(retryAfter);
-    if (!Number.isNaN(seconds)) return seconds * 1000;
-  }
-  return BASE_RETRY_DELAY_MS * 2 ** attempt;
+/** The longest Retry-After a request waits out before retrying. */
+export const MAX_RETRY_DELAY_MS = 60_000;
+
+/**
+ * How long to wait before the next attempt, or null to stop retrying.
+ * Retry-After may be seconds or an HTTP date; a value that is negative,
+ * unparseable or already past falls back to exponential backoff. A server
+ * asking for more than MAX_RETRY_DELAY_MS (a maintenance window, a daily
+ * quota) gets no retry: the response is returned rather than blocking the
+ * method for hours.
+ */
+export function retryDelayMs(
+  response: Response,
+  attempt: number,
+): number | null {
+  const backoff = BASE_RETRY_DELAY_MS * 2 ** attempt;
+  const retryAfter = response.headers.get("Retry-After")?.trim();
+  if (!retryAfter) return backoff;
+  const delay = /^\d+(\.\d+)?$/.test(retryAfter)
+    ? Number(retryAfter) * 1000
+    : Date.parse(retryAfter) - Date.now();
+  if (!Number.isFinite(delay) || delay < 0) return backoff;
+  return delay > MAX_RETRY_DELAY_MS ? null : delay;
 }
 
 const MAX_REDIRECTS = 5;
@@ -151,10 +168,10 @@ export async function redmineFetch(
     ) {
       return response;
     }
+    const delay = retryDelayMs(response, attempt);
+    if (delay === null) return response;
     await response.body?.cancel();
-    await new Promise((resolve) =>
-      setTimeout(resolve, retryDelayMs(response, attempt))
-    );
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
   return response!;
 }
