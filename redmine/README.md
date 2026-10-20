@@ -135,7 +135,8 @@ not the API's total. There is no `truncated` field — you cannot distinguish
 
 A 429 or a 503 with `Retry-After` (any method), or a 502, 503 or 504 on a read,
 is retried up to 4 times with backoff, honoring `Retry-After` (a `Retry-After`
-over 300 seconds fails at once); see
+over 300 seconds fails at once, and all retries of one request wait 300 seconds
+in total at most); see
 [Redirects, retries and timeouts](#redirects-retries-and-timeouts). Any other
 failure (network error, timeout, non-2xx response), or one that outlasts the
 retries, throws. There is no partial-result path, except that

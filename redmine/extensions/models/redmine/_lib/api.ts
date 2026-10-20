@@ -27,7 +27,8 @@ function isRetryableStatus(response: Response, method: string): boolean {
 }
 
 /**
- * The longest Retry-After a request waits out before retrying. Rate limiters
+ * The longest Retry-After a request waits out before retrying, and the total
+ * time all retries of one request may spend waiting. Rate limiters
  * with a time window (Skipper's clusterClientRatelimit over "2m", for one)
  * ask for up to the whole window, so this covers a few minutes; anything
  * longer is a maintenance window or daily quota, not worth blocking on.
@@ -165,6 +166,8 @@ export interface RedmineFetchOptions {
   crossOrigin?: CrossOriginRedirect;
   /** Called as each response (including each redirect hop) arrives. */
   onResponse?: () => void;
+  /** Total time all retries of one request may wait (default MAX_RETRY_DELAY_MS). */
+  retryBudgetMs?: number;
 }
 
 /** Fetch a Redmine URL with retries, safe redirects, and a per-attempt timeout. */
@@ -177,6 +180,10 @@ export async function redmineFetch(
     (() => AbortSignal.timeout(REQUEST_TIMEOUT_MS));
   const crossOrigin = options.crossOrigin ?? "reject";
   const method = (init.method ?? "GET").toUpperCase();
+  // One budget for the summed waits of every retry, so a limiter that keeps
+  // asking for the maximum cannot hold a request for MAX_RETRIES times it.
+  const retryBudgetMs = options.retryBudgetMs ?? MAX_RETRY_DELAY_MS;
+  let waitedMs = 0;
   let response: Response;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const result = await fetchFollowingRedirects(
@@ -202,7 +209,8 @@ export async function redmineFetch(
     // A streamed body was consumed by this attempt and cannot be resent.
     if (init.body instanceof ReadableStream) return response;
     const delay = retryDelayMs(response, attempt);
-    if (delay === null) return response;
+    if (delay === null || waitedMs + delay > retryBudgetMs) return response;
+    waitedMs += delay;
     await response.body?.cancel();
     await new Promise((resolve) => setTimeout(resolve, delay));
   }

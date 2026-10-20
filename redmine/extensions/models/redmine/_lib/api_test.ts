@@ -1396,3 +1396,24 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "redmineFetch: stops retrying once the summed waits pass the budget",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 429, headers: { "Retry-After": "0.2" } })
+    );
+    try {
+      // Waits 0.2 s twice (0.4 s); a third wait would reach 0.6 s > 0.5 s.
+      const response = await redmineFetch(`${url}/x`, {}, {
+        retryBudgetMs: 500,
+      });
+      assertEquals(response.status, 429);
+      assertEquals(requests.length, 3);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});

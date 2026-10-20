@@ -4,8 +4,10 @@
 rate limiter with a time window asks for up to the whole window: Skipper's
 `clusterClientRatelimit` over `"2m"`, for example, sends up to about two
 minutes. So rate-limited calls failed where earlier versions waited. The cap is
-now 300 seconds; a longer `Retry-After` (a maintenance window, a daily quota)
-still fails fast instead of blocking the method.
+now 300 seconds, and it is also the total that all retries of one request may
+wait (so at most 5 minutes, not 4 × the cap). A longer `Retry-After` (a
+maintenance window, a daily quota) still fails fast instead of blocking the
+method.
 
 **Fixed:** 2026.10.20.1 kept `X-Redmine-API-Key` and `X-Redmine-Username` on an
 http→https redirect to any port of the same host, so a TLS listener on an
