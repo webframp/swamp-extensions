@@ -1,5 +1,5 @@
 // Redmine Model Tests
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import {
   assertEquals,
@@ -8,7 +8,13 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { model } from "./redmine.ts";
+import {
+  isIsoDate,
+  model,
+  searchDataName,
+  servedHtmlInsteadOf,
+  UPLOAD_TIMEOUT_MS,
+} from "./redmine.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Server Helpers
@@ -78,10 +84,10 @@ Deno.test("redmine model: globalArguments validates host, apiKey, project", () =
   assertEquals(crossProject.project, undefined);
 });
 
-Deno.test("redmine model: has all 7 resources", () => {
+Deno.test("redmine model: has all 13 resources", () => {
   assertExists(model.resources);
   const names = Object.keys(model.resources);
-  assertEquals(names.length, 12);
+  assertEquals(names.length, 13);
   assertExists(model.resources.issues);
   assertExists(model.resources.issue_detail);
   assertExists(model.resources.projects);
@@ -91,10 +97,10 @@ Deno.test("redmine model: has all 7 resources", () => {
   assertExists(model.resources.custom_fields);
 });
 
-Deno.test("redmine model: has all 9 methods", () => {
+Deno.test("redmine model: has all 28 methods", () => {
   assertExists(model.methods);
   const names = Object.keys(model.methods);
-  assertEquals(names.length, 26);
+  assertEquals(names.length, 28);
   assertExists(model.methods.list_statuses);
   assertExists(model.methods.list_trackers);
   assertExists(model.methods.list_projects);
@@ -167,7 +173,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "statuses");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "statuses-all");
 
       const data = resources[0].data as {
         statuses: Array<{ id: number; name: string; isClosed: boolean }>;
@@ -225,7 +231,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "trackers");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "trackers-all");
 
       const data = resources[0].data as {
         trackers: Array<{
@@ -298,7 +304,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "projects");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "projects-all");
 
       const data = resources[0].data as {
         projects: Array<{
@@ -369,7 +375,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "users");
-      assertEquals(resources[0].name, TEST_PROJECT);
+      assertEquals(resources[0].name, `users-${TEST_PROJECT}`);
 
       const data = resources[0].data as {
         members: Array<{
@@ -448,7 +454,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "custom_fields");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "custom-fields-all");
 
       const data = resources[0].data as {
         customFields: Array<{
@@ -534,7 +540,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
-      assertEquals(resources[0].name, "200");
+      assertEquals(resources[0].name, "issue-200");
     } finally {
       uninstall();
       await server.shutdown();
@@ -619,6 +625,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
+      assertEquals(resources[0].name, `issue-${mockIssue1.id}`);
 
       // Verify the re-fetched data shows updated status
       const data = resources[0].data as {
@@ -786,6 +793,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issues");
+      assertEquals(resources[0].name, `issues-p:${TEST_PROJECT}`);
 
       const data = resources[0].data as {
         issues: Array<Record<string, unknown>>;
@@ -903,7 +911,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
-      assertEquals(resources[0].name, String(mockIssue1.id));
+      assertEquals(resources[0].name, `issue-${mockIssue1.id}`);
 
       const data = resources[0].data as {
         id: number;
@@ -1006,7 +1014,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "relations");
-      assertEquals(resources[0].name, "100");
+      assertEquals(resources[0].name, "relations-100");
       const data = resources[0].data as {
         relations: Array<{ relationType: string }>;
       };
@@ -1121,6 +1129,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
+      assertEquals(resources[0].name, `versions-${TEST_PROJECT}`);
       const data = resources[0].data as {
         versions: Array<{ name: string }>;
       };
@@ -1172,7 +1181,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "time_entries");
-      assertEquals(resources[0].name, "100");
+      assertEquals(resources[0].name, "time-entries-i:100");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1314,6 +1323,10 @@ Deno.test({
       assertEquals(capturedPath, "/projects/my%20project/search.json");
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "search_results");
+      assertEquals(
+        resources[0].name,
+        await searchDataName("test", "my project"),
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -1356,7 +1369,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
-      assertEquals(resources[0].name, "10");
+      assertEquals(resources[0].name, "version-10");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1399,6 +1412,7 @@ Deno.test({
       assertEquals(body.version.name, "New Sprint");
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
+      assertEquals(resources[0].name, "version-99");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1510,6 +1524,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "issue_categories");
+      assertEquals(resources[0].name, `issue-categories-${TEST_PROJECT}`);
       const data = resources[0].data as {
         categories: Array<{ name: string }>;
       };
@@ -1613,4 +1628,858 @@ Deno.test("redmine model: upload_file names the path and issue when the file can
     Error,
     "/nonexistent/path/does-not-exist.txt",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Attachment Tests
+// ---------------------------------------------------------------------------
+
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+
+function attachmentServer(seen: string[]) {
+  return startMockRedmine((req) => {
+    const u = new URL(req.url);
+    seen.push(
+      `${u.pathname}${u.search}|${req.headers.get("X-Redmine-Username") ?? ""}`,
+    );
+    if (u.pathname === "/issues/42.json") {
+      return Response.json({
+        issue: {
+          id: 42,
+          attachments: [
+            {
+              id: 7,
+              filename: "screen.png",
+              filesize: PNG_BYTES.length,
+              content_type: "image/png",
+              description: "",
+              author: { id: 3, name: "Tester" },
+              created_on: "2026-10-19T06:23:17Z",
+            },
+            {
+              id: 8,
+              filename: "big.pdf",
+              filesize: 5_000_000,
+              content_type: "application/pdf",
+              created_on: "2026-10-19T07:00:00Z",
+            },
+            {
+              id: 9,
+              filename: "notes",
+              filesize: 3,
+              content_type: null,
+              created_on: "2026-10-19T08:00:00Z",
+            },
+          ],
+        },
+      });
+    }
+    if (u.pathname === "/attachments/download/7") {
+      return new Response(PNG_BYTES, {
+        headers: { "Content-Type": "image/png" },
+      });
+    }
+    if (u.pathname === "/attachments/download/9") {
+      return new Response("abc");
+    }
+    return new Response("Not found", { status: 404 });
+  });
+}
+
+function makeUsernameContext() {
+  return createModelTestContext({
+    globalArgs: {
+      host: TEST_HOST,
+      apiKey: TEST_API_KEY,
+      username: "user@example.com",
+    },
+    definition: { id: "test-id", name: "test-redmine", version: 1, tags: {} },
+  });
+}
+
+Deno.test({
+  name:
+    "redmine model: list_attachments maps attachments and sends the username header",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const { url, server } = attachmentServer(seen);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeUsernameContext();
+      await model.methods.list_attachments.execute(
+        { issueId: 42 },
+        context as unknown as Parameters<
+          typeof model.methods.list_attachments.execute
+        >[1],
+      );
+      const [written] = getWrittenResources();
+      assertEquals(written.specName, "attachments");
+      assertEquals(written.name, "attachments-42");
+      const data = written.data as {
+        attachments: Array<
+          {
+            id: number;
+            contentType: string;
+            dataName: string;
+            status: string;
+            author: unknown;
+          }
+        >;
+      };
+      assertEquals(data.attachments.map((a) => a.id), [7, 8, 9]);
+      assertEquals(
+        data.attachments.map((a) => a.dataName as string | null),
+        [null, null, null],
+      );
+      assertEquals(data.attachments[2].contentType, "application/octet-stream");
+      assertEquals(data.attachments[1].author, null);
+      assertEquals(data.attachments.every((a) => a.status === "listed"), true);
+      assertEquals(seen, [
+        "/issues/42.json?include=attachments|user@example.com",
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: download_attachments stores files and skips large ones",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const { url, server } = attachmentServer(seen);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources, getWrittenFiles } =
+        makeUsernameContext();
+      const result = await model.methods.download_attachments.execute(
+        { issueId: 42, maxBytes: 1_000_000 },
+        context as unknown as Parameters<
+          typeof model.methods.download_attachments.execute
+        >[1],
+      );
+      const files = getWrittenFiles();
+      assertEquals(files.map((f) => [f.specName, f.name]), [
+        ["attachment", "attachment-42-7"],
+        ["attachment", "attachment-42-9"],
+      ]);
+      assertEquals([...(files[0].content as Uint8Array)], [...PNG_BYTES]);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ id: number; status: string }>;
+      };
+      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
+        [7, "downloaded"],
+        [8, "skipped-too-large"],
+        [9, "downloaded"],
+      ]);
+      assertEquals(result.dataHandles.length, 3);
+      assertEquals(
+        seen.includes("/attachments/download/8|user@example.com"),
+        false,
+      );
+      assertEquals(
+        seen.includes("/attachments/download/7|user@example.com"),
+        true,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments filters by content type and rejects unknown IDs",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = attachmentServer([]);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles } = makeContext();
+      const ctx = context as unknown as Parameters<
+        typeof model.methods.download_attachments.execute
+      >[1];
+      await model.methods.download_attachments.execute(
+        { issueId: 42, contentTypePrefix: "image/" },
+        ctx,
+      );
+      assertEquals(getWrittenFiles().map((f) => f.name), ["attachment-42-7"]);
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 42, attachmentIds: [7, 99] },
+            ctx,
+          ),
+        Error,
+        "Attachment(s) 99 are not on this issue",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments skips a body larger than its recorded filesize",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [{
+              id: 1,
+              filename: "liar.bin",
+              filesize: 2,
+              content_type: "application/octet-stream",
+              created_on: "2026-10-19T06:23:17Z",
+            }],
+          },
+        });
+      }
+      if (u.pathname === "/attachments/download/1") {
+        return new Response(new Uint8Array(50));
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles, getWrittenResources } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 5, maxBytes: 10 },
+        context as unknown as Parameters<
+          typeof model.methods.download_attachments.execute
+        >[1],
+      );
+      assertEquals(getWrittenFiles().length, 0);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ id: number; status: string }>;
+      };
+      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
+        [1, "skipped-too-large"],
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+function rawAttachment(
+  id: number,
+  filename: string,
+  contentType: string | null,
+  filesize = 3,
+) {
+  return {
+    id,
+    filename,
+    filesize,
+    content_type: contentType,
+    created_on: "2026-10-19T06:23:17Z",
+  };
+}
+
+type DownloadCtx = Parameters<
+  typeof model.methods.download_attachments.execute
+>[1];
+
+Deno.test({
+  name:
+    "redmine model: download_attachments records a failed download, keeps the others, then fails",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [
+              rawAttachment(3, "gone.png", "image/png"),
+              rawAttachment(4, "ok.png", "image/png"),
+            ],
+          },
+        });
+      }
+      if (u.pathname === "/attachments/download/4") {
+        return new Response("png");
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources, getWrittenFiles } = makeContext();
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 5 },
+            context as unknown as DownloadCtx,
+          ),
+        Error,
+        "Failed to download 1 attachment(s) of issue 5: 3 (gone.png): Redmine API GET /attachments/download/3 failed (404)",
+      );
+      assertEquals(getWrittenFiles().map((f) => f.name), ["attachment-5-4"]);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<
+          { id: number; status: string; error: string | null }
+        >;
+      };
+      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
+        [3, "failed"],
+        [4, "downloaded"],
+      ]);
+      assertEquals(
+        data.attachments[0].error,
+        "Redmine API GET /attachments/download/3 failed (404)",
+      );
+      assertEquals(data.attachments[1].error, null);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: a filtered download_attachments run keeps every attachment in the resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const { url, server } = attachmentServer(seen);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 42, contentTypePrefix: "IMAGE/" },
+        context as unknown as DownloadCtx,
+      );
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<
+          { id: number; status: string; dataName: string | null }
+        >;
+        filter: unknown;
+      };
+      assertEquals(
+        data.attachments.map((a) => [a.id, a.status, a.dataName]),
+        [
+          [7, "downloaded", "attachment-42-7"],
+          [8, "not-selected", null],
+          [9, "not-selected", null],
+        ],
+      );
+      assertEquals(data.filter, {
+        attachmentIds: null,
+        contentTypePrefix: "IMAGE/",
+        maxBytes: 20_971_520,
+      });
+      assertEquals(
+        model.resources.attachments.schema.safeParse(data).success,
+        true,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments stores the file with the attachment's content type",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = attachmentServer([]);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context } = makeContext();
+      const overrides: Array<[string, string, unknown]> = [];
+      const original = context.createFileWriter;
+      const spying = {
+        ...context,
+        createFileWriter: (spec: string, name: string, o?: unknown) => {
+          overrides.push([spec, name, o]);
+          return original(spec, name);
+        },
+      };
+      await model.methods.download_attachments.execute(
+        { issueId: 42, attachmentIds: [7, 9] },
+        spying as unknown as DownloadCtx,
+      );
+      assertEquals(overrides, [
+        ["attachment", "attachment-42-7", { contentType: "image/png" }],
+        [
+          "attachment",
+          "attachment-42-9",
+          { contentType: "application/octet-stream" },
+        ],
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments skips a chunked body that passes maxBytes",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: { id: 5, attachments: [rawAttachment(1, "a.bin", null, 2)] },
+        });
+      }
+      // No Content-Length: an endless stream of 4-byte chunks.
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(4));
+          },
+        }),
+      );
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles, getWrittenResources } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 5, maxBytes: 10 },
+        context as unknown as DownloadCtx,
+      );
+      assertEquals(getWrittenFiles().length, 0);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ status: string }>;
+      };
+      assertEquals(data.attachments[0].status, "skipped-too-large");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments fails an attachment served as an HTML page",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [rawAttachment(2, "shot.png", "image/png")],
+          },
+        });
+      }
+      return new Response("<html>login</html>", {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles, getWrittenResources } = makeContext();
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 5 },
+            context as unknown as DownloadCtx,
+          ),
+        Error,
+        "server returned text/html instead of image/png",
+      );
+      assertEquals(getWrittenFiles().length, 0);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ status: string }>;
+      };
+      assertEquals(data.attachments[0].status, "failed");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: list_attachments rejects an attachment id that is not a positive integer",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine(() =>
+      Response.json({
+        issue: { id: 5, attachments: [rawAttachment(-1, "x", null)] },
+      })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await assertRejects(
+        () =>
+          model.methods.list_attachments.execute(
+            { issueId: 5 },
+            context as unknown as Parameters<
+              typeof model.methods.list_attachments.execute
+            >[1],
+          ),
+        Error,
+        "invalid attachment id -1 on issue 5",
+      );
+      assertEquals(getWrittenResources().length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: attachment argument schemas reject bad input", () => {
+  const download = model.methods.download_attachments.arguments;
+  const list = model.methods.list_attachments.arguments;
+  assertEquals(download.safeParse({ issueId: 1 }).success, true);
+  assertEquals(
+    download.parse({ issueId: 1 }).maxBytes,
+    20_971_520,
+  );
+  for (
+    const bad of [
+      { issueId: 1, attachmentIds: [] },
+      {
+        issueId: 1,
+        attachmentIds: Array.from({ length: 101 }, (_, i) => i + 1),
+      },
+      { issueId: 1, attachmentIds: [1.5] },
+      { issueId: 1, maxBytes: 524_288_001 },
+      { issueId: 1, maxBytes: 0 },
+      { issueId: 1, contentTypePrefix: "" },
+      { issueId: 1.5 },
+      { issueId: -1 },
+    ]
+  ) {
+    assertEquals(download.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+  assertEquals(list.safeParse({ issueId: 0 }).success, false);
+  assertExists(model.files.attachment);
+  assertEquals(model.files.attachment.contentType, "application/octet-stream");
+});
+
+Deno.test("redmine model: servedHtmlInsteadOf allows HTML attachments only", () => {
+  const png = { filename: "shot.png", contentType: "image/png" };
+  const htmlUnknown = {
+    filename: "report.HTML",
+    contentType: "application/octet-stream",
+  };
+  const htmlKnown = { filename: "page", contentType: "text/html" };
+  assertEquals(servedHtmlInsteadOf(png, "text/html; charset=utf-8"), true);
+  assertEquals(servedHtmlInsteadOf(png, "image/png"), false);
+  assertEquals(servedHtmlInsteadOf(png, null), false);
+  assertEquals(servedHtmlInsteadOf(htmlUnknown, "text/html"), false);
+  assertEquals(servedHtmlInsteadOf(htmlKnown, "TEXT/HTML"), false);
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments stores an .html attachment recorded without a type",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [rawAttachment(6, "report.html", null, 13)],
+          },
+        });
+      }
+      return new Response("<html></html>", {
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 5 },
+        context as unknown as DownloadCtx,
+      );
+      assertEquals(getWrittenFiles().map((f) => f.name), ["attachment-5-6"]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments records a file that cannot be stored as failed",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = attachmentServer([]);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const original = context.createFileWriter;
+      const failing = {
+        ...context,
+        createFileWriter: (spec: string, name: string) => {
+          const writer = original(spec, name);
+          if (name !== "attachment-42-9") return writer;
+          return {
+            ...writer,
+            writeAll: () => Promise.reject(new Error("disk full")),
+          };
+        },
+      };
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 42, attachmentIds: [7, 9] },
+            failing as unknown as DownloadCtx,
+          ),
+        Error,
+        "9 (notes): storing the file failed: disk full",
+      );
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<
+          { id: number; status: string; dataName: string | null }
+        >;
+      };
+      assertEquals(
+        data.attachments.map((a) => [a.id, a.status, a.dataName]),
+        [
+          [7, "downloaded", "attachment-42-7"],
+          [8, "not-selected", null],
+          [9, "failed", null],
+        ],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: searchDataName keeps distinct queries and scopes apart", async () => {
+  const names = await Promise.all([
+    searchDataName("foo bar", undefined),
+    searchDataName("foo-bar", undefined),
+    searchDataName("foo_bar", undefined),
+    searchDataName("foo bar", "web"),
+  ]);
+  assertEquals(new Set(names).size, 4);
+  assertEquals(names[0].startsWith("search-foo_bar-"), true);
+  assertEquals(names[0], await searchDataName("foo bar", undefined));
+  const long = await searchDataName("x".repeat(500), undefined);
+  assertEquals(long.length, "search-".length + 40 + 1 + 8);
+});
+
+Deno.test({
+  name: "redmine model: list_time_entries names data by every filter",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine(() =>
+      Response.json({ time_entries: [], total_count: 0 })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const ctx = context as unknown as Parameters<
+        typeof model.methods.list_time_entries.execute
+      >[1];
+      await model.methods.list_time_entries.execute({}, ctx);
+      await model.methods.list_time_entries.execute({ project: "5" }, ctx);
+      await model.methods.list_time_entries.execute({ issueId: 5 }, ctx);
+      await model.methods.list_time_entries.execute(
+        { project: "web", userId: 3, from: "2026-01-01", to: "2026-02-01" },
+        ctx,
+      );
+      assertEquals(getWrittenResources().map((r) => r.name), [
+        "time-entries-all",
+        "time-entries-p:5",
+        "time-entries-i:5",
+        "time-entries-p:web-u:3-from:2026-01-01-to:2026-02-01",
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+async function withUploadFile(fn: (path: string) => Promise<void>) {
+  const path = await Deno.makeTempFile({ suffix: ".txt" });
+  try {
+    await Deno.writeTextFile(path, "hello");
+    await fn(path);
+  } finally {
+    await Deno.remove(path);
+  }
+}
+
+type UploadCtx = Parameters<typeof model.methods.upload_file.execute>[1];
+
+Deno.test({
+  name:
+    "redmine model: upload_file rejects a cross-origin redirect without sending the key",
+  sanitizeResources: false,
+  fn: async () => {
+    const seenOther: string[] = [];
+    const otherWrapped = Deno.serve({ port: 0, onListen() {} }, (req) => {
+      seenOther.push(req.headers.get("X-Redmine-API-Key") ?? "");
+      return Response.json({ upload: { id: 1, token: "t" } });
+    });
+    const { url, server } = startMockRedmine(() =>
+      new Response(null, {
+        status: 307,
+        headers: {
+          Location: `http://localhost:${otherWrapped.addr.port}/uploads.json`,
+        },
+      })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        await assertRejects(
+          () =>
+            model.methods.upload_file.execute(
+              { issueId: 1, filePath: path },
+              context as unknown as UploadCtx,
+            ),
+          Error,
+          "redirected from",
+        );
+      });
+      assertEquals(seenOther, []);
+    } finally {
+      uninstall();
+      await server.shutdown();
+      await otherWrapped.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: upload_file does not retry the upload after a 502 but retries a 429",
+  sanitizeResources: false,
+  fn: async () => {
+    let status = 502;
+    let uploads = 0;
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/uploads.json") {
+        uploads++;
+        if (uploads === 1) {
+          return new Response(null, {
+            status,
+            headers: { "Retry-After": "0" },
+          });
+        }
+        return Response.json({ upload: { id: 1, token: "tok" } });
+      }
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        const ctx = context as unknown as UploadCtx;
+        await assertRejects(
+          () =>
+            model.methods.upload_file.execute(
+              { issueId: 1, filePath: path },
+              ctx,
+            ),
+          Error,
+          "(502)",
+        );
+        assertEquals(uploads, 1);
+
+        uploads = 0;
+        status = 429;
+        await model.methods.upload_file.execute(
+          { issueId: 1, filePath: path },
+          ctx,
+        );
+        assertEquals(uploads, 2);
+      });
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: list_time_entries rejects dates that are not YYYY-MM-DD", () => {
+  const schema = model.methods.list_time_entries.arguments;
+  assertEquals(schema.safeParse({ from: "2026-01-01" }).success, true);
+  for (
+    const bad of [
+      { from: "01/01/2026" },
+      { to: "2026-01-01-to:2026-02-01" },
+      { from: "yesterday" },
+      { from: "2026-02-31" },
+      { to: "2026-13-01" },
+    ]
+  ) {
+    assertEquals(schema.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+});
+
+Deno.test({
+  name: "redmine model: upload_file gives the upload a 10-minute deadline",
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(UPLOAD_TIMEOUT_MS, 600_000);
+    const { url, server } = startMockRedmine((req) =>
+      new URL(req.url).pathname === "/uploads.json"
+        ? Response.json({ upload: { id: 1, token: "tok" } })
+        : new Response(null, { status: 204 })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    const timeouts: number[] = [];
+    const originalTimeout = AbortSignal.timeout;
+    AbortSignal.timeout = (ms: number) => {
+      timeouts.push(ms);
+      return originalTimeout.call(AbortSignal, ms);
+    };
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        await model.methods.upload_file.execute(
+          { issueId: 1, filePath: path },
+          context as unknown as UploadCtx,
+        );
+      });
+      // The upload POST, then the attach PUT with the JSON default.
+      assertEquals(timeouts, [UPLOAD_TIMEOUT_MS, 120_000]);
+    } finally {
+      AbortSignal.timeout = originalTimeout;
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: isIsoDate accepts only real calendar dates", () => {
+  assertEquals(isIsoDate("2026-02-28"), true);
+  assertEquals(isIsoDate("2028-02-29"), true);
+  assertEquals(isIsoDate("2026-02-29"), false);
+  assertEquals(isIsoDate("2026-00-10"), false);
+  assertEquals(isIsoDate("2026-1-01"), false);
 });

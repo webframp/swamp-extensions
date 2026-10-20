@@ -1,13 +1,14 @@
 manifestVersion: 1
 name: "@webframp/redmine"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.20.1"
 description: |
   Redmine issue tracker integration — workflow-agnostic CRUD model.
 
-  Provides 26 model methods covering issues, projects, statuses, trackers,
+  Provides 28 model methods covering issues, projects, statuses, trackers,
   users, custom fields, relations, versions, time entries, watchers, search,
-  issue categories, journal editing, and file uploads. Designed as composable
+  issue categories, journal editing, file uploads, and attachment listing
+  and download. Designed as composable
   primitives for building any workflow on top of Redmine.
 
   For opinionated Kanban workflows, flow metrics, and sprint reports, see

@@ -108,7 +108,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/ddd-guidance`](ddd-guidance/) | Agent-guided Domain-Driven Design facilitator — bounded contexts, ubiquitous language, and aggregate boundaries as versioned domain knowledge | None |
 | [`@webframp/rice-scoring`](rice-scoring/) | Agent-guided RICE (Reach, Impact, Confidence, Effort) prioritization framework producing ranked, versioned scorecards | None |
 | [`@webframp/swamp-adoption`](swamp-adoption/) | Interactive onboarding model that interviews users to map their domain onto swamp primitives and scaffolds extension designs | None |
-| [`@webframp/redmine`](redmine/) | Workflow-agnostic Redmine CRUD model — 26 methods covering issues, projects, statuses, trackers, users, custom fields, relations, time entries, and more | None |
+| [`@webframp/redmine`](redmine/) | Workflow-agnostic Redmine CRUD model — 28 methods covering issues, projects, statuses, trackers, users, custom fields, relations, time entries, attachments, and more | None |
 | [`@webframp/github-issue-lifecycle`](github-issue-lifecycle/) | GitHub issue lifecycle tracker — drives issues from triage through planning, implementation, PR linkage, and merge as versioned swamp data with optional label sync and comment posting | None (shells out to `gh`) |
 
 ## Workflow + Report Extensions
@@ -380,7 +380,7 @@ swamp workflow run @webframp/terraform-drift
 ### Redmine issue tracking
 
 ```bash
-# @webframp/redmine alone gives you the CRUD model (26 methods).
+# @webframp/redmine alone gives you the CRUD model (28 methods).
 # Add @webframp/redmine-kanban for flow-metrics/sprint reports and the
 # scaffold-story workflow.
 swamp extension pull @webframp/redmine

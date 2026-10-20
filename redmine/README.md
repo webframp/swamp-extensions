@@ -45,6 +45,23 @@ swamp model method run tracker list_issues \
 swamp model method run tracker get_issue --arg issueId=1234
 ```
 
+### List and download an issue's attachments
+
+```bash
+swamp model method run tracker list_attachments --arg issueId=1234
+swamp model method run tracker download_attachments \
+  --arg issueId=1234 \
+  --arg contentTypePrefix=image/
+```
+
+`download_attachments` stores each file as `attachment-<issueId>-<attachmentId>`
+in the `attachment` file spec. It writes the `attachments-<issueId>` resource
+listing every attachment of the issue, whether or not the filter selected it,
+with its `status` (`listed` after `list_attachments`; `downloaded`,
+`not-selected`, `skipped-too-large` or `failed` after `download_attachments`).
+`dataName` names the stored file only when `status` is `downloaded`; otherwise
+it is `null`.
+
 ### Create an issue
 
 ```bash
@@ -114,11 +131,14 @@ capped at 500 items maximum. The output's `totalCount` reflects fetched count,
 not the API's total. There is no `truncated` field — you cannot distinguish
 "exactly 500 items exist" from "more than 500 were truncated."
 
-### All errors throw — no graceful degradation
+### All errors throw after retries run out
 
-Every API failure (network error, non-2xx response) throws immediately. There is
-no retry logic, no backoff, and no partial-result path. Transient Redmine
-outages or 429 responses crash the method execution.
+A 429 or a 503 with `Retry-After` (any method), or a 502, 503 or 504 on a read,
+is retried up to 4 times with backoff, honoring `Retry-After`; see
+[Redirects, retries and timeouts](#redirects-retries-and-timeouts). Any other
+failure (network error, timeout, non-2xx response), or one that outlasts the
+retries, throws. There is no partial-result path, except that
+`download_attachments` records which attachments failed.
 
 ### `project` global arg is optional but required by some methods
 
@@ -134,9 +154,72 @@ succeeded but the method throws (no resource written).
 
 ### `upload_file` reads the local file path
 
-The `filePath` argument must be an absolute path readable by the swamp process.
-If the file cannot be read, the method throws with the path in the error
-message.
+The `filePath` argument must be a path relative to the working directory, with
+no `..` and no leading `/` or `~`, readable by the swamp process. If the file
+cannot be read, the method throws with the path in the error message.
+
+### `download_attachments` skips files over `maxBytes` and fails on errors
+
+An attachment larger than `maxBytes` (default 20 MiB) is not downloaded; its
+status is `skipped-too-large`. The limit applies both to the size Redmine
+records and to the bytes it actually serves. Any other download failure (a 404,
+a 403, a stalled connection, or an HTML page served in place of the file) marks
+that attachment `failed` with an `error`. The method finishes the other
+downloads, writes the `attachments` resource, and then fails the run naming each
+failed attachment.
+
+### Redirects, retries and timeouts
+
+Redirects are followed by hand. A same-origin redirect, or an http→https upgrade
+of the same host name (on any port, e.g. `http://host:8080` →
+`https://host:8443`), keeps `X-Redmine-API-Key` and `X-Redmine-Username`. Any
+other redirect fails an API call with a message naming the URL to set as `host`;
+`download_attachments` follows it without the credentials, for storage backends
+that redirect to S3 or a CDN. Every request retries a 429, and a 503 that
+carries `Retry-After` (a throttle or maintenance responder that sets the header,
+rejecting before any work; nginx `limit_req` does not set it by default). A
+`Retry-After` longer than 60 seconds is not waited out: the response is returned
+as an error. A write that was redirected is never retried, whatever the status,
+since the server may already have committed it. Only reads (GET) also retry a
+502, a 504 or a bare 503: the gateway can time out after Redmine committed a
+write, and retrying a POST, PUT or DELETE then creates a duplicate issue or
+upload, adds a second journal note, or reports a 404 for a delete that
+succeeded. JSON requests time out after 120 seconds per attempt, downloads after
+60 seconds without data, and `upload_file`'s upload after 10 minutes per
+attempt.
+
+### Data names
+
+Swamp stores data by name with no spec component, so every name carries a spec
+prefix. Before 2026.10.20.1, `list_statuses`, `list_trackers`, `list_projects`,
+`list_custom_fields`, and unfiltered `list_issues` and `list_time_entries` all
+wrote `all`; `get_issue`, `list_relations`, `list_time_entries` (by issue) and
+`create_issue`, `update_issue`, `get_version` and `create_version` wrote bare
+numeric IDs; `search` wrote the bare sanitized query (a search for `all` or `42`
+collided with the others); and `list_users`, `list_versions`,
+`list_time_entries` and `list_issue_categories` wrote the bare project
+identifier. Each overwrote the others. Within a method, the name includes every
+filter, so different filters do not overwrite each other either. `limit` and
+`sort` are not filters and are not in the name: runs that differ only in those
+share it.
+
+| Method                                      | Spec               | Data name                                           |
+| ------------------------------------------- | ------------------ | --------------------------------------------------- |
+| `list_statuses`                             | `statuses`         | `statuses-all`                                      |
+| `list_trackers`                             | `trackers`         | `trackers-all`                                      |
+| `list_projects`                             | `projects`         | `projects-all`                                      |
+| `list_custom_fields`                        | `custom_fields`    | `custom-fields-all`                                 |
+| `list_users`                                | `users`            | `users-<project>`                                   |
+| `list_issues`                               | `issues`           | `issues-<filters>` (e.g. `issues-p:web`)            |
+| `get_issue`, `create_issue`, `update_issue` | `issue_detail`     | `issue-<issueId>`                                   |
+| `list_relations`                            | `relations`        | `relations-<issueId>`                               |
+| `list_versions`                             | `versions`         | `versions-<project>`                                |
+| `get_version`, `create_version`             | `versions`         | `version-<versionId>`                               |
+| `list_time_entries`                         | `time_entries`     | `time-entries-<filters>` (e.g. `time-entries-i:42`) |
+| `search`                                    | `search_results`   | `search-<sanitized query>-<hash>`                   |
+| `list_issue_categories`                     | `issue_categories` | `issue-categories-<project>`                        |
+| `list_attachments`, `download_attachments`  | `attachments`      | `attachments-<issueId>`                             |
+| `download_attachments`                      | `attachment`       | `attachment-<issueId>-<attachmentId>`               |
 
 ### Reports and workflows referenced in README do not exist here
 

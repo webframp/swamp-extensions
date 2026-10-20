@@ -2,7 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
-import { redmineApi, redmineApiPaginated } from "./api.ts";
+import {
+  isHttpsUpgrade,
+  MAX_DOWNLOAD_BYTES,
+  redmineApi,
+  redmineApiPaginated,
+  redmineDownload,
+  RedmineDownloadTooLargeError,
+  redmineFetch,
+  retryDelayMs,
+} from "./api.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Redmine API Server
@@ -352,3 +361,939 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "redmineDownload: returns bytes and sends both headers",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(new Uint8Array([1, 2, 3]), {
+        headers: { "Content-Type": "image/png" },
+      })
+    );
+    try {
+      const result = await redmineDownload(
+        url,
+        "test-api-key-123",
+        "/attachments/download/7",
+        "user@example.com",
+      );
+      assertEquals([...result.bytes], [1, 2, 3]);
+      assertEquals(result.contentType, "image/png");
+      assertEquals(
+        requests[0].headers["x-redmine-api-key"],
+        "test-api-key-123",
+      );
+      assertEquals(
+        requests[0].headers["x-redmine-username"],
+        "user@example.com",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: rejects a non-2xx response and an oversized body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer((req) =>
+      new URL(req.url).pathname === "/missing"
+        ? new Response("no", { status: 404 })
+        : new Response(new Uint8Array(10))
+    );
+    try {
+      await assertRejects(
+        () => redmineDownload(url, "k", "/missing"),
+        Error,
+        "failed (404)",
+      );
+      await assertRejects(
+        () => redmineDownload(url, "k", "/big", undefined, 5),
+        Error,
+        "more than maxBytes=5",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineDownload: stops reading a chunked body without Content-Length at maxBytes",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    // An endless body: the test can only finish if the reader stops at the cap.
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(4));
+          },
+        }),
+      )
+    );
+    try {
+      const err = await assertRejects(
+        () => redmineDownload(url, "k", "/stream", undefined, 10),
+        RedmineDownloadTooLargeError,
+        "more than maxBytes=10",
+      );
+      assertEquals(err.name, "RedmineDownloadTooLargeError");
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: returns a chunked body that stays within maxBytes",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2]));
+            controller.enqueue(new Uint8Array([3, 4]));
+            controller.close();
+          },
+        }),
+      )
+    );
+    try {
+      const result = await redmineDownload(
+        url,
+        "k",
+        "/stream",
+        undefined,
+        4,
+      );
+      assertEquals([...result.bytes], [1, 2, 3, 4]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineFetch: in strip mode keeps credentials on a same-origin redirect and drops them cross-origin, also after a hop back",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let originUrl = "";
+    const other = startMockServer((req) =>
+      new URL(req.url).pathname === "/bounce"
+        ? new Response(null, {
+          status: 302,
+          headers: { Location: `${originUrl}/back` },
+        })
+        : new Response("elsewhere")
+    );
+    const origin = startMockServer((req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/a") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "/b" },
+        });
+      }
+      if (path === "/b") {
+        return new Response(null, {
+          status: 307,
+          headers: { Location: `${other.url}/c` },
+        });
+      }
+      if (path === "/back") return new Response("back home");
+      if (path === "/leave") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${other.url}/bounce` },
+        });
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    originUrl = origin.url;
+    const headers = {
+      "X-Redmine-API-Key": "SECRET",
+      "X-Redmine-Username": "someone",
+      "Accept": "*/*",
+    };
+    try {
+      const response = await redmineFetch(`${origin.url}/a`, { headers }, {
+        crossOrigin: "strip",
+      });
+      assertEquals(await response.text(), "elsewhere");
+      assertEquals(origin.requests.map((r) => r.path), ["/a", "/b"]);
+      assertEquals(origin.requests[1].headers["x-redmine-api-key"], "SECRET");
+      assertEquals(other.requests.length, 1);
+      assertEquals(other.requests[0].headers["x-redmine-api-key"], undefined);
+      assertEquals(other.requests[0].headers["x-redmine-username"], undefined);
+      assertEquals(other.requests[0].headers["accept"], "*/*");
+
+      // origin -> other -> origin: coming back does not restore the
+      // credentials.
+      const back = await redmineFetch(`${origin.url}/leave`, { headers }, {
+        crossOrigin: "strip",
+      });
+      assertEquals(await back.text(), "back home");
+      assertEquals(origin.requests.at(-2)?.path, "/leave");
+      assertEquals(
+        origin.requests.at(-2)?.headers["x-redmine-api-key"],
+        "SECRET",
+      );
+      assertEquals(origin.requests.at(-1)?.path, "/back");
+      assertEquals(
+        origin.requests.at(-1)?.headers["x-redmine-api-key"],
+        undefined,
+      );
+    } finally {
+      await origin.server.shutdown();
+      await other.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: turns a 303 after POST into a bodyless GET",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/post"
+        ? new Response(null, { status: 303, headers: { Location: "/done" } })
+        : new Response("ok")
+    );
+    try {
+      const response = await redmineFetch(`${url}/post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ a: 1 }),
+      });
+      assertEquals(await response.text(), "ok");
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/post"],
+        ["GET", "/done"],
+      ]);
+      assertEquals(requests[1].headers["content-type"], undefined);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: stops after too many redirects",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(null, { status: 302, headers: { Location: "/loop" } })
+    );
+    try {
+      await assertRejects(
+        () => redmineFetch(`${url}/loop`, {}),
+        Error,
+        "more than 5 redirects",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: aborts a body that stops sending data",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let stall: (() => void) | undefined;
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1]));
+            stall = () => controller.close();
+          },
+        }),
+      )
+    );
+    try {
+      await assertRejects(
+        () => redmineDownload(url, "k", "/stall", undefined, undefined, 50),
+        Error,
+        "failed while reading the body: no data for 50ms",
+      );
+    } finally {
+      stall?.();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineApi: rejects a redirect off the Redmine origin instead of going anonymous",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const other = startMockServer(() => Response.json({ issues: [] }));
+    const { url, server } = startMockServer(() =>
+      new Response(null, {
+        status: 301,
+        headers: { Location: `${other.url}/issues.json` },
+      })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "SECRET", "GET", "/issues.json"),
+        Error,
+        `redirected from ${url} to ${other.url}; set host to the Redmine URL it redirects to`,
+      );
+      assertEquals(other.requests.length, 0);
+    } finally {
+      await server.shutdown();
+      await other.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: wraps a malformed redirect Location with the request",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: "http://[::1" },
+      })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "GET", "/x.json"),
+        Error,
+        `Redmine GET /x.json request to ${url} failed`,
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: turns a 301 after POST into a GET",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/old"
+        ? new Response(null, { status: 301, headers: { Location: "/new" } })
+        : new Response("ok")
+    );
+    try {
+      await (await redmineFetch(`${url}/old`, {
+        method: "POST",
+        body: "{}",
+      })).text();
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/old"],
+        ["GET", "/new"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () => {
+  const u = (s: string) => new URL(s);
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
+    true,
+  );
+  // URL normalizes an explicit default port away, so :443 still counts.
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp:443/a")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://www.r.corp/a")),
+    false,
+  );
+  assertEquals(isHttpsUpgrade(u("https://r.corp"), u("http://r.corp")), false);
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp:8443")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("http://r.corp:9090")),
+    false,
+  );
+});
+
+Deno.test({
+  name: "redmineApi: retries a POST only on 429, not on 502",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return new Response(null, { status: 502 });
+    });
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+        Error,
+        "failed (502)",
+      );
+      assertEquals(count, 1);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: retries a POST after a 429",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return count === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : Response.json({ issue: { id: 1 } });
+    });
+    try {
+      await redmineApi(url, "k", "POST", "/issues.json", { issue: {} });
+      assertEquals(count, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: aborts an attempt at its signal",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(
+      () =>
+        new Promise<Response>((r) =>
+          setTimeout(() => r(new Response("late")), 500)
+        ),
+    );
+    try {
+      await assertRejects(
+        () =>
+          redmineFetch(`${url}/slow`, {}, {
+            makeSignal: () => AbortSignal.timeout(20),
+          }),
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: gives each retry attempt its own default signal",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() =>
+      ++count === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : new Response("ok")
+    );
+    const seen: Array<AbortSignal | null | undefined> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      seen.push(init?.signal);
+      return originalFetch(input, init);
+    };
+    try {
+      await (await redmineFetch(`${url}/x`, {})).text();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await server.shutdown();
+    }
+    assertEquals(seen.length, 2);
+    assertEquals(seen.every((sig) => sig instanceof AbortSignal), true);
+    assertEquals(seen[0] === seen[1], false);
+  },
+});
+
+for (const method of ["PUT", "DELETE", "POST"]) {
+  Deno.test({
+    name: `redmineApi: does not retry a ${method} after a 502`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      const { url, server } = startMockServer(() => {
+        count++;
+        return new Response(null, { status: 502 });
+      });
+      try {
+        await assertRejects(
+          () => redmineApi(url, "k", method, "/issues/1.json", { issue: {} }),
+          Error,
+          "failed (502)",
+        );
+        assertEquals(count, 1);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+for (const status of [502, 503, 504]) {
+  Deno.test({
+    name: `redmineApi: retries a GET after a ${status}`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      const { url, server } = startMockServer(() =>
+        ++count === 1
+          ? new Response(null, { status, headers: { "Retry-After": "0" } })
+          : Response.json({ ok: true })
+      );
+      try {
+        await redmineApi(url, "k", "GET", "/x.json");
+        assertEquals(count, 2);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineFetch: retries a HEAD after a 502 and keeps HEAD on a 303",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server, requests } = startMockServer((req) => {
+      count++;
+      if (count === 1) {
+        return new Response(null, {
+          status: 502,
+          headers: { "Retry-After": "0" },
+        });
+      }
+      return new URL(req.url).pathname === "/a"
+        ? new Response(null, { status: 303, headers: { Location: "/b" } })
+        : new Response(null);
+    });
+    try {
+      await redmineFetch(`${url}/a`, { method: "HEAD" });
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["HEAD", "/a"],
+        ["HEAD", "/a"],
+        ["HEAD", "/b"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+for (const method of ["PUT", "DELETE", "POST"]) {
+  Deno.test({
+    name: `redmineApi: retries a ${method} after a 503 with Retry-After only`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      let headers: Record<string, string> = { "Retry-After": "0" };
+      const { url, server } = startMockServer(() =>
+        ++count === 1
+          ? new Response(null, { status: 503, headers })
+          : Response.json({ ok: true })
+      );
+      try {
+        await redmineApi(url, "k", method, "/issues/1.json", { issue: {} });
+        assertEquals(count, 2);
+        count = 0;
+        headers = {};
+        await assertRejects(
+          () => redmineApi(url, "k", method, "/issues/1.json", { issue: {} }),
+          Error,
+          "failed (503)",
+        );
+        assertEquals(count, 1);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineApi: waits the Retry-After delay before retrying",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const times: number[] = [];
+    const { url, server } = startMockServer(() => {
+      times.push(performance.now());
+      return times.length === 1
+        ? new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "0.3" },
+        })
+        : Response.json({ ok: true });
+    });
+    try {
+      await redmineApi(url, "k", "GET", "/x.json");
+      assertEquals(times.length, 2);
+      const waited = times[1] - times[0];
+      // Honors 0.3 s, and not the 1 s exponential default.
+      assertEquals(waited >= 280 && waited < 900, true, `waited ${waited}ms`);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test(
+  "redmineFetch: keeps credentials across an http to https upgrade of the same host",
+  async () => {
+    const seen: Array<[string, string | null]> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      const url = String(input);
+      seen.push([url, new Headers(init?.headers).get("X-Redmine-API-Key")]);
+      if (url.startsWith("http://redmine.test/")) {
+        return Promise.resolve(
+          new Response(null, {
+            status: 301,
+            headers: { Location: "https://redmine.test/issues.json" },
+          }),
+        );
+      }
+      if (url === "https://redmine.test/issues.json") {
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: "https://cdn.test/file" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("ok"));
+    };
+    try {
+      const response = await redmineFetch(
+        "http://redmine.test/issues.json",
+        { headers: { "X-Redmine-API-Key": "SECRET" } },
+        { crossOrigin: "strip" },
+      );
+      assertEquals(await response.text(), "ok");
+      await assertRejects(
+        () =>
+          redmineFetch("http://redmine.test/issues.json", {
+            headers: { "X-Redmine-API-Key": "SECRET" },
+          }),
+        Error,
+        "redirected from https://redmine.test to https://cdn.test",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assertEquals(seen.slice(0, 3), [
+      ["http://redmine.test/issues.json", "SECRET"],
+      ["https://redmine.test/issues.json", "SECRET"],
+      ["https://cdn.test/file", null],
+    ]);
+  },
+);
+
+Deno.test({
+  name:
+    "redmineDownload: follows a redirect to storage on another origin without credentials",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const storage = startMockServer(() =>
+      new Response(new Uint8Array([9, 8, 7]), {
+        headers: { "Content-Type": "image/png" },
+      })
+    );
+    const redmine = startMockServer(() =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: `${storage.url}/bucket/7?sig=x` },
+      })
+    );
+    try {
+      const result = await redmineDownload(
+        redmine.url,
+        "SECRET",
+        "/attachments/download/7",
+        "someone",
+      );
+      assertEquals([...result.bytes], [9, 8, 7]);
+      assertEquals(redmine.requests[0].headers["x-redmine-api-key"], "SECRET");
+      assertEquals(storage.requests.length, 1);
+      assertEquals(storage.requests[0].headers["x-redmine-api-key"], undefined);
+      assertEquals(
+        storage.requests[0].headers["x-redmine-username"],
+        undefined,
+      );
+    } finally {
+      await redmine.server.shutdown();
+      await storage.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: retries a GET after a bare 503 (no Retry-After)",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() =>
+      ++count === 1
+        ? new Response(null, { status: 503 })
+        : Response.json({ ok: true })
+    );
+    try {
+      await redmineApi(url, "k", "GET", "/x.json");
+      assertEquals(count, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: does not wait out a Retry-After longer than the cap",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return new Response(null, {
+        status: 429,
+        headers: { "Retry-After": "3600" },
+      });
+    });
+    try {
+      const started = performance.now();
+      await assertRejects(
+        () => redmineApi(url, "k", "GET", "/x.json"),
+        Error,
+        "failed (429)",
+      );
+      assertEquals(count, 1);
+      assertEquals(performance.now() - started < 1000, true);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("retryDelayMs: parses seconds and HTTP dates, caps, and falls back", () => {
+  const withHeader = (value?: string) =>
+    new Response(null, {
+      status: 429,
+      headers: value === undefined ? {} : { "Retry-After": value },
+    });
+  assertEquals(retryDelayMs(withHeader(), 0), 1000);
+  assertEquals(retryDelayMs(withHeader(), 2), 4000);
+  assertEquals(retryDelayMs(withHeader("1.5"), 0), 1500);
+  assertEquals(retryDelayMs(withHeader(" 2 "), 0), 2000);
+  assertEquals(retryDelayMs(withHeader("60"), 0), 60_000);
+  assertEquals(retryDelayMs(withHeader("61"), 0), null);
+  assertEquals(retryDelayMs(withHeader("86400"), 0), null);
+  assertEquals(retryDelayMs(withHeader("-5"), 1), 2000);
+  assertEquals(retryDelayMs(withHeader("soon"), 0), 1000);
+  const past = new Date(Date.now() - 60_000).toUTCString();
+  assertEquals(retryDelayMs(withHeader(past), 0), 1000);
+  const tomorrow = new Date(Date.now() + 86_400_000).toUTCString();
+  assertEquals(retryDelayMs(withHeader(tomorrow), 0), null);
+  const soon = new Date(Date.now() + 30_000).toUTCString();
+  const delay = retryDelayMs(withHeader(soon), 0)!;
+  assertEquals(delay > 28_000 && delay <= 30_000, true, `delay ${delay}`);
+});
+
+Deno.test({
+  name:
+    "redmineApi: does not retry a POST whose redirected GET fails, since a retry would POST again",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/issues.json"
+        ? new Response(null, {
+          status: 303,
+          headers: { Location: "/issues/99.json" },
+        })
+        : new Response(null, { status: 502 })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+        Error,
+        "failed (502)",
+      );
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/issues.json"],
+        ["GET", "/issues/99.json"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+for (
+  const [label, headers] of [
+    ["429", { status: 429, retryAfter: "0" }],
+    ["503 with Retry-After", { status: 503, retryAfter: "0" }],
+  ] as const
+) {
+  Deno.test({
+    name:
+      `redmineApi: does not repeat a redirected POST after a ${label} on the redirected GET`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      const { url, server, requests } = startMockServer((req) =>
+        new URL(req.url).pathname === "/issues.json"
+          ? new Response(null, {
+            status: 303,
+            headers: { Location: "/issues/99.json" },
+          })
+          : new Response(null, {
+            status: headers.status,
+            headers: { "Retry-After": headers.retryAfter },
+          })
+      );
+      try {
+        await assertRejects(
+          () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+          Error,
+          `failed (${headers.status})`,
+        );
+        assertEquals(requests.map((r) => [r.method, r.path]), [
+          ["POST", "/issues.json"],
+          ["GET", "/issues/99.json"],
+        ]);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineApi: still retries a redirected GET after a 429",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let finalHits = 0;
+    const { url, server, requests } = startMockServer((req) => {
+      if (new URL(req.url).pathname === "/old.json") {
+        return new Response(null, {
+          status: 301,
+          headers: { Location: "/new.json" },
+        });
+      }
+      return ++finalHits === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : Response.json({ ok: true });
+    });
+    try {
+      await redmineApi(url, "k", "GET", "/old.json");
+      assertEquals(requests.map((r) => r.path), [
+        "/old.json",
+        "/new.json",
+        "/old.json",
+        "/new.json",
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineDownload: slow redirect hops do not count against the idle timeout",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(async (req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/a" || path === "/b") {
+        // Each hop is under the 120ms idle limit; together they exceed it.
+        await new Promise((r) => setTimeout(r, 80));
+        return new Response(null, {
+          status: 302,
+          headers: { Location: path === "/a" ? "/b" : "/file" },
+        });
+      }
+      return new Response(new Uint8Array([1, 2]));
+    });
+    try {
+      const result = await redmineDownload(url, "k", "/a", undefined, 10, 120);
+      assertEquals([...result.bytes], [1, 2]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test(
+  "redmineDownload: defaults maxBytes to MAX_DOWNLOAD_BYTES",
+  async () => {
+    const originalFetch = globalThis.fetch;
+    let cancelled = false;
+    globalThis.fetch = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          {
+            headers: { "Content-Length": String(MAX_DOWNLOAD_BYTES + 1) },
+          },
+        ),
+      );
+    try {
+      await assertRejects(
+        () => redmineDownload("http://redmine.test", "k", "/huge"),
+        RedmineDownloadTooLargeError,
+        `more than maxBytes=${MAX_DOWNLOAD_BYTES}`,
+      );
+      assertEquals(cancelled, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+);

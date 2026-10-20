@@ -7,10 +7,17 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { redmineApi, redmineApiPaginated } from "./_lib/api.ts";
+import {
+  MAX_DOWNLOAD_BYTES,
+  redmineApi,
+  redmineApiPaginated,
+  redmineDownload,
+  RedmineDownloadTooLargeError,
+  redmineFetch,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/redmine";
 
@@ -205,6 +212,188 @@ export function mapIssueDetail(raw: RawIssue): Record<string, unknown> {
 }
 
 // =============================================================================
+// Attachments
+// =============================================================================
+
+interface RawAttachment {
+  id: number;
+  filename: string;
+  filesize: number;
+  content_type?: string | null;
+  description?: string | null;
+  author?: { id: number; name: string };
+  created_on: string;
+}
+
+/**
+ * Data name for search results. The readable part is lossy (punctuation
+ * becomes `_`, truncated to 40 characters), so a hash of the exact query and
+ * project scope keeps `foo bar` and `foo-bar` apart.
+ */
+export async function searchDataName(
+  query: string,
+  project: string | undefined,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(JSON.stringify([query, project ?? null])),
+  );
+  const hash = Array.from(new Uint8Array(digest).slice(0, 4))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `search-${query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}-${hash}`;
+}
+
+/** A real calendar date as YYYY-MM-DD (rejects 2026-02-31). */
+export function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value;
+}
+
+/** Default `maxBytes` for download_attachments (20 MiB). */
+export const DEFAULT_MAX_DOWNLOAD_BYTES = 20_971_520;
+
+/** Per-attempt deadline for upload_file's binary POST. */
+export const UPLOAD_TIMEOUT_MS = 600_000;
+
+/** Status of one attachment in the attachments resource. */
+export type AttachmentStatus =
+  | "listed"
+  | "not-selected"
+  | "downloaded"
+  | "skipped-too-large"
+  | "failed";
+
+/** One attachment as stored in the attachments resource. */
+export interface Attachment {
+  id: number;
+  filename: string;
+  filesize: number;
+  contentType: string;
+  description: string;
+  author: { id: number; name: string } | null;
+  createdOn: string;
+  dataName: string | null;
+  status: AttachmentStatus;
+  error: string | null;
+}
+
+/** Data name of the attachments resource of one issue. */
+export function attachmentsResourceName(issueId: number): string {
+  return `attachments-${issueId}`;
+}
+
+/** Data name of one stored attachment file. */
+export function attachmentDataName(
+  issueId: number,
+  attachmentId: number,
+): string {
+  return `attachment-${issueId}-${attachmentId}`;
+}
+
+/**
+ * Map Redmine attachments to the attachments resource shape. The attachment
+ * ID ends up in a URL path and a data name, so anything other than a
+ * positive integer is rejected rather than interpolated.
+ */
+export function mapAttachments(
+  issueId: number,
+  raw: RawAttachment[],
+): Attachment[] {
+  return raw.map((a) => {
+    if (!Number.isSafeInteger(a.id) || a.id <= 0) {
+      throw new Error(
+        `Redmine returned an invalid attachment id ${
+          JSON.stringify(a.id)
+        } on issue ${issueId}`,
+      );
+    }
+    return {
+      id: a.id,
+      filename: a.filename,
+      filesize: a.filesize,
+      // An empty content_type means Redmine does not know it.
+      contentType: a.content_type || "application/octet-stream",
+      description: a.description ?? "",
+      author: a.author ?? null,
+      createdOn: a.created_on,
+      dataName: null,
+      status: "listed" as const,
+      error: null,
+    };
+  });
+}
+
+const HTML_FILE = /\.(html?|xhtml)$/i;
+
+/**
+ * True when the server answered with an HTML page (a login page, a proxy's
+ * error page) where the attachment is not HTML. Redmine resolves an unknown
+ * recorded type from the file name, so a `.html` file recorded as
+ * application/octet-stream is legitimately served as text/html.
+ */
+export function servedHtmlInsteadOf(
+  attachment: Pick<Attachment, "filename" | "contentType">,
+  servedContentType: string | null,
+): boolean {
+  const served = servedContentType?.toLowerCase() ?? "";
+  if (!served.startsWith("text/html")) return false;
+  const recorded = attachment.contentType.toLowerCase();
+  if (recorded.startsWith("text/html") || recorded.includes("xhtml")) {
+    return false;
+  }
+  return !HTML_FILE.test(attachment.filename);
+}
+
+/**
+ * Return the IDs of the attachments that match the requested IDs and
+ * content-type prefix. An `attachmentIds` array selects exactly those IDs
+ * (the schema rejects an empty one); the prefix match ignores case, as MIME
+ * types do. Throws when a requested ID is not on the issue.
+ */
+export function selectAttachments(
+  attachments: Attachment[],
+  attachmentIds: number[] | undefined,
+  contentTypePrefix: string | undefined,
+): Set<number> {
+  if (attachmentIds !== undefined) {
+    const missing = attachmentIds.filter((id) =>
+      !attachments.some((a) => a.id === id)
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `Attachment(s) ${missing.join(", ")} are not on this issue`,
+      );
+    }
+  }
+  const prefix = contentTypePrefix?.toLowerCase();
+  return new Set(
+    attachments.filter((a) =>
+      (attachmentIds === undefined || attachmentIds.includes(a.id)) &&
+      (prefix === undefined || a.contentType.toLowerCase().startsWith(prefix))
+    ).map((a) => a.id),
+  );
+}
+
+async function fetchAttachments(
+  host: string,
+  apiKey: string,
+  issueId: number,
+  username?: string,
+): Promise<Attachment[]> {
+  const data = await redmineApi<{ issue: { attachments?: RawAttachment[] } }>(
+    host,
+    apiKey,
+    "GET",
+    `/issues/${issueId}.json?include=attachments`,
+    undefined,
+    username,
+  );
+  return mapAttachments(issueId, data.issue.attachments ?? []);
+}
+
+// =============================================================================
 // Context type used by all methods
 // =============================================================================
 
@@ -220,6 +409,15 @@ type MethodContext = {
     name: string,
     data: unknown,
   ) => Promise<{ name: string; dataId: string; version: number }>;
+  createFileWriter: (
+    spec: string,
+    name: string,
+    overrides?: { contentType?: string },
+  ) => {
+    writeAll: (
+      content: Uint8Array,
+    ) => Promise<{ name: string; dataId: string; version: number }>;
+  };
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
   };
@@ -232,7 +430,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.10.14.1",
+  version: "2026.10.20.1",
 
   upgrades: [
     {
@@ -355,6 +553,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.20.1",
+      description:
+        "No globalArguments changes — adds list_attachments and download_attachments, an attachments resource and an attachment file spec; resource data names gain a spec prefix (stored data under the old names is not migrated)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -717,6 +921,69 @@ export const model = {
       lifetime: "1h" as const,
       garbageCollection: 3,
     },
+    attachments: {
+      description:
+        "Every attachment of one issue: ID, file name, size, content type, author, date, " +
+        "and (after download_attachments) the data name and status of each, selected or not",
+      schema: z.object({
+        issueId: z.number(),
+        attachments: z.array(z.object({
+          id: z.number(),
+          filename: z.string(),
+          filesize: z.number(),
+          contentType: z.string(),
+          description: z.string(),
+          author: z.object({ id: z.number(), name: z.string() }).nullable(),
+          createdOn: z.string(),
+          dataName: z.string().nullable().describe(
+            "Data name of the file this run stored (attachment file spec); null unless status is downloaded",
+          ),
+          status: z.enum([
+            "listed",
+            "not-selected",
+            "downloaded",
+            "skipped-too-large",
+            "failed",
+          ]).describe(
+            "listed (list_attachments); not-selected, downloaded, " +
+              "skipped-too-large or failed (download_attachments)",
+          ),
+          error: z.string().nullable().describe(
+            "Why the download failed (status failed), else null",
+          ),
+        })),
+        filter: z.object({
+          attachmentIds: z.array(z.number()).nullable(),
+          contentTypePrefix: z.string().nullable(),
+          maxBytes: z.number(),
+        }).nullable().describe(
+          "Selection download_attachments used; null for list_attachments",
+        ),
+        fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
+      }),
+      lifetime: "1d" as const,
+      garbageCollection: 3,
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Files
+  // ---------------------------------------------------------------------------
+
+  files: {
+    attachment: {
+      description:
+        "Content of one issue attachment, named attachment-<issueId>-<attachmentId>",
+      contentType: "application/octet-stream",
+      lifetime: "1d" as const,
+      garbageCollection: 3,
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -747,7 +1014,7 @@ export const model = {
           isClosed: s.is_closed,
         }));
 
-        const handle = await context.writeResource("statuses", "all", {
+        const handle = await context.writeResource("statuses", "statuses-all", {
           statuses,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -783,7 +1050,7 @@ export const model = {
           description: t.description,
         }));
 
-        const handle = await context.writeResource("trackers", "all", {
+        const handle = await context.writeResource("trackers", "trackers-all", {
           trackers,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -824,7 +1091,7 @@ export const model = {
           updatedOn: p.updated_on,
         }));
 
-        const handle = await context.writeResource("projects", "all", {
+        const handle = await context.writeResource("projects", "projects-all", {
           projects,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -886,13 +1153,17 @@ export const model = {
           };
         });
 
-        const handle = await context.writeResource("users", project, {
-          members,
-          project,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "users",
+          `users-${project}`,
+          {
+            members,
+            project,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} members in project {project}", {
           count: members.length,
@@ -930,12 +1201,16 @@ export const model = {
           trackers: cf.trackers,
         }));
 
-        const handle = await context.writeResource("custom_fields", "all", {
-          customFields,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "custom_fields",
+          "custom-fields-all",
+          {
+            customFields,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} custom fields", {
           count: customFields.length,
@@ -943,8 +1218,6 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
-
-    // ── Stub methods (not yet implemented) ────────────────────────────────
 
     list_issues: {
       description: "List issues matching filters",
@@ -964,7 +1237,7 @@ export const model = {
           .describe("Filter by assignee ID or 'me'"),
         parentId: z.number().optional().describe("Filter by parent issue ID"),
         limit: z.number().optional().describe(
-          "Max results (default 25, max 100)",
+          "Max results (default 100, max 500)",
         ),
         sort: z.string().optional().describe(
           "Sort field (e.g., 'updated_on:desc')",
@@ -1041,13 +1314,17 @@ export const model = {
           ? filterParts.join("-")
           : "all";
 
-        const handle = await context.writeResource("issues", instanceName, {
-          issues,
-          totalCount: issues.length,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "issues",
+          `issues-${instanceName}`,
+          {
+            issues,
+            totalCount: issues.length,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} issues", { count: issues.length });
         return { dataHandles: [handle] };
@@ -1078,7 +1355,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(args.issueId),
+          `issue-${args.issueId}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1179,7 +1456,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(data.issue.id),
+          `issue-${data.issue.id}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1307,7 +1584,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(args.issueId),
+          `issue-${args.issueId}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1382,7 +1659,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "relations",
-          String(args.issueId),
+          `relations-${args.issueId}`,
           {
             relations,
             issueId: args.issueId,
@@ -1540,12 +1817,16 @@ export const model = {
           updatedOn: v.updated_on,
         }));
 
-        const handle = await context.writeResource("versions", project, {
-          versions,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "versions",
+          `versions-${project}`,
+          {
+            versions,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} versions in project {project}", {
           count: versions.length,
@@ -1563,9 +1844,13 @@ export const model = {
           "Filter by project identifier",
         ),
         userId: z.number().optional().describe("Filter by user ID"),
-        from: z.string().optional().describe("Start date (YYYY-MM-DD)"),
-        to: z.string().optional().describe("End date (YYYY-MM-DD)"),
-        limit: z.number().optional().describe("Max results (default 25)"),
+        from: z.string().refine(isIsoDate, "from must be a YYYY-MM-DD date")
+          .optional().describe("Start date (YYYY-MM-DD)"),
+        to: z.string().refine(isIsoDate, "to must be a YYYY-MM-DD date")
+          .optional().describe("End date (YYYY-MM-DD)"),
+        limit: z.number().optional().describe(
+          "Max results (default 100, max 500)",
+        ),
       }),
       execute: async (
         args: {
@@ -1625,13 +1910,21 @@ export const model = {
           updatedOn: e.updated_on,
         }));
 
-        const instanceName = args.issueId !== undefined
-          ? String(args.issueId)
-          : args.project ?? "all";
+        // Every filter is in the name (prefixed, like list_issues), so runs
+        // with different filters do not overwrite each other.
+        const filterParts: string[] = [];
+        if (args.issueId !== undefined) filterParts.push(`i:${args.issueId}`);
+        if (args.project !== undefined) filterParts.push(`p:${args.project}`);
+        if (args.userId !== undefined) filterParts.push(`u:${args.userId}`);
+        if (args.from !== undefined) filterParts.push(`from:${args.from}`);
+        if (args.to !== undefined) filterParts.push(`to:${args.to}`);
+        const instanceName = filterParts.length > 0
+          ? filterParts.join("-")
+          : "all";
 
         const handle = await context.writeResource(
           "time_entries",
-          instanceName,
+          `time-entries-${instanceName}`,
           {
             timeEntries,
             totalCount: timeEntries.length,
@@ -1811,7 +2104,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "search_results",
-          args.query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50),
+          await searchDataName(args.query, args.project),
           {
             results: data.results,
             totalCount: data.total_count,
@@ -1880,7 +2173,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "versions",
-          String(args.versionId),
+          `version-${args.versionId}`,
           {
             versions: [version],
             fetchedAt: new Date().toISOString(),
@@ -1985,7 +2278,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "versions",
-          String(v.id),
+          `version-${v.id}`,
           {
             versions: [version],
             fetchedAt: new Date().toISOString(),
@@ -2155,7 +2448,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_categories",
-          project,
+          `issue-categories-${project}`,
           {
             categories,
             project,
@@ -2228,9 +2521,10 @@ export const model = {
 
         let uploadResp: Response;
         try {
-          uploadResp = await fetch(
+          uploadResp = await redmineFetch(
             `${host}/uploads.json?${params}`,
             { method: "POST", headers, body: fileData },
+            { makeSignal: () => AbortSignal.timeout(UPLOAD_TIMEOUT_MS) },
           );
         } catch (e) {
           throw new Error(
@@ -2283,6 +2577,199 @@ export const model = {
           id: args.issueId,
         });
         return { dataHandles: [] };
+      },
+    },
+
+    list_attachments: {
+      description:
+        "List the attachments of an issue (ID, file name, size, content type, author, date). Read-only",
+      arguments: z.object({
+        issueId: z.number().int().positive().describe("Issue ID"),
+      }),
+      execute: async (
+        args: { issueId: number },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, apiKey, username } = context.globalArgs;
+        const attachments = await fetchAttachments(
+          host,
+          apiKey,
+          args.issueId,
+          username,
+        );
+        const handle = await context.writeResource(
+          "attachments",
+          attachmentsResourceName(args.issueId),
+          {
+            issueId: args.issueId,
+            attachments,
+            filter: null,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        context.logger.info("Issue {id} has {count} attachments", {
+          id: args.issueId,
+          count: attachments.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    download_attachments: {
+      description:
+        "Download the attachments of an issue in one run (fan-out). Stores each file under the attachment file spec and writes the attachments resource listing every attachment with its data name and status. Filter by attachment IDs or a content-type prefix such as image/. Fails after writing the resource if any download failed. Read-only on Redmine",
+      arguments: z.object({
+        issueId: z.number().int().positive().describe("Issue ID"),
+        attachmentIds: z.array(z.number().int().positive()).min(1).max(100)
+          .optional().describe(
+            "Only these attachment IDs (default: all)",
+          ),
+        contentTypePrefix: z.string().min(1).optional().describe(
+          "Only attachments whose content type starts with this, e.g. image/ (case-insensitive)",
+        ),
+        maxBytes: z.number().int().positive().max(MAX_DOWNLOAD_BYTES).default(
+          DEFAULT_MAX_DOWNLOAD_BYTES,
+        ).describe("Skip an attachment larger than this (default 20 MiB)"),
+      }),
+      execute: async (
+        args: {
+          issueId: number;
+          attachmentIds?: number[];
+          contentTypePrefix?: string;
+          maxBytes?: number;
+        },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, apiKey, username } = context.globalArgs;
+        const maxBytes = args.maxBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
+        const all = await fetchAttachments(
+          host,
+          apiKey,
+          args.issueId,
+          username,
+        );
+        const selected = selectAttachments(
+          all,
+          args.attachmentIds,
+          args.contentTypePrefix,
+        );
+
+        const handles: Array<
+          { name: string; dataId: string; version: number }
+        > = [];
+        // Every attachment of the issue stays in the resource, so a filtered
+        // run does not shrink the listing that list_attachments wrote.
+        const results: Attachment[] = [];
+        for (const attachment of all) {
+          if (!selected.has(attachment.id)) {
+            results.push({ ...attachment, status: "not-selected" });
+            continue;
+          }
+          if (attachment.filesize > maxBytes) {
+            results.push({ ...attachment, status: "skipped-too-large" });
+            continue;
+          }
+          // Redmine's recorded filesize can disagree with the bytes it
+          // serves; the download enforces maxBytes on the actual body too.
+          let bytes: Uint8Array;
+          try {
+            const download = await redmineDownload(
+              host,
+              apiKey,
+              `/attachments/download/${attachment.id}`,
+              username,
+              maxBytes,
+            );
+            // A login page or a storage proxy's error page arrives as a 200
+            // text/html response; do not store it as the attachment.
+            if (
+              servedHtmlInsteadOf(attachment, download.contentType)
+            ) {
+              throw new Error(
+                `server returned text/html instead of ${attachment.contentType}`,
+              );
+            }
+            bytes = download.bytes;
+          } catch (e) {
+            if (e instanceof RedmineDownloadTooLargeError) {
+              results.push({ ...attachment, status: "skipped-too-large" });
+            } else {
+              results.push({
+                ...attachment,
+                status: "failed",
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+            continue;
+          }
+          const dataName = attachmentDataName(args.issueId, attachment.id);
+          try {
+            const writer = context.createFileWriter(
+              "attachment",
+              dataName,
+              { contentType: attachment.contentType },
+            );
+            handles.push(await writer.writeAll(bytes));
+          } catch (e) {
+            results.push({
+              ...attachment,
+              status: "failed",
+              error: `storing the file failed: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            });
+            continue;
+          }
+          results.push({ ...attachment, dataName, status: "downloaded" });
+        }
+
+        handles.push(
+          await context.writeResource(
+            "attachments",
+            attachmentsResourceName(args.issueId),
+            {
+              issueId: args.issueId,
+              attachments: results,
+              filter: {
+                attachmentIds: args.attachmentIds ?? null,
+                contentTypePrefix: args.contentTypePrefix ?? null,
+                maxBytes,
+              },
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          ),
+        );
+        context.logger.info(
+          "Downloaded {done} of {count} selected attachments of issue {id}",
+          {
+            done: results.filter((r) => r.status === "downloaded").length,
+            count: selected.size,
+            id: args.issueId,
+          },
+        );
+
+        // The files that did download, and a resource that says which did
+        // not, are stored first; then the run fails so a workflow step does
+        // not pass over a missing attachment.
+        const failed = results.filter((r) => r.status === "failed");
+        if (failed.length > 0) {
+          throw new Error(
+            `Failed to download ${failed.length} attachment(s) of issue ${args.issueId}: ${
+              failed.map((f) =>
+                `${f.id} (${f.filename}): ${f.error ?? "unknown error"}`
+              ).join(
+                "; ",
+              )
+            }`,
+          );
+        }
+        return { dataHandles: handles };
       },
     },
   },
