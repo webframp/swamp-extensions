@@ -67,10 +67,14 @@ export const REQUEST_TIMEOUT_MS = 120_000;
  */
 export type CrossOriginRedirect = "reject" | "strip";
 
-/** Same host, http upgraded to https on the default ports. */
+/**
+ * Same host name, http upgraded to https, on any ports (self-hosted Redmine
+ * often runs on http://host:3000 or :8080 behind a TLS listener elsewhere).
+ * The credentials stay with the same host and only gain encryption.
+ */
 export function isHttpsUpgrade(from: URL, to: URL): boolean {
   return from.protocol === "http:" && to.protocol === "https:" &&
-    from.hostname === to.hostname && from.port === "" && to.port === "";
+    from.hostname === to.hostname;
 }
 
 // fetch's own redirect handling strips only Authorization on a cross-origin
@@ -84,7 +88,7 @@ async function fetchFollowingRedirects(
   url: string,
   init: RequestInit,
   crossOrigin: CrossOriginRedirect,
-): Promise<Response> {
+): Promise<{ response: Response; redirected: boolean }> {
   let trusted = new URL(url);
   let current = new URL(url);
   let method = (init.method ?? "GET").toUpperCase();
@@ -101,7 +105,7 @@ async function fetchFollowingRedirects(
     });
     const location = response.headers.get("Location");
     if (!REDIRECT_STATUSES.has(response.status) || !location) {
-      return response;
+      return { response, redirected: hop > 0 };
     }
     await response.body?.cancel();
     if (hop >= MAX_REDIRECTS) {
@@ -159,14 +163,17 @@ export async function redmineFetch(
   const method = (init.method ?? "GET").toUpperCase();
   let response: Response;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    response = await fetchFollowingRedirects(url, {
+    const result = await fetchFollowingRedirects(url, {
       ...init,
       signal: makeSignal(),
     }, crossOrigin);
-    // Retryability is judged by the method we sent first, not by what a
-    // redirect turned it into: a retry restarts from `url` with `init`, so a
-    // POST that a 303 turned into a GET would be POSTed again.
+    response = result.response;
+    // A retry restarts from `url` with `init`, so it repeats the original
+    // method. Once a write has been redirected, the server may already have
+    // committed it (POST -> 303 -> GET), so no status, not even a 429 on the
+    // redirected request, makes repeating it safe.
     if (
+      (result.redirected && method !== "GET" && method !== "HEAD") ||
       !isRetryableStatus(response, method) || attempt === MAX_RETRIES
     ) {
       return response;
@@ -469,6 +476,8 @@ export async function redmineDownload(
       }
     } catch (e) {
       if (e instanceof RedmineDownloadTooLargeError) throw e;
+      // Release the connection now rather than when the reader is collected.
+      await reader.cancel().catch(() => {});
       throw new Error(
         `Redmine GET ${path} from ${host} failed while reading the body: ${
           e instanceof Error ? e.message : String(e)

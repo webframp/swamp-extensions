@@ -712,7 +712,7 @@ Deno.test({
   },
 });
 
-Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => {
+Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () => {
   const u = (s: string) => new URL(s);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
@@ -730,6 +730,14 @@ Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => 
   assertEquals(isHttpsUpgrade(u("https://r.corp"), u("http://r.corp")), false);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp:8443")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("http://r.corp:9090")),
     false,
   );
 });
@@ -1153,6 +1161,77 @@ Deno.test({
       assertEquals(requests.map((r) => [r.method, r.path]), [
         ["POST", "/issues.json"],
         ["GET", "/issues/99.json"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+for (
+  const [label, headers] of [
+    ["429", { status: 429, retryAfter: "0" }],
+    ["503 with Retry-After", { status: 503, retryAfter: "0" }],
+  ] as const
+) {
+  Deno.test({
+    name:
+      `redmineApi: does not repeat a redirected POST after a ${label} on the redirected GET`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      const { url, server, requests } = startMockServer((req) =>
+        new URL(req.url).pathname === "/issues.json"
+          ? new Response(null, {
+            status: 303,
+            headers: { Location: "/issues/99.json" },
+          })
+          : new Response(null, {
+            status: headers.status,
+            headers: { "Retry-After": headers.retryAfter },
+          })
+      );
+      try {
+        await assertRejects(
+          () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+          Error,
+          `failed (${headers.status})`,
+        );
+        assertEquals(requests.map((r) => [r.method, r.path]), [
+          ["POST", "/issues.json"],
+          ["GET", "/issues/99.json"],
+        ]);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineApi: still retries a redirected GET after a 429",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let finalHits = 0;
+    const { url, server, requests } = startMockServer((req) => {
+      if (new URL(req.url).pathname === "/old.json") {
+        return new Response(null, {
+          status: 301,
+          headers: { Location: "/new.json" },
+        });
+      }
+      return ++finalHits === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : Response.json({ ok: true });
+    });
+    try {
+      await redmineApi(url, "k", "GET", "/old.json");
+      assertEquals(requests.map((r) => r.path), [
+        "/old.json",
+        "/new.json",
+        "/old.json",
+        "/new.json",
       ]);
     } finally {
       await server.shutdown();
