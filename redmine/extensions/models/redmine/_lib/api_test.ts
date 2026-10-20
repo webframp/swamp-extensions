@@ -719,7 +719,11 @@ Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => 
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
     true,
   );
-  // URL normalizes an explicit default port away, so :443 still counts.
+    // URL normalizes an explicit default port away, so :80 and :443 count.
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:80/a"), u("https://r.corp:443/a")),
+    true,
+  );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp:443/a")),
     true,
