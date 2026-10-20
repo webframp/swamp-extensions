@@ -32,7 +32,7 @@ import {
 /** Extension name, used as the instrumentation scope. */
 const INSTRUMENTATION_NAME = "@webframp/pass";
 /** Kept in step with `version` in manifest.yaml. */
-const INSTRUMENTATION_VERSION = "2026.08.20.1";
+const INSTRUMENTATION_VERSION = "2026.10.20.1";
 
 /** Returns the tracer for this extension. No-op unless the host configured a provider. */
 export function getTracer(): Tracer {
@@ -50,6 +50,8 @@ export const Attr = {
   VAULT_NAME: "vault.name",
   /** Key the operation addressed. A name, never the secret stored under it. */
   VAULT_SECRET_KEY: "vault.secret_key",
+  /** Field a get or put key selected, when one did. A name, never its value. */
+  VAULT_SECRET_FIELD: "vault.secret_field",
   /** Number of keys a list operation returned. */
   VAULT_KEYS_RETURNED: "vault.keys_returned",
   /** Configured key prefix, when one is set. */

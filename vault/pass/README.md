@@ -25,16 +25,25 @@ vaults:
   my-secrets:
     type: "@webframp/pass"
     config:
-# Optional: override the default password store directory
-# storeDir: "/path/to/custom/.password-store"
+      # Every setting is optional; the values shown are the defaults.
 
-# Optional: key prefix for namespacing (defaults to "swamp")
-# Set to "" to disable prefixing
-# prefix: "myproject"
+      # Override the password store directory (defaults to ~/.password-store)
+      # storeDir: "/path/to/custom/.password-store"
 
-# Optional: extra environment variable names to forward to the pass
-# subprocess, for GPG or pinentry setups that need something unusual
-# extraEnv: ["MY_PINENTRY_SOCKET"]
+      # Key prefix for namespacing (defaults to "swamp").
+      # Set to "" to disable prefixing.
+      prefix: "swamp"
+
+      # Extra environment variable names to forward to the pass subprocess,
+      # for GPG or pinentry setups that need something unusual.
+      extraEnv: []
+
+      # Return only line 1 of each entry (defaults to false).
+      passwordOnly: false
+
+      # Enable per-key field selection, e.g. "smtp/example#login".
+      # Unset by default, so keys are taken literally.
+      # fieldSeparator: "#"
 ```
 
 With the default `prefix: "swamp"`, a secret named `db/password` is stored as
@@ -44,6 +53,66 @@ namespace.
 Keys are validated before the CLI runs. A key must be relative, non-empty, and
 free of `.` or `..` path segments, so it cannot reach a secret outside the
 configured prefix.
+
+## Multiline entries
+
+By default `get` returns the whole decrypted entry, every line of it, with only
+the final newline removed. pass convention puts the password on line 1 and
+optional `name: value` metadata on the lines after it:
+
+```text
+s3cr3t-value
+login: user@example.com
+host: smtp.example.com
+```
+
+Wiring that entry into a password or API token hands the consumer the secret
+plus all its metadata, which looks like a wrong password at the far end. Two
+opt-in settings narrow what `get` returns.
+
+**`passwordOnly: true`** returns line 1 only (`s3cr3t-value` above), for every
+key the vault serves. Spaces and tabs on that line are kept; the line terminator
+is not.
+
+**`fieldSeparator`** lets each key select a metadata field. With
+`fieldSeparator: "#"`:
+
+| Key                  | Returns                                        |
+| -------------------- | ---------------------------------------------- |
+| `smtp/example`       | the whole entry, or line 1 with `passwordOnly` |
+| `smtp/example#login` | `user@example.com`                             |
+| `smtp/example#host`  | `smtp.example.com`                             |
+
+Field names match case-insensitively, and only lines after line 1 are searched,
+so a password containing a colon is never read as a field. A line such as
+`otpauth://totp/...` is a URI, not a field, so `#otpauth` does not match it. The
+first matching line wins. Whitespace after the colon is dropped; trailing
+whitespace is kept. A field the entry lacks is an error that names the entry and
+field but never quotes the entry.
+
+The key splits at the last occurrence of the separator. The text after it
+selects a field only if it is a field name: non-blank, free of `/` and `:`, and
+without whitespace at either end. Otherwise the whole key names an entry, so
+`team#a/entry` and `a#` read those entries. An entry whose name does end in the
+separator and a field name, such as `smtp#login`, can never be read whole: `get`
+reads the `login:` field of `smtp` instead. Choose a separator that never
+appears in your entry names. The separator itself may not contain `/` or
+whitespace.
+
+With `passwordOnly` or a field selection, a key that names a directory is an
+error. Telling the two apart means checking file metadata under `storeDir`; if
+that check is refused, `get` fails rather than guess. Without them, `get`
+returns whatever `pass show` prints, which for a directory is its tree listing.
+`put` refuses a key that selects a field, since writing it would replace the
+whole entry.
+
+```yaml
+globalArgs:
+  smtpUser:
+    source: vault
+    vault: my-secrets
+    key: smtp/example#login
+```
 
 ## Subprocess environment
 
@@ -95,9 +164,9 @@ The provider emits OpenTelemetry spans for every vault operation — `pass get`,
 configures a TracerProvider; the swamp host does that. With no provider
 configured the tracer is a no-op.
 
-Attributes: `vault.name`, `vault.secret_key`, `vault.prefix` when a prefix is
-configured, `rpc.system`, `rpc.service`, `rpc.method`, and `vault.keys_returned`
-on `list`.
+Attributes: `vault.name`, `vault.secret_key`, `vault.secret_field` when a get or
+put key selects a field, `vault.prefix` when a prefix is configured,
+`rpc.system`, `rpc.service`, `rpc.method`, and `vault.keys_returned` on `list`.
 
 These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
 spans when you run a `swamp vault` subcommand, but they carry no attributes, and
@@ -148,7 +217,9 @@ store directory is missing, unreadable, or `find` itself isn't installed; check
 **A key is rejected before `pass` runs.** `assertSafeKey` throws for keys that
 are empty, start with `/` or `-`, contain a null byte, or contain a `.` or `..`
 path segment — these would otherwise let a caller escape the configured `prefix`
-and read or overwrite a secret elsewhere in the store.
+and read or overwrite a secret elsewhere in the store. With `fieldSeparator`
+set, the check applies to the entry path left after the field is split off, so
+`#login` fails as an empty key, and `put` rejects any key that selects a field.
 
 **Secrets from before 2026.04.22.1 return "not found".** Version 2026.04.22.1
 introduced key prefixing with a default of `"swamp"`. Every `get`/`put`/`list`

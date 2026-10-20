@@ -1,8 +1,8 @@
 manifestVersion: 1
 name: "@webframp/pass"
 license: Apache-2.0
-version: "2026.10.14.1"
-description: "GPG-encrypted password store using the pass CLI (passwordstore.org). Emits OpenTelemetry spans for get, put, and list so vault reads are visible in traces, including reads during model and workflow runs where the host emits nothing. Span attributes carry the vault name, key name, and backend only — never secret values or error messages."
+version: "2026.10.20.1"
+description: "GPG-encrypted password store using the pass CLI (passwordstore.org). Can return just the first line of a multiline entry (the password, by pass convention) or a named metadata field such as login. Emits OpenTelemetry spans for get, put, and list so vault reads are visible in traces, including reads during model and workflow runs where the host emits nothing. Span attributes carry the vault name, key and field names, and backend only — never secret values or error messages."
 repository: "https://github.com/webframp/swamp-extensions"
 vaults:
   - pass.ts
