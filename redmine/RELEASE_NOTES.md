@@ -38,15 +38,16 @@ Every source file now says Apache-2.0, matching `LICENSE.md` and the manifest.
 
 **Changed:** A redirect to another origin now fails an API call with a message
 naming the URL to set as `host`. A same-origin redirect, or an http→https
-upgrade of the same host name on any port, still works. `download_attachments`
-follows other redirects without the credentials (S3 or CDN storage backends).
+upgrade of the same host on the default ports (80 to 443), still works.
+`download_attachments` follows other redirects without the credentials (S3 or
+CDN storage backends).
 
 **Changed:** Only reads (GET) retry a 502, a 504 or a 503 without `Retry-After`.
 A gateway can time out after Redmine committed a write, so retrying created a
 duplicate issue or upload, added a second journal note, or reported a 404 for a
 delete that succeeded. Every method still retries a 429, and a 503 that carries
 `Retry-After` (a throttle rejecting before any work), unless the write was
-redirected. A `Retry-After` longer than 60 seconds is no longer slept on (it
+redirected. A `Retry-After` longer than 300 seconds is no longer slept on (it
 blocked the method for up to 4 × the value); the request fails instead. An
 HTTP-date `Retry-After` is now honored. `upload_file`'s upload now uses the same
 retry and redirect handling as every other call.

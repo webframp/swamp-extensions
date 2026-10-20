@@ -713,7 +713,7 @@ Deno.test({
   },
 });
 
-Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () => {
+Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => {
   const u = (s: string) => new URL(s);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
@@ -731,11 +731,15 @@ Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () =>
   assertEquals(isHttpsUpgrade(u("https://r.corp"), u("http://r.corp")), false);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp")),
-    true,
+    false,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp"), u("https://r.corp:8443")),
+    false,
   );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp:8443")),
-    true,
+    false,
   );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("http://r.corp:9090")),
@@ -1125,8 +1129,10 @@ Deno.test("retryDelayMs: parses seconds and HTTP dates, caps, and falls back", (
   assertEquals(retryDelayMs(withHeader(), 2), 4000);
   assertEquals(retryDelayMs(withHeader("1.5"), 0), 1500);
   assertEquals(retryDelayMs(withHeader(" 2 "), 0), 2000);
-  assertEquals(retryDelayMs(withHeader("60"), 0), 60_000);
-  assertEquals(retryDelayMs(withHeader("61"), 0), null);
+  // A 2-minute rate-limit window is waited out; a longer one is not.
+  assertEquals(retryDelayMs(withHeader("120"), 0), 120_000);
+  assertEquals(retryDelayMs(withHeader("300"), 0), 300_000);
+  assertEquals(retryDelayMs(withHeader("301"), 0), null);
   assertEquals(retryDelayMs(withHeader("86400"), 0), null);
   assertEquals(retryDelayMs(withHeader("-5"), 1), 2000);
   assertEquals(retryDelayMs(withHeader("soon"), 0), 1000);
@@ -1297,3 +1303,33 @@ Deno.test(
     }
   },
 );
+
+Deno.test({
+  name: "redmineFetch: refuses to resend a streamed body on a 307",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 307, headers: { Location: "/again" } })
+    );
+    try {
+      await assertRejects(
+        () =>
+          redmineFetch(`${url}/up`, {
+            method: "PUT",
+            body: new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode("{}"));
+                c.close();
+              },
+            }),
+          }),
+        Error,
+        "cannot follow a 307 redirect with a streamed body",
+      );
+      assertEquals(requests.length, 1);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
