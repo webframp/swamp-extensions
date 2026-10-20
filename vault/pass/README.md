@@ -25,23 +25,25 @@ vaults:
   my-secrets:
     type: "@webframp/pass"
     config:
-# Optional: override the default password store directory
-# storeDir: "/path/to/custom/.password-store"
+      # Every setting is optional; the values shown are the defaults.
 
-# Optional: key prefix for namespacing (defaults to "swamp")
-# Set to "" to disable prefixing
-# prefix: "myproject"
+      # Override the password store directory (defaults to ~/.password-store)
+      # storeDir: "/path/to/custom/.password-store"
 
-# Optional: extra environment variable names to forward to the pass
-# subprocess, for GPG or pinentry setups that need something unusual
-# extraEnv: ["MY_PINENTRY_SOCKET"]
+      # Key prefix for namespacing (defaults to "swamp").
+      # Set to "" to disable prefixing.
+      prefix: "swamp"
 
-# Optional: return only line 1 of each entry (defaults to false)
-# passwordOnly: true
+      # Extra environment variable names to forward to the pass subprocess,
+      # for GPG or pinentry setups that need something unusual.
+      extraEnv: []
 
-# Optional: enable per-key field selection, e.g. "smtp/example#login"
-# (unset by default, so keys are taken literally)
-# fieldSeparator: "#"
+      # Return only line 1 of each entry (defaults to false).
+      passwordOnly: false
+
+      # Enable per-key field selection, e.g. "smtp/example#login".
+      # Unset by default, so keys are taken literally.
+      # fieldSeparator: "#"
 ```
 
 With the default `prefix: "swamp"`, a secret named `db/password` is stored as
@@ -82,13 +84,19 @@ is not.
 | `smtp/example#host`  | `smtp.example.com`                             |
 
 Field names match case-insensitively, and only lines after line 1 are searched,
-so a password containing a colon is never read as a field. The first matching
-line wins. Whitespace after the colon is dropped. A field the entry lacks is an
-error that names the entry and field but never quotes the entry.
+so a password containing a colon is never read as a field. A line such as
+`otpauth://totp/...` is a URI, not a field, so `#otpauth` does not match it. The
+first matching line wins. Whitespace after the colon is dropped; trailing
+whitespace is kept. A field the entry lacks is an error that names the entry and
+field but never quotes the entry.
 
-The key splits at the last occurrence of the separator. While `fieldSeparator`
-is set, any key containing it is read as a field selection, so choose a
-separator that never appears in your entry names. `put` refuses a key that
+The key splits at the last occurrence of the separator. The text after it
+selects a field only if it is a field name: non-blank, free of `/` and `:`, and
+without whitespace at either end. Otherwise the whole key names an entry, so
+`team#a/entry` and `a#` read those entries, and every key `list` returns stays
+readable. A key such as `smtp#login` is always read as a field selection,
+though, so choose a separator that never appears in your entry names. The
+separator itself may not contain `/` or whitespace. `put` refuses a key that
 selects a field, since writing it would replace the whole entry.
 
 ```yaml
@@ -202,7 +210,9 @@ store directory is missing, unreadable, or `find` itself isn't installed; check
 **A key is rejected before `pass` runs.** `assertSafeKey` throws for keys that
 are empty, start with `/` or `-`, contain a null byte, or contain a `.` or `..`
 path segment — these would otherwise let a caller escape the configured `prefix`
-and read or overwrite a secret elsewhere in the store.
+and read or overwrite a secret elsewhere in the store. With `fieldSeparator`
+set, the check applies to the entry path left after the field is split off, so
+`#login` fails as an empty key, and `put` rejects any key that selects a field.
 
 **Secrets from before 2026.04.22.1 return "not found".** Version 2026.04.22.1
 introduced key prefixing with a default of `"swamp"`. Every `get`/`put`/`list`

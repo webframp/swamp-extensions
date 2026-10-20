@@ -45,6 +45,8 @@ Deno.test("vault export conforms to VaultProvider contract", () => {
       { passwordOnly: "yes" }, // Wrong type
       { fieldSeparator: "" }, // Empty separator would split every key
       { fieldSeparator: "/" }, // Would split on path segments
+      { fieldSeparator: " " }, // "my entry" would read the "entry:" field of "my"
+      { fieldSeparator: "#\t" }, // Whitespace anywhere in the separator
     ],
   });
 });
@@ -752,23 +754,92 @@ Deno.test("multiline: a missing field fails without quoting the entry", async ()
   });
 });
 
-Deno.test("multiline: invalid field selectors are rejected before the CLI runs", async () => {
+Deno.test("multiline: text after the separator that is not a field name is part of the entry name", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
       storeDir: "/tmp/store",
       fieldSeparator: "#",
     });
-    for (const key of ["example#", "example# ", "example#a:b"]) {
-      lastOptions = undefined;
-      await assertRejects(() => provider.get(key), Error, "invalid field");
-      assertEquals(lastOptions, undefined, `CLI ran for "${key}"`);
+    mockSecrets.set("swamp/team#a/entry", "dir-entry");
+    mockSecrets.set("swamp/a#", "trailing");
+    mockSecrets.set("swamp/b# ", "blank");
+    mockSecrets.set("swamp/c#x:y", "colon");
+    for (const key of ["team#a/entry", "a#", "b# ", "c#x:y"]) {
+      assertEquals(
+        await provider.get(key),
+        mockSecrets.get(`swamp/${key}`),
+        `"${key}" was not read as a whole entry`,
+      );
     }
-    // An empty entry path still fails the key check.
+  });
+});
+
+Deno.test("multiline: every key list returns stays readable with fieldSeparator set", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    await provider.put("plain", "p");
+    await provider.put("team#a/entry", "d");
+    await provider.put("a#", "t");
+    const keys = await provider.list();
+    assertEquals(keys, ["a#", "plain", "team#a/entry"]);
+    for (const key of keys) {
+      assertEquals(await provider.get(key), mockSecrets.get(`swamp/${key}`));
+    }
+  });
+});
+
+Deno.test("multiline: an empty entry path is rejected before the CLI runs", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    lastOptions = undefined;
     await assertRejects(
       () => provider.get("#login"),
       Error,
       "must not be empty",
     );
+    assertEquals(lastOptions, undefined);
+  });
+});
+
+Deno.test("multiline: field parsing handles CRLF, empty values, and surrounding whitespace", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set(
+      "swamp/e",
+      "pw\r\nlogin: me\r\n  User : spaced \r\nempty:\r\n",
+    );
+    assertEquals(await provider.get("e#login"), "me");
+    // Whitespace around the name is ignored; trailing value whitespace is kept.
+    assertEquals(await provider.get("e#user"), "spaced ");
+    assertEquals(await provider.get("e#empty"), "");
+  });
+});
+
+Deno.test("multiline: URI lines such as otpauth:// are not fields", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("v", {
+      storeDir: "/tmp/store",
+      fieldSeparator: "#",
+    });
+    mockSecrets.set(
+      "swamp/e",
+      "pw\notpauth://totp/a?secret=ABC\nhttps://example.test\n",
+    );
+    await assertRejects(
+      () => provider.get("e#otpauth"),
+      Error,
+      'no "otpauth:"',
+    );
+    await assertRejects(() => provider.get("e#https"), Error, 'no "https:"');
   });
 });
 
@@ -781,7 +852,7 @@ Deno.test("multiline: put refuses a key that selects a field", async () => {
     await assertRejects(
       () => provider.put("example#login", "x"),
       Error,
-      "cannot write a single field",
+      'selects the "login" field of "example"',
     );
     assertEquals(mockSecrets.size, 0);
   });
@@ -991,4 +1062,25 @@ Deno.test("otel: a field selection records the entry and field, never the value"
   const text = spanText(span);
   assertEquals(text.includes("PW-CANARY-1f2e"), false);
   assertEquals(text.includes("LOGIN-CANARY-3a4b"), false);
+});
+
+Deno.test("otel: a put that selects a field records the entry and field like get", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", {
+        storeDir: "/tmp/store",
+        fieldSeparator: "#",
+      });
+      await assertRejects(
+        () => provider.put("smtp#login", "VALUE-CANARY-5d6e"),
+        Error,
+      );
+    })
+  );
+
+  const span = spanNamed(spans, "pass put");
+  assertEquals(span.status.code, SpanStatusCode.ERROR);
+  assertEquals(span.attributes["vault.secret_key"], "smtp");
+  assertEquals(span.attributes["vault.secret_field"], "login");
+  assertEquals(spanText(span).includes("VALUE-CANARY-5d6e"), false);
 });
