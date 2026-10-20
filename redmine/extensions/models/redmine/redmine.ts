@@ -15,6 +15,7 @@ import {
   redmineApiPaginated,
   redmineDownload,
   RedmineDownloadTooLargeError,
+  redmineFetch,
 } from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/redmine";
@@ -223,6 +224,20 @@ interface RawAttachment {
   created_on: string;
 }
 
+/** Default `maxBytes` for download_attachments (20 MiB). */
+export const DEFAULT_MAX_DOWNLOAD_BYTES = 20_971_520;
+
+/** Per-attempt deadline for upload_file's binary POST. */
+const UPLOAD_TIMEOUT_MS = 600_000;
+
+/** Status of one attachment in the attachments resource. */
+export type AttachmentStatus =
+  | "listed"
+  | "not-selected"
+  | "downloaded"
+  | "skipped-too-large"
+  | "failed";
+
 /** One attachment as stored in the attachments resource. */
 export interface Attachment {
   id: number;
@@ -233,7 +248,8 @@ export interface Attachment {
   author: { id: number; name: string } | null;
   createdOn: string;
   dataName: string;
-  status: "listed" | "downloaded" | "skipped-too-large";
+  status: AttachmentStatus;
+  error: string | null;
 }
 
 /** Data name of the attachments resource of one issue. */
@@ -249,43 +265,66 @@ export function attachmentDataName(
   return `attachment-${issueId}-${attachmentId}`;
 }
 
-/** Map Redmine attachments to the attachments resource shape. */
+/**
+ * Map Redmine attachments to the attachments resource shape. The attachment
+ * ID ends up in a URL path and a data name, so anything other than a
+ * positive integer is rejected rather than interpolated.
+ */
 export function mapAttachments(
   issueId: number,
   raw: RawAttachment[],
 ): Attachment[] {
-  return raw.map((a) => ({
-    id: a.id,
-    filename: a.filename,
-    filesize: a.filesize,
-    contentType: a.content_type || "application/octet-stream",
-    description: a.description ?? "",
-    author: a.author ?? null,
-    createdOn: a.created_on,
-    dataName: attachmentDataName(issueId, a.id),
-    status: "listed" as const,
-  }));
+  return raw.map((a) => {
+    if (!Number.isSafeInteger(a.id) || a.id <= 0) {
+      throw new Error(
+        `Redmine returned an invalid attachment id ${
+          JSON.stringify(a.id)
+        } on issue ${issueId}`,
+      );
+    }
+    return {
+      id: a.id,
+      filename: a.filename,
+      filesize: a.filesize,
+      // An empty content_type means Redmine does not know it.
+      contentType: a.content_type || "application/octet-stream",
+      description: a.description ?? "",
+      author: a.author ?? null,
+      createdOn: a.created_on,
+      dataName: attachmentDataName(issueId, a.id),
+      status: "listed" as const,
+      error: null,
+    };
+  });
 }
 
-/** Keep the attachments that match the requested IDs and content-type prefix. */
+/**
+ * Return the IDs of the attachments that match the requested IDs and
+ * content-type prefix. An `attachmentIds` array selects exactly those IDs
+ * (the schema rejects an empty one); the prefix match ignores case, as MIME
+ * types do. Throws when a requested ID is not on the issue.
+ */
 export function selectAttachments(
   attachments: Attachment[],
   attachmentIds: number[] | undefined,
   contentTypePrefix: string | undefined,
-): Attachment[] {
-  if (attachmentIds?.length) {
+): Set<number> {
+  if (attachmentIds !== undefined) {
     const missing = attachmentIds.filter((id) =>
       !attachments.some((a) => a.id === id)
     );
-    if (missing.length) {
+    if (missing.length > 0) {
       throw new Error(
         `Attachment(s) ${missing.join(", ")} are not on this issue`,
       );
     }
   }
-  return attachments.filter((a) =>
-    (!attachmentIds?.length || attachmentIds.includes(a.id)) &&
-    (!contentTypePrefix || a.contentType.startsWith(contentTypePrefix))
+  const prefix = contentTypePrefix?.toLowerCase();
+  return new Set(
+    attachments.filter((a) =>
+      (attachmentIds === undefined || attachmentIds.includes(a.id)) &&
+      (prefix === undefined || a.contentType.toLowerCase().startsWith(prefix))
+    ).map((a) => a.id),
   );
 }
 
@@ -836,8 +875,8 @@ export const model = {
     },
     attachments: {
       description:
-        "Attachments of one issue: ID, file name, size, content type, author, date, " +
-        "and (after download_attachments) the data name and status of each stored file",
+        "Every attachment of one issue: ID, file name, size, content type, author, date, " +
+        "and (after download_attachments) the data name and status of each, selected or not",
       schema: z.object({
         issueId: z.number(),
         attachments: z.array(z.object({
@@ -851,8 +890,26 @@ export const model = {
           dataName: z.string().describe(
             "Data name of the stored file (attachment file spec)",
           ),
-          status: z.enum(["listed", "downloaded", "skipped-too-large"]),
+          status: z.enum([
+            "listed",
+            "not-selected",
+            "downloaded",
+            "skipped-too-large",
+            "failed",
+          ]).describe(
+            "listed (list_attachments); not-selected, downloaded, " +
+              "skipped-too-large or failed (download_attachments)",
+          ),
+          error: z.string().nullable().describe(
+            "Why the download failed (status failed), else null",
+          ),
         })),
+        filter: z.object({
+          attachmentIds: z.array(z.number()).nullable(),
+          contentTypePrefix: z.string().nullable(),
+        }).nullable().describe(
+          "Selection download_attachments used; null for list_attachments",
+        ),
         fetchedAt: z.string(),
         durationMs: z.number().optional().describe(
           "Method execution duration in milliseconds",
@@ -2389,9 +2446,10 @@ export const model = {
 
         let uploadResp: Response;
         try {
-          uploadResp = await fetch(
+          uploadResp = await redmineFetch(
             `${host}/uploads.json?${params}`,
             { method: "POST", headers, body: fileData },
+            () => AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
           );
         } catch (e) {
           throw new Error(
@@ -2451,7 +2509,7 @@ export const model = {
       description:
         "List the attachments of an issue (ID, file name, size, content type, author, date). Read-only",
       arguments: z.object({
-        issueId: z.number().describe("Issue ID"),
+        issueId: z.number().int().positive().describe("Issue ID"),
       }),
       execute: async (
         args: { issueId: number },
@@ -2471,6 +2529,7 @@ export const model = {
           {
             issueId: args.issueId,
             attachments,
+            filter: null,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
@@ -2486,17 +2545,18 @@ export const model = {
 
     download_attachments: {
       description:
-        "Download the attachments of an issue in one run (fan-out). Stores each file under the attachment file spec and writes the attachments resource with the data name and status of each. Filter by attachment IDs or a content-type prefix such as image/. Read-only on Redmine",
+        "Download the attachments of an issue in one run (fan-out). Stores each file under the attachment file spec and writes the attachments resource listing every attachment with its data name and status. Filter by attachment IDs or a content-type prefix such as image/. Fails after writing the resource if any download failed. Read-only on Redmine",
       arguments: z.object({
-        issueId: z.number().describe("Issue ID"),
-        attachmentIds: z.array(z.number()).max(100).optional().describe(
-          "Only these attachment IDs (default: all)",
-        ),
+        issueId: z.number().int().positive().describe("Issue ID"),
+        attachmentIds: z.array(z.number().int().positive()).min(1).max(100)
+          .optional().describe(
+            "Only these attachment IDs (default: all)",
+          ),
         contentTypePrefix: z.string().min(1).optional().describe(
-          "Only attachments whose content type starts with this, e.g. image/",
+          "Only attachments whose content type starts with this, e.g. image/ (case-insensitive)",
         ),
         maxBytes: z.number().int().positive().max(524_288_000).default(
-          20_971_520,
+          DEFAULT_MAX_DOWNLOAD_BYTES,
         ).describe("Skip an attachment larger than this (default 20 MiB)"),
       }),
       execute: async (
@@ -2510,7 +2570,7 @@ export const model = {
       ) => {
         const startMs = Date.now();
         const { host, apiKey, username } = context.globalArgs;
-        const maxBytes = args.maxBytes ?? 20_971_520;
+        const maxBytes = args.maxBytes ?? DEFAULT_MAX_DOWNLOAD_BYTES;
         const all = await fetchAttachments(
           host,
           apiKey,
@@ -2526,8 +2586,14 @@ export const model = {
         const handles: Array<
           { name: string; dataId: string; version: number }
         > = [];
+        // Every attachment of the issue stays in the resource, so a filtered
+        // run does not shrink the listing that list_attachments wrote.
         const results: Attachment[] = [];
-        for (const attachment of selected) {
+        for (const attachment of all) {
+          if (!selected.has(attachment.id)) {
+            results.push({ ...attachment, status: "not-selected" });
+            continue;
+          }
           if (attachment.filesize > maxBytes) {
             results.push({ ...attachment, status: "skipped-too-large" });
             continue;
@@ -2536,24 +2602,36 @@ export const model = {
           // serves; the download enforces maxBytes on the actual body too.
           let bytes: Uint8Array;
           try {
-            ({ bytes } = await redmineDownload(
+            const download = await redmineDownload(
               host,
               apiKey,
               `/attachments/download/${attachment.id}`,
               username,
               maxBytes,
-            ));
+            );
+            // A login page or a storage proxy's error page arrives as a 200
+            // text/html response; do not store it as the attachment.
+            const served = download.contentType?.toLowerCase() ?? "";
+            if (
+              served.startsWith("text/html") &&
+              !attachment.contentType.toLowerCase().startsWith("text/html")
+            ) {
+              throw new Error(
+                `server returned text/html instead of ${attachment.contentType}`,
+              );
+            }
+            bytes = download.bytes;
           } catch (e) {
             if (e instanceof RedmineDownloadTooLargeError) {
               results.push({ ...attachment, status: "skipped-too-large" });
-              continue;
+            } else {
+              results.push({
+                ...attachment,
+                status: "failed",
+                error: e instanceof Error ? e.message : String(e),
+              });
             }
-            throw new Error(
-              `Failed to download attachment ${attachment.id} (${attachment.filename}) of issue ${args.issueId}: ${
-                e instanceof Error ? e.message : String(e)
-              }`,
-              { cause: e },
-            );
+            continue;
           }
           const writer = context.createFileWriter(
             "attachment",
@@ -2571,6 +2649,10 @@ export const model = {
             {
               issueId: args.issueId,
               attachments: results,
+              filter: {
+                attachmentIds: args.attachmentIds ?? null,
+                contentTypePrefix: args.contentTypePrefix ?? null,
+              },
               fetchedAt: new Date().toISOString(),
               durationMs: Date.now() - startMs,
               collectedBy: EXTENSION_NAME,
@@ -2581,10 +2663,24 @@ export const model = {
           "Downloaded {done} of {count} selected attachments of issue {id}",
           {
             done: results.filter((r) => r.status === "downloaded").length,
-            count: selected.length,
+            count: selected.size,
             id: args.issueId,
           },
         );
+
+        // The files that did download, and a resource that says which did
+        // not, are stored first; then the run fails so a workflow step does
+        // not pass over a missing attachment.
+        const failed = results.filter((r) => r.status === "failed");
+        if (failed.length > 0) {
+          throw new Error(
+            `Failed to download ${failed.length} attachment(s) of issue ${args.issueId}: ${
+              failed.map((f) => `${f.id} (${f.filename}): ${f.error}`).join(
+                "; ",
+              )
+            }`,
+          );
+        }
         return { dataHandles: handles };
       },
     },

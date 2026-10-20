@@ -55,8 +55,10 @@ swamp model method run tracker download_attachments \
 ```
 
 `download_attachments` stores each file as `attachment-<issueId>-<attachmentId>`
-in the `attachment` file spec, and writes the `attachments-<issueId>` resource
-with each file's `dataName` and `status`.
+in the `attachment` file spec. It writes the `attachments-<issueId>` resource
+listing every attachment of the issue with its `dataName` and `status`
+(`downloaded`, `not-selected`, `skipped-too-large` or `failed`), whether or not
+the filter selected it.
 
 ### Create an issue
 
@@ -151,14 +153,23 @@ The `filePath` argument must be an absolute path readable by the swamp process.
 If the file cannot be read, the method throws with the path in the error
 message.
 
-### `download_attachments` skips files over `maxBytes`
+### `download_attachments` skips files over `maxBytes` and fails on errors
 
 An attachment larger than `maxBytes` (default 20 MiB) is not downloaded; its
-status in the `attachments` resource is `skipped-too-large`. The limit applies
-both to the size Redmine records and to the bytes it actually serves. Any other
-download failure (for example a 404 or 403) fails the run and names the
-attachment. Files downloaded before the failure stay stored, but the
-`attachments` resource is not written.
+status is `skipped-too-large`. The limit applies both to the size Redmine
+records and to the bytes it actually serves. Any other download failure (a 404,
+a 403, a stalled connection, or an HTML page served in place of the file) marks
+that attachment `failed` with an `error`. The method finishes the other
+downloads, writes the `attachments` resource, and then fails the run naming each
+failed attachment.
+
+### Redirects and timeouts
+
+Redirects are followed by hand. A same-origin redirect keeps `X-Redmine-API-Key`
+and `X-Redmine-Username`; a cross-origin one (for example to an S3 or CDN
+storage backend) is followed without them. JSON requests time out after 120
+seconds per attempt, downloads after 60 seconds without data, and
+`upload_file`'s upload after 10 minutes per attempt.
 
 ### Reports and workflows referenced in README do not exist here
 

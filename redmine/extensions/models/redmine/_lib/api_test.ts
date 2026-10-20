@@ -7,6 +7,7 @@ import {
   redmineApiPaginated,
   redmineDownload,
   RedmineDownloadTooLargeError,
+  redmineFetch,
 } from "./api.ts";
 
 // ---------------------------------------------------------------------------
@@ -473,6 +474,128 @@ Deno.test({
       );
       assertEquals([...result.bytes], [1, 2, 3, 4]);
     } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineFetch: keeps credentials on a same-origin redirect and drops them cross-origin",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const other = startMockServer(() => new Response("elsewhere"));
+    const origin = startMockServer((req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/a") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "/b" },
+        });
+      }
+      if (path === "/b") {
+        return new Response(null, {
+          status: 307,
+          headers: { Location: `${other.url}/c` },
+        });
+      }
+      return new Response("unexpected", { status: 500 });
+    });
+    try {
+      const response = await redmineFetch(`${origin.url}/a`, {
+        headers: {
+          "X-Redmine-API-Key": "SECRET",
+          "X-Redmine-Username": "someone",
+          "Accept": "*/*",
+        },
+      });
+      assertEquals(await response.text(), "elsewhere");
+      assertEquals(origin.requests.map((r) => r.path), ["/a", "/b"]);
+      assertEquals(origin.requests[1].headers["x-redmine-api-key"], "SECRET");
+      assertEquals(other.requests.length, 1);
+      assertEquals(other.requests[0].headers["x-redmine-api-key"], undefined);
+      assertEquals(other.requests[0].headers["x-redmine-username"], undefined);
+      assertEquals(other.requests[0].headers["accept"], "*/*");
+    } finally {
+      await origin.server.shutdown();
+      await other.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: turns a 303 after POST into a bodyless GET",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/post"
+        ? new Response(null, { status: 303, headers: { Location: "/done" } })
+        : new Response("ok")
+    );
+    try {
+      const response = await redmineFetch(`${url}/post`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ a: 1 }),
+      });
+      assertEquals(await response.text(), "ok");
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/post"],
+        ["GET", "/done"],
+      ]);
+      assertEquals(requests[1].headers["content-type"], undefined);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: stops after too many redirects",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(null, { status: 302, headers: { Location: "/loop" } })
+    );
+    try {
+      await assertRejects(
+        () => redmineFetch(`${url}/loop`, {}),
+        Error,
+        "more than 5 redirects",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: aborts a body that stops sending data",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let stall: (() => void) | undefined;
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1]));
+            stall = () => controller.close();
+          },
+        }),
+      )
+    );
+    try {
+      await assertRejects(
+        () => redmineDownload(url, "k", "/stall", undefined, undefined, 50),
+        Error,
+        "failed while reading the body",
+      );
+    } finally {
+      stall?.();
       await server.shutdown();
     }
   },
