@@ -11,6 +11,7 @@
 
 import { z } from "npm:zod@4.6.5";
 import {
+  MAX_DOWNLOAD_BYTES,
   redmineApi,
   redmineApiPaginated,
   redmineDownload,
@@ -2629,7 +2630,7 @@ export const model = {
         contentTypePrefix: z.string().min(1).optional().describe(
           "Only attachments whose content type starts with this, e.g. image/ (case-insensitive)",
         ),
-        maxBytes: z.number().int().positive().max(524_288_000).default(
+        maxBytes: z.number().int().positive().max(MAX_DOWNLOAD_BYTES).default(
           DEFAULT_MAX_DOWNLOAD_BYTES,
         ).describe("Skip an attachment larger than this (default 20 MiB)"),
       }),
@@ -2760,7 +2761,9 @@ export const model = {
         if (failed.length > 0) {
           throw new Error(
             `Failed to download ${failed.length} attachment(s) of issue ${args.issueId}: ${
-              failed.map((f) => `${f.id} (${f.filename}): ${f.error}`).join(
+              failed.map((f) =>
+                `${f.id} (${f.filename}): ${f.error ?? "unknown error"}`
+              ).join(
                 "; ",
               )
             }`,

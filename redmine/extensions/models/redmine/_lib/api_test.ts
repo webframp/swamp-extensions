@@ -4,6 +4,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import {
   isHttpsUpgrade,
+  MAX_DOWNLOAD_BYTES,
   redmineApi,
   redmineApiPaginated,
   redmineDownload,
@@ -1238,3 +1239,61 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name:
+    "redmineDownload: slow redirect hops do not count against the idle timeout",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(async (req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/a" || path === "/b") {
+        // Each hop is under the 120ms idle limit; together they exceed it.
+        await new Promise((r) => setTimeout(r, 80));
+        return new Response(null, {
+          status: 302,
+          headers: { Location: path === "/a" ? "/b" : "/file" },
+        });
+      }
+      return new Response(new Uint8Array([1, 2]));
+    });
+    try {
+      const result = await redmineDownload(url, "k", "/a", undefined, 10, 120);
+      assertEquals([...result.bytes], [1, 2]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test(
+  "redmineDownload: defaults maxBytes to MAX_DOWNLOAD_BYTES",
+  async () => {
+    const originalFetch = globalThis.fetch;
+    let cancelled = false;
+    globalThis.fetch = () =>
+      Promise.resolve(
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          {
+            headers: { "Content-Length": String(MAX_DOWNLOAD_BYTES + 1) },
+          },
+        ),
+      );
+    try {
+      await assertRejects(
+        () => redmineDownload("http://redmine.test", "k", "/huge"),
+        RedmineDownloadTooLargeError,
+        `more than maxBytes=${MAX_DOWNLOAD_BYTES}`,
+      );
+      assertEquals(cancelled, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  },
+);

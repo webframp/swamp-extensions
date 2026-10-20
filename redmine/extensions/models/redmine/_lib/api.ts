@@ -88,6 +88,7 @@ async function fetchFollowingRedirects(
   url: string,
   init: RequestInit,
   crossOrigin: CrossOriginRedirect,
+  onResponse?: () => void,
 ): Promise<{ response: Response; redirected: boolean }> {
   let trusted = new URL(url);
   let current = new URL(url);
@@ -103,6 +104,7 @@ async function fetchFollowingRedirects(
       headers,
       redirect: "manual",
     });
+    onResponse?.();
     const location = response.headers.get("Location");
     if (!REDIRECT_STATUSES.has(response.status) || !location) {
       return { response, redirected: hop > 0 };
@@ -149,6 +151,8 @@ export interface RedmineFetchOptions {
   makeSignal?: () => AbortSignal;
   /** Redirects off the Redmine origin (default: reject). */
   crossOrigin?: CrossOriginRedirect;
+  /** Called as each response (including each redirect hop) arrives. */
+  onResponse?: () => void;
 }
 
 /** Fetch a Redmine URL with retries, safe redirects, and a per-attempt timeout. */
@@ -163,10 +167,15 @@ export async function redmineFetch(
   const method = (init.method ?? "GET").toUpperCase();
   let response: Response;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const result = await fetchFollowingRedirects(url, {
-      ...init,
-      signal: makeSignal(),
-    }, crossOrigin);
+    const result = await fetchFollowingRedirects(
+      url,
+      {
+        ...init,
+        signal: makeSignal(),
+      },
+      crossOrigin,
+      options.onResponse,
+    );
     response = result.response;
     // A retry restarts from `url` with `init`, so it repeats the original
     // method. Once a write has been redirected, the server may already have
@@ -356,6 +365,9 @@ export class RedmineDownloadTooLargeError extends Error {
   }
 }
 
+/** Largest download allowed; also redmineDownload's default `maxBytes`. */
+export const MAX_DOWNLOAD_BYTES = 524_288_000;
+
 /** A download is aborted when no bytes arrive for this long. */
 export const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
 
@@ -377,7 +389,7 @@ export async function redmineDownload(
   apiKey: string,
   path: string,
   username?: string,
-  maxBytes?: number,
+  maxBytes: number = MAX_DOWNLOAD_BYTES,
   idleTimeoutMs: number = DOWNLOAD_IDLE_TIMEOUT_MS,
 ): Promise<{ bytes: Uint8Array; contentType: string | null }> {
   const headers: Record<string, string> = { "X-Redmine-API-Key": apiKey };
@@ -413,6 +425,9 @@ export async function redmineDownload(
           return controller.signal;
         },
         crossOrigin: "strip",
+        // Each hop's response is data arriving: restart the idle timer, so
+        // slow hops are judged one at a time, not added together.
+        onResponse: resetIdle,
       });
     } catch (e) {
       throw new Error(
@@ -431,7 +446,7 @@ export async function redmineDownload(
     const contentType = response.headers.get("Content-Type");
     const lengthHeader = response.headers.get("Content-Length");
     const declared = lengthHeader === null ? NaN : Number(lengthHeader);
-    if (maxBytes !== undefined && declared > maxBytes) {
+    if (declared > maxBytes) {
       await response.body?.cancel();
       throw new RedmineDownloadTooLargeError(path, declared, maxBytes);
     }
@@ -456,7 +471,7 @@ export async function redmineDownload(
         const { done, value } = await reader.read();
         if (done) break;
         resetIdle();
-        if (maxBytes !== undefined && total + value.length > maxBytes) {
+        if (total + value.length > maxBytes) {
           await reader.cancel();
           throw new RedmineDownloadTooLargeError(
             path,
@@ -466,7 +481,7 @@ export async function redmineDownload(
         }
         if (total + value.length > buffer.length) {
           let size = Math.max(buffer.length * 2, total + value.length);
-          if (maxBytes !== undefined) size = Math.min(size, maxBytes);
+          size = Math.min(size, maxBytes);
           const grown = new Uint8Array(size);
           grown.set(buffer.subarray(0, total));
           buffer = grown;
