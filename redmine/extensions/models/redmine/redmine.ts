@@ -430,7 +430,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.10.20.1",
+  version: "2026.10.20.2",
 
   upgrades: [
     {
@@ -559,6 +559,12 @@ export const model = {
       toVersion: "2026.10.20.1",
       description:
         "No globalArguments changes — adds list_attachments and download_attachments, an attachments resource and an attachment file spec; resource data names gain a spec prefix (stored data under the old names is not migrated)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.20.2",
+      description:
+        "No schema changes — Retry-After cap raised to 300s; https upgrade keeps credentials only on default ports",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
