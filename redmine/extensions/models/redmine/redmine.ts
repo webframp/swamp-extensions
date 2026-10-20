@@ -224,6 +224,24 @@ interface RawAttachment {
   created_on: string;
 }
 
+/**
+ * Data name for search results. The readable part is lossy (punctuation
+ * becomes `_`, truncated to 40 characters), so a hash of the exact query and
+ * project scope keeps `foo bar` and `foo-bar` apart.
+ */
+export async function searchDataName(
+  query: string,
+  project: string | undefined,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(JSON.stringify([query, project ?? null])),
+  );
+  const hash = Array.from(new Uint8Array(digest).slice(0, 4))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `search-${query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 40)}-${hash}`;
+}
+
 /** Default `maxBytes` for download_attachments (20 MiB). */
 export const DEFAULT_MAX_DOWNLOAD_BYTES = 20_971_520;
 
@@ -1881,9 +1899,17 @@ export const model = {
           updatedOn: e.updated_on,
         }));
 
-        const instanceName = args.issueId !== undefined
-          ? String(args.issueId)
-          : args.project ?? "all";
+        // Every filter is in the name (prefixed, like list_issues), so runs
+        // with different filters do not overwrite each other.
+        const filterParts: string[] = [];
+        if (args.issueId !== undefined) filterParts.push(`i:${args.issueId}`);
+        if (args.project !== undefined) filterParts.push(`p:${args.project}`);
+        if (args.userId !== undefined) filterParts.push(`u:${args.userId}`);
+        if (args.from !== undefined) filterParts.push(`from:${args.from}`);
+        if (args.to !== undefined) filterParts.push(`to:${args.to}`);
+        const instanceName = filterParts.length > 0
+          ? filterParts.join("-")
+          : "all";
 
         const handle = await context.writeResource(
           "time_entries",
@@ -2067,7 +2093,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "search_results",
-          "search-" + args.query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50),
+          await searchDataName(args.query, args.project),
           {
             results: data.results,
             totalCount: data.total_count,

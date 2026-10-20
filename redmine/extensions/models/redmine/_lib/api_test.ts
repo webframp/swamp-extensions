@@ -510,6 +510,12 @@ Deno.test({
         });
       }
       if (path === "/back") return new Response("back home");
+      if (path === "/leave") {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${other.url}/bounce` },
+        });
+      }
       return new Response("unexpected", { status: 500 });
     });
     originUrl = origin.url;
@@ -530,12 +536,18 @@ Deno.test({
       assertEquals(other.requests[0].headers["x-redmine-username"], undefined);
       assertEquals(other.requests[0].headers["accept"], "*/*");
 
-      // Leaving the origin and coming back does not restore the credentials.
-      const back = await redmineFetch(`${other.url}/bounce`, { headers }, {
+      // origin -> other -> origin: coming back does not restore the
+      // credentials.
+      const back = await redmineFetch(`${origin.url}/leave`, { headers }, {
         crossOrigin: "strip",
       });
       assertEquals(await back.text(), "back home");
-      // The first hop is already off the start origin (other -> origin).
+      assertEquals(origin.requests.at(-2)?.path, "/leave");
+      assertEquals(
+        origin.requests.at(-2)?.headers["x-redmine-api-key"],
+        "SECRET",
+      );
+      assertEquals(origin.requests.at(-1)?.path, "/back");
       assertEquals(
         origin.requests.at(-1)?.headers["x-redmine-api-key"],
         undefined,
@@ -761,8 +773,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "redmineFetch: aborts an attempt at its signal and gives each attempt a signal",
+  name: "redmineFetch: aborts an attempt at its signal",
   // Server creates connection pool resources that outlive the test
   sanitizeResources: false,
   fn: async () => {
@@ -779,21 +790,173 @@ Deno.test({
             makeSignal: () => AbortSignal.timeout(20),
           }),
       );
-      const seen: Array<AbortSignal | null | undefined> = [];
-      const originalFetch = globalThis.fetch;
-      globalThis.fetch = (input, init) => {
-        seen.push(init?.signal);
-        return originalFetch(input, { ...init, signal: undefined });
-      };
-      try {
-        await (await redmineFetch(`${url}/slow`, {})).text();
-      } finally {
-        globalThis.fetch = originalFetch;
-      }
-      assertEquals(seen.length, 1);
-      assertEquals(seen[0] instanceof AbortSignal, true);
     } finally {
       await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: gives each retry attempt its own default signal",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() =>
+      ++count === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : new Response("ok")
+    );
+    const seen: Array<AbortSignal | null | undefined> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      seen.push(init?.signal);
+      return originalFetch(input, init);
+    };
+    try {
+      await (await redmineFetch(`${url}/x`, {})).text();
+    } finally {
+      globalThis.fetch = originalFetch;
+      await server.shutdown();
+    }
+    assertEquals(seen.length, 2);
+    assertEquals(seen.every((sig) => sig instanceof AbortSignal), true);
+    assertEquals(seen[0] === seen[1], false);
+  },
+});
+
+for (const method of ["PUT", "DELETE", "POST"]) {
+  Deno.test({
+    name: `redmineApi: does not retry a ${method} after a 502`,
+    // Server creates connection pool resources that outlive the test
+    sanitizeResources: false,
+    fn: async () => {
+      let count = 0;
+      const { url, server } = startMockServer(() => {
+        count++;
+        return new Response(null, { status: 502 });
+      });
+      try {
+        await assertRejects(
+          () => redmineApi(url, "k", method, "/issues/1.json", { issue: {} }),
+          Error,
+          "failed (502)",
+        );
+        assertEquals(count, 1);
+      } finally {
+        await server.shutdown();
+      }
+    },
+  });
+}
+
+Deno.test({
+  name: "redmineApi: retries a GET after a 502",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() =>
+      ++count === 1
+        ? new Response(null, { status: 502, headers: { "Retry-After": "0" } })
+        : Response.json({ ok: true })
+    );
+    try {
+      await redmineApi(url, "k", "GET", "/x.json");
+      assertEquals(count, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test(
+  "redmineFetch: keeps credentials across an http to https upgrade of the same host",
+  async () => {
+    const seen: Array<[string, string | null]> = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (input, init) => {
+      const url = String(input);
+      seen.push([url, new Headers(init?.headers).get("X-Redmine-API-Key")]);
+      if (url.startsWith("http://redmine.test/")) {
+        return Promise.resolve(
+          new Response(null, {
+            status: 301,
+            headers: { Location: "https://redmine.test/issues.json" },
+          }),
+        );
+      }
+      if (url === "https://redmine.test/issues.json") {
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { Location: "https://cdn.test/file" },
+          }),
+        );
+      }
+      return Promise.resolve(new Response("ok"));
+    };
+    try {
+      const response = await redmineFetch(
+        "http://redmine.test/issues.json",
+        { headers: { "X-Redmine-API-Key": "SECRET" } },
+        { crossOrigin: "strip" },
+      );
+      assertEquals(await response.text(), "ok");
+      await assertRejects(
+        () =>
+          redmineFetch("http://redmine.test/issues.json", {
+            headers: { "X-Redmine-API-Key": "SECRET" },
+          }),
+        Error,
+        "redirected from https://redmine.test to https://cdn.test",
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+    assertEquals(seen.slice(0, 3), [
+      ["http://redmine.test/issues.json", "SECRET"],
+      ["https://redmine.test/issues.json", "SECRET"],
+      ["https://cdn.test/file", null],
+    ]);
+  },
+);
+
+Deno.test({
+  name:
+    "redmineDownload: follows a redirect to storage on another origin without credentials",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const storage = startMockServer(() =>
+      new Response(new Uint8Array([9, 8, 7]), {
+        headers: { "Content-Type": "image/png" },
+      })
+    );
+    const redmine = startMockServer(() =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: `${storage.url}/bucket/7?sig=x` },
+      })
+    );
+    try {
+      const result = await redmineDownload(
+        redmine.url,
+        "SECRET",
+        "/attachments/download/7",
+        "someone",
+      );
+      assertEquals([...result.bytes], [9, 8, 7]);
+      assertEquals(redmine.requests[0].headers["x-redmine-api-key"], "SECRET");
+      assertEquals(storage.requests.length, 1);
+      assertEquals(storage.requests[0].headers["x-redmine-api-key"], undefined);
+      assertEquals(
+        storage.requests[0].headers["x-redmine-username"],
+        undefined,
+      );
+    } finally {
+      await redmine.server.shutdown();
+      await storage.server.shutdown();
     }
   },
 });

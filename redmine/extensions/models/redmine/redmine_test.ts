@@ -8,7 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { model, servedHtmlInsteadOf } from "./redmine.ts";
+import { model, searchDataName, servedHtmlInsteadOf } from "./redmine.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Server Helpers
@@ -1175,7 +1175,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "time_entries");
-      assertEquals(resources[0].name, "time-entries-100");
+      assertEquals(resources[0].name, "time-entries-i:100");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1317,7 +1317,10 @@ Deno.test({
       assertEquals(capturedPath, "/projects/my%20project/search.json");
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "search_results");
-      assertEquals(resources[0].name, "search-test");
+      assertEquals(
+        resources[0].name,
+        await searchDataName("test", "my project"),
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -2257,6 +2260,158 @@ Deno.test({
           [9, "failed", null],
         ],
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("redmine model: searchDataName keeps distinct queries and scopes apart", async () => {
+  const names = await Promise.all([
+    searchDataName("foo bar", undefined),
+    searchDataName("foo-bar", undefined),
+    searchDataName("foo_bar", undefined),
+    searchDataName("foo bar", "web"),
+  ]);
+  assertEquals(new Set(names).size, 4);
+  assertEquals(names[0].startsWith("search-foo_bar-"), true);
+  assertEquals(names[0], await searchDataName("foo bar", undefined));
+  const long = await searchDataName("x".repeat(500), undefined);
+  assertEquals(long.length, "search-".length + 40 + 1 + 8);
+});
+
+Deno.test({
+  name: "redmine model: list_time_entries names data by every filter",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine(() =>
+      Response.json({ time_entries: [], total_count: 0 })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const ctx = context as unknown as Parameters<
+        typeof model.methods.list_time_entries.execute
+      >[1];
+      await model.methods.list_time_entries.execute({}, ctx);
+      await model.methods.list_time_entries.execute({ project: "5" }, ctx);
+      await model.methods.list_time_entries.execute({ issueId: 5 }, ctx);
+      await model.methods.list_time_entries.execute(
+        { project: "web", userId: 3, from: "2026-01-01", to: "2026-02-01" },
+        ctx,
+      );
+      assertEquals(getWrittenResources().map((r) => r.name), [
+        "time-entries-all",
+        "time-entries-p:5",
+        "time-entries-i:5",
+        "time-entries-p:web-u:3-from:2026-01-01-to:2026-02-01",
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+async function withUploadFile(fn: (path: string) => Promise<void>) {
+  const path = await Deno.makeTempFile({ suffix: ".txt" });
+  try {
+    await Deno.writeTextFile(path, "hello");
+    await fn(path);
+  } finally {
+    await Deno.remove(path);
+  }
+}
+
+type UploadCtx = Parameters<typeof model.methods.upload_file.execute>[1];
+
+Deno.test({
+  name:
+    "redmine model: upload_file rejects a cross-origin redirect without sending the key",
+  sanitizeResources: false,
+  fn: async () => {
+    const seenOther: string[] = [];
+    const otherWrapped = Deno.serve({ port: 0, onListen() {} }, (req) => {
+      seenOther.push(req.headers.get("X-Redmine-API-Key") ?? "");
+      return Response.json({ upload: { id: 1, token: "t" } });
+    });
+    const { url, server } = startMockRedmine(() =>
+      new Response(null, {
+        status: 307,
+        headers: {
+          Location: `http://localhost:${otherWrapped.addr.port}/uploads.json`,
+        },
+      })
+    );
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        await assertRejects(
+          () =>
+            model.methods.upload_file.execute(
+              { issueId: 1, filePath: path },
+              context as unknown as UploadCtx,
+            ),
+          Error,
+          "redirected from",
+        );
+      });
+      assertEquals(seenOther, []);
+    } finally {
+      uninstall();
+      await server.shutdown();
+      await otherWrapped.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: upload_file does not retry the upload after a 502 but retries a 429",
+  sanitizeResources: false,
+  fn: async () => {
+    let status = 502;
+    let uploads = 0;
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/uploads.json") {
+        uploads++;
+        if (uploads === 1) {
+          return new Response(null, {
+            status,
+            headers: { "Retry-After": "0" },
+          });
+        }
+        return Response.json({ upload: { id: 1, token: "tok" } });
+      }
+      return new Response(null, { status: 204 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      await withUploadFile(async (path) => {
+        const { context } = makeContext();
+        const ctx = context as unknown as UploadCtx;
+        await assertRejects(
+          () =>
+            model.methods.upload_file.execute(
+              { issueId: 1, filePath: path },
+              ctx,
+            ),
+          Error,
+          "(502)",
+        );
+        assertEquals(uploads, 1);
+
+        uploads = 0;
+        status = 429;
+        await model.methods.upload_file.execute(
+          { issueId: 1, filePath: path },
+          ctx,
+        );
+        assertEquals(uploads, 2);
+      });
     } finally {
       uninstall();
       await server.shutdown();

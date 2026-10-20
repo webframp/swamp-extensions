@@ -57,9 +57,10 @@ swamp model method run tracker download_attachments \
 `download_attachments` stores each file as `attachment-<issueId>-<attachmentId>`
 in the `attachment` file spec. It writes the `attachments-<issueId>` resource
 listing every attachment of the issue, whether or not the filter selected it,
-with its `status` (`downloaded`, `not-selected`, `skipped-too-large` or
-`failed`). `dataName` names the stored file only when `status` is `downloaded`;
-otherwise it is `null`.
+with its `status` (`listed` after `list_attachments`; `downloaded`,
+`not-selected`, `skipped-too-large` or `failed` after `download_attachments`).
+`dataName` names the stored file only when `status` is `downloaded`; otherwise
+it is `null`.
 
 ### Create an issue
 
@@ -170,36 +171,42 @@ Redirects are followed by hand. A same-origin redirect, or an http→https upgra
 of the same host, keeps `X-Redmine-API-Key` and `X-Redmine-Username`. Any other
 redirect fails an API call with a message naming the URL to set as `host`;
 `download_attachments` follows it without the credentials, for storage backends
-that redirect to S3 or a CDN. A POST (`create_issue`, `create_version`,
-`upload_file`, ...) retries only a 429, since a 502 or 504 can arrive after
-Redmine already created the record. JSON requests time out after 120 seconds per
-attempt, downloads after 60 seconds without data, and `upload_file`'s upload
-after 10 minutes per attempt.
+that redirect to S3 or a CDN. Every request retries a 429. Only reads (GET) also
+retry a 502, 503 or 504: the gateway can time out after Redmine committed a
+write, and retrying a POST, PUT or DELETE then creates a duplicate issue or
+upload, adds a second journal note, or reports a 404 for a delete that
+succeeded. JSON requests time out after 120 seconds per attempt, downloads after
+60 seconds without data, and `upload_file`'s upload after 10 minutes per
+attempt.
 
 ### Data names
 
 Swamp stores data by name with no spec component, so every name carries a spec
-prefix. Before 2026.10.20.1, `list_statuses`, `list_trackers`, `list_projects`
-and `list_custom_fields` all wrote `all`, and `get_issue` and `list_relations`
-both wrote the bare issue ID, overwriting one another.
+prefix. Before 2026.10.20.1, `list_statuses`, `list_trackers`, `list_projects`,
+`list_custom_fields`, and unfiltered `list_issues` and `list_time_entries` all
+wrote `all`; `get_issue`, `list_relations`, `list_time_entries` (by issue) and
+`get_version` wrote bare numeric IDs; and `list_users`, `list_versions`,
+`list_time_entries` and `list_issue_categories` wrote the bare project
+identifier. Each overwrote the others. Within a method, the name includes every
+filter, so different filters do not overwrite each other either.
 
-| Method                                      | Spec               | Data name                                |
-| ------------------------------------------- | ------------------ | ---------------------------------------- |
-| `list_statuses`                             | `statuses`         | `statuses-all`                           |
-| `list_trackers`                             | `trackers`         | `trackers-all`                           |
-| `list_projects`                             | `projects`         | `projects-all`                           |
-| `list_custom_fields`                        | `custom_fields`    | `custom-fields-all`                      |
-| `list_users`                                | `users`            | `users-<project>`                        |
-| `list_issues`                               | `issues`           | `issues-<filters>` (e.g. `issues-p:web`) |
-| `get_issue`, `create_issue`, `update_issue` | `issue_detail`     | `issue-<issueId>`                        |
-| `list_relations`                            | `relations`        | `relations-<issueId>`                    |
-| `list_versions`                             | `versions`         | `versions-<project>`                     |
-| `get_version`, `create_version`             | `versions`         | `version-<versionId>`                    |
-| `list_time_entries`                         | `time_entries`     | `time-entries-<issueId, project or all>` |
-| `search`                                    | `search_results`   | `search-<sanitized query>`               |
-| `list_issue_categories`                     | `issue_categories` | `issue-categories-<project>`             |
-| `list_attachments`, `download_attachments`  | `attachments`      | `attachments-<issueId>`                  |
-| `download_attachments`                      | `attachment`       | `attachment-<issueId>-<attachmentId>`    |
+| Method                                      | Spec               | Data name                                           |
+| ------------------------------------------- | ------------------ | --------------------------------------------------- |
+| `list_statuses`                             | `statuses`         | `statuses-all`                                      |
+| `list_trackers`                             | `trackers`         | `trackers-all`                                      |
+| `list_projects`                             | `projects`         | `projects-all`                                      |
+| `list_custom_fields`                        | `custom_fields`    | `custom-fields-all`                                 |
+| `list_users`                                | `users`            | `users-<project>`                                   |
+| `list_issues`                               | `issues`           | `issues-<filters>` (e.g. `issues-p:web`)            |
+| `get_issue`, `create_issue`, `update_issue` | `issue_detail`     | `issue-<issueId>`                                   |
+| `list_relations`                            | `relations`        | `relations-<issueId>`                               |
+| `list_versions`                             | `versions`         | `versions-<project>`                                |
+| `get_version`, `create_version`             | `versions`         | `version-<versionId>`                               |
+| `list_time_entries`                         | `time_entries`     | `time-entries-<filters>` (e.g. `time-entries-i:42`) |
+| `search`                                    | `search_results`   | `search-<sanitized query>-<hash>`                   |
+| `list_issue_categories`                     | `issue_categories` | `issue-categories-<project>`                        |
+| `list_attachments`, `download_attachments`  | `attachments`      | `attachments-<issueId>`                             |
+| `download_attachments`                      | `attachment`       | `attachment-<issueId>-<attachmentId>`               |
 
 ### Reports and workflows referenced in README do not exist here
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Redmine API helper utilities.
  *
@@ -10,13 +11,15 @@
 const MAX_RETRIES = 4;
 const BASE_RETRY_DELAY_MS = 1000;
 
-// POST (create_issue, upload_file's upload, ...) is not idempotent: a 502 or
-// 504 can arrive after Redmine already created the record, and a retry
-// would create a second one. Only a 429 is known to be rejected before any
-// work, so that is the only status a POST retries.
+// Only a read is safe to repeat after a 502/503/504: the gateway can time
+// out after Redmine committed the write. A retried POST creates a second
+// issue or upload, a retried PUT with notes adds a second journal entry, and
+// a retried DELETE reports 404 for a delete that succeeded. A 429 is
+// rejected before any work, so every method retries that.
 function isRetryableStatus(status: number, method: string): boolean {
-  if (method === "POST") return status === 429;
-  return status === 429 || status === 502 || status === 503 || status === 504;
+  if (status === 429) return true;
+  if (method !== "GET" && method !== "HEAD") return false;
+  return status === 502 || status === 503 || status === 504;
 }
 
 function retryDelayMs(response: Response, attempt: number): number {
@@ -66,7 +69,6 @@ async function fetchFollowingRedirects(
   let current = new URL(url);
   let method = (init.method ?? "GET").toUpperCase();
   let body = init.body;
-  let leftOrigin = false;
   const headers = new Headers(init.headers);
 
   for (let hop = 0;; hop++) {
@@ -95,7 +97,7 @@ async function fetchFollowingRedirects(
       headers.delete("Content-Type");
     }
     const next = new URL(location, current);
-    if (!leftOrigin && next.origin !== trusted.origin) {
+    if (next.origin !== trusted.origin) {
       if (isHttpsUpgrade(trusted, next)) {
         trusted = next;
       } else if (crossOrigin === "reject") {
@@ -104,7 +106,7 @@ async function fetchFollowingRedirects(
             `set host to the Redmine URL it redirects to`,
         );
       } else {
-        leftOrigin = true;
+        // Deleted for good: a later hop back to the origin stays anonymous.
         for (const name of CREDENTIAL_HEADERS) headers.delete(name);
       }
     }
