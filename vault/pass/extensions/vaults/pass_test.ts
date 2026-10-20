@@ -622,13 +622,20 @@ Deno.test({
 // consumers see no change.
 // ---------------------------------------------------------------------------
 
+/**
+ * A store path that does not exist. passwordOnly and field reads stat the
+ * store to tell entries from directories, so these tests must not share a
+ * fixed path such as /tmp/store that a machine might actually have.
+ */
+const ABSENT_STORE = `/tmp/swamp-pass-test-absent-${crypto.randomUUID()}`;
+
 const MULTILINE_ENTRY = "s3cr3t-value\n" +
   "login: user@example.com\n" +
   "host: smtp.example.com\n";
 
 Deno.test("multiline: the default returns the whole entry", async () => {
   await withMockedPass(async () => {
-    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    const provider = vault.createProvider("v", { storeDir: ABSENT_STORE });
     mockSecrets.set("swamp/example", MULTILINE_ENTRY);
     assertEquals(
       await provider.get("example"),
@@ -640,7 +647,7 @@ Deno.test("multiline: the default returns the whole entry", async () => {
 Deno.test("multiline: passwordOnly returns line 1 only", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       passwordOnly: true,
     });
     mockSecrets.set("swamp/example", MULTILINE_ENTRY);
@@ -651,7 +658,7 @@ Deno.test("multiline: passwordOnly returns line 1 only", async () => {
 Deno.test("multiline: passwordOnly keeps edge whitespace and drops CRLF", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       passwordOnly: true,
     });
     mockSecrets.set("swamp/crlf", "  pad ded \r\nlogin: x\r\n");
@@ -664,7 +671,7 @@ Deno.test("multiline: passwordOnly keeps edge whitespace and drops CRLF", async 
 Deno.test("multiline: fieldSeparator selects a named field", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set("swamp/smtp/example", MULTILINE_ENTRY);
@@ -683,7 +690,7 @@ Deno.test("multiline: fieldSeparator selects a named field", async () => {
 Deno.test("multiline: field parsing never treats line 1 as a field", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set("swamp/tricky", "url: not-a-field\nurl: https://x.test\n");
@@ -694,7 +701,7 @@ Deno.test("multiline: field parsing never treats line 1 as a field", async () =>
 Deno.test("multiline: a field value keeps colons and the first match wins", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set(
@@ -708,7 +715,7 @@ Deno.test("multiline: a field value keeps colons and the first match wins", asyn
 Deno.test("multiline: the separator splits at its last occurrence", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set("swamp/team#a/entry", "pw\nlogin: me\n");
@@ -719,7 +726,7 @@ Deno.test("multiline: the separator splits at its last occurrence", async () => 
 Deno.test("multiline: fieldSeparator works with passwordOnly and a multi-char separator", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       passwordOnly: true,
       fieldSeparator: "::",
     });
@@ -731,7 +738,7 @@ Deno.test("multiline: fieldSeparator works with passwordOnly and a multi-char se
 
 Deno.test("multiline: without fieldSeparator a # in a key is literal", async () => {
   await withMockedPass(async () => {
-    const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+    const provider = vault.createProvider("v", { storeDir: ABSENT_STORE });
     mockSecrets.set("swamp/a#b", "literal");
     assertEquals(await provider.get("a#b"), "literal");
   });
@@ -740,7 +747,7 @@ Deno.test("multiline: without fieldSeparator a # in a key is literal", async () 
 Deno.test("multiline: a missing field fails without quoting the entry", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set("swamp/example", MULTILINE_ENTRY);
@@ -757,7 +764,7 @@ Deno.test("multiline: a missing field fails without quoting the entry", async ()
 Deno.test("multiline: text after the separator that is not a field name is part of the entry name", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set("swamp/team#a/entry", "dir-entry");
@@ -777,7 +784,7 @@ Deno.test("multiline: text after the separator that is not a field name is part 
 Deno.test("multiline: every key list returns stays readable with fieldSeparator set", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     await provider.put("plain", "p");
@@ -794,7 +801,7 @@ Deno.test("multiline: every key list returns stays readable with fieldSeparator 
 Deno.test("multiline: an empty entry path is rejected before the CLI runs", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     lastOptions = undefined;
@@ -810,7 +817,7 @@ Deno.test("multiline: an empty entry path is rejected before the CLI runs", asyn
 Deno.test("multiline: field parsing handles CRLF, empty values, and surrounding whitespace", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set(
@@ -827,7 +834,7 @@ Deno.test("multiline: field parsing handles CRLF, empty values, and surrounding 
 Deno.test("multiline: URI lines such as otpauth:// are not fields", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     mockSecrets.set(
@@ -846,7 +853,7 @@ Deno.test("multiline: URI lines such as otpauth:// are not fields", async () => 
 Deno.test("multiline: put refuses a key that selects a field", async () => {
   await withMockedPass(async () => {
     const provider = vault.createProvider("v", {
-      storeDir: "/tmp/store",
+      storeDir: ABSENT_STORE,
       fieldSeparator: "#",
     });
     await assertRejects(
@@ -905,6 +912,47 @@ Deno.test("multiline: an entry file beside a same-named directory is still an en
     });
   } finally {
     await Deno.remove(store, { recursive: true });
+  }
+});
+
+Deno.test("multiline: a directory named <entry>.gpg is not mistaken for an entry", async () => {
+  const store = await Deno.makeTempDir({ prefix: "swamp-pass-dir-" });
+  try {
+    await Deno.mkdir(`${store}/swamp/odd.gpg`, { recursive: true });
+    await Deno.mkdir(`${store}/swamp/odd`, { recursive: true });
+    await withMockedPass(async () => {
+      mockSecrets.set("swamp/odd", "swamp/odd\n└── x\n");
+      const provider = vault.createProvider("v", {
+        storeDir: store,
+        passwordOnly: true,
+      });
+      await assertRejects(() => provider.get("odd"), Error, "is a directory");
+    });
+  } finally {
+    await Deno.remove(store, { recursive: true });
+  }
+});
+
+Deno.test("multiline: a refused stat fails the read instead of guessing", async () => {
+  const originalStat = Deno.stat;
+  try {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).stat = () =>
+      Promise.reject(new Deno.errors.PermissionDenied("read access refused"));
+    await withMockedPass(async () => {
+      mockSecrets.set("swamp/smtp", "swamp/smtp\n└── example\n");
+      const provider = vault.createProvider("v", {
+        storeDir: ABSENT_STORE,
+        passwordOnly: true,
+      });
+      await assertRejects(
+        () => provider.get("smtp"),
+        Deno.errors.PermissionDenied,
+      );
+    });
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).stat = originalStat;
   }
 });
 
@@ -1095,7 +1143,7 @@ Deno.test("otel: a field selection records the entry and field, never the value"
   const spans = await withMockedPass(() =>
     withSpans(async () => {
       const provider = vault.createProvider("v", {
-        storeDir: "/tmp/store",
+        storeDir: ABSENT_STORE,
         fieldSeparator: "#",
       });
       mockSecrets.set(
@@ -1118,7 +1166,7 @@ Deno.test("otel: a put that selects a field records the entry and field like get
   const spans = await withMockedPass(() =>
     withSpans(async () => {
       const provider = vault.createProvider("v", {
-        storeDir: "/tmp/store",
+        storeDir: ABSENT_STORE,
         fieldSeparator: "#",
       });
       await assertRejects(

@@ -308,22 +308,26 @@ export const vault = {
     /**
      * Whether `pass show` printed a directory tree rather than an entry.
      *
-     * pass shows the entry file when one exists, and otherwise, if the name is
-     * a directory, prints a tree of it and exits 0. Narrowing that listing to a
-     * line or field would hand back a path as if it were the password.
+     * pass shows the entry when `<name>.gpg` is a regular file, and otherwise,
+     * if the name is a directory, prints a tree of it and exits 0. Narrowing
+     * that listing to a line or field would hand back a path as if it were the
+     * password.
+     *
+     * Only "not found" counts as absent. Any other stat failure, such as a
+     * Deno permission refusal, is thrown: guessing "not a directory" there
+     * would return the listing after all.
      */
     const isDirectory = async (entry: string): Promise<boolean> => {
-      try {
-        await Deno.stat(`${storeDir}/${entry}.gpg`);
-        return false;
-      } catch {
-        // No entry file, so pass took its directory branch if there is one.
-      }
-      try {
-        return (await Deno.stat(`${storeDir}/${entry}`)).isDirectory;
-      } catch {
-        return false;
-      }
+      const stat = async (path: string): Promise<Deno.FileInfo | undefined> => {
+        try {
+          return await Deno.stat(path);
+        } catch (err) {
+          if (err instanceof Deno.errors.NotFound) return undefined;
+          throw err;
+        }
+      };
+      if ((await stat(`${storeDir}/${entry}.gpg`))?.isFile) return false;
+      return (await stat(`${storeDir}/${entry}`))?.isDirectory ?? false;
     };
 
     const spanAttributes = (

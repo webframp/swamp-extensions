@@ -100,9 +100,11 @@ appears in your entry names. The separator itself may not contain `/` or
 whitespace.
 
 With `passwordOnly` or a field selection, a key that names a directory is an
-error. Without them, `get` returns whatever `pass show` prints, which for a
-directory is its tree listing. `put` refuses a key that selects a field, since
-writing it would replace the whole entry.
+error. Telling the two apart means checking file metadata under `storeDir`; if
+that check is refused, `get` fails rather than guess. Without them, `get`
+returns whatever `pass show` prints, which for a directory is its tree listing.
+`put` refuses a key that selects a field, since writing it would replace the
+whole entry.
 
 ```yaml
 globalArgs:

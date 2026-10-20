@@ -20,8 +20,10 @@ new `vault.secret_field` span attribute, and `vault.secret_key` carries the
 entry path without the selector. Neither ever carries a value.
 
 **Added:** With `passwordOnly` or a field selection, a key naming a directory
-fails with "is a directory, not an entry" instead of returning a line of the
-directory's tree listing.
+fails with "is a directory, not an entry". pass prints a tree listing for a
+directory and exits 0, so without this check the first line of that listing
+would come back as the password. These modes read file metadata under `storeDir`
+to tell the two apart, and fail rather than guess if they cannot.
 
 **Fixed:** Spans reported a stale instrumentation-scope version
 (`2026.08.20.1`); they now report the published version.
