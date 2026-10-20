@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
-import { redmineApi, redmineApiPaginated } from "./api.ts";
+import {
+  redmineApi,
+  redmineApiPaginated,
+  redmineDownload,
+  RedmineDownloadTooLargeError,
+} from "./api.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Redmine API Server
@@ -347,6 +352,126 @@ Deno.test({
       );
 
       assertEquals(result, null);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: returns bytes and sends both headers",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(new Uint8Array([1, 2, 3]), {
+        headers: { "Content-Type": "image/png" },
+      })
+    );
+    try {
+      const result = await redmineDownload(
+        url,
+        "test-api-key-123",
+        "/attachments/download/7",
+        "user@example.com",
+      );
+      assertEquals([...result.bytes], [1, 2, 3]);
+      assertEquals(result.contentType, "image/png");
+      assertEquals(
+        requests[0].headers["x-redmine-api-key"],
+        "test-api-key-123",
+      );
+      assertEquals(
+        requests[0].headers["x-redmine-username"],
+        "user@example.com",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: rejects a non-2xx response and an oversized body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer((req) =>
+      new URL(req.url).pathname === "/missing"
+        ? new Response("no", { status: 404 })
+        : new Response(new Uint8Array(10))
+    );
+    try {
+      await assertRejects(
+        () => redmineDownload(url, "k", "/missing"),
+        Error,
+        "failed (404)",
+      );
+      await assertRejects(
+        () => redmineDownload(url, "k", "/big", undefined, 5),
+        Error,
+        "more than maxBytes=5",
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineDownload: stops reading a chunked body without Content-Length at maxBytes",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    // An endless body: the test can only finish if the reader stops at the cap.
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            controller.enqueue(new Uint8Array(4));
+          },
+        }),
+      )
+    );
+    try {
+      const err = await assertRejects(
+        () => redmineDownload(url, "k", "/stream", undefined, 10),
+        RedmineDownloadTooLargeError,
+        "more than maxBytes=10",
+      );
+      assertEquals(err.name, "RedmineDownloadTooLargeError");
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineDownload: returns a chunked body that stays within maxBytes",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2]));
+            controller.enqueue(new Uint8Array([3, 4]));
+            controller.close();
+          },
+        }),
+      )
+    );
+    try {
+      const result = await redmineDownload(
+        url,
+        "k",
+        "/stream",
+        undefined,
+        4,
+      );
+      assertEquals([...result.bytes], [1, 2, 3, 4]);
     } finally {
       await server.shutdown();
     }

@@ -10,7 +10,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
 import { z } from "npm:zod@4.6.5";
-import { redmineApi, redmineApiPaginated } from "./_lib/api.ts";
+import {
+  redmineApi,
+  redmineApiPaginated,
+  redmineDownload,
+  RedmineDownloadTooLargeError,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/redmine";
 
@@ -205,6 +210,103 @@ export function mapIssueDetail(raw: RawIssue): Record<string, unknown> {
 }
 
 // =============================================================================
+// Attachments
+// =============================================================================
+
+interface RawAttachment {
+  id: number;
+  filename: string;
+  filesize: number;
+  content_type?: string | null;
+  description?: string | null;
+  author?: { id: number; name: string };
+  created_on: string;
+}
+
+/** One attachment as stored in the attachments resource. */
+export interface Attachment {
+  id: number;
+  filename: string;
+  filesize: number;
+  contentType: string;
+  description: string;
+  author: { id: number; name: string } | null;
+  createdOn: string;
+  dataName: string;
+  status: "listed" | "downloaded" | "skipped-too-large";
+}
+
+/** Data name of the attachments resource of one issue. */
+export function attachmentsResourceName(issueId: number): string {
+  return `attachments-${issueId}`;
+}
+
+/** Data name of one stored attachment file. */
+export function attachmentDataName(
+  issueId: number,
+  attachmentId: number,
+): string {
+  return `attachment-${issueId}-${attachmentId}`;
+}
+
+/** Map Redmine attachments to the attachments resource shape. */
+export function mapAttachments(
+  issueId: number,
+  raw: RawAttachment[],
+): Attachment[] {
+  return raw.map((a) => ({
+    id: a.id,
+    filename: a.filename,
+    filesize: a.filesize,
+    contentType: a.content_type || "application/octet-stream",
+    description: a.description ?? "",
+    author: a.author ?? null,
+    createdOn: a.created_on,
+    dataName: attachmentDataName(issueId, a.id),
+    status: "listed" as const,
+  }));
+}
+
+/** Keep the attachments that match the requested IDs and content-type prefix. */
+export function selectAttachments(
+  attachments: Attachment[],
+  attachmentIds: number[] | undefined,
+  contentTypePrefix: string | undefined,
+): Attachment[] {
+  if (attachmentIds?.length) {
+    const missing = attachmentIds.filter((id) =>
+      !attachments.some((a) => a.id === id)
+    );
+    if (missing.length) {
+      throw new Error(
+        `Attachment(s) ${missing.join(", ")} are not on this issue`,
+      );
+    }
+  }
+  return attachments.filter((a) =>
+    (!attachmentIds?.length || attachmentIds.includes(a.id)) &&
+    (!contentTypePrefix || a.contentType.startsWith(contentTypePrefix))
+  );
+}
+
+async function fetchAttachments(
+  host: string,
+  apiKey: string,
+  issueId: number,
+  username?: string,
+): Promise<Attachment[]> {
+  const data = await redmineApi<{ issue: { attachments?: RawAttachment[] } }>(
+    host,
+    apiKey,
+    "GET",
+    `/issues/${issueId}.json?include=attachments`,
+    undefined,
+    username,
+  );
+  return mapAttachments(issueId, data.issue.attachments ?? []);
+}
+
+// =============================================================================
 // Context type used by all methods
 // =============================================================================
 
@@ -220,6 +322,15 @@ type MethodContext = {
     name: string,
     data: unknown,
   ) => Promise<{ name: string; dataId: string; version: number }>;
+  createFileWriter: (
+    spec: string,
+    name: string,
+    overrides?: { contentType?: string },
+  ) => {
+    writeAll: (
+      content: Uint8Array,
+    ) => Promise<{ name: string; dataId: string; version: number }>;
+  };
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
   };
@@ -232,7 +343,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.10.14.1",
+  version: "2026.10.20.1",
 
   upgrades: [
     {
@@ -355,6 +466,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.20.1",
+      description:
+        "No globalArguments changes — adds list_attachments and download_attachments, an attachments resource and an attachment file spec",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -715,6 +832,50 @@ export const model = {
         ),
       }),
       lifetime: "1h" as const,
+      garbageCollection: 3,
+    },
+    attachments: {
+      description:
+        "Attachments of one issue: ID, file name, size, content type, author, date, " +
+        "and (after download_attachments) the data name and status of each stored file",
+      schema: z.object({
+        issueId: z.number(),
+        attachments: z.array(z.object({
+          id: z.number(),
+          filename: z.string(),
+          filesize: z.number(),
+          contentType: z.string(),
+          description: z.string(),
+          author: z.object({ id: z.number(), name: z.string() }).nullable(),
+          createdOn: z.string(),
+          dataName: z.string().describe(
+            "Data name of the stored file (attachment file spec)",
+          ),
+          status: z.enum(["listed", "downloaded", "skipped-too-large"]),
+        })),
+        fetchedAt: z.string(),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
+      }),
+      lifetime: "1d" as const,
+      garbageCollection: 3,
+    },
+  },
+
+  // ---------------------------------------------------------------------------
+  // Files
+  // ---------------------------------------------------------------------------
+
+  files: {
+    attachment: {
+      description:
+        "Content of one issue attachment, named attachment-<issueId>-<attachmentId>",
+      contentType: "application/octet-stream",
+      lifetime: "1d" as const,
       garbageCollection: 3,
     },
   },
@@ -2283,6 +2444,148 @@ export const model = {
           id: args.issueId,
         });
         return { dataHandles: [] };
+      },
+    },
+
+    list_attachments: {
+      description:
+        "List the attachments of an issue (ID, file name, size, content type, author, date). Read-only",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+      }),
+      execute: async (
+        args: { issueId: number },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, apiKey, username } = context.globalArgs;
+        const attachments = await fetchAttachments(
+          host,
+          apiKey,
+          args.issueId,
+          username,
+        );
+        const handle = await context.writeResource(
+          "attachments",
+          attachmentsResourceName(args.issueId),
+          {
+            issueId: args.issueId,
+            attachments,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        context.logger.info("Issue {id} has {count} attachments", {
+          id: args.issueId,
+          count: attachments.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    download_attachments: {
+      description:
+        "Download the attachments of an issue in one run (fan-out). Stores each file under the attachment file spec and writes the attachments resource with the data name and status of each. Filter by attachment IDs or a content-type prefix such as image/. Read-only on Redmine",
+      arguments: z.object({
+        issueId: z.number().describe("Issue ID"),
+        attachmentIds: z.array(z.number()).max(100).optional().describe(
+          "Only these attachment IDs (default: all)",
+        ),
+        contentTypePrefix: z.string().min(1).optional().describe(
+          "Only attachments whose content type starts with this, e.g. image/",
+        ),
+        maxBytes: z.number().int().positive().max(524_288_000).default(
+          20_971_520,
+        ).describe("Skip an attachment larger than this (default 20 MiB)"),
+      }),
+      execute: async (
+        args: {
+          issueId: number;
+          attachmentIds?: number[];
+          contentTypePrefix?: string;
+          maxBytes?: number;
+        },
+        context: MethodContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, apiKey, username } = context.globalArgs;
+        const maxBytes = args.maxBytes ?? 20_971_520;
+        const all = await fetchAttachments(
+          host,
+          apiKey,
+          args.issueId,
+          username,
+        );
+        const selected = selectAttachments(
+          all,
+          args.attachmentIds,
+          args.contentTypePrefix,
+        );
+
+        const handles: Array<
+          { name: string; dataId: string; version: number }
+        > = [];
+        const results: Attachment[] = [];
+        for (const attachment of selected) {
+          if (attachment.filesize > maxBytes) {
+            results.push({ ...attachment, status: "skipped-too-large" });
+            continue;
+          }
+          // Redmine's recorded filesize can disagree with the bytes it
+          // serves; the download enforces maxBytes on the actual body too.
+          let bytes: Uint8Array;
+          try {
+            ({ bytes } = await redmineDownload(
+              host,
+              apiKey,
+              `/attachments/download/${attachment.id}`,
+              username,
+              maxBytes,
+            ));
+          } catch (e) {
+            if (e instanceof RedmineDownloadTooLargeError) {
+              results.push({ ...attachment, status: "skipped-too-large" });
+              continue;
+            }
+            throw new Error(
+              `Failed to download attachment ${attachment.id} (${attachment.filename}) of issue ${args.issueId}: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+              { cause: e },
+            );
+          }
+          const writer = context.createFileWriter(
+            "attachment",
+            attachment.dataName,
+            { contentType: attachment.contentType },
+          );
+          handles.push(await writer.writeAll(bytes));
+          results.push({ ...attachment, status: "downloaded" });
+        }
+
+        handles.push(
+          await context.writeResource(
+            "attachments",
+            attachmentsResourceName(args.issueId),
+            {
+              issueId: args.issueId,
+              attachments: results,
+              fetchedAt: new Date().toISOString(),
+              durationMs: Date.now() - startMs,
+              collectedBy: EXTENSION_NAME,
+            },
+          ),
+        );
+        context.logger.info(
+          "Downloaded {done} of {count} selected attachments of issue {id}",
+          {
+            done: results.filter((r) => r.status === "downloaded").length,
+            count: selected.length,
+            id: args.issueId,
+          },
+        );
+        return { dataHandles: handles };
       },
     },
   },

@@ -81,7 +81,7 @@ Deno.test("redmine model: globalArguments validates host, apiKey, project", () =
 Deno.test("redmine model: has all 7 resources", () => {
   assertExists(model.resources);
   const names = Object.keys(model.resources);
-  assertEquals(names.length, 12);
+  assertEquals(names.length, 13);
   assertExists(model.resources.issues);
   assertExists(model.resources.issue_detail);
   assertExists(model.resources.projects);
@@ -94,7 +94,7 @@ Deno.test("redmine model: has all 7 resources", () => {
 Deno.test("redmine model: has all 9 methods", () => {
   assertExists(model.methods);
   const names = Object.keys(model.methods);
-  assertEquals(names.length, 26);
+  assertEquals(names.length, 28);
   assertExists(model.methods.list_statuses);
   assertExists(model.methods.list_trackers);
   assertExists(model.methods.list_projects);
@@ -1613,4 +1613,289 @@ Deno.test("redmine model: upload_file names the path and issue when the file can
     Error,
     "/nonexistent/path/does-not-exist.txt",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Attachment Tests
+// ---------------------------------------------------------------------------
+
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+
+function attachmentServer(seen: string[]) {
+  return startMockRedmine((req) => {
+    const u = new URL(req.url);
+    seen.push(
+      `${u.pathname}${u.search}|${req.headers.get("X-Redmine-Username") ?? ""}`,
+    );
+    if (u.pathname === "/issues/42.json") {
+      return Response.json({
+        issue: {
+          id: 42,
+          attachments: [
+            {
+              id: 7,
+              filename: "screen.png",
+              filesize: PNG_BYTES.length,
+              content_type: "image/png",
+              description: "",
+              author: { id: 3, name: "Tester" },
+              created_on: "2026-10-19T06:23:17Z",
+            },
+            {
+              id: 8,
+              filename: "big.pdf",
+              filesize: 5_000_000,
+              content_type: "application/pdf",
+              created_on: "2026-10-19T07:00:00Z",
+            },
+            {
+              id: 9,
+              filename: "notes",
+              filesize: 3,
+              content_type: null,
+              created_on: "2026-10-19T08:00:00Z",
+            },
+          ],
+        },
+      });
+    }
+    if (u.pathname === "/attachments/download/7") {
+      return new Response(PNG_BYTES, {
+        headers: { "Content-Type": "image/png" },
+      });
+    }
+    if (u.pathname === "/attachments/download/9") {
+      return new Response("abc");
+    }
+    return new Response("Not found", { status: 404 });
+  });
+}
+
+function makeUsernameContext() {
+  return createModelTestContext({
+    globalArgs: {
+      host: TEST_HOST,
+      apiKey: TEST_API_KEY,
+      username: "user@example.com",
+    },
+    definition: { id: "test-id", name: "test-redmine", version: 1, tags: {} },
+  });
+}
+
+Deno.test({
+  name:
+    "redmine model: list_attachments maps attachments and sends the username header",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const { url, server } = attachmentServer(seen);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeUsernameContext();
+      await model.methods.list_attachments.execute(
+        { issueId: 42 },
+        context as unknown as Parameters<
+          typeof model.methods.list_attachments.execute
+        >[1],
+      );
+      const [written] = getWrittenResources();
+      assertEquals(written.specName, "attachments");
+      assertEquals(written.name, "attachments-42");
+      const data = written.data as {
+        attachments: Array<
+          {
+            id: number;
+            contentType: string;
+            dataName: string;
+            status: string;
+            author: unknown;
+          }
+        >;
+      };
+      assertEquals(data.attachments.map((a) => a.id), [7, 8, 9]);
+      assertEquals(data.attachments[0].dataName, "attachment-42-7");
+      assertEquals(data.attachments[2].contentType, "application/octet-stream");
+      assertEquals(data.attachments[1].author, null);
+      assertEquals(data.attachments.every((a) => a.status === "listed"), true);
+      assertEquals(seen, [
+        "/issues/42.json?include=attachments|user@example.com",
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmine model: download_attachments stores files and skips large ones",
+  sanitizeResources: false,
+  fn: async () => {
+    const seen: string[] = [];
+    const { url, server } = attachmentServer(seen);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources, getWrittenFiles } =
+        makeUsernameContext();
+      const result = await model.methods.download_attachments.execute(
+        { issueId: 42, maxBytes: 1_000_000 },
+        context as unknown as Parameters<
+          typeof model.methods.download_attachments.execute
+        >[1],
+      );
+      const files = getWrittenFiles();
+      assertEquals(files.map((f) => [f.specName, f.name]), [
+        ["attachment", "attachment-42-7"],
+        ["attachment", "attachment-42-9"],
+      ]);
+      assertEquals([...(files[0].content as Uint8Array)], [...PNG_BYTES]);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ id: number; status: string }>;
+      };
+      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
+        [7, "downloaded"],
+        [8, "skipped-too-large"],
+        [9, "downloaded"],
+      ]);
+      assertEquals(result.dataHandles.length, 3);
+      assertEquals(
+        seen.includes("/attachments/download/8|user@example.com"),
+        false,
+      );
+      assertEquals(
+        seen.includes("/attachments/download/7|user@example.com"),
+        true,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments filters by content type and rejects unknown IDs",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = attachmentServer([]);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles } = makeContext();
+      const ctx = context as unknown as Parameters<
+        typeof model.methods.download_attachments.execute
+      >[1];
+      await model.methods.download_attachments.execute(
+        { issueId: 42, contentTypePrefix: "image/" },
+        ctx,
+      );
+      assertEquals(getWrittenFiles().map((f) => f.name), ["attachment-42-7"]);
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 42, attachmentIds: [7, 99] },
+            ctx,
+          ),
+        Error,
+        "Attachment(s) 99 are not on this issue",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments skips a body larger than its recorded filesize",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [{
+              id: 1,
+              filename: "liar.bin",
+              filesize: 2,
+              content_type: "application/octet-stream",
+              created_on: "2026-10-19T06:23:17Z",
+            }],
+          },
+        });
+      }
+      if (u.pathname === "/attachments/download/1") {
+        return new Response(new Uint8Array(50));
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles, getWrittenResources } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 5, maxBytes: 10 },
+        context as unknown as Parameters<
+          typeof model.methods.download_attachments.execute
+        >[1],
+      );
+      assertEquals(getWrittenFiles().length, 0);
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<{ id: number; status: string }>;
+      };
+      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
+        [1, "skipped-too-large"],
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments names the attachment when a download fails",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [{
+              id: 3,
+              filename: "gone.png",
+              filesize: 2,
+              content_type: "image/png",
+              created_on: "2026-10-19T06:23:17Z",
+            }],
+          },
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 5 },
+            context as unknown as Parameters<
+              typeof model.methods.download_attachments.execute
+            >[1],
+          ),
+        Error,
+        "Failed to download attachment 3 (gone.png) of issue 5",
+      );
+      assertEquals(getWrittenResources().length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
 });

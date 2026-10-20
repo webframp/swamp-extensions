@@ -181,3 +181,81 @@ export async function redmineApiPaginated<T>(
   // Trim to cap if we overshot
   return allResults.slice(0, cap);
 }
+
+/** Thrown by `redmineDownload` when a response is larger than `maxBytes`. */
+export class RedmineDownloadTooLargeError extends Error {
+  constructor(path: string, size: number, maxBytes: number) {
+    super(
+      `Redmine GET ${path} is ${size} bytes, more than maxBytes=${maxBytes}`,
+    );
+    this.name = "RedmineDownloadTooLargeError";
+  }
+}
+
+/**
+ * Download raw bytes from a Redmine path (for example an attachment).
+ * Retries like the JSON helpers. Throws on a non-2xx response, and throws
+ * `RedmineDownloadTooLargeError` when the response is larger than `maxBytes`.
+ * The body is read as a stream and abandoned as soon as it passes the cap,
+ * so a missing or wrong Content-Length cannot make it buffer without bound.
+ */
+export async function redmineDownload(
+  host: string,
+  apiKey: string,
+  path: string,
+  username?: string,
+  maxBytes?: number,
+): Promise<{ bytes: Uint8Array; contentType: string | null }> {
+  const headers: Record<string, string> = { "X-Redmine-API-Key": apiKey };
+  if (username) {
+    headers["X-Redmine-Username"] = username;
+  }
+
+  let response: Response;
+  try {
+    response = await fetchWithRetry(`${host}${path}`, { headers });
+  } catch (e) {
+    throw new Error(
+      `Redmine GET ${path} request to ${host} failed: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
+
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`Redmine API GET ${path} failed (${response.status})`);
+  }
+
+  const contentType = response.headers.get("Content-Type");
+  const declared = Number(response.headers.get("Content-Length") ?? NaN);
+  if (maxBytes !== undefined && declared > maxBytes) {
+    await response.body?.cancel();
+    throw new RedmineDownloadTooLargeError(path, declared, maxBytes);
+  }
+  if (!response.body) {
+    return { bytes: new Uint8Array(0), contentType };
+  }
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader = response.body.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (maxBytes !== undefined && total > maxBytes) {
+      await reader.cancel();
+      throw new RedmineDownloadTooLargeError(path, total, maxBytes);
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return { bytes, contentType };
+}

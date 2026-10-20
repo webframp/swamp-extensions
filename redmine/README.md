@@ -45,6 +45,19 @@ swamp model method run tracker list_issues \
 swamp model method run tracker get_issue --arg issueId=1234
 ```
 
+### List and download an issue's attachments
+
+```bash
+swamp model method run tracker list_attachments --arg issueId=1234
+swamp model method run tracker download_attachments \
+  --arg issueId=1234 \
+  --arg contentTypePrefix=image/
+```
+
+`download_attachments` stores each file as `attachment-<issueId>-<attachmentId>`
+in the `attachment` file spec, and writes the `attachments-<issueId>` resource
+with each file's `dataName` and `status`.
+
 ### Create an issue
 
 ```bash
@@ -137,6 +150,15 @@ succeeded but the method throws (no resource written).
 The `filePath` argument must be an absolute path readable by the swamp process.
 If the file cannot be read, the method throws with the path in the error
 message.
+
+### `download_attachments` skips files over `maxBytes`
+
+An attachment larger than `maxBytes` (default 20 MiB) is not downloaded; its
+status in the `attachments` resource is `skipped-too-large`. The limit applies
+both to the size Redmine records and to the bytes it actually serves. Any other
+download failure (for example a 404 or 403) fails the run and names the
+attachment. Files downloaded before the failure stay stored, but the
+`attachments` resource is not written.
 
 ### Reports and workflows referenced in README do not exist here
 
