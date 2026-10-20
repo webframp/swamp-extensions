@@ -50,7 +50,7 @@ export const Attr = {
   VAULT_NAME: "vault.name",
   /** Key the operation addressed. A name, never the secret stored under it. */
   VAULT_SECRET_KEY: "vault.secret_key",
-  /** Field of the entry a get selected, when one was. A name, never its value. */
+  /** Field a get or put key selected, when one did. A name, never its value. */
   VAULT_SECRET_FIELD: "vault.secret_field",
   /** Number of keys a list operation returned. */
   VAULT_KEYS_RETURNED: "vault.keys_returned",

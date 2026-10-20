@@ -858,6 +858,56 @@ Deno.test("multiline: put refuses a key that selects a field", async () => {
   });
 });
 
+Deno.test("multiline: a directory key is an error under passwordOnly or a field selection", async () => {
+  const store = await Deno.makeTempDir({ prefix: "swamp-pass-dir-" });
+  try {
+    await Deno.mkdir(`${store}/swamp/smtp`, { recursive: true });
+    await withMockedPass(async () => {
+      // What `pass show` prints, with exit 0, for a directory name.
+      mockSecrets.set("swamp/smtp", "swamp/smtp\n└── example\n");
+      const narrowed = [
+        vault.createProvider("v", { storeDir: store, passwordOnly: true }),
+        vault.createProvider("v", { storeDir: store, fieldSeparator: "#" }),
+      ];
+      await assertRejects(
+        () => narrowed[0].get("smtp"),
+        Error,
+        'pass key "smtp" is a directory, not an entry',
+      );
+      await assertRejects(
+        () => narrowed[1].get("smtp#login"),
+        Error,
+        "is a directory",
+      );
+      // The default mode keeps returning what pass prints.
+      const whole = vault.createProvider("v", { storeDir: store });
+      assertEquals(await whole.get("smtp"), "swamp/smtp\n└── example");
+    });
+  } finally {
+    await Deno.remove(store, { recursive: true });
+  }
+});
+
+Deno.test("multiline: an entry file beside a same-named directory is still an entry", async () => {
+  const store = await Deno.makeTempDir({ prefix: "swamp-pass-dir-" });
+  try {
+    await Deno.mkdir(`${store}/swamp/smtp`, { recursive: true });
+    await Deno.writeTextFile(`${store}/swamp/smtp.gpg`, "");
+    await withMockedPass(async () => {
+      mockSecrets.set("swamp/smtp", "pw\nlogin: me\n");
+      const provider = vault.createProvider("v", {
+        storeDir: store,
+        passwordOnly: true,
+        fieldSeparator: "#",
+      });
+      assertEquals(await provider.get("smtp"), "pw");
+      assertEquals(await provider.get("smtp#login"), "me");
+    });
+  } finally {
+    await Deno.remove(store, { recursive: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // OpenTelemetry spans
 //

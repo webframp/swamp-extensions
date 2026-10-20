@@ -93,11 +93,16 @@ field but never quotes the entry.
 The key splits at the last occurrence of the separator. The text after it
 selects a field only if it is a field name: non-blank, free of `/` and `:`, and
 without whitespace at either end. Otherwise the whole key names an entry, so
-`team#a/entry` and `a#` read those entries, and every key `list` returns stays
-readable. A key such as `smtp#login` is always read as a field selection,
-though, so choose a separator that never appears in your entry names. The
-separator itself may not contain `/` or whitespace. `put` refuses a key that
-selects a field, since writing it would replace the whole entry.
+`team#a/entry` and `a#` read those entries. An entry whose name does end in the
+separator and a field name, such as `smtp#login`, can never be read whole: `get`
+reads the `login:` field of `smtp` instead. Choose a separator that never
+appears in your entry names. The separator itself may not contain `/` or
+whitespace.
+
+With `passwordOnly` or a field selection, a key that names a directory is an
+error. Without them, `get` returns whatever `pass show` prints, which for a
+directory is its tree listing. `put` refuses a key that selects a field, since
+writing it would replace the whole entry.
 
 ```yaml
 globalArgs:
@@ -157,9 +162,9 @@ The provider emits OpenTelemetry spans for every vault operation — `pass get`,
 configures a TracerProvider; the swamp host does that. With no provider
 configured the tracer is a no-op.
 
-Attributes: `vault.name`, `vault.secret_key`, `vault.secret_field` when a get
-selects a field, `vault.prefix` when a prefix is configured, `rpc.system`,
-`rpc.service`, `rpc.method`, and `vault.keys_returned` on `list`.
+Attributes: `vault.name`, `vault.secret_key`, `vault.secret_field` when a get or
+put key selects a field, `vault.prefix` when a prefix is configured,
+`rpc.system`, `rpc.service`, `rpc.method`, and `vault.keys_returned` on `list`.
 
 These spans cover a case the host does not. swamp emits its own `swamp.vault.*`
 spans when you run a `swamp vault` subcommand, but they carry no attributes, and

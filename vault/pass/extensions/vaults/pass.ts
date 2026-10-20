@@ -305,6 +305,27 @@ export const vault = {
       return prefix ? `${prefix}/${key}` : key;
     };
 
+    /**
+     * Whether `pass show` printed a directory tree rather than an entry.
+     *
+     * pass shows the entry file when one exists, and otherwise, if the name is
+     * a directory, prints a tree of it and exits 0. Narrowing that listing to a
+     * line or field would hand back a path as if it were the password.
+     */
+    const isDirectory = async (entry: string): Promise<boolean> => {
+      try {
+        await Deno.stat(`${storeDir}/${entry}.gpg`);
+        return false;
+      } catch {
+        // No entry file, so pass took its directory branch if there is one.
+      }
+      try {
+        return (await Deno.stat(`${storeDir}/${entry}`)).isDirectory;
+      } catch {
+        return false;
+      }
+    };
+
     const spanAttributes = (
       method: string,
       key?: string,
@@ -326,7 +347,14 @@ export const vault = {
         const attrs = spanAttributes("get", path);
         if (field !== undefined) attrs[Attr.VAULT_SECRET_FIELD] = field;
         return withVaultSpan("pass get", attrs, async () => {
-          const content = await runPass(["show", prefixKey(path)]);
+          const entry = prefixKey(path);
+          const content = await runPass(["show", entry]);
+          if (
+            (field !== undefined || parsed.passwordOnly) &&
+            await isDirectory(entry)
+          ) {
+            throw new Error(`pass key "${path}" is a directory, not an entry`);
+          }
           if (field !== undefined) {
             const value = extractField(content, field);
             if (value === undefined) {
