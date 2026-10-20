@@ -1333,3 +1333,62 @@ Deno.test({
     }
   },
 });
+
+function streamBody(): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode("{}"));
+      c.close();
+    },
+  });
+}
+
+Deno.test({
+  name:
+    "redmineFetch: returns a retryable response at once for a streamed body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 429, headers: { "Retry-After": "5" } })
+    );
+    try {
+      const started = performance.now();
+      const response = await redmineFetch(`${url}/x`, {
+        method: "PUT",
+        body: streamBody(),
+      });
+      assertEquals(response.status, 429);
+      assertEquals(requests.length, 1);
+      assertEquals(performance.now() - started < 1000, true);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: follows a 303 after a POST with a streamed body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/post"
+        ? new Response(null, { status: 303, headers: { Location: "/done" } })
+        : new Response("ok")
+    );
+    try {
+      const response = await redmineFetch(`${url}/post`, {
+        method: "POST",
+        body: streamBody(),
+      });
+      assertEquals(await response.text(), "ok");
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/post"],
+        ["GET", "/done"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});

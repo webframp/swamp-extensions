@@ -199,6 +199,8 @@ export async function redmineFetch(
     ) {
       return response;
     }
+    // A streamed body was consumed by this attempt and cannot be resent.
+    if (init.body instanceof ReadableStream) return response;
     const delay = retryDelayMs(response, attempt);
     if (delay === null) return response;
     await response.body?.cancel();
