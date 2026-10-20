@@ -3,6 +3,7 @@
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import {
+  isHttpsUpgrade,
   redmineApi,
   redmineApiPaginated,
   redmineDownload,
@@ -481,11 +482,19 @@ Deno.test({
 
 Deno.test({
   name:
-    "redmineFetch: keeps credentials on a same-origin redirect and drops them cross-origin",
+    "redmineFetch: in strip mode keeps credentials on a same-origin redirect and drops them cross-origin, also after a hop back",
   // Server creates connection pool resources that outlive the test
   sanitizeResources: false,
   fn: async () => {
-    const other = startMockServer(() => new Response("elsewhere"));
+    let originUrl = "";
+    const other = startMockServer((req) =>
+      new URL(req.url).pathname === "/bounce"
+        ? new Response(null, {
+          status: 302,
+          headers: { Location: `${originUrl}/back` },
+        })
+        : new Response("elsewhere")
+    );
     const origin = startMockServer((req) => {
       const path = new URL(req.url).pathname;
       if (path === "/a") {
@@ -500,15 +509,18 @@ Deno.test({
           headers: { Location: `${other.url}/c` },
         });
       }
+      if (path === "/back") return new Response("back home");
       return new Response("unexpected", { status: 500 });
     });
+    originUrl = origin.url;
+    const headers = {
+      "X-Redmine-API-Key": "SECRET",
+      "X-Redmine-Username": "someone",
+      "Accept": "*/*",
+    };
     try {
-      const response = await redmineFetch(`${origin.url}/a`, {
-        headers: {
-          "X-Redmine-API-Key": "SECRET",
-          "X-Redmine-Username": "someone",
-          "Accept": "*/*",
-        },
+      const response = await redmineFetch(`${origin.url}/a`, { headers }, {
+        crossOrigin: "strip",
       });
       assertEquals(await response.text(), "elsewhere");
       assertEquals(origin.requests.map((r) => r.path), ["/a", "/b"]);
@@ -517,6 +529,17 @@ Deno.test({
       assertEquals(other.requests[0].headers["x-redmine-api-key"], undefined);
       assertEquals(other.requests[0].headers["x-redmine-username"], undefined);
       assertEquals(other.requests[0].headers["accept"], "*/*");
+
+      // Leaving the origin and coming back does not restore the credentials.
+      const back = await redmineFetch(`${other.url}/bounce`, { headers }, {
+        crossOrigin: "strip",
+      });
+      assertEquals(await back.text(), "back home");
+      // The first hop is already off the start origin (other -> origin).
+      assertEquals(
+        origin.requests.at(-1)?.headers["x-redmine-api-key"],
+        undefined,
+      );
     } finally {
       await origin.server.shutdown();
       await other.server.shutdown();
@@ -592,10 +615,184 @@ Deno.test({
       await assertRejects(
         () => redmineDownload(url, "k", "/stall", undefined, undefined, 50),
         Error,
-        "failed while reading the body",
+        "failed while reading the body: no data for 50ms",
       );
     } finally {
       stall?.();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineApi: rejects a redirect off the Redmine origin instead of going anonymous",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const other = startMockServer(() => Response.json({ issues: [] }));
+    const { url, server } = startMockServer(() =>
+      new Response(null, {
+        status: 301,
+        headers: { Location: `${other.url}/issues.json` },
+      })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "SECRET", "GET", "/issues.json"),
+        Error,
+        `redirected from ${url} to ${other.url}; set host to the Redmine URL it redirects to`,
+      );
+      assertEquals(other.requests.length, 0);
+    } finally {
+      await server.shutdown();
+      await other.server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: wraps a malformed redirect Location with the request",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(() =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: "http://[::1" },
+      })
+    );
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "GET", "/x.json"),
+        Error,
+        `Redmine GET /x.json request to ${url} failed`,
+      );
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: turns a 301 after POST into a GET",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/old"
+        ? new Response(null, { status: 301, headers: { Location: "/new" } })
+        : new Response("ok")
+    );
+    try {
+      await (await redmineFetch(`${url}/old`, {
+        method: "POST",
+        body: "{}",
+      })).text();
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/old"],
+        ["GET", "/new"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => {
+  const u = (s: string) => new URL(s);
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
+    true,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp/a"), u("https://www.r.corp/a")),
+    false,
+  );
+  assertEquals(isHttpsUpgrade(u("https://r.corp"), u("http://r.corp")), false);
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp")),
+    false,
+  );
+});
+
+Deno.test({
+  name: "redmineApi: retries a POST only on 429, not on 502",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return new Response(null, { status: 502 });
+    });
+    try {
+      await assertRejects(
+        () => redmineApi(url, "k", "POST", "/issues.json", { issue: {} }),
+        Error,
+        "failed (502)",
+      );
+      assertEquals(count, 1);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineApi: retries a POST after a 429",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    let count = 0;
+    const { url, server } = startMockServer(() => {
+      count++;
+      return count === 1
+        ? new Response(null, { status: 429, headers: { "Retry-After": "0" } })
+        : Response.json({ issue: { id: 1 } });
+    });
+    try {
+      await redmineApi(url, "k", "POST", "/issues.json", { issue: {} });
+      assertEquals(count, 2);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmineFetch: aborts an attempt at its signal and gives each attempt a signal",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer(
+      () =>
+        new Promise<Response>((r) =>
+          setTimeout(() => r(new Response("late")), 500)
+        ),
+    );
+    try {
+      await assertRejects(
+        () =>
+          redmineFetch(`${url}/slow`, {}, {
+            makeSignal: () => AbortSignal.timeout(20),
+          }),
+      );
+      const seen: Array<AbortSignal | null | undefined> = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = (input, init) => {
+        seen.push(init?.signal);
+        return originalFetch(input, { ...init, signal: undefined });
+      };
+      try {
+        await (await redmineFetch(`${url}/slow`, {})).text();
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+      assertEquals(seen.length, 1);
+      assertEquals(seen[0] instanceof AbortSignal, true);
+    } finally {
       await server.shutdown();
     }
   },

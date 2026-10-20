@@ -10,7 +10,12 @@
 const MAX_RETRIES = 4;
 const BASE_RETRY_DELAY_MS = 1000;
 
-function isRetryableStatus(status: number): boolean {
+// POST (create_issue, upload_file's upload, ...) is not idempotent: a 502 or
+// 504 can arrive after Redmine already created the record, and a retry
+// would create a second one. Only a 429 is known to be rejected before any
+// work, so that is the only status a POST retries.
+function isRetryableStatus(status: number, method: string): boolean {
+  if (method === "POST") return status === 429;
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
@@ -30,20 +35,38 @@ const CREDENTIAL_HEADERS = ["X-Redmine-API-Key", "X-Redmine-Username"];
 /** Per-attempt deadline for JSON requests, covering headers and body. */
 export const REQUEST_TIMEOUT_MS = 120_000;
 
+/**
+ * What to do when a redirect leaves the configured Redmine origin.
+ * - `reject`: throw. API calls use this: following without credentials
+ *   would silently return anonymous (partial or empty) results.
+ * - `strip`: follow without the Redmine credentials. Downloads use this,
+ *   for storage backends that redirect to a presigned S3 or CDN URL.
+ */
+export type CrossOriginRedirect = "reject" | "strip";
+
+/** Same host, http upgraded to https on the default ports. */
+export function isHttpsUpgrade(from: URL, to: URL): boolean {
+  return from.protocol === "http:" && to.protocol === "https:" &&
+    from.hostname === to.hostname && from.port === "" && to.port === "";
+}
+
 // fetch's own redirect handling strips only Authorization on a cross-origin
 // hop, so X-Redmine-API-Key would go to whatever host a Location names (an
 // S3 or CDN storage backend, a proxy, a misconfigured vhost). Follow
-// redirects by hand: same-origin hops keep the credentials, cross-origin
-// hops are still followed but without them. Method rewriting follows the
-// fetch spec (303, and 301/302 on POST, become a bodyless GET).
+// redirects by hand: same-origin hops and an http->https upgrade of the same
+// host keep the credentials; any other hop is rejected or followed without
+// them, per `crossOrigin`. Method rewriting follows the fetch spec (303, and
+// 301/302 on POST, become a bodyless GET).
 async function fetchFollowingRedirects(
   url: string,
   init: RequestInit,
+  crossOrigin: CrossOriginRedirect,
 ): Promise<Response> {
-  const origin = new URL(url).origin;
+  let trusted = new URL(url);
   let current = new URL(url);
   let method = (init.method ?? "GET").toUpperCase();
   let body = init.body;
+  let leftOrigin = false;
   const headers = new Headers(init.headers);
 
   for (let hop = 0;; hop++) {
@@ -71,10 +94,21 @@ async function fetchFollowingRedirects(
       body = undefined;
       headers.delete("Content-Type");
     }
-    current = new URL(location, current);
-    if (current.origin !== origin) {
-      for (const name of CREDENTIAL_HEADERS) headers.delete(name);
+    const next = new URL(location, current);
+    if (!leftOrigin && next.origin !== trusted.origin) {
+      if (isHttpsUpgrade(trusted, next)) {
+        trusted = next;
+      } else if (crossOrigin === "reject") {
+        throw new Error(
+          `redirected from ${trusted.origin} to ${next.origin}; ` +
+            `set host to the Redmine URL it redirects to`,
+        );
+      } else {
+        leftOrigin = true;
+        for (const name of CREDENTIAL_HEADERS) headers.delete(name);
+      }
     }
+    current = next;
   }
 }
 
@@ -83,19 +117,33 @@ async function fetchFollowingRedirects(
 // loop is enough. Retry 429/502/503/504 with backoff (honoring Retry-After
 // when the server sends one) instead of failing the whole run on the first
 // transient block. Each attempt gets a fresh signal from `makeSignal`.
+/** Options for `redmineFetch`. */
+export interface RedmineFetchOptions {
+  /** A fresh signal for each attempt (default: a REQUEST_TIMEOUT_MS deadline). */
+  makeSignal?: () => AbortSignal;
+  /** Redirects off the Redmine origin (default: reject). */
+  crossOrigin?: CrossOriginRedirect;
+}
+
 /** Fetch a Redmine URL with retries, safe redirects, and a per-attempt timeout. */
 export async function redmineFetch(
   url: string,
   init: RequestInit,
-  makeSignal: () => AbortSignal = () => AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  options: RedmineFetchOptions = {},
 ): Promise<Response> {
+  const makeSignal = options.makeSignal ??
+    (() => AbortSignal.timeout(REQUEST_TIMEOUT_MS));
+  const crossOrigin = options.crossOrigin ?? "reject";
+  const method = (init.method ?? "GET").toUpperCase();
   let response: Response;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     response = await fetchFollowingRedirects(url, {
       ...init,
       signal: makeSignal(),
-    });
-    if (!isRetryableStatus(response.status) || attempt === MAX_RETRIES) {
+    }, crossOrigin);
+    if (
+      !isRetryableStatus(response.status, method) || attempt === MAX_RETRIES
+    ) {
       return response;
     }
     await response.body?.cancel();
@@ -104,6 +152,25 @@ export async function redmineFetch(
     );
   }
   return response!;
+}
+
+/** Parse a 2xx JSON body, naming the request if reading it fails. */
+async function readJson<T>(
+  response: Response,
+  method: string,
+  path: string,
+  host: string,
+): Promise<T> {
+  try {
+    return (await response.json()) as T;
+  } catch (e) {
+    throw new Error(
+      `Redmine ${method} ${path} from ${host} failed while reading the body: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      { cause: e },
+    );
+  }
 }
 
 /**
@@ -160,7 +227,7 @@ export async function redmineApi<T = null>(
     throw new Error(errorMsg);
   }
 
-  return (await response.json()) as T;
+  return await readJson<T>(response, method, path, host);
 }
 
 /**
@@ -224,9 +291,14 @@ export async function redmineApiPaginated<T>(
       throw new Error(errorMsg);
     }
 
-    const data = await response.json();
+    const data = await readJson<Record<string, unknown>>(
+      response,
+      "GET",
+      path,
+      host,
+    );
     const items = (data[resultKey] ?? []) as T[];
-    const totalCount: number = data.total_count ?? 0;
+    const totalCount = (data.total_count as number | undefined) ?? 0;
 
     allResults.push(...items);
 
@@ -255,9 +327,12 @@ export class RedmineDownloadTooLargeError extends Error {
 /** A download is aborted when no bytes arrive for this long. */
 export const DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
 
+const INITIAL_BUFFER_CAP = 8 * 1024 * 1024;
+
 /**
  * Download raw bytes from a Redmine path (for example an attachment).
- * Retries and follows redirects like the JSON helpers. Throws on a non-2xx
+ * Retries like the JSON helpers. A redirect off the Redmine origin is followed
+ * without the Redmine credentials (storage backends redirect to S3 or a CDN). Throws on a non-2xx
  * response, and throws `RedmineDownloadTooLargeError` when the response is
  * larger than `maxBytes`. The body is read as a stream and abandoned as soon
  * as it passes the cap, so a missing or wrong Content-Length cannot make it
@@ -295,10 +370,13 @@ export async function redmineDownload(
   try {
     let response: Response;
     try {
-      response = await redmineFetch(`${host}${path}`, { headers }, () => {
-        controller = new AbortController();
-        resetIdle();
-        return controller.signal;
+      response = await redmineFetch(`${host}${path}`, { headers }, {
+        makeSignal: () => {
+          controller = new AbortController();
+          resetIdle();
+          return controller.signal;
+        },
+        crossOrigin: "strip",
       });
     } catch (e) {
       throw new Error(
@@ -328,8 +406,12 @@ export async function redmineDownload(
     // Allocate once when the length is declared; otherwise grow in place.
     // Either way the bytes are held in one buffer, never in a chunk list
     // plus a merged copy.
+    // The up-front allocation is capped so a large declared length costs
+    // nothing until the bytes actually arrive.
     let buffer = new Uint8Array(
-      Number.isInteger(declared) && declared >= 0 ? declared : 64 * 1024,
+      Number.isInteger(declared) && declared >= 0
+        ? Math.min(declared, INITIAL_BUFFER_CAP)
+        : 64 * 1024,
     );
     let total = 0;
     const reader = response.body.getReader();

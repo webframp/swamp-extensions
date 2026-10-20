@@ -6,51 +6,54 @@ size, content type, author, date) into a new `attachments` resource, named
 new `attachment` file spec, named `attachment-<issueId>-<attachmentId>`. It
 filters by attachment IDs or a content-type prefix (case-insensitive) and skips
 files over `maxBytes` (default 20 MiB). Until now the type had no way to read an
-attachment: `get_issue` does not request `include=attachments`, and
-`upload_file` was the only file method.
-
-The `attachments` resource always lists every attachment of the issue. After
-`download_attachments` each one has a status: `downloaded`, `not-selected`,
-`skipped-too-large` or `failed` (with an `error`), and `filter` records the
-selection. The size limit applies to the bytes Redmine serves as well as to the
-size it records. A file served as an HTML page (a login or proxy error page) is
-`failed`, not stored. If any download fails, the method stores the files that
-did download and the resource, then fails the run and names each failed
 attachment.
 
+The `attachments` resource always lists every attachment of the issue, with a
+status (`downloaded`, `not-selected`, `skipped-too-large` or `failed` with an
+`error`) and, for downloaded ones, the `dataName` of the stored file. `filter`
+records the selection and `maxBytes`. The size limit applies to the bytes
+Redmine serves as well as to the size it records. A non-HTML attachment served
+as an HTML page (a login or proxy error page) is `failed`, not stored. If any
+download fails, the method stores the files that did download and the resource,
+then fails the run naming each failed attachment.
+
 **Fixed:** Every request sent `X-Redmine-API-Key` and `X-Redmine-Username` to
-whatever host a redirect pointed at, because `fetch` strips only
-`Authorization` on a cross-origin redirect. Redirects are now followed by hand:
-a same-origin redirect keeps the credentials, a cross-origin one (for example to
-an S3 or CDN storage backend) is followed without them, and more than 5
-redirects fail the request.
+whatever host a redirect pointed at, because `fetch` strips only `Authorization`
+on a cross-origin redirect.
+
+**Fixed:** Methods overwrote each other's stored data. Swamp stores data by
+name, not by spec, so `list_statuses`, `list_trackers`, `list_projects` and
+`list_custom_fields` all wrote `all`, and `get_issue` and `list_relations` both
+wrote the bare issue ID. Every data name now carries a spec prefix (see
+**Upgrade note**).
+
+**Fixed:** The source files' SPDX header said AGPL-3.0-or-later; it now says
+Apache-2.0, matching `LICENSE.md` and the manifest.
+
+**Changed:** A redirect to another origin now fails an API call with a message
+naming the URL to set as `host`. A same-origin redirect, or an http→https
+upgrade of the same host, still works. `download_attachments` follows other
+redirects without the credentials (S3 or CDN storage backends).
+
+**Changed:** A POST (`create_issue`, `create_version`, `upload_file`, ...)
+retries only a 429. A 502 or 504 can arrive after Redmine already created the
+record, and retrying it created a duplicate. GET, PUT and DELETE still retry
+429/502/503/504. `upload_file`'s upload now uses the same retry and redirect
+handling as every other call.
 
 **Changed:** Requests no longer wait forever on a server that stops answering.
 JSON requests time out after 120 seconds per attempt, downloads after 60 seconds
 without data, and `upload_file`'s upload after 10 minutes per attempt.
-`upload_file`'s upload now also retries 429/502/503/504 like every other call.
 
-**Upgrade note:** No `globalArguments` changes; existing instances move to this
-version with an identity upgrade. Downloads send `X-Redmine-Username` when
-`username` is set, like every other method.
+**Upgrade note:** Data names change. Update any `data.latest(...)` or
+`model.<name>.resource.<spec>.<name>` reference:
 
-## 2026.10.14.1
+- `all` → `statuses-all`, `trackers-all`, `projects-all`, `custom-fields-all`
+- `<project>` → `users-<project>`, `versions-<project>`,
+  `issue-categories-<project>`
+- `<filters>` → `issues-<filters>`; `<issueId>` → `issue-<issueId>`,
+  `relations-<issueId>`; `<versionId>` → `version-<versionId>`
+- time entries → `time-entries-<...>`; search → `search-<query>`
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
-
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.09.19.1
-
-**Fixed:** `redmineApi`/`redmineApiPaginated` had no retry logic — any 429
-(or 502/503/504) failed the request outright. A caller sequentially fetching
-many issues (e.g. an enrichment step iterating over a large ticket list) can
-trip Redmine's rate limiter even at concurrency 1, and every prior release
-turned that into a hard failure. Both helpers now retry through a shared
-`fetchWithRetry`, honoring `Retry-After` when the server sends one and
-falling back to exponential backoff (up to 4 retries) otherwise.
-
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+Data stored under the old names is not migrated; rerun the method to write it
+under the new name. No `globalArguments` changes.

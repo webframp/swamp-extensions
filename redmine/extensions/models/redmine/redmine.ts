@@ -7,7 +7,7 @@
  *
  * @module
  */
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
 import {
@@ -247,7 +247,7 @@ export interface Attachment {
   description: string;
   author: { id: number; name: string } | null;
   createdOn: string;
-  dataName: string;
+  dataName: string | null;
   status: AttachmentStatus;
   error: string | null;
 }
@@ -291,11 +291,32 @@ export function mapAttachments(
       description: a.description ?? "",
       author: a.author ?? null,
       createdOn: a.created_on,
-      dataName: attachmentDataName(issueId, a.id),
+      dataName: null,
       status: "listed" as const,
       error: null,
     };
   });
+}
+
+const HTML_FILE = /\.(html?|xhtml)$/i;
+
+/**
+ * True when the server answered with an HTML page (a login page, a proxy's
+ * error page) where the attachment is not HTML. Redmine resolves an unknown
+ * recorded type from the file name, so a `.html` file recorded as
+ * application/octet-stream is legitimately served as text/html.
+ */
+export function servedHtmlInsteadOf(
+  attachment: Pick<Attachment, "filename" | "contentType">,
+  servedContentType: string | null,
+): boolean {
+  const served = servedContentType?.toLowerCase() ?? "";
+  if (!served.startsWith("text/html")) return false;
+  const recorded = attachment.contentType.toLowerCase();
+  if (recorded.startsWith("text/html") || recorded.includes("xhtml")) {
+    return false;
+  }
+  return !HTML_FILE.test(attachment.filename);
 }
 
 /**
@@ -510,7 +531,7 @@ export const model = {
     {
       toVersion: "2026.10.20.1",
       description:
-        "No globalArguments changes — adds list_attachments and download_attachments, an attachments resource and an attachment file spec",
+        "No globalArguments changes — adds list_attachments and download_attachments, an attachments resource and an attachment file spec; resource data names gain a spec prefix (stored data under the old names is not migrated)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -887,8 +908,8 @@ export const model = {
           description: z.string(),
           author: z.object({ id: z.number(), name: z.string() }).nullable(),
           createdOn: z.string(),
-          dataName: z.string().describe(
-            "Data name of the stored file (attachment file spec)",
+          dataName: z.string().nullable().describe(
+            "Data name of the file this run stored (attachment file spec); null unless status is downloaded",
           ),
           status: z.enum([
             "listed",
@@ -907,6 +928,7 @@ export const model = {
         filter: z.object({
           attachmentIds: z.array(z.number()).nullable(),
           contentTypePrefix: z.string().nullable(),
+          maxBytes: z.number(),
         }).nullable().describe(
           "Selection download_attachments used; null for list_attachments",
         ),
@@ -965,7 +987,7 @@ export const model = {
           isClosed: s.is_closed,
         }));
 
-        const handle = await context.writeResource("statuses", "all", {
+        const handle = await context.writeResource("statuses", "statuses-all", {
           statuses,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -1001,7 +1023,7 @@ export const model = {
           description: t.description,
         }));
 
-        const handle = await context.writeResource("trackers", "all", {
+        const handle = await context.writeResource("trackers", "trackers-all", {
           trackers,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -1042,7 +1064,7 @@ export const model = {
           updatedOn: p.updated_on,
         }));
 
-        const handle = await context.writeResource("projects", "all", {
+        const handle = await context.writeResource("projects", "projects-all", {
           projects,
           fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - startMs,
@@ -1104,13 +1126,17 @@ export const model = {
           };
         });
 
-        const handle = await context.writeResource("users", project, {
-          members,
-          project,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "users",
+          `users-${project}`,
+          {
+            members,
+            project,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} members in project {project}", {
           count: members.length,
@@ -1148,12 +1174,16 @@ export const model = {
           trackers: cf.trackers,
         }));
 
-        const handle = await context.writeResource("custom_fields", "all", {
-          customFields,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "custom_fields",
+          "custom-fields-all",
+          {
+            customFields,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} custom fields", {
           count: customFields.length,
@@ -1259,13 +1289,17 @@ export const model = {
           ? filterParts.join("-")
           : "all";
 
-        const handle = await context.writeResource("issues", instanceName, {
-          issues,
-          totalCount: issues.length,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "issues",
+          `issues-${instanceName}`,
+          {
+            issues,
+            totalCount: issues.length,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} issues", { count: issues.length });
         return { dataHandles: [handle] };
@@ -1296,7 +1330,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(args.issueId),
+          `issue-${args.issueId}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1397,7 +1431,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(data.issue.id),
+          `issue-${data.issue.id}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1525,7 +1559,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_detail",
-          String(args.issueId),
+          `issue-${args.issueId}`,
           {
             ...issue,
             fetchedAt: new Date().toISOString(),
@@ -1600,7 +1634,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "relations",
-          String(args.issueId),
+          `relations-${args.issueId}`,
           {
             relations,
             issueId: args.issueId,
@@ -1758,12 +1792,16 @@ export const model = {
           updatedOn: v.updated_on,
         }));
 
-        const handle = await context.writeResource("versions", project, {
-          versions,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "versions",
+          `versions-${project}`,
+          {
+            versions,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} versions in project {project}", {
           count: versions.length,
@@ -1849,7 +1887,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "time_entries",
-          instanceName,
+          `time-entries-${instanceName}`,
           {
             timeEntries,
             totalCount: timeEntries.length,
@@ -2029,7 +2067,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "search_results",
-          args.query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50),
+          "search-" + args.query.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 50),
           {
             results: data.results,
             totalCount: data.total_count,
@@ -2098,7 +2136,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "versions",
-          String(args.versionId),
+          `version-${args.versionId}`,
           {
             versions: [version],
             fetchedAt: new Date().toISOString(),
@@ -2203,7 +2241,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "versions",
-          String(v.id),
+          `version-${v.id}`,
           {
             versions: [version],
             fetchedAt: new Date().toISOString(),
@@ -2373,7 +2411,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "issue_categories",
-          project,
+          `issue-categories-${project}`,
           {
             categories,
             project,
@@ -2449,7 +2487,7 @@ export const model = {
           uploadResp = await redmineFetch(
             `${host}/uploads.json?${params}`,
             { method: "POST", headers, body: fileData },
-            () => AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+            { makeSignal: () => AbortSignal.timeout(UPLOAD_TIMEOUT_MS) },
           );
         } catch (e) {
           throw new Error(
@@ -2611,10 +2649,8 @@ export const model = {
             );
             // A login page or a storage proxy's error page arrives as a 200
             // text/html response; do not store it as the attachment.
-            const served = download.contentType?.toLowerCase() ?? "";
             if (
-              served.startsWith("text/html") &&
-              !attachment.contentType.toLowerCase().startsWith("text/html")
+              servedHtmlInsteadOf(attachment, download.contentType)
             ) {
               throw new Error(
                 `server returned text/html instead of ${attachment.contentType}`,
@@ -2633,13 +2669,25 @@ export const model = {
             }
             continue;
           }
-          const writer = context.createFileWriter(
-            "attachment",
-            attachment.dataName,
-            { contentType: attachment.contentType },
-          );
-          handles.push(await writer.writeAll(bytes));
-          results.push({ ...attachment, status: "downloaded" });
+          const dataName = attachmentDataName(args.issueId, attachment.id);
+          try {
+            const writer = context.createFileWriter(
+              "attachment",
+              dataName,
+              { contentType: attachment.contentType },
+            );
+            handles.push(await writer.writeAll(bytes));
+          } catch (e) {
+            results.push({
+              ...attachment,
+              status: "failed",
+              error: `storing the file failed: ${
+                e instanceof Error ? e.message : String(e)
+              }`,
+            });
+            continue;
+          }
+          results.push({ ...attachment, dataName, status: "downloaded" });
         }
 
         handles.push(
@@ -2652,6 +2700,7 @@ export const model = {
               filter: {
                 attachmentIds: args.attachmentIds ?? null,
                 contentTypePrefix: args.contentTypePrefix ?? null,
+                maxBytes,
               },
               fetchedAt: new Date().toISOString(),
               durationMs: Date.now() - startMs,

@@ -1,5 +1,5 @@
 // Redmine Model Tests
-// SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
+// SPDX-License-Identifier: Apache-2.0
 
 import {
   assertEquals,
@@ -8,7 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { model } from "./redmine.ts";
+import { model, servedHtmlInsteadOf } from "./redmine.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Server Helpers
@@ -167,7 +167,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "statuses");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "statuses-all");
 
       const data = resources[0].data as {
         statuses: Array<{ id: number; name: string; isClosed: boolean }>;
@@ -225,7 +225,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "trackers");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "trackers-all");
 
       const data = resources[0].data as {
         trackers: Array<{
@@ -298,7 +298,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "projects");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "projects-all");
 
       const data = resources[0].data as {
         projects: Array<{
@@ -369,7 +369,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "users");
-      assertEquals(resources[0].name, TEST_PROJECT);
+      assertEquals(resources[0].name, `users-${TEST_PROJECT}`);
 
       const data = resources[0].data as {
         members: Array<{
@@ -448,7 +448,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "custom_fields");
-      assertEquals(resources[0].name, "all");
+      assertEquals(resources[0].name, "custom-fields-all");
 
       const data = resources[0].data as {
         customFields: Array<{
@@ -534,7 +534,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
-      assertEquals(resources[0].name, "200");
+      assertEquals(resources[0].name, "issue-200");
     } finally {
       uninstall();
       await server.shutdown();
@@ -619,6 +619,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
+      assertEquals(resources[0].name, `issue-${mockIssue1.id}`);
 
       // Verify the re-fetched data shows updated status
       const data = resources[0].data as {
@@ -786,6 +787,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issues");
+      assertEquals(resources[0].name, `issues-p:${TEST_PROJECT}`);
 
       const data = resources[0].data as {
         issues: Array<Record<string, unknown>>;
@@ -903,7 +905,7 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_detail");
-      assertEquals(resources[0].name, String(mockIssue1.id));
+      assertEquals(resources[0].name, `issue-${mockIssue1.id}`);
 
       const data = resources[0].data as {
         id: number;
@@ -1006,7 +1008,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "relations");
-      assertEquals(resources[0].name, "100");
+      assertEquals(resources[0].name, "relations-100");
       const data = resources[0].data as {
         relations: Array<{ relationType: string }>;
       };
@@ -1121,6 +1123,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
+      assertEquals(resources[0].name, `versions-${TEST_PROJECT}`);
       const data = resources[0].data as {
         versions: Array<{ name: string }>;
       };
@@ -1172,7 +1175,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "time_entries");
-      assertEquals(resources[0].name, "100");
+      assertEquals(resources[0].name, "time-entries-100");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1314,6 +1317,7 @@ Deno.test({
       assertEquals(capturedPath, "/projects/my%20project/search.json");
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "search_results");
+      assertEquals(resources[0].name, "search-test");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1356,7 +1360,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
-      assertEquals(resources[0].name, "10");
+      assertEquals(resources[0].name, "version-10");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1399,6 +1403,7 @@ Deno.test({
       assertEquals(body.version.name, "New Sprint");
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "versions");
+      assertEquals(resources[0].name, "version-99");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1510,6 +1515,7 @@ Deno.test({
       );
       const resources = getWrittenResources();
       assertEquals(resources[0].specName, "issue_categories");
+      assertEquals(resources[0].name, `issue-categories-${TEST_PROJECT}`);
       const data = resources[0].data as {
         categories: Array<{ name: string }>;
       };
@@ -1713,7 +1719,10 @@ Deno.test({
         >;
       };
       assertEquals(data.attachments.map((a) => a.id), [7, 8, 9]);
-      assertEquals(data.attachments[0].dataName, "attachment-42-7");
+      assertEquals(
+        data.attachments.map((a) => a.dataName as string | null),
+        [null, null, null],
+      );
       assertEquals(data.attachments[2].contentType, "application/octet-stream");
       assertEquals(data.attachments[1].author, null);
       assertEquals(data.attachments.every((a) => a.status === "listed"), true);
@@ -1946,17 +1955,23 @@ Deno.test({
         context as unknown as DownloadCtx,
       );
       const data = getWrittenResources()[0].data as {
-        attachments: Array<{ id: number; status: string }>;
+        attachments: Array<
+          { id: number; status: string; dataName: string | null }
+        >;
         filter: unknown;
       };
-      assertEquals(data.attachments.map((a) => [a.id, a.status]), [
-        [7, "downloaded"],
-        [8, "not-selected"],
-        [9, "not-selected"],
-      ]);
+      assertEquals(
+        data.attachments.map((a) => [a.id, a.status, a.dataName]),
+        [
+          [7, "downloaded", "attachment-42-7"],
+          [8, "not-selected", null],
+          [9, "not-selected", null],
+        ],
+      );
       assertEquals(data.filter, {
         attachmentIds: null,
         contentTypePrefix: "IMAGE/",
+        maxBytes: 20_971_520,
       });
       assertEquals(
         model.resources.attachments.schema.safeParse(data).success,
@@ -2149,4 +2164,102 @@ Deno.test("redmine model: attachment argument schemas reject bad input", () => {
   assertEquals(list.safeParse({ issueId: 0 }).success, false);
   assertExists(model.files.attachment);
   assertEquals(model.files.attachment.contentType, "application/octet-stream");
+});
+
+Deno.test("redmine model: servedHtmlInsteadOf allows HTML attachments only", () => {
+  const png = { filename: "shot.png", contentType: "image/png" };
+  const htmlUnknown = {
+    filename: "report.HTML",
+    contentType: "application/octet-stream",
+  };
+  const htmlKnown = { filename: "page", contentType: "text/html" };
+  assertEquals(servedHtmlInsteadOf(png, "text/html; charset=utf-8"), true);
+  assertEquals(servedHtmlInsteadOf(png, "image/png"), false);
+  assertEquals(servedHtmlInsteadOf(png, null), false);
+  assertEquals(servedHtmlInsteadOf(htmlUnknown, "text/html"), false);
+  assertEquals(servedHtmlInsteadOf(htmlKnown, "TEXT/HTML"), false);
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments stores an .html attachment recorded without a type",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockRedmine((req) => {
+      const u = new URL(req.url);
+      if (u.pathname === "/issues/5.json") {
+        return Response.json({
+          issue: {
+            id: 5,
+            attachments: [rawAttachment(6, "report.html", null, 13)],
+          },
+        });
+      }
+      return new Response("<html></html>", {
+        headers: { "Content-Type": "text/html" },
+      });
+    });
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenFiles } = makeContext();
+      await model.methods.download_attachments.execute(
+        { issueId: 5 },
+        context as unknown as DownloadCtx,
+      );
+      assertEquals(getWrittenFiles().map((f) => f.name), ["attachment-5-6"]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "redmine model: download_attachments records a file that cannot be stored as failed",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = attachmentServer([]);
+    const uninstall = installFetchMock(TEST_HOST, url);
+    try {
+      const { context, getWrittenResources } = makeContext();
+      const original = context.createFileWriter;
+      const failing = {
+        ...context,
+        createFileWriter: (spec: string, name: string) => {
+          const writer = original(spec, name);
+          if (name !== "attachment-42-9") return writer;
+          return {
+            ...writer,
+            writeAll: () => Promise.reject(new Error("disk full")),
+          };
+        },
+      };
+      await assertRejects(
+        () =>
+          model.methods.download_attachments.execute(
+            { issueId: 42, attachmentIds: [7, 9] },
+            failing as unknown as DownloadCtx,
+          ),
+        Error,
+        "9 (notes): storing the file failed: disk full",
+      );
+      const data = getWrittenResources()[0].data as {
+        attachments: Array<
+          { id: number; status: string; dataName: string | null }
+        >;
+      };
+      assertEquals(
+        data.attachments.map((a) => [a.id, a.status, a.dataName]),
+        [
+          [7, "downloaded", "attachment-42-7"],
+          [8, "not-selected", null],
+          [9, "failed", null],
+        ],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
 });

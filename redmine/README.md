@@ -56,9 +56,10 @@ swamp model method run tracker download_attachments \
 
 `download_attachments` stores each file as `attachment-<issueId>-<attachmentId>`
 in the `attachment` file spec. It writes the `attachments-<issueId>` resource
-listing every attachment of the issue with its `dataName` and `status`
-(`downloaded`, `not-selected`, `skipped-too-large` or `failed`), whether or not
-the filter selected it.
+listing every attachment of the issue, whether or not the filter selected it,
+with its `status` (`downloaded`, `not-selected`, `skipped-too-large` or
+`failed`). `dataName` names the stored file only when `status` is `downloaded`;
+otherwise it is `null`.
 
 ### Create an issue
 
@@ -163,13 +164,42 @@ that attachment `failed` with an `error`. The method finishes the other
 downloads, writes the `attachments` resource, and then fails the run naming each
 failed attachment.
 
-### Redirects and timeouts
+### Redirects, retries and timeouts
 
-Redirects are followed by hand. A same-origin redirect keeps `X-Redmine-API-Key`
-and `X-Redmine-Username`; a cross-origin one (for example to an S3 or CDN
-storage backend) is followed without them. JSON requests time out after 120
-seconds per attempt, downloads after 60 seconds without data, and
-`upload_file`'s upload after 10 minutes per attempt.
+Redirects are followed by hand. A same-origin redirect, or an http→https upgrade
+of the same host, keeps `X-Redmine-API-Key` and `X-Redmine-Username`. Any other
+redirect fails an API call with a message naming the URL to set as `host`;
+`download_attachments` follows it without the credentials, for storage backends
+that redirect to S3 or a CDN. A POST (`create_issue`, `create_version`,
+`upload_file`, ...) retries only a 429, since a 502 or 504 can arrive after
+Redmine already created the record. JSON requests time out after 120 seconds per
+attempt, downloads after 60 seconds without data, and `upload_file`'s upload
+after 10 minutes per attempt.
+
+### Data names
+
+Swamp stores data by name with no spec component, so every name carries a spec
+prefix. Before 2026.10.20.1, `list_statuses`, `list_trackers`, `list_projects`
+and `list_custom_fields` all wrote `all`, and `get_issue` and `list_relations`
+both wrote the bare issue ID, overwriting one another.
+
+| Method                                      | Spec               | Data name                                |
+| ------------------------------------------- | ------------------ | ---------------------------------------- |
+| `list_statuses`                             | `statuses`         | `statuses-all`                           |
+| `list_trackers`                             | `trackers`         | `trackers-all`                           |
+| `list_projects`                             | `projects`         | `projects-all`                           |
+| `list_custom_fields`                        | `custom_fields`    | `custom-fields-all`                      |
+| `list_users`                                | `users`            | `users-<project>`                        |
+| `list_issues`                               | `issues`           | `issues-<filters>` (e.g. `issues-p:web`) |
+| `get_issue`, `create_issue`, `update_issue` | `issue_detail`     | `issue-<issueId>`                        |
+| `list_relations`                            | `relations`        | `relations-<issueId>`                    |
+| `list_versions`                             | `versions`         | `versions-<project>`                     |
+| `get_version`, `create_version`             | `versions`         | `version-<versionId>`                    |
+| `list_time_entries`                         | `time_entries`     | `time-entries-<issueId, project or all>` |
+| `search`                                    | `search_results`   | `search-<sanitized query>`               |
+| `list_issue_categories`                     | `issue_categories` | `issue-categories-<project>`             |
+| `list_attachments`, `download_attachments`  | `attachments`      | `attachments-<issueId>`                  |
+| `download_attachments`                      | `attachment`       | `attachment-<issueId>-<attachmentId>`    |
 
 ### Reports and workflows referenced in README do not exist here
 
