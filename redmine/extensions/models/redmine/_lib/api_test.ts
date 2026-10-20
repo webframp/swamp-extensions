@@ -713,13 +713,17 @@ Deno.test({
   },
 });
 
-Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () => {
+Deno.test("isHttpsUpgrade: only same host, http to https, default ports", () => {
   const u = (s: string) => new URL(s);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp/a")),
     true,
   );
-  // URL normalizes an explicit default port away, so :443 still counts.
+  // URL normalizes an explicit default port away, so :80 and :443 count.
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp:80/a"), u("https://r.corp:443/a")),
+    true,
+  );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp/a"), u("https://r.corp:443/a")),
     true,
@@ -731,11 +735,15 @@ Deno.test("isHttpsUpgrade: only same host name, http to https, any ports", () =>
   assertEquals(isHttpsUpgrade(u("https://r.corp"), u("http://r.corp")), false);
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp")),
-    true,
+    false,
+  );
+  assertEquals(
+    isHttpsUpgrade(u("http://r.corp"), u("https://r.corp:8443")),
+    false,
   );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("https://r.corp:8443")),
-    true,
+    false,
   );
   assertEquals(
     isHttpsUpgrade(u("http://r.corp:8080"), u("http://r.corp:9090")),
@@ -1125,8 +1133,10 @@ Deno.test("retryDelayMs: parses seconds and HTTP dates, caps, and falls back", (
   assertEquals(retryDelayMs(withHeader(), 2), 4000);
   assertEquals(retryDelayMs(withHeader("1.5"), 0), 1500);
   assertEquals(retryDelayMs(withHeader(" 2 "), 0), 2000);
-  assertEquals(retryDelayMs(withHeader("60"), 0), 60_000);
-  assertEquals(retryDelayMs(withHeader("61"), 0), null);
+  // A 2-minute rate-limit window is waited out; a longer one is not.
+  assertEquals(retryDelayMs(withHeader("120"), 0), 120_000);
+  assertEquals(retryDelayMs(withHeader("300"), 0), 300_000);
+  assertEquals(retryDelayMs(withHeader("301"), 0), null);
   assertEquals(retryDelayMs(withHeader("86400"), 0), null);
   assertEquals(retryDelayMs(withHeader("-5"), 1), 2000);
   assertEquals(retryDelayMs(withHeader("soon"), 0), 1000);
@@ -1297,3 +1307,113 @@ Deno.test(
     }
   },
 );
+
+Deno.test({
+  name: "redmineFetch: refuses to resend a streamed body on a 307",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 307, headers: { Location: "/again" } })
+    );
+    try {
+      await assertRejects(
+        () =>
+          redmineFetch(`${url}/up`, {
+            method: "PUT",
+            body: new ReadableStream({
+              start(c) {
+                c.enqueue(new TextEncoder().encode("{}"));
+                c.close();
+              },
+            }),
+          }),
+        Error,
+        "cannot follow a 307 redirect with a streamed body",
+      );
+      assertEquals(requests.length, 1);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+function streamBody(): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode("{}"));
+      c.close();
+    },
+  });
+}
+
+Deno.test({
+  name:
+    "redmineFetch: returns a retryable response at once for a streamed body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 429, headers: { "Retry-After": "5" } })
+    );
+    try {
+      const started = performance.now();
+      const response = await redmineFetch(`${url}/x`, {
+        method: "PUT",
+        body: streamBody(),
+      });
+      assertEquals(response.status, 429);
+      assertEquals(requests.length, 1);
+      assertEquals(performance.now() - started < 1000, true);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: follows a 303 after a POST with a streamed body",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer((req) =>
+      new URL(req.url).pathname === "/post"
+        ? new Response(null, { status: 303, headers: { Location: "/done" } })
+        : new Response("ok")
+    );
+    try {
+      const response = await redmineFetch(`${url}/post`, {
+        method: "POST",
+        body: streamBody(),
+      });
+      assertEquals(await response.text(), "ok");
+      assertEquals(requests.map((r) => [r.method, r.path]), [
+        ["POST", "/post"],
+        ["GET", "/done"],
+      ]);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "redmineFetch: stops retrying once the summed waits pass the budget",
+  // Server creates connection pool resources that outlive the test
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer(() =>
+      new Response(null, { status: 429, headers: { "Retry-After": "0.2" } })
+    );
+    try {
+      // Waits 0.2 s twice (0.4 s); a third wait would reach 0.6 s > 0.5 s.
+      const response = await redmineFetch(`${url}/x`, {}, {
+        retryBudgetMs: 500,
+      });
+      assertEquals(response.status, 429);
+      assertEquals(requests.length, 3);
+    } finally {
+      await server.shutdown();
+    }
+  },
+});

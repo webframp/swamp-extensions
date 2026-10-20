@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/redmine"
 license: Apache-2.0
-version: "2026.10.20.1"
+version: "2026.10.20.2"
 description: |
   Redmine issue tracker integration — workflow-agnostic CRUD model.
 

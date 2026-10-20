@@ -26,8 +26,14 @@ function isRetryableStatus(response: Response, method: string): boolean {
   return status === 502 || status === 503 || status === 504;
 }
 
-/** The longest Retry-After a request waits out before retrying. */
-export const MAX_RETRY_DELAY_MS = 60_000;
+/**
+ * The longest Retry-After a request waits out before retrying, and the total
+ * time all retries of one request may spend waiting. Rate limiters
+ * with a time window (Skipper's clusterClientRatelimit over "2m", for one)
+ * ask for up to the whole window, so this covers a few minutes; anything
+ * longer is a maintenance window or daily quota, not worth blocking on.
+ */
+export const MAX_RETRY_DELAY_MS = 300_000;
 
 /**
  * How long to wait before the next attempt, or null to stop retrying.
@@ -68,13 +74,14 @@ export const REQUEST_TIMEOUT_MS = 120_000;
 export type CrossOriginRedirect = "reject" | "strip";
 
 /**
- * Same host name, http upgraded to https, on any ports (self-hosted Redmine
- * often runs on http://host:3000 or :8080 behind a TLS listener elsewhere).
- * The credentials stay with the same host and only gain encryption.
+ * Same host, http upgraded to https on the default ports (80 to 443), the
+ * redirect a load balancer such as an AWS ALB issues. A TLS listener on any
+ * other port of the host is not trusted with the key: a setup that redirects
+ * there gets the "set host to ..." error and points `host` at the https URL.
  */
 export function isHttpsUpgrade(from: URL, to: URL): boolean {
   return from.protocol === "http:" && to.protocol === "https:" &&
-    from.hostname === to.hostname;
+    from.hostname === to.hostname && from.port === "" && to.port === "";
 }
 
 // fetch's own redirect handling strips only Authorization on a cross-origin
@@ -122,6 +129,12 @@ async function fetchFollowingRedirects(
       body = undefined;
       headers.delete("Content-Type");
     }
+    // A 307/308 resends the body; a stream was consumed by the first hop.
+    if (body instanceof ReadableStream) {
+      throw new Error(
+        `cannot follow a ${response.status} redirect with a streamed body`,
+      );
+    }
     const next = new URL(location, current);
     if (next.origin !== trusted.origin) {
       if (isHttpsUpgrade(trusted, next)) {
@@ -153,6 +166,8 @@ export interface RedmineFetchOptions {
   crossOrigin?: CrossOriginRedirect;
   /** Called as each response (including each redirect hop) arrives. */
   onResponse?: () => void;
+  /** Total time all retries of one request may wait (default MAX_RETRY_DELAY_MS). */
+  retryBudgetMs?: number;
 }
 
 /** Fetch a Redmine URL with retries, safe redirects, and a per-attempt timeout. */
@@ -165,6 +180,10 @@ export async function redmineFetch(
     (() => AbortSignal.timeout(REQUEST_TIMEOUT_MS));
   const crossOrigin = options.crossOrigin ?? "reject";
   const method = (init.method ?? "GET").toUpperCase();
+  // One budget for the summed waits of every retry, so a limiter that keeps
+  // asking for the maximum cannot hold a request for MAX_RETRIES times it.
+  const retryBudgetMs = options.retryBudgetMs ?? MAX_RETRY_DELAY_MS;
+  let waitedMs = 0;
   let response: Response;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     const result = await fetchFollowingRedirects(
@@ -187,8 +206,11 @@ export async function redmineFetch(
     ) {
       return response;
     }
+    // A streamed body was consumed by this attempt and cannot be resent.
+    if (init.body instanceof ReadableStream) return response;
     const delay = retryDelayMs(response, attempt);
-    if (delay === null) return response;
+    if (delay === null || waitedMs + delay > retryBudgetMs) return response;
+    waitedMs += delay;
     await response.body?.cancel();
     await new Promise((resolve) => setTimeout(resolve, delay));
   }
