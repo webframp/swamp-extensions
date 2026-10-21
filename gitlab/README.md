@@ -111,27 +111,27 @@ fires the `@webframp/review-dashboard` report automatically.
 
 ### Write (REST)
 
-| Method                  | Description                                                       | Inputs                                                               |
-| ----------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `create_issue`          | Create an issue                                                   | `project`, `title`, `description?`, `labels?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?` |
-| `update_issue`          | Update an issue                                                   | `project`, `iid`, `title?`, `description?`, `labels?`, `addLabels?`, `removeLabels?`, `stateEvent?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?` |
-| `add_issue_note`        | Comment on an issue, or reply into a thread                       | `project`, `iid`, `body`, `discussionId?`                            |
-| `update_issue_note`     | Edit a comment on an issue                                        | `project`, `iid`, `noteId`, `body`                                   |
-| `delete_issue_note`     | Delete a comment on an issue                                      | `project`, `iid`, `noteId`                                           |
-| `set_issue_assignees`   | Set (replace) an issue's assignees                                | `project`, `iid`, `usernames`                                        |
-| `unassign_from_issues`  | Remove a user (default: you) from multiple issues in one fan-out  | `project`, `iids`, `username?`                                       |
-| `remove_work_item_parent` | Detach a work item from its parent (GraphQL)                    | `project`, `iid`                                                     |
-| `convert_work_item_type` | Change a work item's type, e.g. Task to Issue (GraphQL)          | `project`, `iid`, `type`                                             |
-| `create_merge_request`  | Create a merge request                                            | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`  |
-| `merge`                 | Merge a merge request                                             | `project`, `iid`, `squash?`                                          |
-| `add_mr_note`           | Comment on a merge request, or reply into a thread                | `project`, `iid`, `body`, `discussionId?`                            |
-| `update_mr_note`        | Edit a comment on a merge request                                 | `project`, `iid`, `noteId`, `body`                                    |
-| `delete_mr_note`        | Delete a comment on a merge request                                | `project`, `iid`, `noteId`                                           |
-| `resolve_mr_discussion` | Resolve/unresolve an MR discussion thread                         | `project`, `iid`, `discussionId`, `resolved?`                        |
-| `set_mr_assignees`      | Set (replace) an MR's assignees                                   | `project`, `iid`, `usernames`                                        |
-| `unassign_from_mrs`     | Remove a user (default: you) from multiple MRs in one fan-out     | `project`, `iids`, `username?`                                       |
-| `remove_mr_reviewers`   | Remove a reviewer (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`                                       |
-| `create_label`          | Create a label                                                    | `project`, `name`, `color?`, `description?`                          |
+| Method                    | Description                                                       | Inputs                                                                                                                                                                  |
+| ------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create_issue`            | Create an issue                                                   | `project`, `title`, `description?`, `labels?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?`                                                       |
+| `update_issue`            | Update an issue                                                   | `project`, `iid`, `title?`, `description?`, `labels?`, `addLabels?`, `removeLabels?`, `stateEvent?`, `assignees?`, `milestone?`, `dueDate?`, `confidential?`, `weight?` |
+| `add_issue_note`          | Comment on an issue, or reply into a thread                       | `project`, `iid`, `body`, `discussionId?`                                                                                                                               |
+| `update_issue_note`       | Edit a comment on an issue                                        | `project`, `iid`, `noteId`, `body`                                                                                                                                      |
+| `delete_issue_note`       | Delete a comment on an issue                                      | `project`, `iid`, `noteId`                                                                                                                                              |
+| `set_issue_assignees`     | Set (replace) an issue's assignees                                | `project`, `iid`, `usernames`                                                                                                                                           |
+| `unassign_from_issues`    | Remove a user (default: you) from multiple issues in one fan-out  | `project`, `iids`, `username?`                                                                                                                                          |
+| `remove_work_item_parent` | Detach a work item from its parent (GraphQL)                      | `project`, `iid`                                                                                                                                                        |
+| `convert_work_item_type`  | Change a work item's type, e.g. Task to Issue (GraphQL)           | `project`, `iid`, `type`                                                                                                                                                |
+| `create_merge_request`    | Create a merge request                                            | `project`, `title`, `sourceBranch`, `targetBranch?`, `description?`                                                                                                     |
+| `merge`                   | Merge a merge request                                             | `project`, `iid`, `squash?`                                                                                                                                             |
+| `add_mr_note`             | Comment on a merge request, or reply into a thread                | `project`, `iid`, `body`, `discussionId?`                                                                                                                               |
+| `update_mr_note`          | Edit a comment on a merge request                                 | `project`, `iid`, `noteId`, `body`                                                                                                                                      |
+| `delete_mr_note`          | Delete a comment on a merge request                               | `project`, `iid`, `noteId`                                                                                                                                              |
+| `resolve_mr_discussion`   | Resolve/unresolve an MR discussion thread                         | `project`, `iid`, `discussionId`, `resolved?`                                                                                                                           |
+| `set_mr_assignees`        | Set (replace) an MR's assignees                                   | `project`, `iid`, `usernames`                                                                                                                                           |
+| `unassign_from_mrs`       | Remove a user (default: you) from multiple MRs in one fan-out     | `project`, `iids`, `username?`                                                                                                                                          |
+| `remove_mr_reviewers`     | Remove a reviewer (default: you) from multiple MRs in one fan-out | `project`, `iids`, `username?`                                                                                                                                          |
+| `create_label`            | Create a label                                                    | `project`, `name`, `color?`, `description?`                                                                                                                             |
 
 ## Reports
 
@@ -148,27 +148,27 @@ view:
 
 ## Resources
 
-| Resource          | Description                       | Key fields                                                |
-| ----------------- | --------------------------------- | --------------------------------------------------------- |
-| **dashboard**     | Cross-project MR overview + todos | username, reviewing, assigned, authored, todos, truncated |
-| **projects**      | Project list                      | name, visibility, starCount, archived, truncated          |
-| **projectInfo**   | Single project detail             | webUrl, openIssuesCount, topics                           |
-| **mergeRequests** | MR list by state                  | iid, author, sourceBranch, draft, truncated               |
-| **issues**        | Issue list by state               | iid, author, labels, truncated                            |
-| **issueDetail**   | Single issue (from create/update) | iid, webUrl, description, state                           |
-| **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
-| **issueAssignees** | Assignees of an issue after a set/unassign | iid, assignees                                    |
-| **issueUnassignResult** | Fan-out unassign result across issues | username, results, failed                            |
-| **workItemParent** | Parent of a work item before/after detaching | previousParent, parent                          |
-| **workItemType** | Type of a work item before/after converting | previousType, type                                 |
-| **issueDiscussions** | Discussion threads on an issue  | iid, discussions, truncated                               |
-| **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
-| **pipelines**     | CI/CD pipeline runs               | status, source, ref, truncated                            |
-| **labels**        | Project labels                    | name, color, description                                  |
-| **members**       | Project members                   | username, accessLevel                                     |
-| **branches**      | Repository branches               | name, protected, default                                  |
-| **fileContent**   | Raw file content at a ref         | project, ref, path, content, truncated                    |
-| **searchResults** | Raw GitLab search results         | query, scope, project, group, results, count, truncated   |
+| Resource                | Description                                  | Key fields                                                |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------- |
+| **dashboard**           | Cross-project MR overview + todos            | username, reviewing, assigned, authored, todos, truncated |
+| **projects**            | Project list                                 | name, visibility, starCount, archived, truncated          |
+| **projectInfo**         | Single project detail                        | webUrl, openIssuesCount, topics                           |
+| **mergeRequests**       | MR list by state                             | iid, author, sourceBranch, draft, truncated               |
+| **issues**              | Issue list by state                          | iid, author, labels, truncated                            |
+| **issueDetail**         | Single issue (from create/update)            | iid, webUrl, description, state                           |
+| **notes**               | Comments on issue or MR                      | noteableType, noteableIid, truncated                      |
+| **issueAssignees**      | Assignees of an issue after a set/unassign   | iid, assignees                                            |
+| **issueUnassignResult** | Fan-out unassign result across issues        | username, results, failed                                 |
+| **workItemParent**      | Parent of a work item before/after detaching | previousParent, parent                                    |
+| **workItemType**        | Type of a work item before/after converting  | previousType, type                                        |
+| **issueDiscussions**    | Discussion threads on an issue               | iid, discussions, truncated                               |
+| **releases**            | Tagged releases                              | tagName, releasedAt, truncated                            |
+| **pipelines**           | CI/CD pipeline runs                          | status, source, ref, truncated                            |
+| **labels**              | Project labels                               | name, color, description                                  |
+| **members**             | Project members                              | username, accessLevel                                     |
+| **branches**            | Repository branches                          | name, protected, default                                  |
+| **fileContent**         | Raw file content at a ref                    | project, ref, path, content, truncated                    |
+| **searchResults**       | Raw GitLab search results                    | query, scope, project, group, results, count, truncated   |
 
 ### Search scope availability
 

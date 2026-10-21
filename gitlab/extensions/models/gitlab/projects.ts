@@ -4408,9 +4408,13 @@ export const model = {
             );
           }
           if (result.errors?.length) {
-            throw new Error(
-              `workItemUpdate failed: ${result.errors.join("; ")}`,
-            );
+            const joined = result.errors.join("; ");
+            // GitLab answers a parent link the token cannot administer with
+            // "No Work Item Link found", even though the link exists.
+            const hint = /No Work Item Link found/i.test(joined)
+              ? ` (the token must be able to administer both the work item and its parent ${previousParent})`
+              : "";
+            throw new Error(`workItemUpdate failed: ${joined}${hint}`);
           }
           const after = workItemHierarchy(result.workItem);
           if (!after) {

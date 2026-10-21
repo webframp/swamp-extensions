@@ -18,7 +18,8 @@ the REST issues API does not cover.
 Neither method sends a mutation when the work item is already in the
 requested state. Results land in the new `workItemParent` and
 `workItemType` resources, under the data names
-`<project>-work-item-<iid>-parent` and `-type`. No globalArguments change.
+`<project>-work-item-<iid>-parent` and `-type`, with `/` in the project
+path written as `~` (for example `group~proj-work-item-7-parent`). No globalArguments change.
 Contributed by @zWaR (#500).
 
 ## 2026.10.14.2

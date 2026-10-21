@@ -8023,3 +8023,19 @@ Deno.test("convert_work_item_type throws when the work item has no type", async 
     m.restore();
   }
 });
+
+Deno.test("remove_work_item_parent explains GitLab's link-not-found permission error", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "other/proj#1" }),
+    update: updateResponse(null, ["No Work Item Link found"]),
+  });
+  try {
+    await assertRejects(
+      runRemoveParent,
+      Error,
+      "No Work Item Link found (the token must be able to administer both the work item and its parent other/proj#1)",
+    );
+  } finally {
+    m.restore();
+  }
+});
