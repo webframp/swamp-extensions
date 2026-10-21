@@ -5,14 +5,15 @@
 (`workItemUpdate` with the hierarchy widget, and `workItemConvert`), which
 the REST issues API does not cover.
 
-- `remove_work_item_parent` leaves a work item with no ancestor. It finds
-  the parent through `hasParent`, so it also removes a parent the token
-  cannot read. It fails unless the mutation response confirms the parent is
-  gone.
+- `remove_work_item_parent` leaves a work item with no ancestor. It fails
+  unless the mutation response confirms the parent is gone. If the token
+  cannot read the parent, it fails before sending the mutation, since
+  GitLab would refuse it. Requires GitLab 17.2 or later.
 - `convert_work_item_type` changes a work item's type. Converting a Task to
   an Issue makes it show on issue boards. Type names match the project's
   work item types, ignoring case and surrounding whitespace. An unknown name
-  fails with the list of available types.
+  fails with the list of available types. It fails if GitLab returns a type
+  other than the one requested.
 
 Neither method sends a mutation when the work item is already in the
 requested state. Results land in the new `workItemParent` and

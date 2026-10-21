@@ -432,11 +432,8 @@ const IssueAssigneesSchema = z.object({
 const WorkItemParentSchema = z.object({
   project: z.string().describe("Project the work item belongs to"),
   iid: z.number().describe("Work item internal ID (project-scoped)"),
-  hadParent: z.boolean().describe(
-    "Whether the work item had a parent before the operation",
-  ),
   previousParent: z.string().nullable().describe(
-    "Full reference of the parent before removal (null when it had none, or when the token cannot read it)",
+    "Full reference of the parent before removal (null when it had none)",
   ),
   parent: z.string().nullable().describe(
     "Full reference of the parent after the operation (null when detached)",
@@ -1875,16 +1872,29 @@ mutation labelCreate($projectPath: ID!, $title: String!, $color: String!, $descr
 }`;
 
 // Work items: the REST issues API cannot touch hierarchy or type, so these
-// go through the work-item GraphQL API. The lookup also returns the
-// namespace's work item types so a type name can resolve to its global ID.
-const WORK_ITEM_QUERY = `
-query workItem($fullPath: ID!, $iid: String!) {
+// go through the work-item GraphQL API. Each method has its own lookup:
+// `hasParent` needs GitLab 17.2+, and keeping it out of the type lookup lets
+// convert_work_item_type run on older instances. The type lookup also returns
+// the project's work item types so a type name can resolve to its global ID.
+const WORK_ITEM_PARENT_QUERY = `
+query workItemParent($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    workItems(iid: $iid) {
+      nodes {
+        id
+        widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } }
+      }
+    }
+  }
+}`;
+
+const WORK_ITEM_TYPE_QUERY = `
+query workItemType($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) {
     workItems(iid: $iid) {
       nodes {
         id
         workItemType { name }
-        widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } }
       }
     }
     workItemTypes { nodes { id name } }
@@ -1921,8 +1931,9 @@ query mrId($fullPath: ID!, $iid: String!) {
 // The hierarchy widget is the only widget carrying `hasParent`; other widgets
 // come back as empty objects from the inline fragment. `hasParent` is read
 // separately from `parent` because GitLab nulls `parent` when the token
-// cannot read it (confidential, or in a project the token cannot see).
-// Returns null when the hierarchy widget is absent.
+// cannot read it (confidential, or in a project the token cannot see), and
+// that must not be mistaken for having no parent. Returns null when the
+// hierarchy widget is absent.
 function workItemHierarchy(
   workItem: any,
 ): { hasParent: boolean; parent: string | null } | null {
@@ -1937,11 +1948,12 @@ function workItemHierarchy(
 async function lookupWorkItem(
   host: string,
   token: string,
+  query: string,
   project: string,
   iid: number,
   method: string,
 ): Promise<{ workItem: any; types: Array<{ id: string; name: string }> }> {
-  const data = await graphqlRequest(host, token, WORK_ITEM_QUERY, {
+  const data = await graphqlRequest(host, token, query, {
     fullPath: project,
     iid: String(iid),
   });
@@ -4361,6 +4373,7 @@ export const model = {
         const { workItem } = await lookupWorkItem(
           host,
           token,
+          WORK_ITEM_PARENT_QUERY,
           args.project,
           args.iid,
           "remove_work_item_parent",
@@ -4371,10 +4384,17 @@ export const model = {
             `remove_work_item_parent: work item ${args.project}#${args.iid} has no hierarchy widget`,
           );
         }
-        const hadParent = before.hasParent;
+        // GitLab only removes a parent link when the token can administer both
+        // ends, so a parent it cannot even read would fail with a misleading
+        // "No Work Item Link found". Fail first with the actual cause.
+        if (before.hasParent && before.parent === null) {
+          throw new Error(
+            `remove_work_item_parent: work item ${args.project}#${args.iid} has a parent this token cannot read, so GitLab will not remove it`,
+          );
+        }
         const previousParent = before.parent;
         let parent: string | null = null;
-        if (hadParent) {
+        if (previousParent) {
           const data = await graphqlRequest(
             host,
             token,
@@ -4400,9 +4420,7 @@ export const model = {
           }
           if (after.hasParent) {
             throw new Error(
-              `remove_work_item_parent: GitLab kept parent ${
-                after.parent ?? "(not readable with this token)"
-              }`,
+              `remove_work_item_parent: GitLab kept parent ${previousParent}`,
             );
           }
           parent = after.parent;
@@ -4413,7 +4431,6 @@ export const model = {
           {
             project: args.project,
             iid: args.iid,
-            hadParent,
             previousParent,
             parent,
             fetchedAt: new Date().toISOString(),
@@ -4422,13 +4439,10 @@ export const model = {
           },
         );
         ctx.logger.info(
-          hadParent
+          previousParent
             ? "Removed parent {parent} from work item #{iid}"
             : "Work item #{iid} has no parent",
-          {
-            iid: args.iid,
-            parent: previousParent ?? "(not readable with this token)",
-          },
+          { iid: args.iid, parent: previousParent },
         );
         return { dataHandles: [handle] };
       },
@@ -4453,6 +4467,7 @@ export const model = {
         const { workItem, types } = await lookupWorkItem(
           host,
           token,
+          WORK_ITEM_TYPE_QUERY,
           args.project,
           args.iid,
           "convert_work_item_type",
@@ -4471,7 +4486,12 @@ export const model = {
             })`,
           );
         }
-        const previousType: string = workItem.workItemType.name;
+        const previousType: string | undefined = workItem.workItemType?.name;
+        if (!previousType) {
+          throw new Error(
+            `convert_work_item_type: work item ${args.project}#${args.iid} has no work item type`,
+          );
+        }
         let type = previousType;
         if (previousType !== target.name) {
           const data = await graphqlRequest(
@@ -4495,6 +4515,11 @@ export const model = {
           if (!converted) {
             throw new Error(
               "convert_work_item_type: workItemConvert returned no work item type",
+            );
+          }
+          if (converted.toLowerCase() !== target.name.toLowerCase()) {
+            throw new Error(
+              `convert_work_item_type: GitLab kept type ${converted} (requested ${target.name})`,
             );
           }
           type = converted;

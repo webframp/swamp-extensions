@@ -159,7 +159,7 @@ view:
 | **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
 | **issueAssignees** | Assignees of an issue after a set/unassign | iid, assignees                                    |
 | **issueUnassignResult** | Fan-out unassign result across issues | username, results, failed                            |
-| **workItemParent** | Parent of a work item before/after detaching | hadParent, previousParent, parent               |
+| **workItemParent** | Parent of a work item before/after detaching | previousParent, parent                          |
 | **workItemType** | Type of a work item before/after converting | previousType, type                                 |
 | **issueDiscussions** | Discussion threads on an issue  | iid, discussions, truncated                               |
 | **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
@@ -236,10 +236,12 @@ assignment.
 GraphQL API, which the REST issues API does not cover. Both check the
 mutation response and throw if GitLab did not apply the change.
 
-- A parent the token cannot read (confidential, or in a project the token
-  cannot see) is still detected through the hierarchy widget's `hasParent`
-  and removed. The resource then records `hadParent: true` with
-  `previousParent: null`.
+- `remove_work_item_parent` needs GitLab 17.2 or later, for the hierarchy
+  widget's `hasParent` field. `convert_work_item_type` does not use it.
+- GitLab removes a parent link only when the token can administer both the
+  work item and its parent. A parent the token cannot read (confidential, or
+  in a project the token cannot see) is detected through `hasParent`, and
+  the method fails before sending the mutation.
 - GitLab enforces hierarchy rules on conversion, and may reject turning a
   Task into an Issue while its parent is an Issue. Run
   `remove_work_item_parent` first.
