@@ -13,6 +13,6 @@ Like the other posting methods, it refuses a closed or merged MR (run
 body, and `post_discussion` skips posting when the same body is already recorded
 for that MR, so a retry after a successful post does not open a duplicate
 thread. The body is compared after normalising line endings and trimming
-surrounding whitespace.
+trailing whitespace.
 
 **Upgrade note:** Additive only. Existing resources and methods are unchanged.

@@ -1114,13 +1114,40 @@ function discussionFetchMock(): {
   };
 }
 
-Deno.test("post_discussion rejects an empty body", () => {
-  const result = model.methods.post_discussion.arguments.safeParse({
-    project: "group/repo",
-    iid: 1,
-    body: "",
+Deno.test("post_discussion rejects an empty or blank body", () => {
+  for (const body of ["", "   ", "\r\n"]) {
+    const result = model.methods.post_discussion.arguments.safeParse({
+      project: "group/repo",
+      iid: 1,
+      body,
+    });
+    assertEquals(result.success, false, JSON.stringify(body));
+  }
+});
+
+Deno.test("post_discussion keeps leading whitespace significant", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
   });
-  assertEquals(result.success, false);
+
+  try {
+    const args = { project: "group/repo", iid: 1 };
+    await model.methods.post_discussion.execute(
+      { ...args, body: "    x = 1" },
+      context as any,
+    );
+    await model.methods.post_discussion.execute(
+      { ...args, body: "x = 1" },
+      context as any,
+    );
+    assertEquals(calls.length, 2);
+  } finally {
+    restore();
+  }
 });
 
 Deno.test("post_discussion opens a thread with no position", async () => {

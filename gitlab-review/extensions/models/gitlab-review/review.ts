@@ -1099,7 +1099,9 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1).describe("Project path"),
         iid: z.number().int().positive().describe("Merge request IID"),
-        body: z.string().min(1).describe("Thread body (markdown)"),
+        body: z.string().refine((s) => s.trim().length > 0, {
+          message: "body must not be blank",
+        }).describe("Thread body (markdown)"),
       }),
       execute: async (
         args: { project: string; iid: number; body: string },
@@ -1112,10 +1114,11 @@ export const model = {
 
         // Keyed by body hash — a single MR can carry many threads, and a retry
         // with the same body must not open a second one. Line endings and
-        // surrounding whitespace are normalised first so a retry that only
-        // adds a trailing newline still matches.
+        // trailing whitespace are normalised first so a retry that only adds a
+        // trailing newline still matches. Leading whitespace is kept: in
+        // markdown it can start an indented code block.
         const bodyKey = await sha256Prefix(
-          args.body.replace(/\r\n?/g, "\n").trim(),
+          args.body.replace(/\r\n?/g, "\n").trimEnd(),
         );
         const resourceName = `${
           instanceName("discussionThread", args.project, args.iid)
