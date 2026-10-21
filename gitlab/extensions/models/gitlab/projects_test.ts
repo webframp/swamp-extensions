@@ -8000,6 +8000,85 @@ Deno.test("every method rejects non-integer and non-positive iids", () => {
   assertEquals(checked.length, 27);
 });
 
+Deno.test("every method rejects non-integer and non-positive numeric ids", () => {
+  // Same shape as the iid test above: required fields are omitted, so the
+  // check is whether the named argument itself is flagged, with 5 as control.
+  const idArgs = ["noteId", "pipelineId", "jobId", "scheduleId", "id"];
+  const argIssues = (schema: any, key: string, v: unknown) =>
+    schema.safeParse({ [key]: v }).error?.issues.filter((i: any) =>
+      i.path[0] === key
+    ) ?? [];
+  const checked: string[] = [];
+  for (const [name, method] of Object.entries(model.methods)) {
+    const shape = (method.arguments as any).shape ?? {};
+    for (const key of idArgs) {
+      if (!(key in shape)) continue;
+      checked.push(`${name}.${key}`);
+      assertEquals(argIssues(method.arguments, key, 5), [], `${name} ${key} 5`);
+      for (const bad of [0, -3, 1.5]) {
+        assertEquals(
+          argIssues(method.arguments, key, bad).length > 0,
+          true,
+          `${name} accepted ${key} ${bad}`,
+        );
+      }
+    }
+  }
+  // Fixed list on purpose, so an id argument added without the constraint,
+  // or a method whose arguments stop exposing `.shape`, fails here.
+  assertEquals(checked.sort(), [
+    "cancel_pipeline.pipelineId",
+    "delete_issue_note.noteId",
+    "delete_mr_note.noteId",
+    "delete_snippet.id",
+    "get_job_log.jobId",
+    "get_pipeline_jobs.pipelineId",
+    "get_snippet.id",
+    "list_pipeline_bridges.pipelineId",
+    "play_pipeline_schedule.scheduleId",
+    "retry_job.jobId",
+    "retry_pipeline.pipelineId",
+    "update_issue_note.noteId",
+    "update_mr_note.noteId",
+    "update_snippet.id",
+  ]);
+});
+
+Deno.test("get_job_log tailLines must be a positive integer up to 10000", () => {
+  const schema = model.methods.get_job_log.arguments;
+  const ok = { project: "g/p", jobId: 1 };
+  assertEquals(schema.parse(ok).tailLines, 200);
+  assertEquals(schema.safeParse({ ...ok, tailLines: 1 }).success, true);
+  assertEquals(schema.safeParse({ ...ok, tailLines: 10_000 }).success, true);
+  for (const bad of [0, -1, 1.5, 10_001]) {
+    assertEquals(
+      schema.safeParse({ ...ok, tailLines: bad }).success,
+      false,
+      `accepted tailLines ${bad}`,
+    );
+  }
+});
+
+Deno.test("create_issue and update_issue reject non-positive milestone ids", () => {
+  for (const name of ["create_issue", "update_issue"] as const) {
+    const schema = model.methods[name].arguments;
+    const issues = (v: unknown) =>
+      schema.safeParse({ milestone: v }).error?.issues.filter((i: any) =>
+        i.path[0] === "milestone"
+      ) ?? [];
+    for (const good of [5, "5", "v1.0", "1.5"]) {
+      assertEquals(issues(good), [], `${name} rejected milestone ${good}`);
+    }
+    for (const bad of [0, -3, 1.5, "0", "000", ""]) {
+      assertEquals(
+        issues(bad).length > 0,
+        true,
+        `${name} accepted milestone ${JSON.stringify(bad)}`,
+      );
+    }
+  }
+});
+
 Deno.test("convert_work_item_type throws when GitLab keeps the old type", async () => {
   const m = mockWorkItemGraphql({
     lookup: workItemLookup({}),
