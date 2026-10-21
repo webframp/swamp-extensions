@@ -2055,15 +2055,25 @@ function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
 }
 
 /**
- * `milestone` argument for create_issue and update_issue: a positive integer
- * id, a numeric-looking string id, or a title. A string of only zeros would
- * parse to id 0, so it is rejected like the number 0.
+ * `milestone` argument for create_issue: a positive integer id, a
+ * numeric-looking string id, or a title. A string of only zeros would parse
+ * to id 0, which names no milestone, so it is rejected like the number 0.
  */
-const milestoneArg = z.union([
+const createMilestoneArg = z.union([
   z.number().int().positive(),
   z.string().min(1).refine((s) => !/^0+$/.test(s), {
     message: "milestone id must be a positive integer",
   }),
+]);
+
+/**
+ * `milestone` argument for update_issue. Same as create_issue, except that 0
+ * (or a string of only zeros) is allowed: the REST edit-issue API reads
+ * `milestone_id: 0` as "unassign the milestone".
+ */
+const updateMilestoneArg = z.union([
+  z.number().int().nonnegative(),
+  z.string().min(1),
 ]);
 
 /**
@@ -2924,9 +2934,9 @@ export const model = {
       toVersion: "2026.10.21.2",
       description:
         "Note, pipeline, job, schedule and snippet id arguments now require " +
-        "positive integers; get_job_log tailLines is capped at 10000; the " +
-        "numeric milestone id must be positive. No globalArguments change; " +
-        "resource schemas unchanged.",
+        "positive integers; get_job_log tailLines is capped at 10000; " +
+        "create_issue milestone ids must be positive. No globalArguments " +
+        "change; resource schemas unchanged.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3793,7 +3803,7 @@ export const model = {
         assignees: z.array(z.string()).optional().describe(
           "Usernames to assign on creation",
         ),
-        milestone: milestoneArg.optional().describe(
+        milestone: createMilestoneArg.optional().describe(
           "Milestone id, or a title to resolve to an id",
         ),
         dueDate: z.string().optional().describe(
@@ -3976,8 +3986,8 @@ export const model = {
         assignees: z.array(z.string()).optional().describe(
           "Replace (wholesale) the issue's assignees by username",
         ),
-        milestone: milestoneArg.optional().describe(
-          "Milestone id, or a title to resolve to an id",
+        milestone: updateMilestoneArg.optional().describe(
+          "Milestone id, or a title to resolve to an id; 0 clears the milestone",
         ),
         dueDate: z.string().optional().describe(
           "Due date, ISO 8601 (YYYY-MM-DD)",

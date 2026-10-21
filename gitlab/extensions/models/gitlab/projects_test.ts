@@ -8059,23 +8059,79 @@ Deno.test("get_job_log tailLines must be a positive integer up to 10000", () => 
   }
 });
 
-Deno.test("create_issue and update_issue reject non-positive milestone ids", () => {
+Deno.test("create_issue and update_issue reject invalid milestone ids", () => {
+  const issues = (name: "create_issue" | "update_issue", v: unknown) =>
+    model.methods[name].arguments.safeParse({ milestone: v }).error?.issues
+      .filter((i: any) => i.path[0] === "milestone") ?? [];
   for (const name of ["create_issue", "update_issue"] as const) {
-    const schema = model.methods[name].arguments;
-    const issues = (v: unknown) =>
-      schema.safeParse({ milestone: v }).error?.issues.filter((i: any) =>
-        i.path[0] === "milestone"
-      ) ?? [];
     for (const good of [5, "5", "v1.0", "1.5"]) {
-      assertEquals(issues(good), [], `${name} rejected milestone ${good}`);
-    }
-    for (const bad of [0, -3, 1.5, "0", "000", ""]) {
       assertEquals(
-        issues(bad).length > 0,
+        issues(name, good),
+        [],
+        `${name} rejected milestone ${good}`,
+      );
+    }
+    for (const bad of [-3, 1.5, ""]) {
+      assertEquals(
+        issues(name, bad).length > 0,
         true,
         `${name} accepted milestone ${JSON.stringify(bad)}`,
       );
     }
+  }
+  // GraphQL create has no "no milestone" id, so 0 is rejected there; REST
+  // update reads milestone_id 0 as "unassign", so it is allowed there.
+  for (const zero of [0, "0", "000"]) {
+    assertEquals(issues("create_issue", zero).length > 0, true);
+    assertEquals(issues("update_issue", zero), []);
+  }
+});
+
+Deno.test("update_issue milestone 0 sends milestone_id 0 to clear it", async () => {
+  const original = globalThis.fetch;
+  let sentBody: any = null;
+  let otherCalls = 0;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      sentBody = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "t",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: [],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-06-10T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    otherCalls++;
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    for (const milestone of [0, "0"]) {
+      sentBody = null;
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      const args = model.methods.update_issue.arguments.parse({
+        project: "org/repo",
+        iid: 5,
+        milestone,
+      });
+      await model.methods.update_issue.execute(args as any, context as any);
+      assertEquals(sentBody.milestone_id, 0, `milestone ${milestone}`);
+    }
+    // No milestone title lookup: 0 is an id, not a title.
+    assertEquals(otherCalls, 0);
+  } finally {
+    globalThis.fetch = original;
   }
 });
 
