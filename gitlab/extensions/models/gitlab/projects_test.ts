@@ -72,6 +72,7 @@ Deno.test("model has all expected methods", () => {
     "cancel_pipeline",
     "check_mr_merge_endpoint",
     "commit_file",
+    "convert_work_item_type",
     "create_branch",
     "create_issue",
     "create_label",
@@ -113,6 +114,7 @@ Deno.test("model has all expected methods", () => {
     "play_pipeline_schedule",
     "rebase_merge_request",
     "remove_mr_reviewers",
+    "remove_work_item_parent",
     "resolve_mr_discussion",
     "retry_job",
     "retry_pipeline",
@@ -179,6 +181,8 @@ Deno.test("model has all expected resources", () => {
     "snippetList",
     "todoList",
     "unassignResult",
+    "workItemParent",
+    "workItemType",
   ]);
 });
 
@@ -7579,5 +7583,479 @@ Deno.test("delete_snippet throws a descriptive error on a non-2xx response (e.g.
     );
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+// =============================================================================
+// Work Item Hierarchy and Type Tests
+// =============================================================================
+
+// Answers the lookups and each mutation with its own body, dispatching on the
+// operation name, so a method reading the wrong response fails the test.
+function mockWorkItemGraphql(responses: {
+  lookup: unknown;
+  update?: unknown;
+  convert?: unknown;
+}): { restore: () => void; bodies: () => any[] } {
+  const original = globalThis.fetch;
+  const all: any[] = [];
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if ((init?.method ?? "GET") !== "POST" || !url.includes("/api/graphql")) {
+      return Promise.resolve(new Response("nope", { status: 404 }));
+    }
+    const body = JSON.parse(init!.body as string);
+    all.push(body);
+    const query: string = body.query;
+    const payload = query.includes("query workItemParent(") ||
+        query.includes("query workItemType(")
+      ? responses.lookup
+      : query.includes("mutation removeWorkItemParent(")
+      ? responses.update
+      : query.includes("mutation convertWorkItem(")
+      ? responses.convert
+      : undefined;
+    if (payload === undefined) {
+      return Promise.resolve(
+        new Response(`unexpected query: ${query}`, { status: 500 }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    bodies: () => all,
+  };
+}
+
+function hierarchyWidget(hasParent: boolean, parent: string | null) {
+  return { hasParent, parent: parent ? { reference: parent } : null };
+}
+
+function workItemLookup(opts: {
+  type?: string;
+  hasParent?: boolean;
+  parent?: string | null;
+  types?: Array<{ id: string; name: string }> | null;
+  nodes?: unknown[];
+}) {
+  const parent = opts.parent ?? null;
+  return {
+    data: {
+      project: {
+        workItems: {
+          nodes: opts.nodes ?? [{
+            id: "gid://gitlab/WorkItem/42",
+            workItemType: { name: opts.type ?? "Task" },
+            widgets: [
+              {},
+              hierarchyWidget(opts.hasParent ?? parent !== null, parent),
+            ],
+          }],
+        },
+        workItemTypes: opts.types === null ? null : {
+          nodes: opts.types ?? [
+            { id: "gid://gitlab/WorkItems::Type/1", name: "Issue" },
+            { id: "gid://gitlab/WorkItems::Type/5", name: "Task" },
+          ],
+        },
+      },
+    },
+  };
+}
+
+function updateResponse(workItem: unknown, errors: string[] = []) {
+  return { data: { workItemUpdate: { workItem, errors } } };
+}
+
+function convertResponse(workItem: unknown, errors: string[] = []) {
+  return { data: { workItemConvert: { workItem, errors } } };
+}
+
+async function runRemoveParent(): Promise<
+  ReturnType<typeof createModelTestContext>
+> {
+  const tc = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await model.methods.remove_work_item_parent.execute(
+    { project: "group/proj", iid: 7 },
+    tc.context as any,
+  );
+  return tc;
+}
+
+async function runConvert(
+  type: string,
+): Promise<ReturnType<typeof createModelTestContext>> {
+  const tc = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await model.methods.convert_work_item_type.execute(
+    { project: "group/proj", iid: 7, type },
+    tc.context as any,
+  );
+  return tc;
+}
+
+Deno.test("remove_work_item_parent clears the parent and records it", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse({ widgets: [{}, hierarchyWidget(false, null)] }),
+  });
+  try {
+    const { getWrittenResources } = await runRemoveParent();
+    const [lookup, update] = m.bodies();
+    assertEquals(m.bodies().length, 2);
+    assertEquals(lookup.query.includes("query workItemParent("), true);
+    assertEquals(lookup.variables, { fullPath: "group/proj", iid: "7" });
+    assertEquals(update.variables, { id: "gid://gitlab/WorkItem/42" });
+    assertEquals(
+      update.query.includes("hierarchyWidget: { parentId: null }"),
+      true,
+    );
+    const written = getWrittenResources().find((x) =>
+      x.specName === "workItemParent"
+    )!;
+    assertEquals(written.name, "group~proj-work-item-7-parent");
+    const d = written.data as any;
+    assertEquals(d.previousParent, "group/proj#1");
+    assertEquals(d.parent, null);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent skips the mutation when there is no parent", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({}) });
+  try {
+    const { getWrittenResources } = await runRemoveParent();
+    assertEquals(m.bodies().length, 1);
+    const d = getWrittenResources().find((x) =>
+      x.specName === "workItemParent"
+    )!.data as any;
+    assertEquals(d.previousParent, null);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent fails before mutating when the parent is unreadable", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ hasParent: true, parent: null }),
+    update: updateResponse({ widgets: [hierarchyWidget(false, null)] }),
+  });
+  try {
+    await assertRejects(
+      runRemoveParent,
+      Error,
+      "has a parent this token cannot read",
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent throws when GitLab keeps the parent", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse({
+      widgets: [hierarchyWidget(true, "group/proj#1")],
+    }),
+  });
+  try {
+    await assertRejects(runRemoveParent, Error, "kept parent group/proj#1");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent throws when the response omits the hierarchy widget", async () => {
+  for (const workItem of [null, { widgets: [{}] }]) {
+    const m = mockWorkItemGraphql({
+      lookup: workItemLookup({ parent: "group/proj#1" }),
+      update: updateResponse(workItem),
+    });
+    try {
+      await assertRejects(runRemoveParent, Error, "removal is unconfirmed");
+    } finally {
+      m.restore();
+    }
+  }
+});
+
+Deno.test("remove_work_item_parent throws when the lookup has no hierarchy widget", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({
+      nodes: [{
+        id: "gid://gitlab/WorkItem/42",
+        workItemType: { name: "Task" },
+        widgets: [{}],
+      }],
+    }),
+  });
+  try {
+    await assertRejects(runRemoveParent, Error, "has no hierarchy widget");
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent throws when the work item is not found", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ nodes: [] }) });
+  try {
+    await assertRejects(
+      runRemoveParent,
+      Error,
+      "work item group/proj#7 not found",
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent surfaces workItemUpdate errors", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse(null, ["not allowed"]),
+  });
+  try {
+    await assertRejects(
+      runRemoveParent,
+      Error,
+      "workItemUpdate failed: not allowed",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent throws on a null workItemUpdate payload", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: { data: { workItemUpdate: null } },
+  });
+  try {
+    await assertRejects(runRemoveParent, Error, "workItemUpdate returned null");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type resolves the type name to its ID", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse({ workItemType: { name: "Issue" } }),
+  });
+  try {
+    const { getWrittenResources } = await runConvert(" issue ");
+    const [lookup, convert] = m.bodies();
+    assertEquals(m.bodies().length, 2);
+    assertEquals(lookup.query.includes("query workItemType("), true);
+    // hasParent needs GitLab 17.2+; the type lookup must not depend on it.
+    assertEquals(lookup.query.includes("hasParent"), false);
+    assertEquals(lookup.variables, { fullPath: "group/proj", iid: "7" });
+    assertEquals(convert.variables, {
+      id: "gid://gitlab/WorkItem/42",
+      typeId: "gid://gitlab/WorkItems::Type/1",
+    });
+    const written = getWrittenResources().find((x) =>
+      x.specName === "workItemType"
+    )!;
+    assertEquals(written.name, "group~proj-work-item-7-type");
+    const d = written.data as any;
+    assertEquals(d.previousType, "Task");
+    assertEquals(d.type, "Issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type skips the mutation when the type already matches", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ type: "Issue" }) });
+  try {
+    const { getWrittenResources } = await runConvert("Issue");
+    assertEquals(m.bodies().length, 1);
+    const d = getWrittenResources().find((x) => x.specName === "workItemType")!
+      .data as any;
+    assertEquals(d.previousType, "Issue");
+    assertEquals(d.type, "Issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type rejects an unknown type name", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({}) });
+  try {
+    await assertRejects(
+      () => runConvert("Epic"),
+      Error,
+      'unknown type "Epic" (available: Issue, Task)',
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when GitLab returns no work item types", async () => {
+  for (const types of [null, []]) {
+    const m = mockWorkItemGraphql({ lookup: workItemLookup({ types }) });
+    try {
+      await assertRejects(
+        () => runConvert("Issue"),
+        Error,
+        "GitLab returned no work item types for group/proj",
+      );
+    } finally {
+      m.restore();
+    }
+  }
+});
+
+Deno.test("convert_work_item_type surfaces workItemConvert errors", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse(null, ["cannot convert"]),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
+      Error,
+      "workItemConvert failed: cannot convert",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws on a null workItemConvert payload", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: { data: { workItemConvert: null } },
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
+      Error,
+      "workItemConvert returned null",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when the mutation returns no work item", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse(null),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
+      Error,
+      "returned no work item type",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("every method rejects non-integer and non-positive iids", () => {
+  // Other required fields are omitted, so parsing always fails; the check is
+  // whether the iid itself is flagged, with a valid iid as the control.
+  const iidIssues = (schema: any, input: Record<string, unknown>) =>
+    schema.safeParse(input).error?.issues.filter((i: any) =>
+      i.path[0] === "iid" || i.path[0] === "iids"
+    ) ?? [];
+  const checked: string[] = [];
+  for (const [name, method] of Object.entries(model.methods)) {
+    const shape = (method.arguments as any).shape ?? {};
+    const key = "iid" in shape ? "iid" : "iids" in shape ? "iids" : null;
+    if (!key) continue;
+    checked.push(name);
+    const wrap = (v: number) => ({ [key]: key === "iids" ? [v] : v });
+    assertEquals(iidIssues(method.arguments, wrap(5)), [], `${name} iid 5`);
+    for (const bad of [0, -3, 1.5]) {
+      assertEquals(
+        iidIssues(method.arguments, wrap(bad)).length > 0,
+        true,
+        `${name} accepted iid ${bad}`,
+      );
+    }
+  }
+  // Fixed count on purpose: a method whose arguments stop exposing `.shape`
+  // would otherwise be skipped silently. Update it when iid methods change.
+  assertEquals(checked.length, 27);
+});
+
+Deno.test("convert_work_item_type throws when GitLab keeps the old type", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse({ workItemType: { name: "Task" } }),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
+      Error,
+      "GitLab kept type Task (requested Issue)",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when the work item has no type", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({
+      nodes: [{ id: "gid://gitlab/WorkItem/42", workItemType: null }],
+    }),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
+      Error,
+      "has no work item type",
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent explains GitLab's link-not-found permission error", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "other/proj#1" }),
+    update: updateResponse(null, ["No Work Item Link found"]),
+  });
+  try {
+    await assertRejects(
+      runRemoveParent,
+      Error,
+      "No Work Item Link found (the token must be able to administer both the work item and its parent other/proj#1)",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type treats a case-only type difference as already converted", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ type: "issue" }) });
+  try {
+    await runConvert("Issue");
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
   }
 });

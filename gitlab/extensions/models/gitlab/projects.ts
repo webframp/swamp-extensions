@@ -429,6 +429,38 @@ const IssueAssigneesSchema = z.object({
   ),
 });
 
+const WorkItemParentSchema = z.object({
+  project: z.string().describe("Project the work item belongs to"),
+  iid: z.number().describe("Work item internal ID (project-scoped)"),
+  previousParent: z.string().nullable().describe(
+    "Full reference of the parent before removal (null when it had none)",
+  ),
+  parent: z.string().nullable().describe(
+    "Full reference of the parent after the operation (null when detached)",
+  ),
+  fetchedAt: z.string().describe("Timestamp the change was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const WorkItemTypeSchema = z.object({
+  project: z.string().describe("Project the work item belongs to"),
+  iid: z.number().describe("Work item internal ID (project-scoped)"),
+  previousType: z.string().describe("Work item type before the conversion"),
+  type: z.string().describe("Work item type after the conversion"),
+  fetchedAt: z.string().describe("Timestamp the change was recorded"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const IssueUnassignResultSchema = z.object({
   project: z.string().describe("Project the issues belong to"),
   // The user removed from each issue (the authenticated user unless overridden).
@@ -1839,6 +1871,52 @@ mutation labelCreate($projectPath: ID!, $title: String!, $color: String!, $descr
   }
 }`;
 
+// Work items: the REST issues API cannot touch hierarchy or type, so these
+// go through the work-item GraphQL API. Each method has its own lookup:
+// `hasParent` needs GitLab 17.2+, and keeping it out of the type lookup lets
+// convert_work_item_type run on older instances. The type lookup also returns
+// the project's work item types so a type name can resolve to its global ID.
+const WORK_ITEM_PARENT_QUERY = `
+query workItemParent($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    workItems(iid: $iid) {
+      nodes {
+        id
+        widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } }
+      }
+    }
+  }
+}`;
+
+const WORK_ITEM_TYPE_QUERY = `
+query workItemType($fullPath: ID!, $iid: String!) {
+  project(fullPath: $fullPath) {
+    workItems(iid: $iid) {
+      nodes {
+        id
+        workItemType { name }
+      }
+    }
+    workItemTypes { nodes { id name } }
+  }
+}`;
+
+const REMOVE_WORK_ITEM_PARENT_MUTATION = `
+mutation removeWorkItemParent($id: WorkItemID!) {
+  workItemUpdate(input: { id: $id, hierarchyWidget: { parentId: null } }) {
+    workItem { widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } } }
+    errors
+  }
+}`;
+
+const CONVERT_WORK_ITEM_MUTATION = `
+mutation convertWorkItem($id: WorkItemID!, $typeId: WorkItemsTypeID!) {
+  workItemConvert(input: { id: $id, workItemTypeId: $typeId }) {
+    workItem { workItemType { name } }
+    errors
+  }
+}`;
+
 // Helpers for extracting GraphQL global IDs
 const ISSUE_ID_QUERY = `
 query issueId($fullPath: ID!, $iid: String!) {
@@ -1849,6 +1927,42 @@ const MR_ID_QUERY = `
 query mrId($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) { mergeRequest(iid: $iid) { id } }
 }`;
+
+// The hierarchy widget is the only widget carrying `hasParent`; other widgets
+// come back as empty objects from the inline fragment. `hasParent` is read
+// separately from `parent` because GitLab nulls `parent` when the token
+// cannot read it (confidential, or in a project the token cannot see), and
+// that must not be mistaken for having no parent. Returns null when the
+// hierarchy widget is absent.
+function workItemHierarchy(
+  workItem: any,
+): { hasParent: boolean; parent: string | null } | null {
+  const hierarchy = (workItem?.widgets ?? []).find((w: any) =>
+    w && "hasParent" in w
+  );
+  if (!hierarchy) return null;
+  const parent: string | null = hierarchy.parent?.reference ?? null;
+  return { hasParent: hierarchy.hasParent === true || parent !== null, parent };
+}
+
+async function lookupWorkItem(
+  host: string,
+  token: string,
+  query: string,
+  project: string,
+  iid: number,
+  method: string,
+): Promise<{ workItem: any; types: Array<{ id: string; name: string }> }> {
+  const data = await graphqlRequest(host, token, query, {
+    fullPath: project,
+    iid: String(iid),
+  });
+  const workItem = data.project?.workItems?.nodes?.[0];
+  if (!workItem) {
+    throw new Error(`${method}: work item ${project}#${iid} not found`);
+  }
+  return { workItem, types: data.project?.workItemTypes?.nodes ?? [] };
+}
 
 // =============================================================================
 // GraphQL Mappers
@@ -2577,7 +2691,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.14.2",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2782,6 +2896,15 @@ export const model = {
         "No globalArguments change; additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Added remove_work_item_parent and convert_work_item_type methods " +
+        "(new resources: workItemParent, workItemType). Method iid/iids " +
+        "arguments now require positive integers. No globalArguments " +
+        "change; resource schemas additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -2914,6 +3037,20 @@ export const model = {
     issueAssignees: {
       description: "Assignees of an issue after a set/unassign",
       schema: IssueAssigneesSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    workItemParent: {
+      description:
+        "Parent of a work item before and after remove_work_item_parent",
+      schema: WorkItemParentSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    workItemType: {
+      description:
+        "Type of a work item before and after convert_work_item_type",
+      schema: WorkItemTypeSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -3586,7 +3723,7 @@ export const model = {
         "work-item details). Returns issue detail keyed by project and iid.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -3801,7 +3938,7 @@ export const model = {
         "assignees, milestone, due date, confidentiality, weight)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         title: z.string().optional(),
         description: z.string().optional(),
         labels: z.array(z.string()).optional(),
@@ -3961,7 +4098,7 @@ export const model = {
         "Add a comment to an issue, or reply into an existing thread by passing discussionId (from list_issue_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         body: z.string().min(1).describe(
           "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
         ),
@@ -4038,7 +4175,7 @@ export const model = {
       description: "Edit an existing comment on an issue by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
         body: z.string().min(1),
       }),
@@ -4096,7 +4233,7 @@ export const model = {
       description: "Delete a comment on an issue by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
       }),
       execute: async (
@@ -4145,7 +4282,7 @@ export const model = {
         "Set (replace) an issue's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -4221,6 +4358,199 @@ export const model = {
       },
     },
 
+    remove_work_item_parent: {
+      description:
+        "Detach a work item (issue, task, ...) from its parent so it has no ancestor. No-op when it has no parent.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number().int().positive(),
+      }),
+      execute: async (
+        args: { project: string; iid: number },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const { workItem } = await lookupWorkItem(
+          host,
+          token,
+          WORK_ITEM_PARENT_QUERY,
+          args.project,
+          args.iid,
+          "remove_work_item_parent",
+        );
+        const before = workItemHierarchy(workItem);
+        if (!before) {
+          throw new Error(
+            `remove_work_item_parent: work item ${args.project}#${args.iid} has no hierarchy widget`,
+          );
+        }
+        // GitLab only removes a parent link when the token can administer both
+        // ends, so a parent it cannot even read would fail with a misleading
+        // "No Work Item Link found". Fail first with the actual cause.
+        if (before.hasParent && before.parent === null) {
+          throw new Error(
+            `remove_work_item_parent: work item ${args.project}#${args.iid} has a parent this token cannot read, so GitLab will not remove it`,
+          );
+        }
+        const previousParent = before.parent;
+        let parent: string | null = null;
+        if (previousParent) {
+          const data = await graphqlRequest(
+            host,
+            token,
+            REMOVE_WORK_ITEM_PARENT_MUTATION,
+            { id: workItem.id },
+          );
+          const result = data.workItemUpdate;
+          if (!result) {
+            throw new Error(
+              "remove_work_item_parent: workItemUpdate returned null (permission denied or work item not found)",
+            );
+          }
+          if (result.errors?.length) {
+            const joined = result.errors.join("; ");
+            // GitLab answers a parent link the token cannot administer with
+            // "No Work Item Link found", even though the link exists.
+            const hint = /No Work Item Link found/i.test(joined)
+              ? ` (the token must be able to administer both the work item and its parent ${previousParent})`
+              : "";
+            throw new Error(`workItemUpdate failed: ${joined}${hint}`);
+          }
+          const after = workItemHierarchy(result.workItem);
+          if (!after) {
+            throw new Error(
+              "remove_work_item_parent: workItemUpdate returned no hierarchy widget, so the removal is unconfirmed",
+            );
+          }
+          if (after.hasParent) {
+            throw new Error(
+              `remove_work_item_parent: GitLab kept parent ${previousParent}`,
+            );
+          }
+          parent = after.parent;
+        }
+        const handle = await ctx.writeResource(
+          "workItemParent",
+          `${sanitizeName(args.project)}-work-item-${args.iid}-parent`,
+          {
+            project: args.project,
+            iid: args.iid,
+            previousParent,
+            parent,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info(
+          previousParent
+            ? "Removed parent {parent} from work item #{iid}"
+            : "Work item #{iid} has no parent",
+          { iid: args.iid, parent: previousParent },
+        );
+        return { dataHandles: [handle] };
+      },
+    },
+
+    convert_work_item_type: {
+      description:
+        "Change a work item's type (e.g. Task to Issue) by type name, as listed in the project's work item types. No-op when it already has that type.",
+      arguments: z.object({
+        project: z.string().min(1),
+        iid: z.number().int().positive(),
+        type: z.string().trim().min(1).describe(
+          "Target type name, case-insensitive (e.g. Issue, Task, Incident)",
+        ),
+      }),
+      execute: async (
+        args: { project: string; iid: number; type: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const { host, token } = ctx.globalArgs;
+        const { workItem, types } = await lookupWorkItem(
+          host,
+          token,
+          WORK_ITEM_TYPE_QUERY,
+          args.project,
+          args.iid,
+          "convert_work_item_type",
+        );
+        if (types.length === 0) {
+          throw new Error(
+            `convert_work_item_type: GitLab returned no work item types for ${args.project}`,
+          );
+        }
+        const wanted = args.type.trim().toLowerCase();
+        const target = types.find((t) => t.name.toLowerCase() === wanted);
+        if (!target) {
+          throw new Error(
+            `convert_work_item_type: unknown type "${args.type}" (available: ${
+              types.map((t) => t.name).join(", ")
+            })`,
+          );
+        }
+        const previousType: string | undefined = workItem.workItemType?.name;
+        if (!previousType) {
+          throw new Error(
+            `convert_work_item_type: work item ${args.project}#${args.iid} has no work item type`,
+          );
+        }
+        let type = previousType;
+        if (previousType.toLowerCase() !== target.name.toLowerCase()) {
+          const data = await graphqlRequest(
+            host,
+            token,
+            CONVERT_WORK_ITEM_MUTATION,
+            { id: workItem.id, typeId: target.id },
+          );
+          const result = data.workItemConvert;
+          if (!result) {
+            throw new Error(
+              "convert_work_item_type: workItemConvert returned null (permission denied or work item not found)",
+            );
+          }
+          if (result.errors?.length) {
+            throw new Error(
+              `workItemConvert failed: ${result.errors.join("; ")}`,
+            );
+          }
+          const converted = result.workItem?.workItemType?.name;
+          if (!converted) {
+            throw new Error(
+              "convert_work_item_type: workItemConvert returned no work item type",
+            );
+          }
+          if (converted.toLowerCase() !== target.name.toLowerCase()) {
+            throw new Error(
+              `convert_work_item_type: GitLab kept type ${converted} (requested ${target.name})`,
+            );
+          }
+          type = converted;
+        }
+        const handle = await ctx.writeResource(
+          "workItemType",
+          `${sanitizeName(args.project)}-work-item-${args.iid}-type`,
+          {
+            project: args.project,
+            iid: args.iid,
+            previousType,
+            type,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Work item #{iid} type: {from} -> {to}", {
+          iid: args.iid,
+          from: previousType,
+          to: type,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
     unassign_from_issues: {
       description:
         "Remove an assignee (default: the authenticated user) from multiple issues " +
@@ -4229,7 +4559,7 @@ export const model = {
         "is a no-op. Per-issue failures are recorded and never abort the batch.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -4340,7 +4670,7 @@ export const model = {
         "GitLab does not support resolving plain issue discussions (only MR/diff discussions), so `resolvable`/`resolved` read false here.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         first: z.number().int().positive().max(100).default(50),
       }),
       execute: async (
@@ -4434,7 +4764,7 @@ export const model = {
       description: "List comments on an issue",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -4478,7 +4808,7 @@ export const model = {
         "List the most recent comments/discussion notes on a merge request (newest 50; truncated=true when older notes exist)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -4779,7 +5109,7 @@ export const model = {
         "Report an MR's mergeability: detailed_merge_status plus a plain-English summary of why it can or cannot merge.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -4851,7 +5181,7 @@ export const model = {
         "Trigger a rebase of an MR's source branch onto its target (async), polling until it finishes or errors.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         skipCi: z.boolean().default(false),
       }),
       execute: async (
@@ -5166,7 +5496,7 @@ export const model = {
         "web UI only show the iid.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -5413,7 +5743,7 @@ export const model = {
       description: "Merge a merge request",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         squash: z.boolean().default(false),
       }),
       execute: async (
@@ -5463,7 +5793,7 @@ export const model = {
       description: "Update a merge request (title, description, labels, state)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         title: z.string().optional(),
         description: z.string().optional(),
         labels: z.array(z.string()).optional(),
@@ -5523,7 +5853,7 @@ export const model = {
         "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         body: z.string().min(1).describe(
           "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
         ),
@@ -5600,7 +5930,7 @@ export const model = {
       description: "Edit an existing comment on a merge request by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
         body: z.string().min(1),
       }),
@@ -5658,7 +5988,7 @@ export const model = {
       description: "Delete a comment on a merge request by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
       }),
       execute: async (
@@ -5707,7 +6037,7 @@ export const model = {
         "Set (replace) an MR's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -5780,7 +6110,7 @@ export const model = {
         "is a no-op. Per-MR failures are recorded and never abort the batch.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -5893,7 +6223,7 @@ export const model = {
         "Useful to clear yourself off MRs you've already reviewed.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -6001,7 +6331,7 @@ export const model = {
         "GitLab EE/Premium supports multiple reviewers.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -6069,7 +6399,7 @@ export const model = {
         "List resolvable discussion threads on an MR with per-thread resolution state and slim diff position (file/line). System-only threads are excluded. Filter for blockers with CEL: size(discussions.filter(d, d.resolvable && !d.resolved)).",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         first: z.number().int().positive().max(100).default(50),
       }),
       execute: async (
@@ -6161,7 +6491,7 @@ export const model = {
         "Resolve (or unresolve) a merge request discussion thread by its discussionId (from list_mr_discussions). MUTATING.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         discussionId: z.string().min(1),
         resolved: z.boolean().default(true),
       }),
@@ -6787,7 +7117,7 @@ export const model = {
         "than GitLab itself; this never attempts a merge.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
