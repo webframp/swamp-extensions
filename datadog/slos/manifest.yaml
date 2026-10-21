@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/datadog/slos"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: "Datadog SLOs — service level objective definitions, status, and history"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

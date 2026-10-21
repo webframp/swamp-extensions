@@ -100,8 +100,9 @@ of results can satisfy the request.
 When `profile` is set, credentials resolve via `fromIni({ profile })`, which
 supports SSO token cache. If your SSO session is expired, re-authenticate with
 `aws sso login --profile <profile>` before running methods. When `profile` is
-omitted, the default credential chain applies (environment variables, shared
-credentials file, instance metadata).
+omitted, the SDK default credential chain applies, which picks up an attached
+IAM role (instance profile, ECS task role). Prefer SSO or named profiles over
+long-lived static access keys.
 
 ## License
 

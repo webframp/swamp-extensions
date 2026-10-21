@@ -33,26 +33,40 @@ swamp extension pull @webframp/cloudflare-audit
 
 ## Configuration
 
-Create the required model instances that the audit workflow references:
+### Credentials
+
+Store the Cloudflare API token in a swamp vault and reference it with a
+`vault.get` expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption cloudflare   # once, if you have no vault yet
+swamp vault put cloudflare API_TOKEN             # prompts; the value never touches shell history
+```
+
+### Model instances
+
+Create the model instances that the audit workflow references:
 
 ```bash
 swamp model create @webframp/cloudflare/zone cf-zone \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'
 
 swamp model create @webframp/cloudflare/dns cf-dns \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
   --global-arg zoneId=YOUR_ZONE_ID
 
 swamp model create @webframp/cloudflare/waf cf-waf \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
   --global-arg zoneId=YOUR_ZONE_ID
 
 swamp model create @webframp/cloudflare/worker cf-worker \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
   --global-arg accountId=YOUR_ACCOUNT_ID
 
 swamp model create @webframp/cloudflare/cache cf-cache \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
   --global-arg zoneId=YOUR_ZONE_ID
 ```
 

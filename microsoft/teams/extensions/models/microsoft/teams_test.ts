@@ -1,9 +1,10 @@
 // Tests for teams.ts model methods
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { assertEquals } from "jsr:@std/assert@1.0.19";
+import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { model } from "./teams.ts";
+import { model, REFRESH_TOKEN_VAULT_KEY } from "./teams.ts";
+import { MicrosoftAuthError } from "./_lib/auth.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Server Helpers
@@ -187,4 +188,118 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+// ---------------------------------------------------------------------------
+// bootstrap: refresh token lands in a vault, never in persisted data
+// ---------------------------------------------------------------------------
+
+function fieldMeta(schema: unknown, field: string): Record<string, unknown> {
+  // deno-lint-ignore no-explicit-any
+  let f = (schema as any).shape[field];
+  // Merge meta across .optional()/.describe() wrappers, as swamp does.
+  const merged: Record<string, unknown> = {};
+  while (f) {
+    Object.assign(merged, f.meta() ?? {});
+    f = typeof f.unwrap === "function" ? f.unwrap() : undefined;
+  }
+  return merged;
+}
+
+Deno.test("bootstrap resource declares refreshToken as a sensitive vault field", () => {
+  const meta = fieldMeta(model.resources.bootstrap.schema, "refreshToken");
+  assertEquals(meta.sensitive, true);
+  assertEquals(meta.vaultKey, REFRESH_TOKEN_VAULT_KEY);
+});
+
+Deno.test("refreshToken global argument is sensitive and optional", () => {
+  const meta = fieldMeta(model.globalArguments, "refreshToken");
+  assertEquals(meta.sensitive, true);
+  const parsed = model.globalArguments.safeParse({
+    tenantId: TEST_TENANT_ID,
+    clientId: TEST_CLIENT_ID,
+  });
+  assertEquals(parsed.success, true);
+});
+
+Deno.test({
+  name:
+    "bootstrap: writes the refresh token only to the declared sensitive field",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer((req) => {
+      const reqUrl = new URL(req.url);
+      if (reqUrl.pathname.endsWith("/oauth2/v2.0/devicecode")) {
+        return Response.json({
+          device_code: "dc",
+          user_code: "UC",
+          verification_uri: "https://microsoft.com/devicelogin",
+          expires_in: 60,
+          interval: 0,
+          message: "go",
+        });
+      }
+      if (reqUrl.pathname.endsWith("/oauth2/v2.0/token")) {
+        return Response.json({
+          access_token: "test-access-token",
+          refresh_token: "minted-refresh-token",
+          expires_in: 3600,
+          token_type: "Bearer",
+          scope: "offline_access",
+        });
+      }
+      return new Response("Not found", { status: 404 });
+    });
+    const uninstall = installMicrosoftMock(url);
+    try {
+      const { context, getWrittenResources, getLogs } = createModelTestContext({
+        globalArgs: { tenantId: TEST_TENANT_ID, clientId: TEST_CLIENT_ID },
+        definition: { id: "test-id", name: "test-teams", version: 1, tags: {} },
+      });
+      await model.methods.bootstrap.execute(
+        {} as Record<string, never>,
+        context as unknown as Parameters<
+          typeof model.methods.bootstrap.execute
+        >[1],
+      );
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      const data = written[0].data as Record<string, unknown>;
+      // The token is carried only by the sensitive field, which swamp
+      // replaces with a vault.get reference before persisting.
+      const parsed = model.resources.bootstrap.schema.parse(data);
+      assertEquals(parsed.refreshToken, "minted-refresh-token");
+      const withoutToken = JSON.stringify({ ...data, refreshToken: undefined });
+      assertEquals(withoutToken.includes("minted-refresh-token"), false);
+      assertEquals(
+        String(data.message).includes(REFRESH_TOKEN_VAULT_KEY),
+        true,
+      );
+      assertEquals(
+        JSON.stringify(getLogs()).includes("minted-refresh-token"),
+        false,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("methods fail with guidance when refreshToken is unset", async () => {
+  const { context } = createModelTestContext({
+    globalArgs: { tenantId: TEST_TENANT_ID, clientId: TEST_CLIENT_ID },
+    definition: { id: "test-id", name: "test-teams", version: 1, tags: {} },
+  });
+  const err = await assertRejects(
+    () =>
+      model.methods.list_teams.execute(
+        {} as Record<string, never>,
+        context as unknown as Parameters<
+          typeof model.methods.list_teams.execute
+        >[1],
+      ),
+    MicrosoftAuthError,
+  );
+  assertEquals((err as MicrosoftAuthError).code, "missing_refresh_token");
 });

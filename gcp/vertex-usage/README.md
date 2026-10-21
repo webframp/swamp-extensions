@@ -12,9 +12,17 @@ CEL / `swamp data query` instead of re-running with different arguments.
 
 ## Setup
 
+Store the credentials JSON in a swamp vault and reference it with a `vault.get`
+expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
 ```bash
+swamp vault create local_encryption gcp   # once, if you have no vault yet
+swamp vault put gcp SA_KEY < key.json     # piped; the key never touches argv or shell history
+rm key.json                               # the vault now holds the only copy
 swamp model create @webframp/gcp/vertex-usage vertex-usage \
-  --global-arg 'serviceAccountJson=<vault:gcp/sa-key>' \
+  --global-arg 'serviceAccountJson=${{ vault.get("gcp", "SA_KEY") }}' \
   --global-arg 'billingTable=<billing-project>.<dataset>.gcp_billing_export_v1_<ID>'
 ```
 
@@ -31,15 +39,20 @@ against live data; the standard path is covered by unit tests.
 
 ## Authentication
 
-In order of precedence:
+Supply credentials through the `serviceAccountJson` global argument, wired from
+a vault as shown in [Setup](#setup). It accepts either kind of credentials JSON:
 
-1. `serviceAccountJson` global argument (service account key, signed-JWT
-   exchange). Store it in a swamp vault.
-2. `GCP_ACCESS_TOKEN` environment variable (a pre-obtained OAuth2 token, for
-   example from CI or `gcloud auth print-access-token`).
-3. The file named by `GOOGLE_APPLICATION_CREDENTIALS`, either a service account
-   key or an `authorized_user` file from
-   `gcloud auth application-default login`.
+- A service account key (signed-JWT exchange). Pipe the downloaded key into the
+  vault, then delete the file.
+- Your own Application Default Credentials, an `authorized_user` file. After
+  `gcloud auth application-default login`, store it with
+  `swamp vault put gcp SA_KEY < ~/.config/gcloud/application_default_credentials.json`.
+  This avoids creating a long-lived service account key at all.
+
+If `serviceAccountJson` is omitted, the model falls back to the
+`GCP_ACCESS_TOKEN` environment variable and then to the file named by
+`GOOGLE_APPLICATION_CREDENTIALS`. These fallbacks remain for compatibility, but
+swamp does not redact them and they are not recommended.
 
 No `gcloud` CLI dependency. Requested scopes are the minimum for each method:
 `monitoring.read`, `cloudplatformprojects.readonly`, `bigquery`.

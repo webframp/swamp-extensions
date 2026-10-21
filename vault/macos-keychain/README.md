@@ -39,7 +39,8 @@ Store and retrieve secrets with the `swamp vault` CLI:
 # Store a secret (interactive prompt, value hidden)
 swamp vault put keychain my-api-key
 
-# Retrieve a secret
+# Retrieve a secret. This prints the plaintext to your terminal; use it only
+# to check a value by hand. Models get secrets through vault.get (below).
 swamp vault read-secret keychain my-api-key --force --json
 
 # Note: listing keys is not supported by macOS Keychain (see Troubleshooting)
@@ -47,18 +48,23 @@ swamp vault read-secret keychain my-api-key --force --json
 
 ## Vault Expressions in Models
 
-Reference vault secrets in model definitions using the `vault://` expression
-syntax:
+Reference Keychain secrets from a model with a `vault.get` expression, either at
+`swamp model create` time:
 
-```yaml
-globalArgs:
-  apiToken:
-    type: string
-    default: "vault://keychain/my-api-key"
+```bash
+swamp model create @example/service my-service \
+  --global-arg 'apiToken=${{ vault.get("keychain", "my-api-key") }}'
 ```
 
-When a method runs, swamp resolves `vault://keychain/my-api-key` by calling the
-provider's `get("my-api-key")` method automatically.
+or in the model definition YAML:
+
+```yaml
+globalArguments:
+  apiToken: ${{ vault.get("keychain", "my-api-key") }}
+```
+
+When a method runs, swamp resolves the expression by calling the provider's
+`get("my-api-key")` method, so the definition never holds the plaintext.
 
 ## Supported Platforms
 

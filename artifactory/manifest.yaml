@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/artifactory"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Query and monitor JFrog Artifactory from a package consumer perspective.
   AQL-powered package search, repository health checks, and service status
@@ -9,15 +9,18 @@ description: |
 
   ## Authentication
 
-  Uses a JFrog Identity Token or Access Token stored in a swamp vault.
+  Uses a JFrog Identity Token or Access Token stored in a swamp vault and
+  referenced with a `vault.get` expression; never pass the literal token.
   Generate a token via the Artifactory UI or REST API.
 
   ## Usage
 
   ```bash
+  swamp vault create local_encryption artifactory   # once, if you have no vault yet
+  swamp vault put artifactory TOKEN   # prompts for the token
   swamp model create @webframp/artifactory packages \
     --global-arg url=https://packages.example.com \
-    --global-arg 'token=vault://my-vault/artifactory-token'
+    --global-arg 'token=${{ vault.get("artifactory", "TOKEN") }}'
 
   swamp model method run packages system_health
   swamp model method run packages list_repos

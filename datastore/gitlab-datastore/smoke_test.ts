@@ -4,7 +4,11 @@
 //
 // Usage:
 //   export GITLAB_PROJECT_ID="123"           # or "mygroup/myproject"
-//   export GITLAB_TOKEN="glpat-xxxx"
+//   # GITLAB_TOKEN is a personal access token with `api` scope. Read it from
+//   # your secret store so the value never appears in the command or shell
+//   # history, e.g. `pass show gitlab/api-token` or
+//   # `op read "op://<vault>/<item>/token"`; never paste it inline.
+//   export GITLAB_TOKEN="$(pass show gitlab/api-token)"
 //   export GITLAB_BASE_URL="https://gitlab.example.com"  # optional
 //   deno run --allow-net --allow-env --allow-read --allow-write --allow-sys smoke_test.ts
 
@@ -50,7 +54,8 @@ Optional:
 
   log(`Project ID: ${projectId}`);
   log(`Base URL: ${baseUrl}`);
-  log(`Token: ${token.substring(0, 10)}...`);
+  // Never print any part of the token.
+  log(`Token: set (${token.length} characters)`);
 
   // Create provider
   const config = { projectId, token, baseUrl, statePrefix: "smoke-test" };

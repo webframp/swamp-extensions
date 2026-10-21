@@ -1,25 +1,52 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README and the `apiToken` description now lead with a vault.
+Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
+to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
+environment variable still works as a fallback, but swamp does not redact it, so
+it is no longer recommended. The missing-token error now says the same.
 
-**Changed:** Singleton get and action methods now write their data under
-`access_applications_add_an_application-current`,
-`access_applications_revoke_service_tokens-current`,
-`access_gateway_ca_add_an_ssh_ca-current`,
-`access_identity_providers_add_an_access_identity_provider-current`,
-`access_key_configuration_rotate_access_keys-current`,
-`access_saml_certificates_rotate_certificate-current`,
-`access_service_tokens_refresh_a_service_token-current`,
-`create_a_short_lived_certificate_ca-current`,
-`create_saml_certificate_for_identity_provider-current`,
-`mcp_portals_api_sync_server-current`, `the_access_key_configuration-current`,
-`your_zero_trust_organization-current`,
-`your_zero_trust_organization_doh_settings-current` instead of `latest`.
-Anything that read `data.latest("<model>", "latest")` or queried
-`name == "latest"` must use the new name.
+**Changed:** Method arguments that carry a secret are now marked sensitive, so
+swamp redacts them from logs and run records. Pass them as `vault.get`
+expressions. Affected: `create_servers`, `update_servers`,
+`access_applications_add_an_application`, `update_an_access_application`,
+`access_identity_providers_add_an_access_identity_provider` and
+`update_an_access_identity_provider`. The README's new "Secrets" section lists
+them per method.
 
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
+**Changed:** Secrets returned by
+`access_identity_providers_add_an_access_identity_provider`,
+`get_an_access_identity_provider`, `update_an_access_identity_provider`,
+`create_a_service_token` and
+`create_access_service_tokens_rotate_a_service_token` are now stored in a vault,
+and the stored resource holds a `vault.get` reference instead of the value.
+Because the model now declares secret output, swamp refuses to run any of the
+model's methods except `list` and `get` (which swamp treats as reads by their
+names) until a vault exists (`swamp vault create local_encryption cloudflare`).
+The README's "Secrets" section lists what each method stores.
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** Secrets inside list items, maps or unions, which swamp cannot move
+into a vault, are now removed before the result is stored. Affected:
+`list_access_applications`, `access_applications_add_an_application`,
+`get_an_access_application`, `update_an_access_application` and
+`list_access_identity_providers`.
+
+**Fixed:** `create_a_short_lived_certificate_ca` and
+`create_saml_certificate_for_identity_provider` wrote to a resource the model
+does not declare, so they always failed. They now write the resource the model
+declares.
+
+**Fixed:** Create methods whose response carries no `id` wrote every result to
+one instance named `created`, so each call overwrote the previous one. They now
+name the instance by the response's `id` or `uid` when present, else by the path
+parameter that scopes the call, else by a hash of the request arguments (secret
+arguments left out). Affected: `create_a_custom_page`,
+`create_your_zero_trust_organization`,
+`create_zero_trust_organization_revoke_all_access_tokens_for_a_user` and
+`create_tag`.
+
+**Upgrade note:** Resources stored by earlier versions of the methods in the
+README's "Secrets" section may hold plaintext secrets; delete them with
+`swamp data delete` and rotate the affected credentials. Results earlier
+versions wrote to the `created` instance stay there; new runs write under the
+new names.

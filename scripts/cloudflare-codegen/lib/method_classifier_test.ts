@@ -9,9 +9,18 @@ import {
   classifyServiceMethods,
   generateMethodName,
   generateModelSource,
+  planSecrets,
 } from "./method_classifier.ts";
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
+import { groupOperations } from "./service_grouper.ts";
+import { generateApiLib } from "./extension_generator.ts";
+import type { OpenAPISpec } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
+import { ZOD_VERSION } from "../config.ts";
+
+// The zod the generated models pin, loaded by its configured version so the
+// end-to-end test reads sensitive-field metadata from the registry they use.
+const { z } = await import(`npm:zod@${ZOD_VERSION}`);
 
 function makeOp(overrides: Partial<GroupedOperation>): GroupedOperation {
   return {
@@ -396,10 +405,122 @@ Deno.test("generateModelSource: created resource id is sanitized", () => {
   const group = makeGroup(op);
   const src = generateModelSource(group, classifyServiceMethods(group), "1");
 
+  // No id-like field is declared and no path parameter scopes the call, so
+  // the fallback is a hash of the request, never a shared "created" slot.
+  assertEquals(src.includes('"created"'), false);
   assertEquals(
     src.includes(
-      'sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"))',
+      "sanitizeInstanceName(String(created?.id ?? await shortHash(JSON.stringify(requestKey))))",
     ),
+    true,
+  );
+  assertEquals(src.includes('shortHash } from "./_lib/api.ts"'), true);
+});
+
+Deno.test("generateModelSource: a created Turnstile widget is named by its sitekey", () => {
+  const op = makeOp({
+    httpMethod: "post",
+    path: "/zones/{zone_id}/api_gateway/widgets",
+    operationId: "api-shield-create-widget",
+    summary: "Create widget",
+    requestBody: { type: "object", properties: { name: { type: "string" } } },
+    responseSchema: {
+      type: "object",
+      properties: { sitekey: { type: "string" }, name: { type: "string" } },
+      // deno-lint-ignore no-explicit-any
+    } as any,
+    // deno-lint-ignore no-explicit-any
+  } as any);
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(
+    src.includes("String(created?.id ?? created?.sitekey ?? await shortHash("),
+    true,
+  );
+});
+
+Deno.test("generateModelSource: a bare-string create response is named by its path parameter", () => {
+  const op = makeOp({
+    httpMethod: "post",
+    path: "/zones/{zone_id}/api_gateway/tunnels/{tunnel_id}/management",
+    operationId: "api-shield-create-management-token",
+    summary: "Create management token",
+    pathParams: [
+      {
+        name: "zone_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      {
+        name: "tunnel_id",
+        in: "path",
+        required: true,
+        schema: { type: "string" },
+      },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    requestBody: {
+      type: "object",
+      properties: { resources: { type: "array" } },
+    },
+    responseSchema: { type: "string" },
+    responseSecrets: { vaultable: [], leaves: [], wrapRoot: true },
+    // deno-lint-ignore no-explicit-any
+  } as any);
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(
+    src.includes("const id = sanitizeInstanceName(String(args.tunnel_id));"),
+    true,
+  );
+  assertEquals(src.includes("created?."), false);
+  assertEquals(src.includes("shortHash"), false);
+});
+
+Deno.test("generateModelSource: several scoping path parameters are hashed together", () => {
+  const op = makeOp({
+    httpMethod: "post",
+    path: "/zones/{zone_id}/api_gateway/{a}/{b}/token",
+    operationId: "api-shield-create-token",
+    summary: "Create token",
+    pathParams: [
+      { name: "a", in: "path", required: true, schema: { type: "string" } },
+      { name: "b", in: "path", required: true, schema: { type: "string" } },
+      // deno-lint-ignore no-explicit-any
+    ] as any,
+    requestBody: { type: "object", properties: { name: { type: "string" } } },
+    responseSchema: { type: "string" },
+    // deno-lint-ignore no-explicit-any
+  } as any);
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(
+    src.includes(
+      "sanitizeInstanceName(await shortHash(JSON.stringify([String(args.a), String(args.b)])))",
+    ),
+    true,
+  );
+});
+
+Deno.test("generateModelSource: the request hash leaves secret arguments out", () => {
+  const op = makeOp({
+    httpMethod: "post",
+    path: "/zones/{zone_id}/api_gateway/credentials",
+    operationId: "api-shield-create-credential",
+    summary: "Create credential",
+    requestBody: {
+      type: "object",
+      properties: { name: { type: "string" }, password: { type: "string" } },
+    },
+    responseSchema: { type: "object", properties: { ok: { type: "boolean" } } },
+    inputSecrets: ["password"],
+    // deno-lint-ignore no-explicit-any
+  } as any);
+  const group = makeGroup(op);
+  const src = generateModelSource(group, classifyServiceMethods(group), "1");
+  assertEquals(
+    src.includes('const secretArgs = new Set<string>(["password"]);'),
     true,
   );
 });
@@ -524,4 +645,287 @@ Deno.test("generateModelSource: singleton get/action never write the reserved na
     /writeResource\("[a-z0-9_-]+", "[a-z0-9_-]+-current"/.test(src),
     true,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Secrets: arguments, returned secrets, and the generated method end to end
+// ---------------------------------------------------------------------------
+
+const envelope = (result: unknown) => ({
+  "200": {
+    content: {
+      "application/json": {
+        schema: { type: "object", properties: { result } },
+      },
+    },
+  },
+});
+
+function secretsSpec(): OpenAPISpec {
+  const ref = (n: string) => ({ $ref: `#/components/schemas/${n}` });
+  return {
+    openapi: "3.0.3",
+    info: { title: "Test", version: "1.0" },
+    components: {
+      schemas: {
+        access_client_secret: { type: "string", "x-sensitive": true },
+        tunnel_tunnel_token: { type: "string", "x-sensitive": true },
+        logpush_destination_conf: { type: "string", "x-sensitive": true },
+        turnstile_secret: { type: "string", "x-sensitive": true },
+      },
+    },
+    paths: {
+      "/accounts/{account_id}/access/service_tokens": {
+        post: {
+          operationId: "access-service-tokens-create-a-service-token",
+          summary: "Create a service token",
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { name: { type: "string" } },
+                },
+              },
+            },
+          },
+          responses: envelope({
+            type: "object",
+            properties: {
+              id: { type: "string" },
+              client_id: { type: "string" },
+              client_secret: ref("access_client_secret"),
+            },
+          }),
+        },
+      },
+      "/accounts/{account_id}/cfd_tunnel/{tunnel_id}/token": {
+        get: {
+          operationId: "cloudflare-tunnel-get-a-cloudflare-tunnel-token",
+          summary: "Get a tunnel token",
+          parameters: [{ name: "tunnel_id", in: "path", required: true }],
+          responses: envelope(ref("tunnel_tunnel_token")),
+        },
+      },
+      "/accounts/{account_id}/logpush/jobs": {
+        get: {
+          operationId: "get-accounts-account_id-logpush-jobs",
+          summary: "List Logpush jobs",
+          responses: envelope({
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "integer" },
+                destination_conf: ref("logpush_destination_conf"),
+              },
+            },
+          }),
+        },
+      },
+      "/accounts/{account_id}/r2-catalog/{bucket_name}/credential": {
+        post: {
+          operationId: "store-credentials",
+          summary: "Store catalog credentials",
+          parameters: [{ name: "bucket_name", in: "path", required: true }],
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { token: { type: "string" } },
+                  required: ["token"],
+                },
+              },
+            },
+          },
+          responses: envelope({ type: "object", nullable: true }),
+        },
+      },
+      "/accounts/{account_id}/challenges/widgets/{sitekey}/rotate_secret": {
+        post: {
+          operationId: "accounts-turnstile-widget-rotate-secret",
+          summary: "Rotate Secret for a Turnstile Widget",
+          parameters: [{ name: "sitekey", in: "path", required: true }],
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { invalidate_immediately: { type: "boolean" } },
+                },
+              },
+            },
+          },
+          responses: envelope({
+            type: "object",
+            properties: {
+              sitekey: { type: "string" },
+              secret: ref("turnstile_secret"),
+            },
+          }),
+        },
+      },
+    } as unknown as OpenAPISpec["paths"],
+  };
+}
+
+const secretsConfig: ServiceConfig = {
+  name: "secrets-demo",
+  description: "Secret handling demo",
+  pathPrefixes: ["/accounts/{account_id}"],
+  scope: "account",
+  labels: ["cloudflare"],
+};
+
+function secretsGroup(): ServiceGroup {
+  return groupOperations(secretsSpec(), [secretsConfig])[0];
+}
+
+/** Paths swamp's data writer would move into a vault for a resource schema. */
+function swampVaultPaths(schema: unknown, prefix: string[] = []): string[] {
+  type Def = {
+    _def: { type: string; innerType?: Def; shape?: Record<string, Def> };
+  };
+  const unwrap = (s: Def): Def => {
+    let c = s;
+    while (["optional", "nullable", "default"].includes(c._def.type)) {
+      c = c._def.innerType!;
+    }
+    return c;
+  };
+  const marked = (f: Def): boolean => {
+    let c: Def | undefined = f;
+    while (c) {
+      const meta = z.globalRegistry.get(c) as
+        | { sensitive?: boolean }
+        | undefined;
+      if (meta?.sensitive) return true;
+      c = ["optional", "nullable", "default"].includes(c._def.type)
+        ? c._def.innerType
+        : undefined;
+    }
+    return false;
+  };
+  const obj = unwrap(schema as Def);
+  if (obj._def.type !== "object" || !obj._def.shape) return [];
+  const out: string[] = [];
+  for (const [k, f] of Object.entries(obj._def.shape)) {
+    if (marked(f)) out.push([...prefix, k].join("."));
+    else out.push(...swampVaultPaths(f, [...prefix, k]));
+  }
+  return out;
+}
+
+Deno.test("planSecrets: vaults reachable secrets, strips list secrets, wraps a bare token", () => {
+  const methods = classifyServiceMethods(secretsGroup());
+  const plan = planSecrets(methods);
+  const get = (n: string) => plan.methods.get(n)!;
+  assertEquals(get("create_a_service_token").vaulted, [["client_secret"]]);
+  assertEquals(get("get_a_cloudflare_tunnel_token").wrapRoot, true);
+  assertEquals(get("get_accounts_account_id_logpush_jobs").strip, [[
+    { each: true },
+    { k: "destination_conf" },
+  ]]);
+  assertEquals(get("create_store_credentials").inputs, ["token"]);
+});
+
+Deno.test("generateModelSource: generated methods keep returned secrets out of plaintext storage", async () => {
+  const group = secretsGroup();
+  const methods = classifyServiceMethods(group);
+  const source = generateModelSource(group, methods, "2026.10.21.1");
+  const dir = await Deno.makeTempDir();
+  const originalFetch = globalThis.fetch;
+  try {
+    await Deno.mkdir(`${dir}/_lib`);
+    await Deno.writeTextFile(`${dir}/_lib/api.ts`, generateApiLib());
+    await Deno.writeTextFile(`${dir}/model.ts`, source);
+    const { model } = await import(`file://${dir}/model.ts`);
+
+    const results: Record<string, unknown> = {
+      "/access/service_tokens": {
+        id: "tok-1",
+        client_id: "cid",
+        client_secret: "CLIENT-SECRET",
+      },
+      "/token": "TUNNEL-TOKEN",
+      "/logpush/jobs": [{ id: 7, destination_conf: "s3://b?secret=DEST" }],
+      "/credential": null,
+      "/rotate_secret": { sitekey: "sk", secret: "ROTATED-SECRET" },
+    };
+    globalThis.fetch = ((input: string | URL | Request) => {
+      const url = new URL(String(input));
+      const key = Object.keys(results).find((k) => url.pathname.endsWith(k))!;
+      return Promise.resolve(Response.json({
+        success: true,
+        errors: [],
+        messages: [],
+        result: results[key],
+        result_info: Array.isArray(results[key])
+          ? { page: 1, per_page: 50, total_count: 1, total_pages: 1 }
+          : undefined,
+      }));
+    }) as typeof fetch;
+
+    const written: { spec: string; data: Record<string, unknown> }[] = [];
+    const context = {
+      globalArgs: { apiToken: "t", accountId: "acct" },
+      writeResource: (spec: string, instance: string, data: unknown) => {
+        written.push({ spec, data: data as Record<string, unknown> });
+        return Promise.resolve({ name: instance });
+      },
+      logger: { info: () => {} },
+    };
+    const run = async (name: string, args: Record<string, unknown>) => {
+      written.length = 0;
+      await model.methods[name].execute(args, context);
+      const [w] = written;
+      // Every spec a method writes must be declared, or swamp rejects it.
+      assertEquals(w.spec in model.resources, true, `${name} -> ${w.spec}`);
+      return { ...w, vault: swampVaultPaths(model.resources[w.spec].schema) };
+    };
+
+    // A minted secret is kept for the vault and declared sensitive.
+    const token = await run("create_a_service_token", { name: "ci" });
+    assertEquals(token.data.client_secret, "CLIENT-SECRET");
+    assertEquals(token.vault, ["client_secret"]);
+
+    // A bare token response is wrapped so it has a field to vault.
+    const tunnel = await run("get_a_cloudflare_tunnel_token", {
+      tunnel_id: "t1",
+    });
+    assertEquals(tunnel.data, { value: "TUNNEL-TOKEN" });
+    assertEquals(tunnel.vault, ["value"]);
+
+    // Secrets in list items cannot be vaulted, so they are never written.
+    const jobs = await run("get_accounts_account_id_logpush_jobs", {});
+    assertEquals(JSON.stringify(jobs.data).includes("DEST"), false);
+    assertEquals((jobs.data.items as { id: number }[])[0].id, 7);
+
+    // A create-typed method named get_* writes the resource it declares.
+    const rotated = await run("get_rotate_secret", { sitekey: "sk" });
+    assertEquals(rotated.spec, "rotate_secret");
+    assertEquals(rotated.vault, ["secret"]);
+
+    // A secret argument is marked so swamp redacts it.
+    const args = model.methods.create_store_credentials.arguments;
+    assertEquals(swampVaultPaths(args), ["token"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await Deno.remove(dir, { recursive: true });
+  }
+});
+
+Deno.test("generateModelSource: apiToken describe leads with the vault and calls the env var a discouraged fallback", () => {
+  const source = generateModelSource(
+    secretsGroup(),
+    classifyServiceMethods(secretsGroup()),
+    "2026.10.21.1",
+  );
+  assertEquals(
+    source.includes('vault.get(\\"cloudflare\\", \\"API_TOKEN\\")'),
+    true,
+  );
+  assertEquals(source.includes("not redacted and is not recommended"), true);
+  assertEquals(source.includes("overrides the CLOUDFLARE_API_TOKEN"), false);
 });

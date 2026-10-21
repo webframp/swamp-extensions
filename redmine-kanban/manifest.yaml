@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/redmine-kanban"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Kanban workflow reports and automation for Redmine.
 
@@ -14,10 +14,13 @@ description: |
   ```bash
   swamp extension pull @webframp/redmine-kanban
 
-  # Requires a @webframp/redmine model instance named "tracker"
+  # Requires a @webframp/redmine model instance named "tracker".
+  # Store the API key in a vault (prompts; never pass it inline).
+  swamp vault create local_encryption redmine
+  swamp vault put redmine API_KEY
   swamp model create @webframp/redmine tracker \
     --global-arg host=https://your-redmine.example.org \
-    --global-arg apiKey=YOUR_API_KEY \
+    --global-arg 'apiKey=${{ vault.get("redmine", "API_KEY") }}' \
     --global-arg project=your-project
 
   # Run the scaffold-story workflow

@@ -116,9 +116,10 @@ resources are deployed.
 ### `"default"` profile uses the default credential chain
 
 When a profile name is literally `"default"`, no `fromIni` credentials are
-loaded. The SDK falls back to environment variables, shared credentials file, or
-instance metadata. Any other profile name triggers `fromIni({ profile })`
-resolution.
+loaded and the SDK default credential chain applies, which picks up an attached
+IAM role (instance profile, ECS task role). Any other profile name triggers
+`fromIni({ profile })` resolution, including SSO profiles. Prefer SSO or named
+profiles over long-lived static access keys.
 
 ## License
 

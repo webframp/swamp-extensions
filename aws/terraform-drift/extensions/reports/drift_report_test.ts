@@ -923,3 +923,187 @@ Deno.test("report: detects missing EIP in AWS", async () => {
     await Deno.remove(tmpDir, { recursive: true });
   }
 });
+
+// =============================================================================
+// Sensitive (masked) Terraform values
+// =============================================================================
+
+const MASK = "***SENSITIVE***";
+
+async function runInstanceCase(
+  values: unknown,
+  awsInstance: Record<string, unknown> = {
+    instanceId: "i-abc123",
+    instanceType: "t3.micro",
+    state: "running",
+    tags: { Name: "web", Secret: "x" },
+  },
+) {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    await writeStepData(
+      tmpDir,
+      TF_MODEL_TYPE,
+      TF_MODEL_ID,
+      "aws_instance.web",
+      1,
+      {
+        address: "aws_instance.web",
+        mode: "managed",
+        type: "aws_instance",
+        name: "web",
+        providerName: "registry.terraform.io/hashicorp/aws",
+        values,
+        dependsOn: [],
+      },
+    );
+    await writeStepData(
+      tmpDir,
+      INV_MODEL_TYPE,
+      INV_MODEL_ID,
+      "all-us-east-1",
+      1,
+      {
+        region: "us-east-1",
+        resourceType: "all",
+        resources: { ec2: [awsInstance] },
+        count: 1,
+        fetchedAt: new Date().toISOString(),
+      },
+    );
+    const steps: StepExecution[] = [
+      makeStep("tf-infra", TF_MODEL_TYPE, TF_MODEL_ID, "read_state", [
+        { name: "aws_instance.web", dataId: "d1", version: 1 },
+      ]),
+      makeStep(
+        "aws-inventory",
+        INV_MODEL_TYPE,
+        INV_MODEL_ID,
+        "inventory_all",
+        [{ name: "all-us-east-1", dataId: "d2", version: 1 }],
+      ),
+    ];
+    return await report.execute(makeContext(tmpDir, steps));
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+}
+
+Deno.test("report: wholly sensitive tags (merge over sensitive var) are unverifiable, not drift", async () => {
+  // tags = merge(var.common_tags, { Secret = var.secret }) with a sensitive
+  // var makes Terraform mark the whole map sensitive; read_state writes the
+  // mask string in place of both tags and tags_all.
+  const result = await runInstanceCase({
+    id: "i-abc123",
+    instance_type: "t3.micro",
+    tags: MASK,
+    tags_all: MASK,
+  });
+  assertEquals(result.json.findings, []);
+  assertEquals(result.json.summary.unverifiableFields, 1);
+  assertEquals(result.json.unverifiable[0].field, "tags_all");
+  assertEquals(result.json.unverifiable[0].resourceId, "i-abc123");
+  assertStringIncludes(result.markdown, "No Drift Detected");
+  assertStringIncludes(result.markdown, "## Unverifiable Fields");
+});
+
+Deno.test("report: masked tags_all does not fall back to tags", async () => {
+  // tags omits default_tags; falling back would report AWS default tags as extra.
+  const result = await runInstanceCase({
+    id: "i-abc123",
+    instance_type: "t3.micro",
+    tags: { Name: "web" },
+    tags_all: MASK,
+  });
+  assertEquals(result.json.findings, []);
+  assertEquals(result.json.unverifiable.map((u) => u.field), ["tags_all"]);
+});
+
+Deno.test("report: masked tag value is unverifiable, other tags still compared", async () => {
+  const result = await runInstanceCase({
+    id: "i-abc123",
+    instance_type: "t3.micro",
+    tags: { Name: "api", Secret: MASK },
+  });
+  assertEquals(result.json.findings.length, 1);
+  const fields = result.json.findings[0].fields ?? [];
+  assertEquals(fields.map((f) => f.field), ["tags.Name"]);
+  assertEquals(result.json.unverifiable.map((u) => u.field), ["tags.Secret"]);
+});
+
+Deno.test("report: masked scalar attribute is unverifiable, not drift", async () => {
+  const result = await runInstanceCase({
+    id: "i-abc123",
+    instance_type: MASK,
+    tags: { Name: "web", Secret: "x" },
+  });
+  assertEquals(result.json.findings, []);
+  assertEquals(result.json.unverifiable.map((u) => u.field), [
+    "instance_type",
+  ]);
+});
+
+Deno.test("report: masked resource id is unverifiable, not missing_in_aws", async () => {
+  const result = await runInstanceCase({
+    id: MASK,
+    instance_type: "t3.micro",
+  });
+  assertEquals(result.json.findings, []);
+  assertEquals(result.json.summary.missingInAws, 0);
+  assertEquals(result.json.unverifiable.map((u) => u.field), ["id"]);
+});
+
+Deno.test("report: wholly masked values block is unverifiable", async () => {
+  const result = await runInstanceCase(MASK);
+  assertEquals(result.json.findings, []);
+  assertEquals(result.json.summary.comparedResources, 1);
+  assertEquals(result.json.unverifiable.map((u) => u.field), ["values"]);
+});
+
+Deno.test("report: masked load balancer internal flag is unverifiable", async () => {
+  const tmpDir = await Deno.makeTempDir();
+  try {
+    const arn =
+      "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/web/abc";
+    await writeStepData(tmpDir, TF_MODEL_TYPE, TF_MODEL_ID, "aws_lb.web", 1, {
+      address: "aws_lb.web",
+      mode: "managed",
+      type: "aws_lb",
+      name: "web",
+      providerName: "registry.terraform.io/hashicorp/aws",
+      values: { arn, name: "web", internal: MASK },
+      dependsOn: [],
+    });
+    await writeStepData(tmpDir, NET_MODEL_TYPE, NET_MODEL_ID, "lbs", 1, {
+      data: [{
+        arn,
+        name: "web",
+        type: "application",
+        scheme: "internet-facing",
+        vpcId: "vpc-1",
+        state: "active",
+      }],
+    });
+    const steps: StepExecution[] = [
+      makeStep("tf-infra", TF_MODEL_TYPE, TF_MODEL_ID, "read_state", [
+        { name: "aws_lb.web", dataId: "d1", version: 1 },
+      ]),
+      makeStep(
+        "aws-networking",
+        NET_MODEL_TYPE,
+        NET_MODEL_ID,
+        "list_load_balancers",
+        [
+          { name: "lbs", dataId: "d2", version: 1 },
+        ],
+      ),
+    ];
+    const result = await report.execute(makeContext(tmpDir, steps));
+    assertEquals(result.json.findings, []);
+    assertEquals(result.json.unverifiable.map((u) => u.field), [
+      "internal/scheme",
+    ]);
+  } finally {
+    await Deno.remove(tmpDir, { recursive: true });
+  }
+});

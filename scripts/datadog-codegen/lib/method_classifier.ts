@@ -12,8 +12,13 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import { schemaToZod } from "./type_mapper.ts";
-import { ZOD_VERSION } from "../config.ts";
+import { schemaToZod, type SensitiveMark } from "./type_mapper.ts";
+import { isSensitiveFieldName } from "./sensitive.ts";
+import {
+  SENSITIVE_ARG_FIELDS,
+  SENSITIVE_RESPONSE_FIELDS,
+  ZOD_VERSION,
+} from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
 export type MethodType =
@@ -285,10 +290,18 @@ export function generateModelSource(
 }
 
 /** Generate GlobalArgsSchema — always apiKey + appKey + site */
-function generateGlobalArgsSchema(): string {
+export function generateGlobalArgsSchema(): string {
   return `const GlobalArgsSchema = z.object({
-  apiKey: z.string().meta({ sensitive: true }).describe("Datadog API key (DD-API-KEY)"),
-  appKey: z.string().meta({ sensitive: true }).describe("Datadog application key (DD-APPLICATION-KEY)"),
+  apiKey: z.string().meta({ sensitive: true }).describe(${
+    JSON.stringify(
+      `Datadog API key (DD-API-KEY). Wire it with \${{ vault.get("datadog", "API_KEY") }}; never pass the literal value.`,
+    )
+  }),
+  appKey: z.string().meta({ sensitive: true }).describe(${
+    JSON.stringify(
+      `Datadog application key (DD-APPLICATION-KEY). Wire it with \${{ vault.get("datadog", "APP_KEY") }}; never pass the literal value.`,
+    )
+  }),
   site: z.enum(["us1", "us3", "us5", "eu1", "ap1", "us1-fed"]).default("us1").describe("Datadog site"),
 });`;
 }
@@ -326,7 +339,21 @@ function generateResponseSchemas(
 
   for (const method of methodsWithResources) {
     const schema = method.operation.responseSchema;
+    // Every method that writes this resource contributes its configured
+    // secret paths; the schema is shared, so they all land on it.
+    const resourceName = getResourceName(method);
+    const sensitivePaths = methods
+      .filter((m) => m.type !== "delete" && getResourceName(m) === resourceName)
+      .flatMap((m) => SENSITIVE_RESPONSE_FIELDS[m.operation.operationId] ?? []);
+    const marks: SensitiveMark[] = [];
+    const mapperOpts = {
+      indent: 2,
+      isSensitiveName: isSensitiveFieldName,
+      sensitivePaths,
+      marks,
+    };
     if (!schema) {
+      assertSensitiveMarks(method, resourceName, sensitivePaths, marks);
       schemaNames.set(method.name, "z.object({})");
       continue;
     }
@@ -338,7 +365,10 @@ function generateResponseSchemas(
       const itemVarName =
         toPascalCase(method.name.replace(/^(list|get)_/, "")) +
         "ItemSchema";
-      const itemZod = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const itemZod = withPassthrough(schemaToZod(schema, mapperOpts, 1));
+      // Items are stored under `items[]`, which swamp's resource redaction
+      // does not descend into.
+      for (const m of marks) m.reachable = false;
       lines.push(`const ${itemVarName} = ${itemZod};`);
       lines.push(``);
       lines.push(`const ${varName} = z.object({`);
@@ -368,9 +398,10 @@ function generateResponseSchemas(
       );
       lines.push(`}).passthrough();`);
     } else {
-      const zodStr = withPassthrough(schemaToZod(schema, { indent: 2 }, 1));
+      const zodStr = withPassthrough(schemaToZod(schema, mapperOpts, 1));
       lines.push(`const ${varName} = ${zodStr};`);
     }
+    assertSensitiveMarks(method, resourceName, sensitivePaths, marks);
     lines.push(``);
   }
 
@@ -393,6 +424,72 @@ function generateResponseSchemas(
   }
 
   return schemaNames;
+}
+
+/**
+ * Fail generation when a secret in a response would not be vaulted: a
+ * configured path that the schema does not declare, or a marked field that
+ * swamp's resource redaction cannot reach (inside an array, record or union).
+ * Emitting the marker there would look protected while the value is stored
+ * in plaintext.
+ */
+function assertSensitiveMarks(
+  method: ClassifiedMethod,
+  resourceName: string,
+  configured: readonly string[],
+  marks: readonly SensitiveMark[],
+): void {
+  const marked = new Set(marks.map((m) => m.path));
+  const missing = configured.filter((p) => !marked.has(p));
+  if (missing.length > 0) {
+    throw new Error(
+      `SENSITIVE_RESPONSE_FIELDS for resource "${resourceName}" (${method.operation.operationId}) ` +
+        `names ${
+          missing.map((p) => `"${p}"`).join(", ")
+        }, which its generated schema does not declare as an object field`,
+    );
+  }
+  const unreachable = marks.filter((m) => !m.reachable);
+  if (unreachable.length > 0) {
+    throw new Error(
+      `Response of ${method.operation.operationId} (resource "${resourceName}") has ` +
+        `secret-bearing field(s) ${
+          unreachable.map((m) => `"${m.path}"`).join(", ")
+        } inside an array, record or union, where swamp does not vault resource fields. ` +
+        `Mark an enclosing object field in SENSITIVE_RESPONSE_FIELDS instead.`,
+    );
+  }
+}
+
+/** Secret-bearing resource field paths a method's resource declares. */
+export function sensitiveResponsePaths(
+  method: ClassifiedMethod,
+  methods: ClassifiedMethod[],
+): string[] {
+  const resourceName = getResourceName(method);
+  const primary = methods.find((m) =>
+    m.type !== "delete" && getResourceName(m) === resourceName
+  );
+  if (!primary) return [];
+  const marks: SensitiveMark[] = [];
+  const sensitivePaths = methods
+    .filter((m) => m.type !== "delete" && getResourceName(m) === resourceName)
+    .flatMap((m) => SENSITIVE_RESPONSE_FIELDS[m.operation.operationId] ?? []);
+  const schema = primary.operation.responseSchema;
+  if (
+    !schema || primary.type === "list" ||
+    (primary.operation.requestBodyArrayWrapper &&
+      primary.operation.isCollection)
+  ) {
+    return [];
+  }
+  schemaToZod(schema, {
+    indent: 2,
+    isSensitiveName: isSensitiveFieldName,
+    sensitivePaths,
+    marks,
+  }, 1);
+  return marks.map((m) => m.path);
 }
 
 /** Generate a single method definition */
@@ -459,20 +556,88 @@ function arrayBodyExpr(op: GroupedOperation): string | undefined {
     : "args.entries";
 }
 
+/** Suffix for an argument whose value is a secret. */
+const SECRET_ARG_HINT =
+  "Secret: supply it with a vault.get expression, never a literal value.";
+/** Suffix for an argument that can carry a secret among other values. */
+const CARRIES_SECRET_ARG_HINT =
+  "Can carry a secret: put it in a vault.get expression, never a literal value.";
+
+/** How an argument is sensitive: its value is a secret, or may hold one. */
+type ArgSensitivity = "secret" | "carries" | false;
+
+/** Describe call for an argument, with the vault hint when it is sensitive. */
+function argDescribe(
+  description: string | undefined,
+  sensitive: ArgSensitivity,
+) {
+  const text = description ? truncateStr(description) : "";
+  if (!sensitive) {
+    return text ? `.describe("${escapeStr(text)}")` : "";
+  }
+  const hint = sensitive === "secret"
+    ? SECRET_ARG_HINT
+    : CARRIES_SECRET_ARG_HINT;
+  return `.describe("${escapeStr(text ? `${text} ${hint}` : hint)}")`;
+}
+
+/**
+ * Top-level argument names (as generated) that are marked sensitive: those
+ * listed in SENSITIVE_ARG_FIELDS plus credential-named ones.
+ */
+export function sensitiveArgNames(op: GroupedOperation): string[] {
+  const configured = new Set(SENSITIVE_ARG_FIELDS[op.operationId] ?? []);
+  const names = new Set<string>();
+  const check = (
+    name: string,
+    schema?: Parameters<typeof isSensitiveFieldName>[1],
+  ) => {
+    if (configured.has(name) || isSensitiveFieldName(name, schema)) {
+      names.add(sanitizeFieldName(name));
+    }
+  };
+  for (const p of [...op.pathParams, ...op.queryParams]) {
+    check(p.name, p.schema);
+  }
+  if (!op.requestBodyIsArray && op.requestBody?.properties) {
+    for (const [name, prop] of Object.entries(op.requestBody.properties)) {
+      if (name === "id" || name === "data") continue;
+      check(name, prop);
+    }
+  }
+  return [...names];
+}
+
 /** Generate the arguments schema for a method */
-function generateArgsSchema(op: GroupedOperation): string {
+export function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
   const seenFields = new Set<string>();
+  const configured = new Set(SENSITIVE_ARG_FIELDS[op.operationId] ?? []);
+  const found = new Set<string>();
+  const isSensitiveArg = (
+    name: string,
+    schema?: Parameters<typeof isSensitiveFieldName>[1],
+  ): ArgSensitivity => {
+    if (configured.has(name)) found.add(name);
+    if (isSensitiveFieldName(name, schema)) return "secret";
+    return configured.has(name) ? "carries" : false;
+  };
+  const sensitiveMeta = ".meta({ sensitive: true })";
+  // Nested request-body fields: swamp masks a sensitive argument value
+  // wherever it sits, so name-matched nested fields are marked too.
+  const nestedOpts = { indent: 2, isSensitiveName: isSensitiveFieldName };
 
   // Path params
   for (const p of op.pathParams) {
     const fieldName = sanitizeFieldName(p.name);
     if (seenFields.has(fieldName)) continue;
     seenFields.add(fieldName);
-    const desc = p.description
-      ? `.describe("${escapeStr(truncateStr(p.description))}")`
-      : "";
-    fields.push(`  ${fieldName}: z.string()${desc},`);
+    const sensitive = isSensitiveArg(p.name, p.schema);
+    fields.push(
+      `  ${fieldName}: z.string()${sensitive ? sensitiveMeta : ""}${
+        argDescribe(p.description, sensitive)
+      },`,
+    );
   }
 
   // Query params
@@ -480,9 +645,8 @@ function generateArgsSchema(op: GroupedOperation): string {
     const fieldName = sanitizeFieldName(p.name);
     if (seenFields.has(fieldName)) continue;
     seenFields.add(fieldName);
-    const desc = p.description
-      ? `.describe("${escapeStr(truncateStr(p.description))}")`
-      : "";
+    const sensitive = isSensitiveArg(p.name, p.schema);
+    const desc = argDescribe(p.description, sensitive);
     let zodType = "z.string()";
     if (p.schema?.type === "integer" || p.schema?.type === "number") {
       zodType = "z.number()";
@@ -494,6 +658,7 @@ function generateArgsSchema(op: GroupedOperation): string {
       );
       zodType = `z.enum([${vals.join(", ")}])`;
     }
+    if (sensitive) zodType += sensitiveMeta;
     fields.push(`  ${fieldName}: ${zodType}.optional()${desc},`);
   }
 
@@ -506,7 +671,7 @@ function generateArgsSchema(op: GroupedOperation): string {
       // validation rather than as a 400 from the API.
       const body = op.requestBody;
       const entriesZod = op.requestBodyArrayWrapper && body
-        ? `${schemaToZod(body, { indent: 2 }, 2)}${
+        ? `${schemaToZod(body, nestedOpts, 2)}${
           body.minItems !== undefined ? `.min(${body.minItems})` : ""
         }${body.maxItems !== undefined ? `.max(${body.maxItems})` : ""}`
         : "z.array(z.record(z.string(), z.unknown()))";
@@ -521,13 +686,22 @@ function generateArgsSchema(op: GroupedOperation): string {
       const fieldName = sanitizeFieldName(name);
       if (seenFields.has(fieldName)) continue;
       seenFields.add(fieldName);
-      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
+      const sensitive = isSensitiveArg(name, prop);
+      const fieldZod = schemaToZod(prop, nestedOpts, 2) +
+        (sensitive ? sensitiveMeta : "");
       const optSuffix = required.has(name) ? "" : ".optional()";
-      const desc = prop.description
-        ? `.describe("${escapeStr(truncateStr(prop.description))}")`
-        : "";
+      const desc = argDescribe(prop.description, sensitive);
       fields.push(`  ${fieldName}: ${fieldZod}${optSuffix}${desc},`);
     }
+  }
+
+  const missing = [...configured].filter((n) => !found.has(n));
+  if (missing.length > 0) {
+    throw new Error(
+      `SENSITIVE_ARG_FIELDS for ${op.operationId} names ${
+        missing.map((n) => `"${n}"`).join(", ")
+      }, which is not an argument of the generated method`,
+    );
   }
 
   if (fields.length === 0) {

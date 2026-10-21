@@ -188,6 +188,31 @@ export function toQueryString(entries: Array<[string, string]>): string {
 }
 
 /**
+ * Delete secret fields from every element of an array, in place, and return
+ * how many values were dropped. Swamp moves a field a resource schema marks
+ * sensitive into a vault only when the field sits in an object, not in an
+ * array element, so a secret inside a list would otherwise be persisted as the
+ * API sent it. Null and absent fields carry no secret and are left alone.
+ */
+export function dropItemSecrets(
+  items: unknown,
+  fields: readonly string[],
+): number {
+  if (!Array.isArray(items)) return 0;
+  let dropped = 0;
+  for (const item of items) {
+    if (item === null || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    for (const field of fields) {
+      if (record[field] === undefined || record[field] === null) continue;
+      delete record[field];
+      dropped++;
+    }
+  }
+  return dropped;
+}
+
+/**
  * Fail when a get/create response carried no data. snykApi returns {} for an
  * empty 2xx body, which is right for delete and action calls but would
  * otherwise persist an empty resource and look like fresh data.

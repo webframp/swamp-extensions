@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/anthropic/analytics"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Observe Claude Enterprise analytics via the Enterprise Analytics API
   (`/v1/organizations/analytics/*`): seat counts, DAU/WAU/MAU, pending
@@ -23,6 +23,8 @@ description: |
 
   ```bash
   swamp extension pull @webframp/anthropic/analytics
+  swamp vault create local_encryption anthropic   # once, if you have no vault yet
+  swamp vault put anthropic ANALYTICS_KEY         # prompts; never pass the value
   swamp model create @webframp/anthropic/analytics claude-analytics \
     --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}' \
     --global-arg 'discountRate=0.15'  # optional; defaults to 0

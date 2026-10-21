@@ -5,18 +5,20 @@
 const FAL_API_BASE = "https://api.fal.ai/v1";
 
 /**
- * Resolve the fal.ai API key: an explicit token (typically from the model's
- * vault-wireable apiToken global arg) takes precedence over the FAL_KEY
- * environment variable (fal.ai's standard SDK env var). Throws a descriptive
- * error when neither is set.
+ * Resolve the fal.ai API key: the apiToken global arg (wired from a vault with
+ * a vault.get(...) expression) takes precedence. The FAL_KEY environment
+ * variable (fal.ai's standard SDK env var) is a discouraged fallback: swamp
+ * does not redact it. Throws a descriptive error when neither is set.
  */
 function resolveToken(apiToken?: string): string {
   const token = apiToken ?? Deno.env.get("FAL_KEY");
   if (!token) {
     throw new Error(
-      "fal.ai API key not set. Provide the apiToken global argument " +
-        "(wireable with a vault.get(...) expression) or set the " +
-        "FAL_KEY environment variable.",
+      "fal.ai API key not set. Store it in a vault and set the apiToken " +
+        "global argument to a vault.get(...) expression, e.g. " +
+        '\'apiToken=${{ vault.get("falai", "API_KEY") }}\'. The FAL_KEY ' +
+        "environment variable is read as a fallback, but it is not " +
+        "redacted and is not recommended.",
     );
   }
   return token;

@@ -1,60 +1,33 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** The README now opens with a Credentials section. Store the key with
+`swamp vault put griptape API_KEY` and set `apiKey` to
+`${{ vault.get("griptape", "API_KEY") }}`. The previous example passed a
+placeholder literal (`apiKey=GRIPTAPE_CLOUD_API_KEY`).
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The `apiKey` description and the missing-key error now point to the
+vault. The `GT_CLOUD_API_KEY` environment variable is still read when `apiKey`
+is unset, but it is now documented as a discouraged fallback because swamp does
+not redact it. Key resolution is unchanged.
 
-## 2026.10.07.1
+**Changed:** The Google Drive access token that Griptape returns in
+`config.google_drive.access_token` is now marked sensitive on the
+`data_connector` resource. `create_data_connector`, `get_data_connector` and
+`update_data_connector` store it in a vault, and the resource holds a vault
+reference instead of the token. Because the resource now declares a sensitive
+field, swamp refuses to run any method of this extension, reads included, until
+a vault exists (`swamp vault create local_encryption griptape`).
 
-**Fixed:** An empty successful response (for example `202 Accepted`) no longer
-fails with a JSON parse error. Mutating methods return no data handle for it,
-and list methods treat an empty page as the end of the results.
+**Changed:** `list_data_connectors` drops `config.google_drive.access_token`
+from every item in the `data_connectors` snapshot. Swamp cannot store a field
+inside a list in a vault, and before this release the token was written in
+cleartext. Use `get_data_connector` to keep it.
 
-**Fixed:** A malformed JSON body now fails with an error that names the HTTP
-status, method, and path, instead of a bare `SyntaxError`.
+**Fixed:** The `config` argument of `create_data_connector` and
+`update_data_connector`, which can carry an S3 secret access key, a Confluence
+API token or a Google Drive auth code, was not marked sensitive, so swamp did
+not redact it. It is now.
 
-**Fixed:** Requests no longer hang indefinitely. Each attempt has a 30-second
-deadline and fails with `timed out after <n>ms: <METHOD> <path>`. Set
-`GT_CLOUD_TIMEOUT_MS` to a positive integer up to 2147483647 to change it.
-`Retry-After` waits on HTTP 429 are capped at 30 seconds.
-
-**Fixed:** Pagination ends on its own page counter and stops at the first empty
-page. A server that ignores the `page` parameter can no longer return page 1 up
-to 20 times, and a list response that is not a JSON object fails with a clear
-error instead of returning an empty result. A `null` `total_pages` no longer
-ends pagination after the first page, and a `next_page` value keeps a short page
-going.
-
-**Fixed:** Descriptions in generated argument and resource schemas are shortened
-at a word boundary instead of mid-word.
-
-**Fixed:** `create`, `update`, and `delete` methods now send their declared
-query parameters, as `get`, `list`, and action methods already did. No current
-endpoint declares one, so behavior is unchanged today.
-
-**Changed:** Stored resource schemas are now tolerant of unexpected data. Enums
-are plain strings or numbers, pattern, length, and range constraints are
-dropped, every response field accepts null or absence, unknown keys are kept at
-every level, and spec defaults are no longer filled in. A response with a new
-enum member or a missing field is stored instead of failing the whole call.
-Argument validation for requests is unchanged.
-
-**Changed:** A resource declared without a response body is now stored as a
-loose object, so whatever the API returns is kept instead of being stripped to
-`{}`.
-
-**Changed:** Generated tests now exercise every method, assert the exact request
-(HTTP method, path, query string, auth header, JSON body) and the written
-resource, and cover the shared helper's error, timeout, retry, and empty-body
-paths.
-
-**Upgrade note:** No migration is required. Schemas only loosen, so previously
-stored data stays valid, and the upgrade chain gains an identity entry. The
-upstream Griptape API spec also changed (tag profiles, tags, license info, and
-engine transports were added); none of those fall under this extension, so no
-method here changed because of it.
-
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** Create a vault before running any method of this extension
+(`swamp vault create local_encryption griptape`). Data written by earlier
+versions still holds the token in cleartext. Remove it with `swamp data delete`.

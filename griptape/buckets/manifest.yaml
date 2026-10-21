@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/griptape/buckets"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: "Griptape Cloud Buckets — asset buckets and their stored assets"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

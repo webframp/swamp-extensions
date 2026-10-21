@@ -323,16 +323,19 @@ swamp workflow run @webframp/sre-health-check --input target=https://example.com
 ```bash
 swamp extension pull @webframp/cloudflare-audit
 
+swamp vault create local_encryption cloudflare   # once, if you have no vault yet
+swamp vault put cloudflare API_TOKEN             # prompts; never pass the token inline
+
 swamp model create @webframp/cloudflare/zone cf-zone \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'
 swamp model create @webframp/cloudflare/dns cf-dns \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
 swamp model create @webframp/cloudflare/waf cf-waf \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
 swamp model create @webframp/cloudflare/worker cf-worker \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg accountId=ACCOUNT_ID
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg accountId=ACCOUNT_ID
 swamp model create @webframp/cloudflare/cache cf-cache \
-  --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
 
 swamp workflow run @webframp/cloudflare-audit --input zoneId=ZONE_ID
 ```
@@ -388,9 +391,11 @@ swamp workflow run @webframp/terraform-drift
 swamp extension pull @webframp/redmine
 swamp extension pull @webframp/redmine-kanban
 
+swamp vault create local_encryption redmine   # once, if you have no vault yet
+swamp vault put redmine API_KEY               # prompts; never pass the key inline
 swamp model create @webframp/redmine tracker \
   --global-arg host=https://your-redmine.example.org \
-  --global-arg apiKey=YOUR_API_KEY \
+  --global-arg 'apiKey=${{ vault.get("redmine", "API_KEY") }}' \
   --global-arg project=your-project
 
 swamp workflow run @webframp/scaffold-story \
@@ -403,23 +408,27 @@ swamp workflow run @webframp/scaffold-story \
 swamp extension pull @webframp/falai/account
 swamp extension pull @webframp/falai/compute
 
+swamp vault create local_encryption falai   # once, if you have no vault yet
+swamp vault put falai API_KEY               # prompts; never pass the key inline
 swamp model create @webframp/falai/account falai-account \
-  --global-arg apiToken=FAL_API_KEY
+  --global-arg 'apiToken=${{ vault.get("falai", "API_KEY") }}'
 swamp model create @webframp/falai/compute falai-compute \
-  --global-arg apiToken=FAL_API_KEY
+  --global-arg 'apiToken=${{ vault.get("falai", "API_KEY") }}'
 
 swamp model method run falai-account get_account_billing
 swamp model method run falai-compute list_compute_instances
 ```
 
-If `apiToken` is omitted, every `@webframp/falai/*` model falls back to the
-`FAL_KEY` environment variable (fal.ai's standard SDK env var).
+Every `@webframp/falai/*` model also reads the `FAL_KEY` environment variable as
+a fallback when `apiToken` is unset, but that value is not redacted and is not
+recommended.
 
 ### Claude Enterprise User → Custom role migration
 
 ```bash
 swamp extension pull @webframp/anthropic/admin
-swamp vault put anthropic ADMIN_KEY   # read/write:members, read/write:rbac_groups
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
+swamp vault put anthropic ADMIN_KEY             # prompts; key needs read/write:members, read/write:rbac_groups
 swamp model create @webframp/anthropic/admin claude-admin \
   --global-arg 'adminKey=${{ vault.get("anthropic", "ADMIN_KEY") }}'
 
@@ -467,7 +476,8 @@ swamp vault create @webframp/pass my-vault --config '{"store":"default"}'
 # gopass
 swamp vault create @webframp/gopass my-vault --config '{"store":"default"}'
 
-# HashiCorp Vault
+# HashiCorp Vault (run `vault login` first; the provider reads ~/.vault-token,
+# so no token goes in the config)
 swamp vault create @webframp/hashicorp-vault my-vault --config '{"address":"https://vault.example.com"}'
 
 # macOS Keychain
@@ -476,10 +486,21 @@ swamp vault create @webframp/macos-keychain my-vault --config '{"service":"swamp
 
 ### Datastore extensions
 
+Datastore config in `.swamp.yaml` resolves `vault.get` expressions, so the
+token stays in a vault:
+
 ```bash
-# GitLab Datastore
-swamp datastore create @webframp/gitlab-datastore my-store \
-  --config '{"projectId":"123","token":"glpat-xxxx"}'
+swamp vault create local_encryption gitlab   # once, if you have no vault yet
+swamp vault put gitlab TOKEN                 # prompts; never pass the token inline
+```
+
+```yaml
+# .swamp.yaml — GitLab Datastore
+datastore:
+  type: "@webframp/gitlab-datastore"
+  config:
+    projectId: "123"
+    token: "${{ vault.get(gitlab, TOKEN) }}"
 ```
 
 ## Development

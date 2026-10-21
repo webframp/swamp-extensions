@@ -9,13 +9,24 @@ specification.
 
 ```bash
 swamp extension pull @webframp/falai/storage
-
-swamp model create @webframp/falai/storage falai-storage \
-  --global-arg apiToken=FAL_API_KEY
 ```
 
-If `apiToken` is omitted, the model falls back to the `FAL_KEY` environment
-variable (fal.ai's standard SDK env var).
+## Credentials
+
+Store the fal.ai API key in a swamp vault and reference it with a `vault.get`
+expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption falai   # once, if you have no vault yet
+swamp vault put falai API_KEY               # prompts; the value never touches shell history
+swamp model create @webframp/falai/storage falai-storage \
+  --global-arg 'apiToken=${{ vault.get("falai", "API_KEY") }}'
+```
+
+If `apiToken` is unset, the model reads the `FAL_KEY` environment variable as a
+fallback. That value is not redacted from swamp output and is not recommended.
 
 ## Methods
 

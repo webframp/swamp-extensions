@@ -31,6 +31,62 @@ Deno.test("synthetics model: has globalArguments with apiKey and appKey", () => 
   assertExists(shape.site);
 });
 
+type ZodLike = {
+  meta?: () => Record<string, unknown> | undefined;
+  _zod?: {
+    def?: {
+      type?: string;
+      innerType?: ZodLike;
+      shape?: Record<string, ZodLike>;
+    };
+  };
+};
+
+/** The wrappers swamp's unwrapSchema sees through; readonly, catch and the rest hide a field. */
+const SWAMP_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+function innerOf(schema: ZodLike | undefined): ZodLike | undefined {
+  const def = schema?._zod?.def;
+  return def && SWAMP_WRAPPERS.has(def.type ?? "") ? def.innerType : undefined;
+}
+
+function isMarkedSensitive(schema: ZodLike | undefined): boolean {
+  for (let cur = schema; cur; cur = innerOf(cur)) {
+    if (cur.meta?.()?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/** Object-field paths marked sensitive, as swamp's resource redaction finds them. */
+function sensitivePaths(schema: unknown, prefix = ""): string[] {
+  let cur = schema as ZodLike | undefined;
+  while (innerOf(cur)) cur = innerOf(cur);
+  if (cur?._zod?.def?.type !== "object") return [];
+  const shape = cur?._zod?.def?.shape;
+  if (!shape) return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(shape)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isMarkedSensitive(field)) out.push(path);
+    out.push(...sensitivePaths(field, path));
+  }
+  return out;
+}
+
+Deno.test("synthetics model: apiKey and appKey are marked sensitive", () => {
+  assertEquals(sensitivePaths(model.globalArguments).sort(), [
+    "apiKey",
+    "appKey",
+  ]);
+});
+
+Deno.test("synthetics model: patch_global_variable marks secret arguments sensitive", () => {
+  const args = (model.methods.patch_global_variable.arguments as unknown as {
+    shape: Record<string, ZodLike>;
+  }).shape;
+  assertEquals(isMarkedSensitive(args["json_patch"]), true);
+});
+
 Deno.test("synthetics model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.get_api_multistep_subtests);
@@ -3176,6 +3232,267 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "patch_global_variable");
       assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_test_file_download_url leaves returned secrets to the vault",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(
+      sensitivePaths(model.resources["test_file_download_url"].schema).sort(),
+      ["url"],
+    );
+    const { url, server } = startMockDdServer({
+      "/files/download": {
+        body: {
+          "id": "fixture-123",
+          "url": "secret-sentinel-get_test_file_download_url",
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_test_file_download_url.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "test_file_download_url");
+      const data = structuredClone(resources[0].data) as Record<
+        string,
+        unknown
+      >;
+      for (const path of ["url"]) {
+        const parts = path.split(".");
+        let cur: Record<string, unknown> = data;
+        for (const part of parts.slice(0, -1)) {
+          cur = cur[part] as Record<string, unknown>;
+        }
+        const leaf = parts[parts.length - 1];
+        assertEquals(cur[leaf], "secret-sentinel-get_test_file_download_url");
+        cur[leaf] = "${{ vault.get('vault', 'key') }}";
+      }
+      assertEquals(
+        JSON.stringify(data).includes(
+          "secret-sentinel-get_test_file_download_url",
+        ),
+        false,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: get_test_file_multipart_presigned_urls leaves returned secrets to the vault",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(
+      sensitivePaths(
+        model.resources["test_file_multipart_presigned_urls"].schema,
+      ).sort(),
+      ["multipart_presigned_urls_params"],
+    );
+    const { url, server } = startMockDdServer({
+      "/files/multipart-presigned-urls": {
+        body: {
+          "id": "fixture-123",
+          "bucketKey":
+            "api-upload-file/abc-def-123/2024-01-01T00:00:00_uuid.json",
+          "multipart_presigned_urls_params":
+            "secret-sentinel-get_test_file_multipart_presigned_urls",
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_test_file_multipart_presigned_urls.execute({
+        "public_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "test_file_multipart_presigned_urls");
+      const data = structuredClone(resources[0].data) as Record<
+        string,
+        unknown
+      >;
+      for (const path of ["multipart_presigned_urls_params"]) {
+        const parts = path.split(".");
+        let cur: Record<string, unknown> = data;
+        for (const part of parts.slice(0, -1)) {
+          cur = cur[part] as Record<string, unknown>;
+        }
+        const leaf = parts[parts.length - 1];
+        assertEquals(
+          cur[leaf],
+          "secret-sentinel-get_test_file_multipart_presigned_urls",
+        );
+        cur[leaf] = "${{ vault.get('vault', 'key') }}";
+      }
+      assertEquals(
+        JSON.stringify(data).includes(
+          "secret-sentinel-get_test_file_multipart_presigned_urls",
+        ),
+        false,
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "synthetics model: patch_global_variable leaves returned secrets to the vault",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(
+      sensitivePaths(model.resources["patch_global_variable"].schema).sort(),
+      ["value.value"],
+    );
+    const { url, server } = startMockDdServer({
+      "/test-id-123/jsonpatch": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "attributes": { "restricted_roles": null },
+              "description": "Example description",
+              "is_fido": true,
+              "is_totp": true,
+              "name": "MY_VARIABLE",
+              "parse_test_options": {
+                "field": "content-type",
+                "localVariableName": "LOCAL_VARIABLE",
+                "parser": null,
+                "type": null,
+              },
+              "parse_test_public_id": "abc-def-123",
+              "tags": ["team:front", "test:workflow-1"],
+              "value": {
+                "secure": true,
+                "value": "secret-sentinel-patch_global_variable",
+              },
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-synthetics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).patch_global_variable.execute({
+        "variable_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "patch_global_variable");
+      const data = structuredClone(resources[0].data) as Record<
+        string,
+        unknown
+      >;
+      for (const path of ["value.value"]) {
+        const parts = path.split(".");
+        let cur: Record<string, unknown> = data;
+        for (const part of parts.slice(0, -1)) {
+          cur = cur[part] as Record<string, unknown>;
+        }
+        const leaf = parts[parts.length - 1];
+        assertEquals(cur[leaf], "secret-sentinel-patch_global_variable");
+        cur[leaf] = "${{ vault.get('vault', 'key') }}";
+      }
+      assertEquals(
+        JSON.stringify(data).includes("secret-sentinel-patch_global_variable"),
+        false,
+      );
     } finally {
       uninstall();
       await server.shutdown();

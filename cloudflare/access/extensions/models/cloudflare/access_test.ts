@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./access.ts";
 
 // ---------------------------------------------------------------------------
@@ -376,6 +377,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -388,12 +393,12 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": "my-mcp-portal",
       "allow_code_mode": true,
       "created_at": "2024-01-01T00:00:00Z",
       "created_by": "test-value",
       "description": "This is my custom MCP Portal",
       "hostname": "exmaple.com",
+      "id": "new-123",
       "modified_at": "2024-01-01T00:00:00Z",
       "modified_by": "test-value",
       "name": "My MCP Portal",
@@ -529,6 +534,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -630,6 +640,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -783,6 +797,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -885,6 +903,818 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Returned secrets
+// ---------------------------------------------------------------------------
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as {
+      sensitive?: boolean;
+    } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[key] != null
+    ) {
+      (parent as Record<string, unknown>)[key] =
+        "${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}
+
+Deno.test({
+  name:
+    "access model: list_access_applications keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "scim_config": {
+        "authentication": [{
+          "scheme": "httpbasic",
+          "password": "STRIP-CANARY-4",
+        }],
+      },
+      "saas_app": { "client_secret": "STRIP-CANARY-8" },
+    }];
+    const { url, server } = startMockCfServer({
+      "/access/apps": { result: mockData, isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_access_applications.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "access_applications");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "access_applications"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: access_applications_add_an_application keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "scim_config": {
+        "authentication": [{
+          "scheme": "httpbasic",
+          "password": "STRIP-CANARY-4",
+        }],
+      },
+      "saas_app": { "client_secret": "STRIP-CANARY-8" },
+    };
+    const { url, server } = startMockCfServer({
+      "/access/apps": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).access_applications_add_an_application.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "access_applications_add_an_application",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "access_applications_add_an_application"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: get_an_access_application keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "scim_config": {
+        "authentication": [{
+          "scheme": "httpbasic",
+          "password": "STRIP-CANARY-4",
+        }],
+      },
+      "saas_app": { "client_secret": "STRIP-CANARY-8" },
+    };
+    const { url, server } = startMockCfServer({
+      "/access/apps/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_an_access_application.execute(
+        { "app_id": "test-id-123" },
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "an_access_application");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "an_access_application"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: update_an_access_application keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "scim_config": {
+        "authentication": [{
+          "scheme": "httpbasic",
+          "password": "STRIP-CANARY-4",
+        }],
+      },
+      "saas_app": { "client_secret": "STRIP-CANARY-8" },
+    };
+    const { url, server } = startMockCfServer({
+      "/access/apps/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_an_access_application.execute(
+        { "app_id": "test-id-123" },
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "an_access_application");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "an_access_application"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: list_access_identity_providers keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "config": { "client_secret": "STRIP-CANARY-0" },
+      "scim_config": { "secret": "STRIP-CANARY-2" },
+      "type": "onetimepin",
+    }];
+    const { url, server } = startMockCfServer({
+      "/access/identity_providers": { result: mockData, isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_access_identity_providers.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "access_identity_providers");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "access_identity_providers"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: access_identity_providers_add_an_access_identity_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "config": { "client_secret": "VAULT-CANARY-0" },
+      "id": null,
+      "name": null,
+      "read_only": true,
+      "saml_certificate_set": null,
+      "saml_certificate_set_id": "c409ef44-e72c-41c8-8c0b-278c8a6f4fd8",
+      "scim_config": {
+        "enabled": true,
+        "identity_update_behavior": "automatic",
+        "scim_base_url": "test-value",
+        "seat_deprovision": true,
+        "secret": "VAULT-CANARY-1",
+        "user_deprovision": true,
+      },
+      "type": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/identity_providers": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).access_identity_providers_add_an_access_identity_provider.execute(
+        {},
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "access_identity_providers_add_an_access_identity_provider",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "access_identity_providers_add_an_access_identity_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(
+        valueAt(data, ["config", "client_secret"]),
+        "VAULT-CANARY-0",
+      );
+      assertEquals(sensitivePaths.has("config.client_secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["config", "client_secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["scim_config", "secret"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("scim_config.secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["scim_config", "secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: get_an_access_identity_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "config": { "client_secret": "VAULT-CANARY-0" },
+      "id": null,
+      "name": null,
+      "read_only": true,
+      "saml_certificate_set": null,
+      "saml_certificate_set_id": "c409ef44-e72c-41c8-8c0b-278c8a6f4fd8",
+      "scim_config": {
+        "enabled": true,
+        "identity_update_behavior": "automatic",
+        "scim_base_url": "test-value",
+        "seat_deprovision": true,
+        "secret": "VAULT-CANARY-1",
+        "user_deprovision": true,
+      },
+      "type": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/identity_providers/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_an_access_identity_provider.execute({
+        "identity_provider_id": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "an_access_identity_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "an_access_identity_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(
+        valueAt(data, ["config", "client_secret"]),
+        "VAULT-CANARY-0",
+      );
+      assertEquals(sensitivePaths.has("config.client_secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["config", "client_secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["scim_config", "secret"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("scim_config.secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["scim_config", "secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: update_an_access_identity_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "config": { "client_secret": "VAULT-CANARY-0" },
+      "id": null,
+      "name": null,
+      "read_only": true,
+      "saml_certificate_set": null,
+      "saml_certificate_set_id": "c409ef44-e72c-41c8-8c0b-278c8a6f4fd8",
+      "scim_config": {
+        "enabled": true,
+        "identity_update_behavior": "automatic",
+        "scim_base_url": "test-value",
+        "seat_deprovision": true,
+        "secret": "VAULT-CANARY-1",
+        "user_deprovision": true,
+      },
+      "type": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/identity_providers/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_an_access_identity_provider.execute({
+        "identity_provider_id": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "an_access_identity_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "an_access_identity_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(
+        valueAt(data, ["config", "client_secret"]),
+        "VAULT-CANARY-0",
+      );
+      assertEquals(sensitivePaths.has("config.client_secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["config", "client_secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["scim_config", "secret"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("scim_config.secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["scim_config", "secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: create_a_service_token keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "client_id": null,
+      "client_secret": "VAULT-CANARY-0",
+      "created_at": null,
+      "duration": null,
+      "id": "test-value",
+      "name": null,
+      "updated_at": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/service_tokens": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_a_service_token.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "a_service_token");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "a_service_token"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["client_secret"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("client_secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["client_secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: create_access_service_tokens_rotate_a_service_token keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "client_id": null,
+      "client_secret": "VAULT-CANARY-0",
+      "created_at": null,
+      "duration": null,
+      "id": "test-value",
+      "name": null,
+      "updated_at": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/service_tokens/test-id-123/rotate": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_access_service_tokens_rotate_a_service_token.execute({
+        "service_token_id": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "access_service_tokens_rotate_a_service_token",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "access_service_tokens_rotate_a_service_token"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["client_secret"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("client_secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["client_secret"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
     } finally {
       uninstall();
       await server.shutdown();

@@ -2,14 +2,22 @@
  * Tests for the method classifier module.
  */
 
-import { assertEquals, assertMatch, assertStringIncludes } from "@std/assert";
 import {
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+  assertThrows,
+} from "@std/assert";
+import {
+  assertSensitiveOperationsExist,
   bodyReferencesArgs,
   classifyOperation,
   classifyServiceMethods,
   generateMethodName,
   generateModelSource,
+  sensitiveFieldsForResource,
 } from "./method_classifier.ts";
+import type { OpenAPISpec } from "./schema_fetcher.ts";
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -368,4 +376,107 @@ Deno.test("generateModelSource: action resources keep API fields and are keyed b
     "sanitizeInstanceName(String(args.key_id))",
   );
   assertEquals(/revoke[a-z_]*-current/.test(src), false);
+});
+
+// ---------------------------------------------------------------------------
+// Sensitive response fields (fal.ai createApiKey one-time secret)
+// ---------------------------------------------------------------------------
+
+const KEYS_CONFIG: ServiceConfig = {
+  name: "keys",
+  description: "fal.ai API Keys",
+  tags: ["API Keys"],
+  labels: ["falai", "keys"],
+};
+
+function createApiKeyOp(
+  properties: Record<string, { type: string }> = {
+    key_id: { type: "string" },
+    key_secret: { type: "string" },
+    key: { type: "string" },
+  },
+): GroupedOperation {
+  return op({
+    operationId: "createApiKey",
+    httpMethod: "post",
+    path: "/keys",
+    requestBody: {
+      type: "object",
+      properties: { alias: { type: "string" } },
+      required: ["alias"],
+    },
+    responseSchema: { type: "object", properties },
+  });
+}
+
+function keysModel(operation: GroupedOperation): string {
+  const group: ServiceGroup = { config: KEYS_CONFIG, operations: [operation] };
+  return generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+}
+
+Deno.test("generateModelSource: createApiKey secrets are marked sensitive in the resource schema, not dropped", () => {
+  const source = keysModel(createApiKeyOp());
+  assertMatch(
+    source,
+    /key_secret: z\.string\(\)\.meta\(\{ sensitive: true \}\)\.optional\(\),/,
+  );
+  assertMatch(
+    source,
+    /\bkey: z\.string\(\)\.meta\(\{ sensitive: true \}\)\.optional\(\),/,
+  );
+  assertMatch(source, /key_id: z\.string\(\)\.optional\(\),/);
+  // The full response is handed to swamp, which vaults the marked fields.
+  assertEquals(source.includes("delete stored"), false);
+  assertStringIncludes(
+    source,
+    'context.writeResource("api_key", id, result)',
+  );
+});
+
+Deno.test("sensitiveFieldsForResource: fails when a configured field is not declared in the spec", () => {
+  const operation = createApiKeyOp({ key_id: { type: "string" } });
+  const group: ServiceGroup = { config: KEYS_CONFIG, operations: [operation] };
+  const [method] = classifyServiceMethods(group);
+  assertThrows(
+    () => sensitiveFieldsForResource(method, [method]),
+    Error,
+    "key_secret, key are not declared",
+  );
+});
+
+Deno.test("sensitiveFieldsForResource: fails when the operation has no response schema", () => {
+  const operation = { ...createApiKeyOp(), responseSchema: undefined };
+  const group: ServiceGroup = { config: KEYS_CONFIG, operations: [operation] };
+  const [method] = classifyServiceMethods(group);
+  assertThrows(
+    () => sensitiveFieldsForResource(method, [method]),
+    Error,
+    "no response schema",
+  );
+});
+
+Deno.test("sensitiveFieldsForResource: empty for operations with no configured secrets", () => {
+  const group: ServiceGroup = { config: CONFIG, operations: [op({})] };
+  const [method] = classifyServiceMethods(group);
+  assertEquals(sensitiveFieldsForResource(method, [method]), []);
+});
+
+Deno.test("assertSensitiveOperationsExist: fails when a configured operationId is missing from the spec", () => {
+  const spec = {
+    openapi: "3.1.0",
+    info: { title: "t", version: "1" },
+    paths: { "/keys": { get: { operationId: "listApiKeys" } } },
+    components: { schemas: {} },
+  } as OpenAPISpec;
+  assertThrows(
+    () => assertSensitiveOperationsExist(spec),
+    Error,
+    "createApiKey",
+  );
+  spec.paths["/keys"].post = { operationId: "createApiKey" };
+  assertSensitiveOperationsExist(spec);
 });

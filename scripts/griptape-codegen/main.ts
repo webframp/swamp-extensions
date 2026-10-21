@@ -317,7 +317,6 @@ async function main() {
       version,
       methods.length,
       opts.notes,
-      existingNotes,
     );
     const swampYaml = generateSwampYaml(
       await Deno.readTextFile(join(extDir, ".swamp.yaml")).catch(() =>

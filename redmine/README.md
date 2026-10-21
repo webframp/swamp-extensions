@@ -22,12 +22,24 @@ swamp extension pull @webframp/redmine
 
 ## Usage
 
+### Store the API key
+
+Store the Redmine API key in a swamp vault and reference it with a `vault.get`
+expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption redmine   # once, if you have no vault yet
+swamp vault put redmine API_KEY               # prompts; the value never touches shell history
+```
+
 ### Create a model instance
 
 ```bash
 swamp model create @webframp/redmine tracker \
   --global-arg host=https://redmine.example.org \
-  --global-arg apiKey=YOUR_API_KEY \
+  --global-arg 'apiKey=${{ vault.get("redmine", "API_KEY") }}' \
   --global-arg project=my-project
 ```
 

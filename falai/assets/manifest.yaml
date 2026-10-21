@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/falai/assets"
 license: Apache-2.0
-version: "2026.10.14.2"
+version: "2026.10.21.1"
 description: "fal.ai Assets — media library, characters, collections, tags, uploads, favorites"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

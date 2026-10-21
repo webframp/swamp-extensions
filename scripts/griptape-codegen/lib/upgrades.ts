@@ -121,15 +121,15 @@ export function compareCalVer(a: string, b: string): number {
 }
 
 /**
- * Generate a single no-op (identity) upgrade entry. The codegen only produces
- * additive, optional schema fields, so old data is always valid under the new
- * schema — the migration is identity.
+ * Generate a single no-op (identity) upgrade entry. Upgrades migrate a
+ * model definition's global arguments, and every generated model takes the
+ * same apiKey/baseUrl pair, so the migration is identity.
  */
 export function generateUpgradeEntry(toVersion: string): string {
   return [
     `    {`,
     `      toVersion: "${toVersion}",`,
-    `      description: "Regenerated from the Griptape API spec and codegen; schema changes only loosen, no migration required",`,
+    `      description: "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",`,
     `      upgradeAttributes: (old: Record<string, unknown>) => old,`,
     `    }`,
   ].join("\n");

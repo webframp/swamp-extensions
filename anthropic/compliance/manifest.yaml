@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/anthropic/compliance"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Observe a Claude Enterprise account via the Compliance API. Covers the
   6-year activity audit feed, organization directory (users, roles, groups
@@ -10,7 +10,7 @@ description: |
 
   ## Authentication
 
-  Requires a Compliance Access Key (`sk-ant-api01-...`) created by the
+  Requires a Compliance Access Key created by the
   primary owner in claude.ai → Org settings → API access. Store in a
   swamp vault.
 
@@ -18,6 +18,8 @@ description: |
 
   ```bash
   swamp extension pull @webframp/anthropic/compliance
+  swamp vault create local_encryption anthropic   # once, if you have no vault yet
+  swamp vault put anthropic COMPLIANCE_KEY        # prompts; never pass the value
   swamp model create @webframp/anthropic/compliance claude-compliance \
     --global-arg 'complianceKey=${{ vault.get("anthropic", "COMPLIANCE_KEY") }}'
 

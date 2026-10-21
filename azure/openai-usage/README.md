@@ -13,7 +13,17 @@ All three credentials are required global arguments:
 
 - `tenantId` — Azure AD tenant UUID
 - `clientId` — App registration (service principal) UUID
-- `clientSecret` — Client secret value (stored in swamp vault recommended)
+- `clientSecret` — Client secret value, always supplied from a swamp vault
+
+Store the client secret in a swamp vault and reference it with a `vault.get`
+expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption azure   # once, if you have no vault yet
+swamp vault put azure CLIENT_SECRET         # prompts; the value never touches shell history
+```
 
 ## Required Permissions
 
@@ -35,7 +45,7 @@ swamp model create @webframp/azure/openai-usage azure-ai-usage \
   --global-arg 'subscriptions=["cef96095-...","690e5f6d-..."]' \
   --global-arg 'tenantId=<tenant-uuid>' \
   --global-arg 'clientId=<app-registration-uuid>' \
-  --global-arg 'clientSecret=<secret-value>'
+  --global-arg 'clientSecret=${{ vault.get("azure", "CLIENT_SECRET") }}'
 
 # Scan all subscriptions
 swamp model method run azure-ai-usage scan_subscriptions

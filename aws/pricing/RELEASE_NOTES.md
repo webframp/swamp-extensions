@@ -1,14 +1,11 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** Documentation only: the README and registry description no longer list environment
+variables or a static shared-credentials file as a way to supply AWS
+credentials. They now recommend AWS SSO or a named profile
+(`aws sso login --profile <name>`, then `--global-arg profile=<name>`), or an
+IAM role attached to where swamp runs. Credential resolution is unchanged: the
+model still uses the AWS SDK default credential chain when `profile` is unset.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.09.24.1
-
-**Changed:** Bump @aws-sdk/* 3.1133.0 → 3.1139.0 (2 packages)
-
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** No code, schema, or behavioral changes. The model version
+moves to 2026.10.21.1 with an identity upgrade.

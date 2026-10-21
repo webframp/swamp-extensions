@@ -106,9 +106,11 @@ description: |
 
   ```bash
   swamp extension pull @webframp/redmine
+  swamp vault create local_encryption redmine
+  swamp vault put redmine API_KEY   # prompts; never pass the key inline
   swamp model create @webframp/redmine tracker \
     --global-arg host=https://your-redmine.example.org \
-    --global-arg apiKey=YOUR_API_KEY \
+    --global-arg 'apiKey=${{ vault.get("redmine", "API_KEY") }}' \
     --global-arg project=your-project
   ```
 repository: "https://github.com/webframp/swamp-extensions"

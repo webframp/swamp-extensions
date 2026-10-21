@@ -695,6 +695,72 @@ Deno.test("data-connectors model: response schemas tolerate unexpected data", ()
   }
 });
 
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("data-connectors model: data_connector resource marks credential fields sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(resourceSchema("data_connector")),
+    ["config.google_drive.access_token"],
+  );
+});
+
+Deno.test({
+  name:
+    "data-connectors model: list_data_connectors drops credentials from list items",
+  sanitizeResources: false,
+  fn: async () => {
+    const item = {
+      "kept_field": "kept",
+      "config": {
+        "google_drive": { "access_token": "plaintext-credential-canary" },
+      },
+    };
+    await withMockApi({
+      "GET /api/data-connectors": { json: [item], itemsKey: "data_connectors" },
+    }, async ({ run, written }) => {
+      await run("list_data_connectors", {});
+      const stored = JSON.stringify(written()[0].data);
+      assertEquals(stored.includes("plaintext-credential-canary"), false);
+      assertStringIncludes(stored, "kept_field");
+    });
+    // The fixture itself is untouched: the method copies before dropping.
+    assertStringIncludes(JSON.stringify(item), "plaintext-credential-canary");
+  },
+});
+
 Deno.test({
   name: "data-connectors model: HTTP errors name the request and status",
   sanitizeResources: false,

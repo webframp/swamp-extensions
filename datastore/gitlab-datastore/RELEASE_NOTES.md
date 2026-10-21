@@ -1,10 +1,13 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The README configuration example put a literal personal access token
+into `.swamp.yaml`. It now stores the token with `swamp vault put gitlab TOKEN`
+and references it with `"${{ vault.get(gitlab, TOKEN) }}"`, and shows the same
+expression inside `SWAMP_DATASTORE`.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The `token` config field is marked sensitive and its description
+says to supply it with a `vault.get` expression.
 
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** No behavioral or schema changes. If your `.swamp.yaml` holds a
+literal token, move it into a vault and replace it with a `vault.get`
+expression.

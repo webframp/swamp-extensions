@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
 license: Apache-2.0
-version: "2026.10.21.2"
+version: "2026.10.21.3"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -17,6 +17,10 @@ description: |
   ## Usage
 
   ```bash
+  # Store the token once (prompts; the value never touches shell history)
+  swamp vault create local_encryption gitlab   # once, if you have no vault yet
+  swamp vault put gitlab TOKEN
+
   # Create with vault-stored token
   swamp model create @webframp/gitlab gitlab \
     --global-arg host=git.example.org \

@@ -23,6 +23,7 @@ import type {
   SchemaObject,
 } from "./schema_fetcher.ts";
 import { resolveRef, resolveSchema } from "./schema_fetcher.ts";
+import { scanSensitive, type SensitiveTree } from "./sensitive.ts";
 import type { ServiceConfig } from "../config.ts";
 
 /** A single API operation grouped into a service. */
@@ -60,6 +61,17 @@ export interface GroupedOperation {
   deprecated: boolean;
   /** Tags from the OpenAPI spec. */
   tags: string[];
+  /**
+   * Top-level request-body argument names that are, or contain, a credential
+   * (found through nested $refs and unions). Emitted with
+   * `.meta({ sensitive: true })`.
+   */
+  sensitiveBodyFields?: string[];
+  /**
+   * Credential paths in the response entity (the item, for list operations)
+   * that swamp's resource walk can reach. Undefined when there are none.
+   */
+  sensitiveResponse?: SensitiveTree;
 }
 
 /** A complete service group ready for code generation. */
@@ -230,6 +242,27 @@ function extractOperation(
     operationId,
   );
 
+  const sensitiveBodyFields = sensitiveRequestFields(
+    spec,
+    operation.requestBody?.content?.["application/json"]?.schema,
+  );
+
+  // A credential in the response must land somewhere swamp can vault it. A
+  // path through an array or record cannot be marked for swamp's resource
+  // walk, so fail generation rather than emit a model that persists it.
+  const responseScan = scanSensitive(spec, responseSchema);
+  if (responseScan.unreachable.length > 0) {
+    throw new Error(
+      `${operationId}: response carries credential field(s) ` +
+        `${responseScan.unreachable.join(", ")} inside an array or record, ` +
+        `which swamp cannot store in a vault. Extend lib/sensitive.ts and the ` +
+        `generator to handle them before generating this operation.`,
+    );
+  }
+  const sensitiveResponse = Object.keys(responseScan.tree).length > 0
+    ? responseScan.tree
+    : undefined;
+
   return {
     httpMethod,
     path,
@@ -244,7 +277,37 @@ function extractOperation(
     listItemsKey,
     deprecated: operation.deprecated ?? false,
     tags: operation.tags ?? [],
+    ...(sensitiveBodyFields.length > 0 ? { sensitiveBodyFields } : {}),
+    ...(sensitiveResponse ? { sensitiveResponse } : {}),
   };
+}
+
+/**
+ * Names of the generated top-level body arguments that are, or contain, a
+ * credential. Mirrors generateArgsSchema's argument layout: a bare-array body
+ * becomes `items`, a oneOf body becomes `body`, otherwise one argument per
+ * top-level property.
+ */
+export function sensitiveRequestFields(
+  spec: OpenAPISpec,
+  schema: SchemaObject | undefined,
+): string[] {
+  if (!schema) return [];
+  const resolved = resolveSchema(spec, schema);
+  const { tree, unreachable } = scanSensitive(spec, schema);
+  if (resolved.type === "array" && resolved.items) {
+    return unreachable.length > 0 ? ["items"] : [];
+  }
+  if (resolved.oneOf) {
+    return Object.keys(tree).length > 0 || unreachable.length > 0
+      ? ["body"]
+      : [];
+  }
+  const fields = new Set(Object.keys(tree));
+  for (const path of unreachable) {
+    fields.add(path.split(/[.[{]/)[0]);
+  }
+  return [...fields].sort();
 }
 
 /**

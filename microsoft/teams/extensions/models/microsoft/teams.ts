@@ -11,6 +11,7 @@
 import { z } from "npm:zod@4.6.5";
 import {
   initiateDeviceCode,
+  MicrosoftAuthError,
   pollDeviceCode,
   refreshAccessToken,
 } from "./_lib/auth.ts";
@@ -22,16 +23,31 @@ const EXTENSION_NAME = "@webframp/microsoft/teams";
 // Schemas
 // =============================================================================
 
+/**
+ * Vault key under which `bootstrap` stores the refresh token. Swamp writes the
+ * sensitive `refreshToken` output field to the repo's default vault (or the
+ * vault a data output override names) under this key, and persists only a
+ * `vault.get` reference in the bootstrap data.
+ */
+export const REFRESH_TOKEN_VAULT_KEY = "TEAMS_REFRESH_TOKEN";
+
 const GlobalArgsSchema = z.object({
   tenantId: z.string().min(1).describe(
-    "Entra tenant GUID (e.g. e9b2b7ba-b238-42a9-b271-2adfc82da650)",
+    "Entra tenant GUID. Store it in a vault and wire it with " +
+      '${{ vault.get("microsoft", "TENANT_ID") }}.',
   ),
   clientId: z.string().min(1).describe(
-    "Azure public client app registration ID",
+    "Azure public client app registration ID. Store it in a vault and wire " +
+      'it with ${{ vault.get("microsoft", "CLIENT_ID") }}.',
   ),
-  refreshToken: z.string().min(1).meta({ sensitive: true }).describe(
-    "OAuth2 refresh token obtained via bootstrap. Re-run bootstrap if expired.",
-  ),
+  refreshToken: z.string().min(1).meta({ sensitive: true }).optional()
+    .describe(
+      "OAuth2 refresh token. Leave unset until bootstrap has run; bootstrap " +
+        `stores the token in a vault under the key ${REFRESH_TOKEN_VAULT_KEY}. ` +
+        "Then wire it with the vault.get reference bootstrap records, e.g. " +
+        `\${{ vault.get("default", "${REFRESH_TOKEN_VAULT_KEY}") }}. ` +
+        "Never pass the literal token. Re-run bootstrap if it expires.",
+    ),
 });
 
 type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
@@ -264,8 +280,12 @@ const AttentionSchema = z.object({
 const BootstrapResultSchema = z.object({
   status: z.string().describe("Authentication result status"),
   message: z.string().describe("Human-readable guidance for the caller"),
-  refreshToken: z.string().meta({ sensitive: true }).optional().describe(
-    "OAuth2 refresh token to store in the vault",
+  refreshToken: z.string().meta({
+    sensitive: true,
+    vaultKey: REFRESH_TOKEN_VAULT_KEY,
+  }).optional().describe(
+    "OAuth2 refresh token. Swamp stores the value in a vault and persists " +
+      "only its vault.get reference here.",
   ),
   fetchedAt: z.string().optional().describe(
     "ISO 8601 timestamp when data was fetched",
@@ -283,6 +303,15 @@ const BootstrapResultSchema = z.object({
 // =============================================================================
 
 async function getAccessToken(globalArgs: GlobalArgs): Promise<string> {
+  if (!globalArgs.refreshToken) {
+    throw new MicrosoftAuthError(
+      "missing_refresh_token",
+      "The refreshToken global argument is not set. Run the bootstrap " +
+        "method, then set refreshToken to the vault.get reference it " +
+        'records, e.g. ${{ vault.get("default", "' + REFRESH_TOKEN_VAULT_KEY +
+        '") }}.',
+    );
+  }
   const tokens = await refreshAccessToken({
     tenantId: globalArgs.tenantId,
     clientId: globalArgs.clientId,
@@ -389,7 +418,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -465,6 +494,13 @@ export const model = {
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No attribute migration — refreshToken global argument is now optional " +
+        "(set it after bootstrap); bootstrap stores the token in a vault",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -518,7 +554,8 @@ export const model = {
       description:
         "Authenticate via device code flow. Displays a user code and " +
         "verification URL, then polls until authentication completes. " +
-        "Outputs the refresh token to store in the vault.",
+        "Stores the refresh token in a vault (key " + REFRESH_TOKEN_VAULT_KEY +
+        ") and records only its vault.get reference.",
       arguments: z.object({}),
       execute: async (
         _args: Record<string, never>,
@@ -556,8 +593,11 @@ export const model = {
 
         const handle = await context.writeResource("bootstrap", "main", {
           status: "authenticated",
-          message:
-            "Store the refreshToken in your vault. It expires after 90 days of inactivity.",
+          message: "The refresh token is stored in a vault under the key " +
+            REFRESH_TOKEN_VAULT_KEY +
+            "; the refreshToken field holds its vault.get reference. Set " +
+            "the model's refreshToken global argument to that reference. " +
+            "It expires after 90 days of inactivity.",
           refreshToken: tokens.refresh_token,
           durationMs: Date.now() - startMs,
           collectedBy: EXTENSION_NAME,

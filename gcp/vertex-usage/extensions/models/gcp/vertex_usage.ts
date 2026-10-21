@@ -51,9 +51,13 @@ const GlobalArgsSchema = z.object({
     .string()
     .meta({ sensitive: true })
     .describe(
-      "GCP service account JSON key (stringified). Falls back to the " +
-        "GCP_ACCESS_TOKEN env var, then to the file named by " +
-        "GOOGLE_APPLICATION_CREDENTIALS, if omitted.",
+      "GCP credentials JSON (a service account key, or an authorized_user " +
+        "file from `gcloud auth application-default login`). Store it in a " +
+        "vault and wire it with " +
+        '${{ vault.get("gcp", "SA_KEY") }}; never pass the literal JSON. ' +
+        "If omitted, the GCP_ACCESS_TOKEN environment variable and then the " +
+        "file named by GOOGLE_APPLICATION_CREDENTIALS are read as fallbacks, " +
+        "but they are not redacted and are not recommended.",
     )
     .optional(),
   billingTable: z
@@ -800,7 +804,8 @@ function parseCredentialsJson(raw: string): Credentials {
 }
 
 /**
- * Resolve credentials. Order: serviceAccountJson arg, GCP_ACCESS_TOKEN env,
+ * Resolve credentials. Order: serviceAccountJson arg (the supported path,
+ * wired from a vault), then the discouraged fallbacks: GCP_ACCESS_TOKEN env,
  * then the file named by GOOGLE_APPLICATION_CREDENTIALS.
  */
 function resolveCredentials(
@@ -815,8 +820,12 @@ function resolveCredentials(
   const path = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS");
   if (!path) {
     throw new Error(
-      "No serviceAccountJson provided and neither GCP_ACCESS_TOKEN nor " +
-        "GOOGLE_APPLICATION_CREDENTIALS is set. Provide one of them.",
+      "No GCP credentials configured. Store the credentials JSON in a vault " +
+        "(swamp vault put gcp SA_KEY < key.json) and set the " +
+        "serviceAccountJson global argument to " +
+        '${{ vault.get("gcp", "SA_KEY") }}. The GCP_ACCESS_TOKEN and ' +
+        "GOOGLE_APPLICATION_CREDENTIALS environment variables are read as " +
+        "fallbacks, but they are not redacted and are not recommended.",
     );
   }
   let raw: string;
@@ -2012,7 +2021,7 @@ const ProjectsFilterArg = z.array(z.string().min(1)).optional().describe(
 /** GCP Vertex AI usage and cost analysis model. */
 export const model = {
   type: "@webframp/gcp/vertex-usage",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -2087,6 +2096,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — credential guidance now leads with vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

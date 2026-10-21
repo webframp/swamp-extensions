@@ -53,10 +53,55 @@ Deno.test("generateReadme: usage example carries only apiToken, no scope arg", (
     { name: "list_assets", description: "List assets", type: "list" },
   ]);
   assertStringIncludes(readme, "swamp extension pull @webframp/falai/assets");
-  assertStringIncludes(readme, "--global-arg apiToken=FAL_API_KEY");
-  assertStringIncludes(readme, "FAL_KEY");
   assertEquals(readme.includes("accountId"), false);
   assertEquals(readme.includes("zoneId"), false);
+});
+
+Deno.test("generateReadme: credentials come from the falai vault, FAL_KEY only as a discouraged fallback", () => {
+  const readme = generateReadme(CONFIG, []);
+  assertStringIncludes(readme, "## Credentials");
+  assertStringIncludes(readme, "swamp vault put falai API_KEY");
+  assertStringIncludes(
+    readme,
+    `--global-arg 'apiToken=\${{ vault.get("falai", "API_KEY") }}'`,
+  );
+  assertStringIncludes(readme, "not redacted");
+  assertStringIncludes(readme, "not\nrecommended");
+  // The old literal-placeholder form invited pasting the key on the CLI.
+  assertEquals(readme.includes("apiToken=FAL_API_KEY"), false);
+  // Vault guidance precedes any mention of the env var.
+  assertEquals(
+    readme.indexOf("vault.get") < readme.indexOf("FAL_KEY"),
+    true,
+  );
+  // No method returns a secret, so no Secrets section and no vault demand.
+  assertEquals(readme.includes("## Secrets"), false);
+  assertEquals(readme.includes("refuses to run"), false);
+});
+
+Deno.test("generateReadme: keys documents that created keys are stored in a vault", () => {
+  const readme = generateReadme(
+    { ...CONFIG, name: "keys", description: "fal.ai API Keys" },
+    [
+      { name: "list_api_keys", description: "List", type: "list" },
+      {
+        name: "create_api_key",
+        description: "Create",
+        type: "create",
+        operation: { operationId: "createApiKey" },
+      },
+      { name: "revoke_api_key", description: "Revoke", type: "delete" },
+    ],
+  );
+  assertStringIncludes(readme, "## Secrets");
+  assertStringIncludes(readme, "| `create_api_key` | `key_secret`, `key` |");
+  // swamp infers list_api_keys's kind from its name: not a read, so it is
+  // refused too. Stated under Credentials and Secrets.
+  const flat = readme.replace(/\s+/g, " ");
+  const sentence =
+    "swamp refuses to run any of its methods, reads included, until a vault exists";
+  assertEquals(flat.split(sentence).length - 1, 2);
+  assertEquals(readme.includes("Created API keys land in a vault"), false);
 });
 
 Deno.test("generateReleaseNotes: default body describes an initial release", () => {
@@ -114,6 +159,15 @@ Deno.test("generateApiLib: uses Authorization: Key <token>, not Bearer", () => {
 Deno.test("generateApiLib: falls back to the FAL_KEY environment variable", () => {
   const lib = generateApiLib();
   assertStringIncludes(lib, 'Deno.env.get("FAL_KEY")');
+});
+
+Deno.test("generateApiLib: missing-key error leads with vault.get and discourages FAL_KEY", () => {
+  const lib = generateApiLib();
+  const start = lib.indexOf("fal.ai API key not set.");
+  const message = lib.slice(start, lib.indexOf(");", start));
+  assertStringIncludes(message, "vault.get");
+  assertStringIncludes(message, "not recommended");
+  assertEquals(message.indexOf("vault.get") < message.indexOf("FAL_KEY"), true);
 });
 
 Deno.test("generateApiLib: base URL is https://api.fal.ai/v1", () => {

@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/terraform-drift"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Terraform drift detection for AWS — compares Terraform state against live
   AWS resources to find configuration drift.

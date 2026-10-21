@@ -64,6 +64,12 @@ export function schemaToZod(
     base = `${base}.nullable()`;
   }
 
+  // Credential fields found by lib/sensitive.ts: swamp stores a resource value
+  // marked this way in a vault and persists only a reference to it.
+  if (schema["x-swamp-sensitive"] === true) {
+    base = `${base}.meta({ sensitive: true })`;
+  }
+
   return base;
 }
 

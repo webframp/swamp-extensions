@@ -12,14 +12,15 @@ surface suspicious users and ban overlap.
 ```bash
 swamp extension pull @webframp/twitch
 
+# Store the credentials first; see Authentication below.
 # Create one model instance per channel you moderate
 swamp model create @webframp/twitch mod-drongo \
   --global-arg channel=drongo \
   --global-arg moderatorId=YOUR_TWITCH_USER_ID \
-  --global-arg 'clientId=${{ vault.get("twitch-creds", "twitch-client-id") }}' \
-  --global-arg 'clientSecret=${{ vault.get("twitch-creds", "twitch-client-secret") }}' \
-  --global-arg 'accessToken=${{ vault.get("twitch-creds", "twitch-access-token") }}' \
-  --global-arg 'refreshToken=${{ vault.get("twitch-creds", "twitch-refresh-token") }}'
+  --global-arg 'clientId=${{ vault.get("twitch", "CLIENT_ID") }}' \
+  --global-arg 'clientSecret=${{ vault.get("twitch", "CLIENT_SECRET") }}' \
+  --global-arg 'accessToken=${{ vault.get("twitch", "ACCESS_TOKEN") }}' \
+  --global-arg 'refreshToken=${{ vault.get("twitch", "REFRESH_TOKEN") }}'
 
 # Check chatters in a channel
 swamp model method run mod-drongo get_chatters --json
@@ -34,14 +35,56 @@ Requires a Twitch application with OAuth2 user tokens. Register an app at
 [dev.twitch.tv/console/apps](https://dev.twitch.tv/console/apps) with redirect
 URL `http://localhost:3000` and category "Chat Bot".
 
-Store credentials in a swamp vault:
+Store every credential in a swamp vault and reference it with a `vault.get`
+expression; never pass a literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
 
 ```bash
-swamp vault put twitch-creds twitch-client-id YOUR_CLIENT_ID
-swamp vault put twitch-creds twitch-client-secret YOUR_CLIENT_SECRET
-swamp vault put twitch-creds twitch-access-token YOUR_ACCESS_TOKEN
-swamp vault put twitch-creds twitch-refresh-token YOUR_REFRESH_TOKEN
+swamp vault create local_encryption twitch   # once, if you have no vault yet
+swamp vault put twitch CLIENT_ID             # each put prompts; values never touch shell history
+swamp vault put twitch CLIENT_SECRET
 ```
+
+### Obtain the user tokens
+
+1. Open this URL in a browser, with your client ID in place of `YOUR_CLIENT_ID`,
+   and approve the app:
+
+   ```text
+   https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=code&scope=moderator:read:chatters+moderator:read:banned_users+moderator:manage:banned_users+user:write:chat+channel:read:editors+moderator:read:suspicious_users+moderator:read:warnings
+   ```
+
+2. Copy the `code` parameter from the redirect URL, then exchange it for tokens
+   and store them straight into the vault. The client secret travels on stdin,
+   never on the `curl` command line, and the tokens are never printed:
+
+   ```bash
+   AUTH_CODE=paste-the-code-here
+   TOKENS=$(printf 'client_id=%s&client_secret=%s&code=%s&grant_type=authorization_code&redirect_uri=http://localhost:3000' \
+       "$(swamp vault read-secret twitch CLIENT_ID --force)" \
+       "$(swamp vault read-secret twitch CLIENT_SECRET --force)" \
+       "$AUTH_CODE" |
+     curl -sS -X POST 'https://id.twitch.tv/oauth2/token' \
+       -H 'Content-Type: application/x-www-form-urlencoded' --data @-)
+   jq -r .access_token <<<"$TOKENS" | swamp vault put twitch ACCESS_TOKEN
+   jq -r .refresh_token <<<"$TOKENS" | swamp vault put twitch REFRESH_TOKEN
+   unset TOKENS AUTH_CODE
+   ```
+
+3. Look up your moderator user ID (the `id` field), sending the headers on
+   stdin:
+
+   ```bash
+   printf 'Authorization: Bearer %s\nClient-Id: %s\n' \
+       "$(swamp vault read-secret twitch ACCESS_TOKEN --force)" \
+       "$(swamp vault read-secret twitch CLIENT_ID --force)" |
+     curl -sS -H @- 'https://api.twitch.tv/helix/users'
+   ```
+
+`swamp vault read-secret --force` prints the plaintext secret. The commands
+above only feed it into a pipe; do not run it bare in a shared terminal, and
+never use it to wire a model — use `vault.get` for that.
 
 The model auto-refreshes expired access tokens using the refresh token.
 

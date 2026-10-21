@@ -35,9 +35,25 @@ export interface TypeMapperOptions {
    * required-ness as-is.
    */
   lenient?: boolean;
+  /**
+   * Decide whether an object field holds a secret. A matching field gets
+   * `.meta({ sensitive: true })`, which makes swamp redact it (arguments) or
+   * move it into a vault (resource fields). Applied at every depth. When
+   * omitted, nothing is marked.
+   */
+  isSensitive?: (name: string, prop: SchemaObject) => boolean;
+  /**
+   * Appended to (or used as) the description of every field `isSensitive`
+   * marks. Used for arguments, to tell the caller to pass a vault reference.
+   */
+  sensitiveHint?: string;
 }
 
-const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
+type ResolvedOptions =
+  & Required<Omit<TypeMapperOptions, "isSensitive" | "sensitiveHint">>
+  & Pick<TypeMapperOptions, "isSensitive" | "sensitiveHint">;
+
+const DEFAULT_OPTIONS: ResolvedOptions = {
   indent: 2,
   maxDepth: 8,
   lenient: false,
@@ -70,7 +86,7 @@ export function schemaToZod(
 
 function schemaToZodInner(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
 ): string {
   // Enum takes priority
@@ -161,7 +177,7 @@ function enumToZod(values: (string | number | boolean)[]): string {
 
 function arrayToZod(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
 ): string {
   if (!schema.items) {
@@ -173,7 +189,7 @@ function arrayToZod(
 
 function objectToZod(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
 ): string {
   // Record type (additionalProperties without fixed properties)
@@ -216,11 +232,22 @@ function objectToZod(
       fieldType += `.default(${JSON.stringify(prop.default)})`;
     }
 
-    // Add .describe() if there's a description (only for top-level fields)
+    const sensitive = opts.isSensitive?.(name, prop) ?? false;
+    const hint = sensitive ? opts.sensitiveHint : undefined;
+
+    // Add .describe() if there's a description (only for top-level fields).
+    // A secret argument always carries the vault hint, at any depth.
     if (prop.description && depth < 2) {
+      const desc = truncateDescription(prop.description);
       fieldType += `.describe(${
-        JSON.stringify(truncateDescription(prop.description))
+        JSON.stringify(hint ? `${desc} ${hint}` : desc)
       })`;
+    } else if (hint) {
+      fieldType += `.describe(${JSON.stringify(hint)})`;
+    }
+
+    if (sensitive) {
+      fieldType += ".meta({ sensitive: true })";
     }
 
     fields.push(`${indent}${safeName}: ${fieldType},`);
@@ -230,7 +257,10 @@ function objectToZod(
     return "z.object({})";
   }
 
-  return `z.object({\n${fields.join("\n")}\n${closingIndent}})`;
+  // Skeleton objects (sensitivity.ts) declare only the path to a secret and
+  // must keep every other key of the real value.
+  const loose = schema["x-swamp-loose"] ? ".passthrough()" : "";
+  return `z.object({\n${fields.join("\n")}\n${closingIndent}})${loose}`;
 }
 
 /** Generate a Zod schema variable name from an operation/resource name */

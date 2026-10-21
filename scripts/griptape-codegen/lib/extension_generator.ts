@@ -16,6 +16,13 @@
  */
 
 import type { ServiceConfig } from "../config.ts";
+import type { ClassifiedMethod } from "./method_classifier.ts";
+import {
+  listStripPaths,
+  resourceNameFor,
+  sensitiveArgNames,
+} from "./method_classifier.ts";
+import { isSensitiveFieldName, sensitivePaths } from "./sensitive.ts";
 import {
   GRIPTAPE_API_BASE,
   MAX_PAGES,
@@ -78,31 +85,230 @@ export function generateDenoJson(): string {
   ) + "\n";
 }
 
+/** A method as the README needs it; `operation` enables the secret notes. */
+export type ReadmeMethod =
+  & Pick<ClassifiedMethod, "name" | "description" | "type">
+  & Partial<Pick<ClassifiedMethod, "operation" | "resourceName">>;
+
+/** Methods that take a credential as an argument, with those argument names. */
+function secretArgMethods(methods: ReadmeMethod[]): [string, string[]][] {
+  return methods.flatMap((m): [string, string[]][] => {
+    if (!m.operation) return [];
+    const names = sensitiveArgNames(m.operation);
+    return names.length > 0 ? [[m.name, names]] : [];
+  });
+}
+
+/** The "Secret-valued arguments" README subsection, or "" when there are none. */
+function secretArgsSection(
+  methods: ReadmeMethod[],
+  instance: string,
+): string {
+  const rows = secretArgMethods(methods);
+  if (rows.length === 0) return "";
+  const list = rows.map(([name, args]) =>
+    `- \`${name}\`: ${args.map((a) => `\`${a}\``).join(", ")}`
+  ).join("\n");
+  // Example: the first argument that is itself the credential (a string). An
+  // argument flagged for a credential nested inside it is an object.
+  const direct =
+    rows.flatMap(([name, args]) =>
+      args.filter(isSensitiveFieldName).map((a) => [name, a] as const)
+    )[0];
+  const nested = [
+    ...new Set(
+      rows.flatMap(([, args]) => args.filter((a) => !isSensitiveFieldName(a))),
+    ),
+  ].sort();
+  const example = direct
+    ? `
+
+\`\`\`bash
+swamp model method run ${instance} ${direct[0]} \\
+  --input '${direct[1]}=\${{ vault.get("griptape", "<KEY>") }}'
+\`\`\``
+    : "";
+  const nestedNote = nested.length > 0
+    ? `
+
+${
+      nested.map((a) => `\`${a}\``).join(" and ")
+    } is an object that holds the credential in one of its fields. Put the
+\`vault.get\` expression on that field, not the literal value.`
+    : "";
+  return `
+### Secret-valued arguments
+
+These method arguments carry a credential:
+
+${list}
+
+Method inputs are recorded with the run. Pass a credential as a
+\`vault.get\` expression so the recorded input holds the reference, not the
+secret; a literal value is recorded in cleartext.${example}${nestedNote}
+`;
+}
+
+/**
+ * Response credentials: per resource, the paths its schema marks sensitive
+ * (swamp vaults them); per list method, the paths it drops from items.
+ */
+function responseSecrets(methods: ReadmeMethod[]): {
+  vaulted: Map<string, Set<string>>;
+  stripped: [string, string[]][];
+} {
+  const vaulted = new Map<string, Set<string>>();
+  const stripped: [string, string[]][] = [];
+  for (const m of methods) {
+    if (!m.operation) continue;
+    if (m.type === "list") {
+      const paths = listStripPaths(m as ClassifiedMethod).map((p) =>
+        p.join(".")
+      );
+      if (paths.length > 0) stripped.push([m.name, paths]);
+      continue;
+    }
+    if (m.type === "delete" || !m.operation.sensitiveResponse) continue;
+    const resource = resourceNameFor(m as ClassifiedMethod);
+    const set = vaulted.get(resource) ?? new Set<string>();
+    for (const p of sensitivePaths(m.operation.sensitiveResponse)) {
+      set.add(p.join("."));
+    }
+    vaulted.set(resource, set);
+  }
+  return { vaulted, stripped };
+}
+
+/**
+ * Method names swamp treats as reads by name alone (its `inferMethodKind`).
+ * Every other method is a possible write, and swamp refuses to run one on a
+ * model with sensitive resource fields until a vault exists.
+ */
+const SWAMP_READ_NAMES = new Set([
+  "get",
+  "read",
+  "describe",
+  "show",
+  "list",
+  "search",
+  "find",
+]);
+
+/**
+ * True when a resource of the model declares a sensitive field, which makes
+ * swamp demand a vault before it runs the model's methods.
+ */
+export function modelRequiresVault(methods: ReadmeMethod[]): boolean {
+  return responseSecrets(methods).vaulted.size > 0;
+}
+
+/** The sentence stating which of a model's methods need a vault to exist. */
+function vaultRefusalSentence(methods: ReadmeMethod[]): string {
+  const reads = methods.map((m) => m.name).filter((n) =>
+    SWAMP_READ_NAMES.has(n.toLowerCase())
+  );
+  const create = "(`swamp vault create local_encryption griptape`)";
+  if (reads.length === 0) {
+    return `Because the model declares sensitive fields, swamp refuses to run
+any of its methods, reads included, until a vault exists ${create}.`;
+  }
+  return `Because the model declares sensitive fields, swamp refuses to run
+any of its methods except ${
+    reads.map((n) => `\`${n}\``).join(" and ")
+  } until a vault exists ${create}; swamp treats a method of ${
+    reads.length === 1 ? "that name" : "those names"
+  } as a read.`;
+}
+
+/**
+ * Credentials-section paragraph stating that the model needs a vault for the
+ * credentials its responses carry, or "" when no resource declares one.
+ */
+function vaultRequirementParagraph(methods: ReadmeMethod[]): string {
+  if (!modelRequiresVault(methods)) return "";
+  return `
+Some responses carry a credential, which swamp stores in a vault (see
+[Secrets](#secrets)). ${vaultRefusalSentence(methods)}
+`;
+}
+
+/** The "Credentials in responses" README subsection, or "" when there are none. */
+function secretResponseSection(methods: ReadmeMethod[]): string {
+  const { vaulted, stripped } = responseSecrets(methods);
+  if (vaulted.size === 0 && stripped.length === 0) return "";
+  const parts: string[] = [];
+  for (const [resource, paths] of vaulted) {
+    parts.push(
+      `- The \`${resource}\` resource marks ${
+        [...paths].sort().map((p) => `\`${p}\``).join(", ")
+      } as sensitive. Swamp stores the value in a vault and the resource holds a vault reference.`,
+    );
+  }
+  for (const [name, paths] of stripped) {
+    parts.push(
+      `- \`${name}\` drops ${
+        paths.map((p) => `\`${p}\``).join(", ")
+      } from every item before writing the snapshot. Swamp cannot vault a field inside a list, so use the matching get method to keep the value.`,
+    );
+  }
+  const refusal = vaulted.size > 0
+    ? `\n${vaultRefusalSentence(methods)}\n`
+    : "";
+  return `
+### Credentials in responses
+
+Some responses carry a credential:
+
+${parts.join("\n")}
+${refusal}`;
+}
+
+/**
+ * The README's "Secrets" section: secret-valued arguments and credentials in
+ * responses, or "" when the service has neither.
+ */
+function secretsSection(methods: ReadmeMethod[], instance: string): string {
+  const body = secretArgsSection(methods, instance) +
+    secretResponseSection(methods);
+  return body === "" ? "" : `
+## Secrets
+${body}`;
+}
+
 /** Generate README.md for the extension. */
 export function generateReadme(
   config: ServiceConfig,
-  methods: { name: string; description: string; type: string }[],
+  methods: ReadmeMethod[],
 ): string {
+  const instance = `gt-${config.name}`;
   return `# @webframp/griptape/${config.name}
 
 ${config.description}
 
 Auto-generated by \`scripts/griptape-codegen\` from the Griptape Cloud OpenAPI specification.
 
-## Usage
+## Credentials
+
+Store the Griptape Cloud API key in a swamp vault and reference it with a
+\`vault.get\` expression; never pass the literal value. Any vault type works —
+\`local_encryption\`, or an extension such as \`@webframp/pass\`,
+\`@webframp/gopass\`, \`@webframp/hashicorp-vault\` or
+\`@webframp/macos-keychain\`.
 
 \`\`\`bash
 swamp extension pull @webframp/griptape/${config.name}
 
-swamp model create @webframp/griptape/${config.name} gt-${config.name} \\
-  --global-arg apiKey=GRIPTAPE_CLOUD_API_KEY
+swamp vault create local_encryption griptape   # once, if you have no vault yet
+swamp vault put griptape API_KEY               # prompts; the value never touches shell history
+swamp model create @webframp/griptape/${config.name} ${instance} \\
+  --global-arg 'apiKey=\${{ vault.get("griptape", "API_KEY") }}'
 \`\`\`
 
-The \`apiKey\` global argument overrides the \`GT_CLOUD_API_KEY\` environment
-variable and is wireable with a \`vault.get(...)\` expression. An optional
+The \`GT_CLOUD_API_KEY\` environment variable is read as a fallback when
+\`apiKey\` is unset, but it is not redacted and is not recommended. An optional
 \`baseUrl\` argument overrides \`GT_CLOUD_BASE_URL\` and the built-in default
 (\`${GRIPTAPE_API_BASE}\`).
-
+${vaultRequirementParagraph(methods)}${secretsSection(methods, instance)}
 ## Methods
 
 | Method | Description |
@@ -126,27 +332,25 @@ Apache-2.0 — see [LICENSE.md](LICENSE.md).
 }
 
 /**
- * Generate RELEASE_NOTES.md, prepending the new entry above any existing
- * history. `existing` is the current file contents, or undefined for a first
- * release — overwriting it would silently erase the changelog on every
- * regeneration.
+ * Generate RELEASE_NOTES.md. The file describes only the version being
+ * published: CI hands it to the registry and the GitHub release for that
+ * version, and earlier versions' notes live in git history and their own
+ * releases. Callers supply the body for anything but a first release.
  */
 export function generateReleaseNotes(
   config: ServiceConfig,
   version: string,
   methodCount: number,
   body?: string,
-  existing?: string,
 ): string {
   const text = body ??
     `**Added:** Initial code-generated release of @webframp/griptape/${config.name} with ${methodCount} methods covering the Griptape Cloud ${
       config.name.replace(/-/g, " ")
     } API surface.`;
-  const entry = `## ${version}
+  return `## ${version}
 
 ${text.trimEnd()}
 `;
-  return existing ? `${entry}\n${existing.trimStart()}` : entry;
 }
 
 /**
@@ -198,20 +402,47 @@ function resolveBaseUrl(baseUrl?: string): string {
 }
 
 /**
- * Resolve the Griptape Cloud API key: an explicit key (typically from the
- * model's vault-wireable apiKey global arg) takes precedence over the
- * GT_CLOUD_API_KEY environment variable. Throws when neither is set.
+ * Resolve the Griptape Cloud API key: the model's apiKey global arg (wired
+ * from a vault with a vault.get(...) expression) takes precedence. The
+ * GT_CLOUD_API_KEY environment variable is a discouraged fallback: swamp does
+ * not redact it. Throws when neither is set.
  */
 function resolveKey(apiKey?: string): string {
   const key = apiKey || Deno.env.get("GT_CLOUD_API_KEY");
   if (!key) {
     throw new Error(
-      "Griptape Cloud API key not set. Provide the apiKey global argument " +
-        "(wireable with a vault.get(...) expression) or set the " +
-        "GT_CLOUD_API_KEY environment variable.",
+      "Griptape Cloud API key not set. Store the key in a swamp vault " +
+        "(swamp vault put griptape API_KEY) and set the apiKey global " +
+        "argument to '\${{ vault.get(\\"griptape\\", \\"API_KEY\\") }}'. " +
+        "The GT_CLOUD_API_KEY environment variable is read as a fallback, " +
+        "but it is not redacted and is not recommended.",
     );
   }
   return key;
+}
+
+/**
+ * Return a copy of \`value\` with each key path removed. Used to drop
+ * credentials from list items before they are written: swamp stores a
+ * sensitive resource field in a vault only when it is not inside an array, so
+ * a credential in a list item would otherwise be persisted in cleartext.
+ */
+export function omitPaths<T>(value: T, paths: string[][]): T {
+  const out = structuredClone(value);
+  for (const path of paths) {
+    let node: unknown = out;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (node === null || typeof node !== "object" || Array.isArray(node)) {
+        node = undefined;
+        break;
+      }
+      node = (node as Record<string, unknown>)[path[i]];
+    }
+    if (node !== null && typeof node === "object" && !Array.isArray(node)) {
+      delete (node as Record<string, unknown>)[path[path.length - 1]];
+    }
+  }
+  return out;
 }
 
 /**

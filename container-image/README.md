@@ -5,7 +5,8 @@ ECR, GHCR, DockerHub, or any OCI-compliant registry.
 
 ## Methods
 
-- **login** — Authenticate to a private registry (password via stdin)
+- **login** — Authenticate to a private registry (password from a vault, passed
+  to `docker login` via stdin)
 - **build** — Build an image from a Dockerfile via `buildx` (supports
   multi-platform)
 - **push** — Push a built image, captures remote digest
@@ -23,11 +24,10 @@ swamp model method run my-image build \
   --input tag=123456789012.dkr.ecr.us-east-1.amazonaws.com/swamp-worker:latest \
   --input platform=linux/arm64
 
-# Login to ECR
-TOKEN=$(aws ecr get-login-password --region us-east-1)
+# Login to ECR (see Registry credentials below for the one-time vault setup)
 swamp model method run my-image login \
   --input registry=123456789012.dkr.ecr.us-east-1.amazonaws.com \
-  --input password="$TOKEN"
+  --input 'password=${{ vault.get("ecr", "PASSWORD") }}'
 
 # Push
 swamp model method run my-image push \
@@ -36,6 +36,45 @@ swamp model method run my-image push \
 # Inspect
 swamp model method run my-image inspect \
   --input tag=123456789012.dkr.ecr.us-east-1.amazonaws.com/swamp-worker:latest
+```
+
+## Registry credentials
+
+Pass the `login` password as a `vault.get` expression. Swamp resolves it at run
+time, redacts it, and records only the expression; a literal
+`--input
+password=…` would be stored in cleartext with the method run. Any vault
+type works — `local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+**ECR.** ECR passwords expire after 12 hours, so let the vault mint a fresh one
+with a refresh hook. The AWS CLI uses your SSO named profile (`aws sso login`)
+or an attached IAM role; the token is piped straight into the vault and never
+printed:
+
+```bash
+swamp vault create local_encryption ecr   # once, if you have no vault yet
+aws ecr get-login-password --region us-east-1 \
+  | swamp vault put ecr PASSWORD \
+    --refresh-from 'aws ecr get-login-password --region us-east-1' \
+    --refresh-ttl 11h
+```
+
+Alternatively, skip `login` entirely: configure the
+[Amazon ECR credential helper](https://github.com/awslabs/amazon-ecr-credential-helper)
+(`docker-credential-ecr-login`) in `~/.docker/config.json`, and `push` uses your
+ambient AWS credentials with no password at all.
+
+**GHCR, DockerHub and other registries.** Store a personal access token once at
+the interactive prompt, then reference it:
+
+```bash
+swamp vault create local_encryption ghcr   # once, if you have no vault yet
+swamp vault put ghcr TOKEN                 # prompts; the value never touches shell history
+swamp model method run my-image login \
+  --input registry=ghcr.io \
+  --input username=my-github-user \
+  --input 'password=${{ vault.get("ghcr", "TOKEN") }}'
 ```
 
 ## Data Outputs

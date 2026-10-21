@@ -20,7 +20,11 @@ Deno) does not independently capture those values via its own instrumentation.
 - `OTEL_DENO=true OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4319`
 - Three canaries: the Vault token, the secret value, and a marker attribute set
   by a probe span compiled into a scratch copy of the extension
-- Command: `swamp vault put probe-vault probe/ext-span2 "<secret canary>"`
+- Command: `swamp vault put probe-vault probe/ext-span2 "<secret canary>"`. The
+  canary went on the command line deliberately, to test argv redaction (see
+  result 3). It was a throwaway value; never pass a real secret this way, since
+  it lands in shell history and the process list. Use the interactive prompt
+  (`swamp vault put <vault> <key>`) or pipe the value on stdin.
 
 ## Results
 
@@ -60,7 +64,9 @@ swamp.args = "<REDACTED> <REDACTED> <REDACTED>"
 ```
 
 Positional arguments are redacted wholesale. No need to duplicate this concern
-at the extension level.
+at the extension level. This covers swamp's own telemetry only: the shell still
+records the value in its history and other local users can see it in the process
+list, so the inline form stays unsafe for real secrets.
 
 ### 4. Host vault spans carry no attributes
 

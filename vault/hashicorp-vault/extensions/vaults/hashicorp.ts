@@ -31,7 +31,11 @@ const ConfigSchema = z.object({
     "Vault server address (e.g., https://vault.example.com:8200)",
   ),
   token: z.string().optional().describe(
-    "Vault authentication token. If omitted, resolves from VAULT_TOKEN env var or ~/.vault-token file.",
+    "Vault authentication token. Leave this unset and run `vault login`, which " +
+      "stores the token in ~/.vault-token where the provider reads it. A " +
+      "literal token here is saved in plaintext in the vault config file and " +
+      "is not recommended. The VAULT_TOKEN environment variable is also read " +
+      "as a fallback, but it is not recommended.",
   ),
   mount: z.string().default("secret").describe("Secrets engine mount path"),
   kvVersion: z.enum(["1", "2"]).default("2").describe(
@@ -67,10 +71,10 @@ function resolveToken(configToken: string | undefined): string {
   }
 
   throw new Error(
-    "No Vault token found. Provide one via: " +
-      "(1) config 'token' field, " +
-      "(2) VAULT_TOKEN environment variable, or " +
-      "(3) ~/.vault-token file (run 'vault login' to create it).",
+    "No Vault token found. Run 'vault login' to store a token in " +
+      "~/.vault-token, where this provider reads it. The config 'token' " +
+      "field and the VAULT_TOKEN environment variable are also read, but a " +
+      "literal token in either is not recommended.",
   );
 }
 

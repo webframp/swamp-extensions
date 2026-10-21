@@ -15,6 +15,7 @@ import { groupOperations } from "./lib/service_grouper.ts";
 import {
   classifyServiceMethods,
   generateModelSource,
+  sensitiveResponsePaths,
 } from "./lib/method_classifier.ts";
 import { generateTestSource } from "./lib/test_generator.ts";
 import {
@@ -329,7 +330,14 @@ async function main() {
     );
     const manifest = generateManifest(config, version, modelFileName);
     const denoJson = generateDenoJson();
-    const readme = generateReadme(config, methods);
+    const secretOutputs = methods
+      .filter((m) => m.type !== "delete")
+      .map((m) => ({
+        method: m.name,
+        paths: sensitiveResponsePaths(m, methods),
+      }))
+      .filter((o) => o.paths.length > 0);
+    const readme = generateReadme(config, methods, secretOutputs);
     const releaseNotes = generateReleaseNotes(
       config,
       version,

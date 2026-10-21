@@ -25,7 +25,8 @@ primary owner in claude.ai.
 ```bash
 swamp extension pull @webframp/anthropic/analytics
 
-# Store key in vault
+# Store key in vault (prompts; the value never touches shell history)
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
 swamp vault put anthropic ANALYTICS_KEY
 
 # Create model

@@ -9,7 +9,11 @@
  * (JSON:API where applicable, flat JSON otherwise).
  */
 
-import { getResourceName } from "./method_classifier.ts";
+import {
+  getResourceName,
+  sensitiveArgNames,
+  sensitiveResponsePaths,
+} from "./method_classifier.ts";
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
@@ -73,6 +77,33 @@ export function generateTestSource(
   lines.push(`});`);
   lines.push(``);
 
+  lines.push(generateSensitiveHelpers());
+  lines.push(``);
+  lines.push(
+    `Deno.test("${config.name} model: apiKey and appKey are marked sensitive", () => {`,
+  );
+  lines.push(
+    `  assertEquals(sensitivePaths(model.globalArguments).sort(), ["apiKey", "appKey"]);`,
+  );
+  lines.push(`});`);
+  lines.push(``);
+
+  for (const method of methods) {
+    const argNames = sensitiveArgNames(method.operation);
+    if (argNames.length === 0) continue;
+    lines.push(
+      `Deno.test("${config.name} model: ${method.name} marks secret arguments sensitive", () => {`,
+    );
+    lines.push(
+      `  const args = (model.methods.${method.name}.arguments as unknown as { shape: Record<string, ZodLike> }).shape;`,
+    );
+    for (const a of argNames) {
+      lines.push(`  assertEquals(isMarkedSensitive(args["${a}"]), true);`);
+    }
+    lines.push(`});`);
+    lines.push(``);
+  }
+
   // Methods existence tests
   lines.push(
     `Deno.test("${config.name} model: has expected methods", () => {`,
@@ -122,6 +153,16 @@ export function generateTestSource(
   // coverage of another.
   for (const method of methods) {
     lines.push(generateExecutionTest(config, method));
+    lines.push(``);
+  }
+
+  // Methods that receive secrets: the secret must sit exactly where the
+  // resource schema marks it, so swamp moves it into a vault.
+  for (const method of methods) {
+    if (method.type === "delete") continue;
+    const paths = sensitiveResponsePaths(method, methods);
+    if (paths.length === 0) continue;
+    lines.push(generateSecretOutputTest(config, method, paths));
     lines.push(``);
   }
 
@@ -491,6 +532,143 @@ ${reqAsserts(actionHasBody)}
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "${resourceName}");
       assertExists(resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+}
+
+/**
+ * Helpers emitted into every generated test: read `.meta({ sensitive: true })`
+ * the way swamp's resource redaction does (extractSensitiveFields): object
+ * fields only, unwrapping only optional, nullable and default wrappers.
+ */
+export function generateSensitiveHelpers(): string {
+  return `type ZodLike = {
+  meta?: () => Record<string, unknown> | undefined;
+  _zod?: {
+    def?: { type?: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+  };
+};
+
+/** The wrappers swamp's unwrapSchema sees through; readonly, catch and the rest hide a field. */
+const SWAMP_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+function innerOf(schema: ZodLike | undefined): ZodLike | undefined {
+  const def = schema?._zod?.def;
+  return def && SWAMP_WRAPPERS.has(def.type ?? "") ? def.innerType : undefined;
+}
+
+function isMarkedSensitive(schema: ZodLike | undefined): boolean {
+  for (let cur = schema; cur; cur = innerOf(cur)) {
+    if (cur.meta?.()?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/** Object-field paths marked sensitive, as swamp's resource redaction finds them. */
+function sensitivePaths(schema: unknown, prefix = ""): string[] {
+  let cur = schema as ZodLike | undefined;
+  while (innerOf(cur)) cur = innerOf(cur);
+  if (cur?._zod?.def?.type !== "object") return [];
+  const shape = cur?._zod?.def?.shape;
+  if (!shape) return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(shape)) {
+    const path = prefix ? \`\${prefix}.\${key}\` : key;
+    if (isMarkedSensitive(field)) out.push(path);
+    out.push(...sensitivePaths(field, path));
+  }
+  return out;
+}`;
+}
+
+/** Set `value` at a dot path, creating intermediate objects. */
+function setPath(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown,
+): void {
+  const parts = path.split(".");
+  let cur = obj;
+  for (const part of parts.slice(0, -1)) {
+    const next = cur[part];
+    if (!next || typeof next !== "object" || Array.isArray(next)) {
+      cur[part] = {};
+    }
+    cur = cur[part] as Record<string, unknown>;
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+/**
+ * Test that a method receiving secrets writes each one at a path the resource
+ * schema marks sensitive, and that replacing those paths (what swamp's data
+ * writer does with a vault reference) leaves no plaintext in the resource.
+ */
+function generateSecretOutputTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+  paths: string[],
+): string {
+  const secret = `secret-sentinel-${method.name}`;
+  const fixture = structuredClone(generateFixture(method));
+  for (const p of paths) {
+    const first = p.split(".")[0];
+    const inAttributes = method.operation.isJsonApi && first !== "id" &&
+      first !== "type";
+    if (inAttributes) {
+      const attrs = (fixture.attributes ?? {}) as Record<string, unknown>;
+      setPath(attrs, p, secret);
+      fixture.attributes = attrs;
+    } else {
+      setPath(fixture, p, secret);
+    }
+  }
+  const responseBody = method.operation.isJsonApi ? { data: fixture } : fixture;
+  const pathPattern = extractPathPattern(method.operation.path);
+  const args = buildExecuteArgs(method);
+  const resourceName = testResourceName(method);
+  const sorted = [...paths].sort();
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} leaves returned secrets to the vault",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    assertEquals(
+      sensitivePaths(model.resources["${resourceName}"].schema).sort(),
+      ${JSON.stringify(sorted)},
+    );
+    const { url, server } = startMockDdServer({
+      "${pathPattern}": { body: ${JSON.stringify(responseBody)} },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      await ${execCall(method.name, JSON.stringify(args))};
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "${resourceName}");
+      const data = structuredClone(resources[0].data) as Record<string, unknown>;
+      for (const path of ${JSON.stringify(sorted)}) {
+        const parts = path.split(".");
+        let cur: Record<string, unknown> = data;
+        for (const part of parts.slice(0, -1)) {
+          cur = cur[part] as Record<string, unknown>;
+        }
+        const leaf = parts[parts.length - 1];
+        assertEquals(cur[leaf], "${secret}");
+        cur[leaf] = "\${{ vault.get('vault', 'key') }}";
+      }
+      assertEquals(JSON.stringify(data).includes("${secret}"), false);
     } finally {
       uninstall();
       await server.shutdown();

@@ -98,9 +98,11 @@ export const PROVIDERS: ProviderDefinition[] = [
         "cloudwatch:GetMetricData",
       ],
       authNotes:
-        "Uses the AWS credential chain (profiles, SSO, environment variables). " +
-        "Configure a profile whose assumed role grants the above CloudWatch " +
-        "read-only permissions. A ReadOnlyAccess managed policy covers both.",
+        "Uses the AWS SDK default credential chain. Sign in with an SSO " +
+        "named profile (aws sso login --profile <name>) and list it in " +
+        "profiles, or run with an attached IAM role. The role needs the " +
+        "above CloudWatch read-only permissions; a ReadOnlyAccess managed " +
+        "policy covers both.",
     },
     fields: {
       inputTokens: "inputTokens",
@@ -125,15 +127,16 @@ export const PROVIDERS: ProviderDefinition[] = [
     setup: {
       command: `swamp model create @webframp/gcp/vertex-usage vertex-usage \\
   --global-arg 'projects=["my-project"]' \\
-  --global-arg 'serviceAccountJson=<contents of service-account.json>'`,
+  --global-arg 'serviceAccountJson=\${{ vault.get("gcp", "SA_KEY") }}'`,
       permissions: [
         "monitoring.timeSeries.list",
       ],
       authNotes:
         "Uses a GCP service account JSON key (signed JWT exchanged for an access token). " +
-        "Pass the JSON key contents as the serviceAccountJson global arg, or set " +
-        "GOOGLE_APPLICATION_CREDENTIALS to the key file path. The service account " +
-        "needs only the Monitoring Viewer role (roles/monitoring.viewer) on each project.",
+        "Store the key in a vault (swamp vault put gcp SA_KEY < key.json, then " +
+        "delete the file) and wire serviceAccountJson with vault.get as shown; " +
+        "never pass the literal JSON. The service account needs only the " +
+        "Monitoring Viewer role (roles/monitoring.viewer) on each project.",
     },
     fields: {
       inputTokens: "inputTokens",
@@ -161,13 +164,15 @@ export const PROVIDERS: ProviderDefinition[] = [
   --global-arg 'subscriptions=["<subscription-uuid>"]' \\
   --global-arg 'tenantId=<tenant-uuid>' \\
   --global-arg 'clientId=<app-registration-uuid>' \\
-  --global-arg 'clientSecret=<secret-value>'`,
+  --global-arg 'clientSecret=\${{ vault.get("azure", "CLIENT_SECRET") }}'`,
       permissions: [
         "Microsoft.CognitiveServices/accounts/read",
         "Microsoft.Insights/metrics/read",
       ],
       authNotes:
         "Uses Azure AD client credentials flow (tenant + app registration + secret). " +
+        "Store the client secret in a vault (swamp vault put azure CLIENT_SECRET) " +
+        "and wire clientSecret with vault.get as shown; never pass the literal value. " +
         "Assign the Reader role on each target subscription. The app registration " +
         "needs no API permissions beyond ARM Reader \u2014 metrics and resource " +
         "discovery use the same token.",
@@ -195,13 +200,15 @@ export const PROVIDERS: ProviderDefinition[] = [
     setup: {
       command:
         `swamp model create @webframp/anthropic/analytics claude-analytics \\
-  --global-arg 'analyticsKey=<vault-reference>'`,
+  --global-arg 'analyticsKey=\${{ vault.get("anthropic", "ANALYTICS_KEY") }}'`,
       permissions: [
         "read:analytics",
       ],
       authNotes:
         "Uses an Enterprise Analytics API key (scope read:analytics) created " +
         "by the primary owner in claude.ai — Org settings → API access. " +
+        "Store it in a vault (swamp vault put anthropic ANALYTICS_KEY) and " +
+        "wire analyticsKey with vault.get as shown. " +
         "No cloud IAM role required.",
     },
     fields: {
@@ -478,7 +485,7 @@ function buildSetup(
 /** Unified AI usage model. */
 export const model = {
   type: "@webframp/ai-usage",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -567,6 +574,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — provider setup hints now wire secrets with vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

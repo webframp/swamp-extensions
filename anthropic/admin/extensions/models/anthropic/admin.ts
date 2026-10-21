@@ -3,7 +3,7 @@
  *
  * Observes members, custom roles, and RBAC groups, and changes them: adds
  * members to a group and switches members between the `user` and `managed`
- * ("Custom") organization roles. Requires an Admin API key (sk-ant-api01-...)
+ * ("Custom") organization roles. Requires an Admin API key
  * created by the primary owner in claude.ai → Organization settings → API with
  * the read:members, write:members, read:rbac_groups and write:rbac_groups
  * scopes, for all linked organizations.
@@ -33,7 +33,7 @@ const ASSIGNABLE_ROLES = ["user", "managed"] as const;
 
 const GlobalArgsSchema = z.object({
   adminKey: z.string().min(1).meta({ sensitive: true }).describe(
-    "Admin API key (sk-ant-api01-...) from claude.ai → Organization settings → API (use vault reference)",
+    'Admin API key from claude.ai → Organization settings → API. Supply it as ${{ vault.get("anthropic", "ADMIN_KEY") }}; never pass the literal key',
   ),
   requestsPerMinute: z.number().int().min(1).max(100).optional().describe(
     "Client-side pacing for Admin API calls. The API allows 100/min per organization, shared by every caller; default 80 leaves headroom.",
@@ -743,9 +743,16 @@ const GROUP_RECHECK_EVERY = 100;
 /** Claude Enterprise Admin API — members, custom roles, and RBAC groups. */
 export const model = {
   type: "@webframp/anthropic/admin",
-  version: "2026.10.20.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — adminKey description drops the token-shaped prefix and directs the key through vault.get",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     members: {
@@ -1201,6 +1208,12 @@ export const model = {
                 aborted = `Could not re-read covering groups: ${
                   String(err).slice(0, MAX_ERROR_CHARS)
                 }`;
+                break;
+              }
+              // A cancel that lands during a re-read which still completes
+              // must stop the run before the next write.
+              if (ctx.signal?.aborted) {
+                aborted = "Cancelled";
                 break;
               }
             }

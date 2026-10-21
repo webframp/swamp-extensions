@@ -1,14 +1,11 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README, the `apiToken` description and the missing-key error
+now direct you to store the fal.ai API key in a vault
+(`swamp vault put falai API_KEY`) and wire it with
+`--global-arg 'apiToken=${{ vault.get("falai", "API_KEY") }}'`. The README
+previously showed `--global-arg apiToken=FAL_API_KEY`, which invited passing the
+key as a literal. The `FAL_KEY` environment variable is still read as a
+fallback, but it is not redacted and is not recommended.
 
-**Changed:** Singleton get and action methods now write their data under
-`estimate_pricing-current` instead of `latest`. Anything that read
-`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
-new name.
-
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+No method behavior changed. Stored resources need no migration.

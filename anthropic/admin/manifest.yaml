@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/anthropic/admin"
 license: Apache-2.0
-version: "2026.10.20.1"
+version: "2026.10.21.1"
 description: |
   Manage the people in a Claude Enterprise organization through the Admin API
   user-management endpoints: read members, custom roles, and RBAC groups with
@@ -10,7 +10,7 @@ description: |
 
   ## Authentication
 
-  Requires an Admin API key (`sk-ant-api01-...`) created by the primary owner
+  Requires an Admin API key created by the primary owner
   in claude.ai → Organization settings → API, for all linked organizations,
   with the scopes `read:members`, `write:members`, `read:rbac_groups`, and
   `write:rbac_groups`. Store it in a swamp vault.
@@ -19,6 +19,8 @@ description: |
 
   ```bash
   swamp extension pull @webframp/anthropic/admin
+  swamp vault create local_encryption anthropic   # once, if you have no vault yet
+  swamp vault put anthropic ADMIN_KEY             # prompts; never pass the value
   swamp model create @webframp/anthropic/admin claude-admin \
     --global-arg 'adminKey=${{ vault.get("anthropic", "ADMIN_KEY") }}'
 

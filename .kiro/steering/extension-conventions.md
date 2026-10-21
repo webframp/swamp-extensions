@@ -133,6 +133,18 @@ keep the `no-import-prefix` lint exclude (it exists to allow inline prefixes).
 Code generators and scaffold templates must emit the same inline pinned
 specifier.
 
+### 2c. Secrets come from a vault (blocking)
+
+Every secret reaches an extension as a `${{ vault.get("<vault>", "<KEY>") }}`
+expression, stored with `swamp vault put <vault> <KEY>` (prompted or piped,
+never on the command line). Docs, manifest Quick Starts, describe strings,
+error messages, and codegen templates must not show a literal or placeholder
+secret, `export TOKEN=…`, a workflow `--input` carrying a secret, a literal
+token in `.swamp.yaml`, or invalid reference syntax (`vault://`, `<vault:…>`,
+`{{ vault … }}`). Secret args and secret fields that APIs return are marked
+`.meta({ sensitive: true })`. See "Secrets Come From a Vault (HARD RULE)" in
+the root `CLAUDE.md` for the full rules and the spot-check greps.
+
 ### 3. ci-discover compatibility
 
 The manifest `name` field MUST use double quotes (not single quotes, not

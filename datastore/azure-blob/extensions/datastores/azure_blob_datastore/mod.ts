@@ -44,15 +44,19 @@ const ACCOUNT_NAME_SCHEMA = z.string().min(3).max(24).regex(
 const AuthSchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("connectionString"),
-    connectionString: z.string().min(1).describe(
-      "Azure Storage connection string (AccountName=...;AccountKey=...;EndpointSuffix=...)",
+    connectionString: z.string().min(1).meta({ sensitive: true }).describe(
+      "Azure Storage connection string (it embeds the account key). Supply " +
+        'it with "${{ vault.get(azure, STORAGE_CONNECTION_STRING) }}"; never ' +
+        "put the literal value in .swamp.yaml or SWAMP_DATASTORE.",
     ),
   }),
   z.object({
     mode: z.literal("sharedKey"),
     accountName: ACCOUNT_NAME_SCHEMA,
     accountKey: z.string().min(1).meta({ sensitive: true }).describe(
-      "Base64-encoded storage account key",
+      "Base64-encoded storage account key. Supply it with " +
+        '"${{ vault.get(azure, STORAGE_ACCOUNT_KEY) }}"; never put the ' +
+        "literal value in .swamp.yaml or SWAMP_DATASTORE.",
     ),
     endpointSuffix: z.string().default("core.windows.net"),
   }),
@@ -61,7 +65,11 @@ const AuthSchema = z.discriminatedUnion("mode", [
     accountName: ACCOUNT_NAME_SCHEMA,
     tenantId: z.string().uuid(),
     clientId: z.string().uuid(),
-    clientSecret: z.string().min(1).meta({ sensitive: true }),
+    clientSecret: z.string().min(1).meta({ sensitive: true }).describe(
+      "Azure AD client secret. Supply it with " +
+        '"${{ vault.get(azure, CLIENT_SECRET) }}"; never put the literal ' +
+        "value in .swamp.yaml or SWAMP_DATASTORE.",
+    ),
     endpointSuffix: z.string().default("core.windows.net"),
   }),
 ]);
@@ -119,13 +127,18 @@ function resolveAuth(parsed: BlobConfig): BlobAuth {
  * distributed locking (the lease ID doubles as the fencing-token nonce) and
  * ETag-conditional writes on a shard-first path index.
  *
+ * The connection string, account key, or client secret is always read from a
+ * swamp vault through a `vault.get` expression, never written literally.
+ *
  * @example
  * ```yaml
  * # .swamp.yaml
  * datastore:
  *   type: "@webframp/azure-blob-datastore"
  *   config:
- *     auth: { mode: "connectionString", connectionString: "AccountName=...;AccountKey=...;" }
+ *     auth:
+ *       mode: "connectionString"
+ *       connectionString: "${{ vault.get(azure, STORAGE_CONNECTION_STRING) }}"
  *     container: "swamp-datastore"
  * ```
  */

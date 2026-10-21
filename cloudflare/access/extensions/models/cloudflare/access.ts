@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+  stripSensitive,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/access";
 
@@ -18,7 +24,7 @@ const EXTENSION_NAME = "@webframp/cloudflare/access";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+    'Cloudflare API token. Wire it with ${{ vault.get("cloudflare", "API_TOKEN") }}; never pass the literal token. The CLOUDFLARE_API_TOKEN environment variable is read as a fallback, but it is not redacted and is not recommended.',
   ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
@@ -2061,1001 +2067,63 @@ const ListAccessIdentityProvidersSchema = z.object({
   ),
 });
 
-const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.union([
-  z.object({
-    config: z.object({}).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      attributes: z.array(z.string()).optional(),
-      email_attribute_name: z.string().optional(),
-      enable_encryption: z.boolean().optional().default(false),
-      header_attributes: z.array(z.object({
-        attribute_name: z.string().optional(),
-        header_name: z.string().optional(),
-      })).optional(),
-      idp_public_certs: z.array(z.string()).optional(),
-      issuer_url: z.string().optional(),
-      sign_request: z.boolean().optional().default(false),
-      sso_target_url: z.string().optional(),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      redirect_url: z.string().optional(),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum(["onetimepin"]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      redirect_url: z.string().optional(),
-      restrict_to_account_members: z.boolean().optional().default(false),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum(["cloudflare"]).optional(),
-  }),
-]);
+const AccessIdentityProvidersAddAnAccessIdentityProviderSchema = z.object({
+  config: z.object({
+    client_secret: z.string().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  read_only: z.boolean().optional().describe(
+    "Indicates that the identity provider is immutable and cannot be updated or deleted via the API.",
+  ),
+  saml_certificate_set: z.unknown().optional().describe(
+    "The SAML encryption certificate set details, including current and previous certificates. Only pr...",
+  ),
+  saml_certificate_set_id: z.string().optional().describe(
+    "The UID of the SAML encryption certificate set assigned to this Identity Provider. Only present f...",
+  ),
+  scim_config: z.object({
+    enabled: z.boolean().optional().default(false),
+    identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+      .optional().default("no_action"),
+    scim_base_url: z.string().optional(),
+    seat_deprovision: z.boolean().optional().default(false),
+    secret: z.string().optional().meta({ sensitive: true }),
+    user_deprovision: z.boolean().optional().default(false),
+  }).optional().describe(
+    "The configuration settings for enabling a System for Cross-Domain Identity Management (SCIM) with...",
+  ),
+  type: z.unknown().optional(),
+}).passthrough();
 
-const GetAnAccessIdentityProviderSchema = z.union([
-  z.object({
-    config: z.object({}).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      attributes: z.array(z.string()).optional(),
-      email_attribute_name: z.string().optional(),
-      enable_encryption: z.boolean().optional().default(false),
-      header_attributes: z.array(z.object({
-        attribute_name: z.string().optional(),
-        header_name: z.string().optional(),
-      })).optional(),
-      idp_public_certs: z.array(z.string()).optional(),
-      issuer_url: z.string().optional(),
-      sign_request: z.boolean().optional().default(false),
-      sso_target_url: z.string().optional(),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.unknown().optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum([
-      "onetimepin",
-      "azureAD",
-      "saml",
-      "centrify",
-      "facebook",
-      "github",
-      "google-apps",
-      "google",
-      "linkedin",
-      "oidc",
-      "okta",
-      "onelogin",
-      "pingone",
-      "yandex",
-      "cloudflare",
-    ]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      redirect_url: z.string().optional(),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum(["onetimepin"]).optional(),
-  }),
-  z.object({
-    config: z.object({
-      redirect_url: z.string().optional(),
-      restrict_to_account_members: z.boolean().optional().default(false),
-    }).optional(),
-    id: z.unknown().optional(),
-    name: z.unknown().optional(),
-    read_only: z.boolean().optional(),
-    saml_certificate_set: z.unknown().optional(),
-    saml_certificate_set_id: z.string().optional(),
-    scim_config: z.object({
-      enabled: z.boolean().optional().default(false),
-      identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
-        .optional().default("no_action"),
-      scim_base_url: z.string().optional(),
-      seat_deprovision: z.boolean().optional().default(false),
-      secret: z.string().optional(),
-      user_deprovision: z.boolean().optional().default(false),
-    }).optional(),
-    type: z.enum(["cloudflare"]).optional(),
-  }),
-]);
+const GetAnAccessIdentityProviderSchema = z.object({
+  config: z.object({
+    client_secret: z.string().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  id: z.unknown().optional(),
+  name: z.unknown().optional(),
+  read_only: z.boolean().optional().describe(
+    "Indicates that the identity provider is immutable and cannot be updated or deleted via the API.",
+  ),
+  saml_certificate_set: z.unknown().optional().describe(
+    "The SAML encryption certificate set details, including current and previous certificates. Only pr...",
+  ),
+  saml_certificate_set_id: z.string().optional().describe(
+    "The UID of the SAML encryption certificate set assigned to this Identity Provider. Only present f...",
+  ),
+  scim_config: z.object({
+    enabled: z.boolean().optional().default(false),
+    identity_update_behavior: z.enum(["automatic", "reauth", "no_action"])
+      .optional().default("no_action"),
+    scim_base_url: z.string().optional(),
+    seat_deprovision: z.boolean().optional().default(false),
+    secret: z.string().optional().meta({ sensitive: true }),
+    user_deprovision: z.boolean().optional().default(false),
+  }).optional().describe(
+    "The configuration settings for enabling a System for Cross-Domain Identity Management (SCIM) with...",
+  ),
+  type: z.unknown().optional(),
+}).passthrough();
 
 const CreateSamlCertificateForIdentityProviderSchema = z.object({
   created_at: z.string().optional().describe(
@@ -3435,7 +2503,7 @@ const ListServiceTokensSchema = z.object({
 
 const CreateAServiceTokenSchema = z.object({
   client_id: z.unknown().optional(),
-  client_secret: z.unknown().optional(),
+  client_secret: z.unknown().optional().meta({ sensitive: true }),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
   id: z.string().optional().describe("The ID of the service token."),
@@ -3456,7 +2524,7 @@ const AccessServiceTokensRefreshAServiceTokenSchema = z.object({
 
 const CreateAccessServiceTokensRotateAServiceTokenSchema = z.object({
   client_id: z.unknown().optional(),
-  client_secret: z.unknown().optional(),
+  client_secret: z.unknown().optional().meta({ sensitive: true }),
   created_at: z.unknown().optional(),
   duration: z.unknown().optional(),
   id: z.string().optional().describe("The ID of the service token."),
@@ -3660,7 +2728,7 @@ const GetLastSeenIdentitySchema = z.object({
 /** Cloudflare Access (Zero Trust) — applications, policies, identity providers, certificates */
 export const model = {
   type: "@webframp/cloudflare/access",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -3721,6 +2789,12 @@ export const model = {
     },
     {
       toVersion: "2026.10.14.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -4242,8 +3316,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource("portals", id, result);
         context.logger.info("Created portals {id}", { id });
@@ -4454,7 +3535,9 @@ export const model = {
     create_servers: {
       description: "Create a new MCP Server",
       arguments: z.object({
-        auth_credentials: z.string().optional(),
+        auth_credentials: z.string().optional().describe(
+          "Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
         auth_type: z.enum(["oauth", "bearer", "unauthenticated"]),
         description: z.string().max(512).nullable().optional(),
         hostname: z.string(),
@@ -4507,8 +3590,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>(["auth_credentials"]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource("servers", id, result);
         context.logger.info("Created servers {id}", { id });
@@ -4554,7 +3644,9 @@ export const model = {
       description: "Update a MCP Server",
       arguments: z.object({
         id: z.string(),
-        auth_credentials: z.string().optional(),
+        auth_credentials: z.string().optional().describe(
+          "Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
         description: z.string().max(512).nullable().optional(),
         is_shared_oauth_callback_enabled: z.boolean().optional().describe(
           "When true, the gateway worker uses the shared Cloudflare-owned OAuth callback...",
@@ -4732,11 +3824,58 @@ export const model = {
           );
         }
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const storedItems = stripSensitive(results, [[
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "password", "when": ["scheme", "httpbasic"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "client_secret", "when": ["scheme", "oauth2"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "client_secret", "when": ["scheme", "access_service_token"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "password", "when": ["scheme", "httpbasic"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "oauth2"] },
+        ], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "access_service_token"] },
+        ], [{ "each": true }, { "k": "saas_app" }, { "k": "client_secret" }]]);
         const handle = await context.writeResource(
           "access_applications",
           "main",
           {
-            items: results,
+            items: storedItems,
             truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
@@ -4776,10 +3915,42 @@ export const model = {
           args,
         );
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const stored = stripSensitive(result ?? {}, [[{ "k": "scim_config" }, {
+          "k": "authentication",
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "oauth2"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "access_service_token"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "each": true,
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "oauth2"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "access_service_token"] },
+        ], [{ "k": "saas_app" }, { "k": "client_secret" }]]);
         const handle = await context.writeResource(
           "access_applications_add_an_application",
           "access_applications_add_an_application-current",
-          result ?? {},
+          stored,
         );
         context.logger.info(
           "Executed access_applications_add_an_application",
@@ -4874,10 +4045,42 @@ export const model = {
           `/accounts/${accountId}/access/apps/${args.app_id}`,
         );
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const stored = stripSensitive(result, [[{ "k": "scim_config" }, {
+          "k": "authentication",
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "oauth2"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "access_service_token"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "each": true,
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "oauth2"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "access_service_token"] },
+        ], [{ "k": "saas_app" }, { "k": "client_secret" }]]);
         const handle = await context.writeResource(
           "an_access_application",
           sanitizeInstanceName(String(args.app_id)),
-          result,
+          stored,
         );
         context.logger.info("Fetched an_access_application", {});
         return { dataHandles: [handle] };
@@ -4917,10 +4120,42 @@ export const model = {
           body,
         );
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const stored = stripSensitive(result, [[{ "k": "scim_config" }, {
+          "k": "authentication",
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "oauth2"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "k": "client_secret",
+          "when": ["scheme", "access_service_token"],
+        }], [{ "k": "scim_config" }, { "k": "authentication" }, {
+          "each": true,
+        }, { "k": "password", "when": ["scheme", "httpbasic"] }], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "token", "when": ["scheme", "oauthbearertoken"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "oauth2"] },
+        ], [
+          { "k": "scim_config" },
+          { "k": "authentication" },
+          { "each": true },
+          { "k": "client_secret", "when": ["scheme", "access_service_token"] },
+        ], [{ "k": "saas_app" }, { "k": "client_secret" }]]);
         const handle = await context.writeResource(
           "an_access_application",
           sanitizeInstanceName(String(args.app_id)),
-          result,
+          stored,
         );
         context.logger.info("Updated an_access_application", {});
         return { dataHandles: [handle] };
@@ -5020,7 +4255,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_a_short_lived_certificate_ca",
+          "a_short_lived_certificate_ca",
           "create_a_short_lived_certificate_ca-current",
           result ?? {},
         );
@@ -5160,8 +4395,9 @@ export const model = {
           body,
         );
 
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? String(args.app_id)),
         );
         const handle = await context.writeResource(
           "an_access_policy",
@@ -5600,8 +4836,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "access_mtls_authentication_add_an_mtls_certificate",
@@ -5918,8 +5161,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource("a_custom_page", id, result);
         context.logger.info("Created a_custom_page {id}", { id });
@@ -6254,8 +5510,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "an_access_group",
@@ -6423,11 +5686,26 @@ export const model = {
           );
         }
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const storedItems = stripSensitive(results, [[{ "each": true }, {
+          "k": "config",
+        }, { "k": "client_secret" }], [
+          { "each": true },
+          { "k": "scim_config" },
+          { "k": "secret" },
+        ], [{ "each": true }, {
+          "k": "scim_config",
+          "when": ["type", "onetimepin"],
+        }, { "k": "secret" }], [{ "each": true }, {
+          "k": "scim_config",
+          "when": ["type", "cloudflare"],
+        }, { "k": "secret" }]]);
         const handle = await context.writeResource(
           "access_identity_providers",
           "main",
           {
-            items: results,
+            items: storedItems,
             truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
@@ -6618,7 +5896,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_saml_certificate_for_identity_provider",
+          "saml_certificate_for_identity_provider",
           "create_saml_certificate_for_identity_provider-current",
           result ?? {},
         );
@@ -6799,8 +6077,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource("create", id, result);
         context.logger.info("Created create {id}", { id });
@@ -7242,8 +6527,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "your_zero_trust_organization",
@@ -7442,8 +6734,14 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          await shortHash(JSON.stringify(requestKey)),
         );
         const handle = await context.writeResource(
           "zero_trust_organization_revoke_all_access_tokens_for_a_user",
@@ -7551,8 +6849,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "an_access_reusable_policy",
@@ -7707,8 +7012,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "access_policy_tests",
@@ -8085,8 +7397,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource(
           "a_service_token",
@@ -8288,8 +7607,9 @@ export const model = {
           body,
         );
 
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? String(args.service_token_id)),
         );
         const handle = await context.writeResource(
           "access_service_tokens_rotate_a_service_token",
@@ -8387,8 +7707,15 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? await shortHash(JSON.stringify(requestKey))),
         );
         const handle = await context.writeResource("tag", id, result);
         context.logger.info("Created tag {id}", { id });
@@ -8596,8 +7923,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource("user", id, result);
         context.logger.info("Created user {id}", { id });

@@ -21,7 +21,7 @@ const EXTENSION_NAME = "@webframp/cloudflare";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().min(1).meta({ sensitive: true }).describe(
-    "Cloudflare API token with Cache Purge permissions",
+    'Cloudflare API token with Cache Purge permissions. Wire it with ${{ vault.get("cloudflare", "API_TOKEN") }}; never pass the literal token.',
   ),
   zoneId: z.string().min(1).describe("Zone ID to manage cache for"),
 });
@@ -131,7 +131,7 @@ async function fetchCacheSettings(
 /** Cloudflare Cache model definition with methods for cache purge, settings management, and analytics. */
 export const model = {
   type: "@webframp/cloudflare/cache",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -201,6 +201,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — apiToken description leads with vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

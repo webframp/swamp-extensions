@@ -73,8 +73,14 @@ To find what swamp does not manage in a region and observe what it should:
 
 ```bash
 swamp model create @webframp/aws/adopt acct --global-arg region=us-east-1
+
+# Judgement runs on a @swamp/typesafe-ai model (triage_batch comes from
+# @webframp/typesafe-batch). Store the TypeSafe API key in a vault; never pass
+# the literal key.
+swamp vault create local_encryption typesafe   # once, if you have no vault yet
+swamp vault put typesafe API_KEY               # prompts; the value never touches shell history
 swamp model create @swamp/typesafe-ai jev \
-  --global-arg 'apiKey=${{ vault.get("secrets", "TYPESAFE_API_KEY") }}'
+  --global-arg 'apiKey=${{ vault.get("typesafe", "API_KEY") }}'
 
 swamp workflow run @webframp/adopt-find-unmanaged --input modelName=acct
 swamp report get @webframp/adopt-decision-report --model acct --markdown

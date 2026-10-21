@@ -1,15 +1,16 @@
 manifestVersion: 1
 name: "@webframp/aws/pricing"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   AWS Pricing API model for looking up service costs.
 
   ## Authentication
 
-  Uses the default AWS credential chain. The Pricing API is public data
+  Uses the AWS SDK default credential chain. The Pricing API is public data
   and doesn't require special IAM permissions, but does require valid
-  AWS credentials.
+  AWS credentials: use AWS SSO or a named profile
+  (`--global-arg profile=<name>`), or an attached IAM role.
 
   ## Regions
 

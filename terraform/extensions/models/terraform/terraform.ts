@@ -207,6 +207,37 @@ function flattenResources(
   return results;
 }
 
+/** Placeholder written in place of any attribute Terraform marks sensitive. */
+export const SENSITIVE_MASK = "***SENSITIVE***";
+
+/**
+ * Mask every attribute that Terraform marks sensitive.
+ *
+ * `sensitive_values` in `terraform show -json` mirrors the shape of `values`:
+ * objects map to objects, lists to lists, and a leaf is `true` when that
+ * attribute (or the whole nested block) is sensitive. Attributes absent from
+ * the mirror are not sensitive and pass through unchanged.
+ */
+export function redactSensitiveValues(value: unknown, mask: unknown): unknown {
+  if (mask === true) return SENSITIVE_MASK;
+  if (Array.isArray(value)) {
+    if (!Array.isArray(mask)) return value;
+    return value.map((item, i) => redactSensitiveValues(item, mask[i]));
+  }
+  if (
+    value !== null && typeof value === "object" &&
+    mask !== null && typeof mask === "object" && !Array.isArray(mask)
+  ) {
+    const maskObj = mask as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = k in maskObj ? redactSensitiveValues(v, maskObj[k]) : v;
+    }
+    return out;
+  }
+  return value;
+}
+
 /** Build workspace env — TF_WORKSPACE selects workspace without requiring `terraform workspace select`. */
 function workspaceEnv(workspace: string): Record<string, string> | undefined {
   if (workspace === "default") return undefined;
@@ -230,6 +261,7 @@ type MethodContext = {
   ) => Promise<{ name: string }>;
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
+    warn: (msg: string, props: Record<string, unknown>) => void;
   };
 };
 
@@ -242,12 +274,13 @@ type MethodContext = {
  *
  * Provides three methods:
  * - `list_resources` -- enumerate all managed resources in state
- * - `read_state` -- write full resource attributes keyed by address
+ * - `read_state` -- write resource attributes keyed by address (redacting
+ *   attributes Terraform marks sensitive)
  * - `get_outputs` -- extract Terraform outputs (redacting sensitive values)
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
 
   upgrades: [
     {
@@ -326,6 +359,12 @@ export const model = {
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — read_state now masks sensitive attributes in values",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: GlobalArgsSchema,
@@ -338,7 +377,8 @@ export const model = {
       garbageCollection: 3,
     },
     tf_resource: {
-      description: "Individual Terraform resource with full attribute values",
+      description:
+        "Individual Terraform resource with its attribute values (sensitive attributes masked)",
       schema: TfResourceSchema,
       lifetime: "1h" as const,
       garbageCollection: 3,
@@ -419,7 +459,7 @@ export const model = {
 
     read_state: {
       description:
-        "Read full Terraform state — writes one resource per Terraform resource keyed by address",
+        "Read full Terraform state — writes one resource per Terraform resource keyed by address, masking sensitive attributes",
       arguments: z.object({}),
       execute: async (
         _args: Record<string, never>,
@@ -442,8 +482,14 @@ export const model = {
 
         const flattened = flattenResources(state.values.root_module);
         const handles = [];
+        // Terraform before 0.15 does not emit sensitive_values, so nothing in
+        // those resources can be masked. Say so rather than imply redaction.
+        const unmasked: string[] = [];
 
         for (const { resource: r } of flattened) {
+          if (r.sensitive_values === undefined || r.sensitive_values === null) {
+            unmasked.push(r.address);
+          }
           const handle = await context.writeResource(
             "tf_resource",
             r.address,
@@ -453,7 +499,10 @@ export const model = {
               type: r.type,
               name: r.name,
               providerName: r.provider_name,
-              values: r.values,
+              values: redactSensitiveValues(
+                r.values,
+                r.sensitive_values ?? {},
+              ) as Record<string, unknown>,
               dependsOn: r.depends_on ?? [],
               durationMs: Date.now() - startMs,
               collectedBy: EXTENSION_NAME,
@@ -461,6 +510,13 @@ export const model = {
             },
           );
           handles.push(handle);
+        }
+
+        if (unmasked.length > 0) {
+          context.logger.warn(
+            "{count} resource(s) have no sensitive_values in state (state written by Terraform older than 0.15?); their attributes were written unmasked: {addresses}",
+            { count: unmasked.length, addresses: unmasked.join(", ") },
+          );
         }
 
         context.logger.info("Wrote {count} resource(s) to state", {

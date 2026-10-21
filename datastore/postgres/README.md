@@ -16,21 +16,34 @@ Compatible with AWS RDS, Aurora, and Aurora Serverless v2.
 
 ## Configuration
 
+The connection string embeds the database password. Store it in a swamp vault
+and reference it from the datastore config with a `vault.get` expression; never
+write the literal URI into `.swamp.yaml` or `SWAMP_DATASTORE`. Any vault type
+works — `local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+Vault expressions are not supported with `managedConfig: true`.
+
+```bash
+swamp vault create local_encryption postgres   # once, if you have no vault yet
+swamp vault put postgres CONNECTION_STRING     # prompts for postgres://<user>:<password>@<host>:5432/swamp
+```
+
 ```yaml
 # .swamp.yaml
 datastore:
   type: "@webframp/postgres-datastore"
   config:
-    connectionString: "postgres://user:pass@your-host:5432/swamp"
+    connectionString: "${{ vault.get(postgres, CONNECTION_STRING) }}"
     schema: "swamp" # default: "swamp"
     ssl: "verify-ca" # default: "require"
     sslCaPath: "/path/to/rds-global-bundle.pem" # required when ssl=verify-ca
 ```
 
-Or via environment variable:
+Or via environment variable. The JSON carries the same vault expression, which
+swamp resolves at startup, so the password never sits in your environment:
 
 ```bash
-export SWAMP_DATASTORE='@webframp/postgres-datastore:{"connectionString":"postgres://user:pass@host:5432/db"}'
+export SWAMP_DATASTORE='@webframp/postgres-datastore:{"connectionString":"${{ vault.get(postgres, CONNECTION_STRING) }}"}'
 ```
 
 ## Required Schema
@@ -168,6 +181,8 @@ deno task lint
 deno task fmt
 deno task test
 
-# Integration tests (requires a real PostgreSQL instance)
-POSTGRES_TEST_URL="postgres://user:pass@localhost:5432/test" deno task test
+# Integration tests (requires a real PostgreSQL instance). Use a throwaway
+# local database whose credentials guard nothing else, e.g. a disposable
+# container; never point this at a shared or production database.
+POSTGRES_TEST_URL="postgres://test:test@localhost:5432/test" deno task test
 ```

@@ -1,8 +1,17 @@
 // Terraform model tests
 // SPDX-License-Identifier: Apache-2.0
 
-import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
-import { model, runTfCommand } from "./terraform.ts";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "jsr:@std/assert@1.0.19";
+import {
+  model,
+  redactSensitiveValues,
+  runTfCommand,
+  SENSITIVE_MASK,
+} from "./terraform.ts";
 
 // =============================================================================
 // Mock terraform show -json output
@@ -104,6 +113,7 @@ function createTestContext(globalArgs?: Record<string, string>) {
     data: unknown;
   }> = [];
   const logs: string[] = [];
+  const warnings: string[] = [];
 
   return {
     context: {
@@ -125,10 +135,14 @@ function createTestContext(globalArgs?: Record<string, string>) {
         info: (msg: string, _props: Record<string, unknown>) => {
           logs.push(msg);
         },
+        warn: (msg: string, _props: Record<string, unknown>) => {
+          warnings.push(msg);
+        },
       },
     },
     getWritten: () => written,
     getLogs: () => logs,
+    getWarnings: () => warnings,
   };
 }
 
@@ -323,12 +337,14 @@ Deno.test("list_resources: handles empty state gracefully", async () => {
 
 Deno.test("read_state: writes one resource per terraform resource", async () => {
   const restore = mockTfCommand(MOCK_STATE_WITH_RESOURCES);
-  const { context, getWritten } = createTestContext();
+  const { context, getWritten, getWarnings } = createTestContext();
   try {
     // deno-lint-ignore no-explicit-any
     await model.methods.read_state.execute({} as any, context as any);
     const written = getWritten();
     assertEquals(written.length, 3);
+    // Every resource carries sensitive_values, so no unmasked warning
+    assertEquals(getWarnings(), []);
     assertEquals(written[0].instanceName, "aws_vpc.main");
     assertEquals(written[0].resourceName, "tf_resource");
     // deno-lint-ignore no-explicit-any
@@ -370,6 +386,126 @@ Deno.test("read_state: preserves dependency information", async () => {
     // deno-lint-ignore no-explicit-any
     (Deno as any).Command = restore;
   }
+});
+
+const MOCK_STATE_WITH_SENSITIVE = {
+  format_version: "1.0",
+  terraform_version: "1.9.0",
+  values: {
+    root_module: {
+      resources: [
+        {
+          address: "aws_db_instance.main",
+          mode: "managed",
+          type: "aws_db_instance",
+          name: "main",
+          provider_name: "registry.terraform.io/hashicorp/aws",
+          schema_version: 2,
+          values: {
+            identifier: "main-db",
+            password: "db-plaintext-pw",
+            master_user_secret: [{ kms_key_id: "k1", secret_arn: "arn:1" }],
+            connection: { host: "db.local", auth_token: "conn-plaintext" },
+            tags: { Name: "db" },
+          },
+          sensitive_values: {
+            password: true,
+            master_user_secret: [{ secret_arn: true }],
+            connection: { auth_token: true },
+            tags: {},
+          },
+          depends_on: [],
+        },
+        {
+          address: "tls_private_key.k",
+          mode: "managed",
+          type: "tls_private_key",
+          name: "k",
+          provider_name: "registry.terraform.io/hashicorp/tls",
+          schema_version: 1,
+          values: {
+            algorithm: "RSA",
+            private_key_pem: { nested: "pem-plaintext" },
+          },
+          // A whole nested block marked sensitive
+          sensitive_values: { private_key_pem: true },
+          depends_on: [],
+        },
+        {
+          address: "null_resource.legacy",
+          mode: "managed",
+          type: "null_resource",
+          name: "legacy",
+          provider_name: "registry.terraform.io/hashicorp/null",
+          values: { id: "123" },
+          // sensitive_values omitted entirely
+          depends_on: [],
+        },
+      ],
+    },
+  },
+};
+
+Deno.test("read_state: masks attributes marked in sensitive_values", async () => {
+  const restore = mockTfCommand(MOCK_STATE_WITH_SENSITIVE);
+  const { context, getWritten, getWarnings } = createTestContext();
+  try {
+    // deno-lint-ignore no-explicit-any
+    await model.methods.read_state.execute({} as any, context as any);
+    const written = getWritten();
+    assertEquals(written.length, 3);
+    const serialized = JSON.stringify(written);
+    for (
+      const secret of [
+        "db-plaintext-pw",
+        "conn-plaintext",
+        "arn:1",
+        "pem-plaintext",
+      ]
+    ) {
+      assertEquals(serialized.includes(secret), false, `leaked ${secret}`);
+    }
+    // deno-lint-ignore no-explicit-any
+    const db = written[0].data as any;
+    assertEquals(db.values.identifier, "main-db");
+    assertEquals(db.values.password, SENSITIVE_MASK);
+    assertEquals(db.values.master_user_secret, [
+      { kms_key_id: "k1", secret_arn: SENSITIVE_MASK },
+    ]);
+    assertEquals(db.values.connection, {
+      host: "db.local",
+      auth_token: SENSITIVE_MASK,
+    });
+    assertEquals(db.values.tags, { Name: "db" });
+    // deno-lint-ignore no-explicit-any
+    const key = written[1].data as any;
+    assertEquals(key.values, {
+      algorithm: "RSA",
+      private_key_pem: SENSITIVE_MASK,
+    });
+    // deno-lint-ignore no-explicit-any
+    const legacy = written[2].data as any;
+    assertEquals(legacy.values, { id: "123" });
+    // The resource without sensitive_values is called out as unmasked
+    const warnings = getWarnings();
+    assertEquals(warnings.length, 1);
+    assertStringIncludes(warnings[0], "no sensitive_values");
+  } finally {
+    // deno-lint-ignore no-explicit-any
+    (Deno as any).Command = restore;
+  }
+});
+
+Deno.test("redactSensitiveValues: leaves values unchanged without a mask", () => {
+  const values = { a: 1, b: [1, 2], c: { d: null } };
+  assertEquals(redactSensitiveValues(values, {}), values);
+  assertEquals(redactSensitiveValues(values, undefined), values);
+  assertEquals(redactSensitiveValues(null, { a: true }), null);
+  assertEquals(redactSensitiveValues([1, 2], [false, true]), [
+    1,
+    SENSITIVE_MASK,
+  ]);
+  assertEquals(redactSensitiveValues("x", true), SENSITIVE_MASK);
 });
 
 // =============================================================================

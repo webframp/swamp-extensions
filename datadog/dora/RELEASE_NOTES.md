@@ -1,25 +1,13 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** The README now shows how to store the API key and application key
+in a `datadog` vault and wire them with `${{ vault.get("datadog", "API_KEY") }}`
+and `${{ vault.get("datadog", "APP_KEY") }}`. The previous example passed
+`DD_API_KEY` and `DD_APP_KEY` as literal global arguments, which swamp rejects
+for sensitive arguments.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The `apiKey` and `appKey` descriptions now say to supply them with
+a `vault.get` expression. Both were already marked sensitive.
 
-## 2026.10.07.1
-
-**Added:** `patch_dora_deployment_by_version` marks a deployment as failed by
-service, env, and version (`PATCH /api/v2/dora/deployments`), with a matching
-`patch_dora_deployment_by_version` resource.
-
-**Fixed:** The shared API helper no longer throws on a successful response with
-an empty body (such as 202 Accepted); it returns an empty result. Datadog
-answers the by-version patch with an empty 202, which the previous helper failed
-to parse. Paginated list requests tolerate an empty page body the same way. A
-body that is not valid JSON now fails with an error naming the HTTP method,
-path, and status, with a snippet of the body.
-
-**Changed:** The description of `patch_dora_deployment` now reads "Mark a
-deployment as failed by ID" (previously "Patch a deployment event"). Behavior is
-unchanged.
-
-**Upgrade note:** Additive changes only; existing stored resources remain valid
-and no migration is needed.
+**Upgrade note:** Documentation and argument descriptions only. Methods,
+arguments, resource schemas and stored data are unchanged.

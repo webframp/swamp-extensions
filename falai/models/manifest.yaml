@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/falai/models"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: "fal.ai Models — model catalog, pricing, analytics, usage, billing events, request search"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

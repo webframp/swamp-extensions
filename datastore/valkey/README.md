@@ -29,6 +29,21 @@ Or via environment variable:
 export SWAMP_DATASTORE='@webframp/valkey-datastore:{"url":"redis://localhost:6379"}'
 ```
 
+### Authentication
+
+When the server requires a password, store it in a swamp vault and reference it
+from the `password` field with a `vault.get` expression. Never write the literal
+password into `.swamp.yaml` or `SWAMP_DATASTORE`, and never embed it in the
+`url`. Any vault type works — `local_encryption`, or an extension such as
+`@webframp/pass`, `@webframp/gopass`, `@webframp/hashicorp-vault` or
+`@webframp/macos-keychain`. Vault expressions are not supported with
+`managedConfig: true`.
+
+```bash
+swamp vault create local_encryption valkey   # once, if you have no vault yet
+swamp vault put valkey PASSWORD              # prompts; the value never touches shell history
+```
+
 ### TLS (ElastiCache / MemoryDB)
 
 ```yaml
@@ -37,6 +52,14 @@ datastore:
   config:
     url: "rediss://your-cluster.cache.amazonaws.com:6379"
     tls: true
+    password: "${{ vault.get(valkey, PASSWORD) }}" # AUTH token, read from the vault
+```
+
+The same expression works inside `SWAMP_DATASTORE`, which swamp resolves at
+startup:
+
+```bash
+export SWAMP_DATASTORE='@webframp/valkey-datastore:{"url":"rediss://your-cluster.cache.amazonaws.com:6379","tls":true,"password":"${{ vault.get(valkey, PASSWORD) }}"}'
 ```
 
 With CA verification:
@@ -122,8 +145,9 @@ Three layers are instrumented:
 Lock contention retries appear as `retry` events on the acquire span, with
 `retry.attempt`, `retry.delay_ms`, and `retry.reason`.
 
-Blob values are file content and the connection URL embeds a password. Neither
-is recorded; span attributes carry only command names, key names, and counts.
+Blob values are file content, and the password (or a password embedded in the
+connection URL) is a secret. Neither is recorded; span attributes carry only
+command names, key names, and counts.
 
 ## Troubleshooting
 

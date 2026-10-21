@@ -1,14 +1,8 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README now shows the Snyk API token stored in a swamp vault
+(`swamp vault put snyk API_TOKEN`) and wired with
+`--global-arg 'apiToken=${{ vault.get("snyk", "API_TOKEN") }}'`, replacing the
+literal-token example. The `apiToken` argument description says the same.
 
-**Changed:** Singleton get and action methods now write their data under
-`list_assets-current` instead of `latest`. Anything that read
-`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
-new name.
-
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+Documentation only: nothing behavioral changed. This API returns no secrets.

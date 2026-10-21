@@ -7,9 +7,11 @@ dedicated convenience method.
 
 ## Authentication
 
-The extension uses the default AWS credential chain. The Pricing API serves
-public catalog data and does not require special IAM permissions, but valid AWS
-credentials must be present in the environment.
+The extension uses the AWS SDK default credential chain. The Pricing API serves
+public catalog data and does not require special IAM permissions, but the call
+must still be signed with valid AWS credentials. Supply them through AWS SSO or a named profile (`aws sso login --profile <name>`, then
+`--global-arg profile=<name>`), or an IAM role attached to where swamp runs (EC2
+instance profile, ECS task role). Avoid long-lived static access keys.
 
 The AWS Pricing API is available only in `us-east-1` and `ap-south-1`. Configure
 the model's `region` global argument accordingly.

@@ -627,7 +627,7 @@ type InventoryContext = {
  */
 export const model = {
   type: "@webframp/aws/inventory",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   upgrades: [
     {
       fromVersion: "2026.03.30.1",
@@ -743,6 +743,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — documentation recommends SSO, named profiles, or an attached IAM role for AWS credentials",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -169,6 +169,104 @@ function installFetchMock(mockUrl: string): () => void {
   };
 }
 
+interface ZodNode {
+  _zod: {
+    def: {
+      type: string;
+      innerType?: ZodNode;
+      shape?: Record<string, ZodNode>;
+    };
+  };
+  meta(): Record<string, unknown> | undefined;
+}
+
+const ZOD_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+/** True when the field, or any wrapper level of it, is marked sensitive. */
+function markedSensitive(node: ZodNode): boolean {
+  for (let n: ZodNode | undefined = node; n;) {
+    if (n.meta()?.sensitive === true) return true;
+    n = ZOD_WRAPPERS.has(n._zod.def.type) ? n._zod.def.innerType : undefined;
+  }
+  return false;
+}
+
+/**
+ * Paths swamp moves into a vault when it writes data with this schema. Like
+ * swamp, it walks object shapes only: not arrays, not unions.
+ */
+function vaultedPaths(schema: unknown, prefix = ""): string[] {
+  let node = schema as ZodNode;
+  while (ZOD_WRAPPERS.has(node._zod.def.type) && node._zod.def.innerType) {
+    node = node._zod.def.innerType;
+  }
+  if (node._zod.def.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(node._zod.def.shape ?? {})) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (markedSensitive(field)) out.push(path);
+    out.push(...vaultedPaths(field, path));
+  }
+  return out;
+}
+
+/**
+ * The written resource carries each secret, every one is marked sensitive on
+ * the resource schema, and after swamp's vault substitution no secret value
+ * is left in what it persists.
+ */
+function assertSecretsVaulted(
+  specName: string,
+  data: unknown,
+  fields: string[],
+): void {
+  const resources = model.resources as Record<string, { schema: unknown }>;
+  const paths = vaultedPaths(resources[specName].schema);
+  const written = data as Record<string, unknown>;
+  for (const field of fields) {
+    assertEquals(written[field], `fixture-${field}`);
+    assertEquals(
+      paths.includes(field),
+      true,
+      `${field} is not marked sensitive on ${specName}`,
+    );
+  }
+  const persisted = structuredClone(written);
+  for (const path of paths) {
+    // Swamp replaces each present, non-null value at the dot path.
+    const keys = path.split(".");
+    let parent: unknown = persisted;
+    for (const key of keys.slice(0, -1)) {
+      parent = parent !== null && typeof parent === "object"
+        ? (parent as Record<string, unknown>)[key]
+        : undefined;
+    }
+    const leaf = keys[keys.length - 1];
+    if (parent === null || typeof parent !== "object") continue;
+    const holder = parent as Record<string, unknown>;
+    if (holder[leaf] !== undefined && holder[leaf] !== null) {
+      holder[leaf] = "${{ vault.get('vault', 'key') }}";
+    }
+  }
+  const json = JSON.stringify(persisted);
+  for (const field of fields) {
+    assertEquals(json.includes(`fixture-${field}`), false);
+  }
+}
+
+/** Every secret argument of a method is marked sensitive. */
+function assertSecretArgs(methodName: string, paths: string[]): void {
+  const methods = model.methods as Record<string, { arguments: unknown }>;
+  const marked = vaultedPaths(methods[methodName].arguments);
+  for (const path of paths) {
+    assertEquals(
+      marked.includes(path),
+      true,
+      `argument ${path} of ${methodName} is not marked sensitive`,
+    );
+  }
+}
+
 Deno.test({
   name:
     "service-accounts model: get_many_group_service_account fetches and writes resource",
@@ -178,13 +276,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -250,6 +348,14 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(data.truncated, false);
+      const item = data.items[0] as Record<string, unknown>;
+      for (const field of ["access_token", "api_key", "client_secret"]) {
+        assertEquals(
+          (mockItem.attributes as Record<string, unknown>)[field],
+          `fixture-${field}`,
+        );
+        assertEquals(field in item, false, `${field} was written in plaintext`);
+      }
     } finally {
       uninstall();
       await server.shutdown();
@@ -266,13 +372,13 @@ Deno.test({
       "id": "new-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -351,6 +457,11 @@ Deno.test({
       assertEquals(resources[0].specName, "group_service_account");
       assertValidResource("group_service_account", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("group_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -367,13 +478,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -436,6 +547,11 @@ Deno.test({
       assertEquals(resources[0].name, "test-id-123");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
+      assertSecretsVaulted("one_group_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -452,13 +568,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -531,6 +647,11 @@ Deno.test({
       assertEquals(resources[0].specName, "group_service_account");
       assertValidResource("group_service_account", resources[0].data);
       assertEquals(resources[0].name, "test-id-123");
+      assertSecretsVaulted("group_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -608,13 +729,13 @@ Deno.test({
       "id": "new-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -656,7 +777,7 @@ Deno.test({
         "group_id": "test-id-123",
         "serviceaccount_id": "test-id-123",
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "service_account",
         },
       }, context);
@@ -675,7 +796,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "service_account",
         },
       });
@@ -685,6 +806,14 @@ Deno.test({
       assertEquals(resources[0].specName, "service_account_secret");
       assertValidResource("service_account_secret", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("service_account_secret", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
+      assertSecretArgs("update_service_account_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -701,13 +830,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -770,6 +899,14 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(data.truncated, false);
+      const item = data.items[0] as Record<string, unknown>;
+      for (const field of ["access_token", "api_key", "client_secret"]) {
+        assertEquals(
+          (mockItem.attributes as Record<string, unknown>)[field],
+          `fixture-${field}`,
+        );
+        assertEquals(field in item, false, `${field} was written in plaintext`);
+      }
     } finally {
       uninstall();
       await server.shutdown();
@@ -786,13 +923,13 @@ Deno.test({
       "id": "new-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -870,6 +1007,11 @@ Deno.test({
       assertEquals(resources[0].specName, "org_service_account");
       assertValidResource("org_service_account", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("org_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -886,13 +1028,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -952,6 +1094,11 @@ Deno.test({
       assertEquals(resources[0].name, "test-id-123");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
+      assertSecretsVaulted("one_org_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -968,13 +1115,13 @@ Deno.test({
       "id": "fixture-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -1046,6 +1193,11 @@ Deno.test({
       assertEquals(resources[0].specName, "org_service_account");
       assertValidResource("org_service_account", resources[0].data);
       assertEquals(resources[0].name, "test-id-123");
+      assertSecretsVaulted("org_service_account", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1119,13 +1271,13 @@ Deno.test({
       "id": "new-123",
       "type": "resource",
       "attributes": {
-        "access_token": "test-value",
+        "access_token": "fixture-access_token",
         "access_token_expires_at": "2025-08-16T00:00:00Z",
         "access_token_ttl_seconds": 1,
-        "api_key": "test-value",
+        "api_key": "fixture-api_key",
         "auth_type": "api_key",
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "created_at": "2025-08-16T00:00:00Z",
         "jwks_url": "test-value",
         "level": "Group",
@@ -1166,7 +1318,7 @@ Deno.test({
       >).update_org_service_account_secret.execute({
         "serviceaccount_id": "test-id-123",
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "service_account",
         },
       }, context);
@@ -1185,7 +1337,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "service_account",
         },
       });
@@ -1195,6 +1347,14 @@ Deno.test({
       assertEquals(resources[0].specName, "org_service_account_secret");
       assertValidResource("org_service_account_secret", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("org_service_account_secret", resources[0].data, [
+        "access_token",
+        "api_key",
+        "client_secret",
+      ]);
+      assertSecretArgs("update_org_service_account_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();

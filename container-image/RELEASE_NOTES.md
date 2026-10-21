@@ -1,12 +1,19 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry
-quality rubric scores a declared license separately from the bundled
-`LICENSE.md`.
+**Fixed:** The README logged in to ECR by exporting the password into a shell
+variable and passing `--input password="$TOKEN"`, which records the password in
+cleartext with the method run. It now passes
+`--input 'password=${{ vault.get("ecr", "PASSWORD") }}'`, which swamp resolves
+and redacts.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Added:** A "Registry credentials" README section: an ECR password kept fresh
+by a vault refresh hook
+(`swamp vault put … --refresh-from 'aws ecr
+get-login-password …'`), the ECR
+credential helper as a password-free alternative, and an interactive
+`swamp vault put` flow for GHCR, DockerHub and other registries.
 
-## 2026.09.18.1
+**Changed:** The `login` `password` argument description says to supply it with
+a `vault.get` expression.
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** Documentation only; no behavioral or schema changes.

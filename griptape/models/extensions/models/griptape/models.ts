@@ -22,7 +22,7 @@ const EXTENSION_NAME = "@webframp/griptape/models";
 
 const GlobalArgsSchema = z.object({
   apiKey: z.string().meta({ sensitive: true }).describe(
-    "Griptape Cloud API key; overrides the GT_CLOUD_API_KEY environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+    'Griptape Cloud API key. Store it in a swamp vault and wire it with a vault.get(...) expression, e.g. ${{ vault.get("griptape", "API_KEY") }}. The GT_CLOUD_API_KEY environment variable is read as a fallback, but it is not redacted and is not recommended.',
   ).optional(),
   baseUrl: z.string().describe(
     "Griptape Cloud API base URL; overrides the GT_CLOUD_BASE_URL environment variable and the built-in default.",
@@ -110,7 +110,7 @@ const CreateAuthConfigSchema = z.looseObject({
 /** Griptape Cloud Models — model configurations and provider auth configs */
 export const model = {
   type: "@webframp/griptape/models",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -140,6 +140,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

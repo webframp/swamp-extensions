@@ -2,6 +2,7 @@
  * Tests for the type mapper module.
  */
 
+import { ZOD_VERSION } from "../config.ts";
 import { assertEquals } from "@std/assert";
 import { schemaToZod, schemaVarName } from "./type_mapper.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
@@ -206,4 +207,85 @@ Deno.test("type_mapper: lenient applies at nested depths too", () => {
 Deno.test("type_mapper: schemaVarName converts snake_case to PascalCase+Schema", () => {
   assertEquals(schemaVarName("compute_instance"), "ComputeInstanceSchema");
   assertEquals(schemaVarName("asset"), "AssetSchema");
+});
+
+// ---------------------------------------------------------------------------
+// Sensitive fields
+// ---------------------------------------------------------------------------
+
+Deno.test("type_mapper: sensitiveFields marks only the named top-level fields, before optional", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      key_id: { type: "string" },
+      key_secret: { type: "string", description: "Secret" },
+      nested: {
+        type: "object",
+        properties: { key_secret: { type: "string" } },
+      },
+    },
+  };
+  assertEquals(
+    schemaToZod(schema, { lenient: true, sensitiveFields: ["key_secret"] }),
+    `z.object({
+  key_id: z.string().optional(),
+  key_secret: z.string().meta({ sensitive: true }).optional().describe("Secret"),
+  nested: z.object({
+    key_secret: z.string().optional(),
+  }).optional(),
+})`,
+  );
+});
+
+Deno.test("type_mapper: sensitiveFields keeps chained refinements after the marker", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      token: { type: ["string", "null"], minLength: 1 },
+      blob: { type: "object", properties: { a: { type: "string" } } },
+    },
+  };
+  const out = schemaToZod(schema, {
+    lenient: true,
+    sensitiveFields: ["token", "blob"],
+  });
+  assertEquals(
+    out.includes(
+      "token: z.string().min(1).meta({ sensitive: true }).nullable().optional(),",
+    ),
+    true,
+  );
+  assertEquals(out.includes("}).meta({ sensitive: true }).optional(),"), true);
+});
+
+Deno.test("pinned zod keeps metadata across a refinement in either order", async () => {
+  // The marker's position is a convention, not a requirement: pinned zod
+  // carries .meta() through .min() whichever comes first.
+  const { z } = await import(`npm:zod@${ZOD_VERSION}`);
+  assertEquals(
+    z.string().meta({ sensitive: true }).min(1).meta()?.sensitive,
+    true,
+  );
+  assertEquals(
+    z.string().min(1).meta({ sensitive: true }).meta()?.sensitive,
+    true,
+  );
+});
+
+Deno.test("type_mapper: sensitiveFields does not leak into array items or records", () => {
+  const item: SchemaObject = {
+    type: "object",
+    properties: { key: { type: "string" } },
+  };
+  assertEquals(
+    schemaToZod({ type: "array", items: item }, { sensitiveFields: ["key"] })
+      .includes("sensitive"),
+    false,
+  );
+  assertEquals(
+    schemaToZod({ type: "object", additionalProperties: item }, {
+      sensitiveFields: ["key"],
+    }).includes("sensitive"),
+    false,
+  );
 });

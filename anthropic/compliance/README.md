@@ -15,15 +15,16 @@ Captures versioned snapshots of:
 
 ## Authentication
 
-Requires a **Compliance Access Key** (`sk-ant-api01-...`) created by the primary
-owner in claude.ai → Org settings → API access.
+Requires a **Compliance Access Key** created by the primary owner in
+claude.ai → Org settings → API access.
 
 ## Quick start
 
 ```bash
 swamp extension pull @webframp/anthropic/compliance
 
-# Store key in vault
+# Store key in vault (prompts; the value never touches shell history)
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
 swamp vault put anthropic COMPLIANCE_KEY
 
 # Create model

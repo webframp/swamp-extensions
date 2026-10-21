@@ -174,6 +174,104 @@ function installFetchMock(mockUrl: string): () => void {
   };
 }
 
+interface ZodNode {
+  _zod: {
+    def: {
+      type: string;
+      innerType?: ZodNode;
+      shape?: Record<string, ZodNode>;
+    };
+  };
+  meta(): Record<string, unknown> | undefined;
+}
+
+const ZOD_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+/** True when the field, or any wrapper level of it, is marked sensitive. */
+function markedSensitive(node: ZodNode): boolean {
+  for (let n: ZodNode | undefined = node; n;) {
+    if (n.meta()?.sensitive === true) return true;
+    n = ZOD_WRAPPERS.has(n._zod.def.type) ? n._zod.def.innerType : undefined;
+  }
+  return false;
+}
+
+/**
+ * Paths swamp moves into a vault when it writes data with this schema. Like
+ * swamp, it walks object shapes only: not arrays, not unions.
+ */
+function vaultedPaths(schema: unknown, prefix = ""): string[] {
+  let node = schema as ZodNode;
+  while (ZOD_WRAPPERS.has(node._zod.def.type) && node._zod.def.innerType) {
+    node = node._zod.def.innerType;
+  }
+  if (node._zod.def.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(node._zod.def.shape ?? {})) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (markedSensitive(field)) out.push(path);
+    out.push(...vaultedPaths(field, path));
+  }
+  return out;
+}
+
+/**
+ * The written resource carries each secret, every one is marked sensitive on
+ * the resource schema, and after swamp's vault substitution no secret value
+ * is left in what it persists.
+ */
+function assertSecretsVaulted(
+  specName: string,
+  data: unknown,
+  fields: string[],
+): void {
+  const resources = model.resources as Record<string, { schema: unknown }>;
+  const paths = vaultedPaths(resources[specName].schema);
+  const written = data as Record<string, unknown>;
+  for (const field of fields) {
+    assertEquals(written[field], `fixture-${field}`);
+    assertEquals(
+      paths.includes(field),
+      true,
+      `${field} is not marked sensitive on ${specName}`,
+    );
+  }
+  const persisted = structuredClone(written);
+  for (const path of paths) {
+    // Swamp replaces each present, non-null value at the dot path.
+    const keys = path.split(".");
+    let parent: unknown = persisted;
+    for (const key of keys.slice(0, -1)) {
+      parent = parent !== null && typeof parent === "object"
+        ? (parent as Record<string, unknown>)[key]
+        : undefined;
+    }
+    const leaf = keys[keys.length - 1];
+    if (parent === null || typeof parent !== "object") continue;
+    const holder = parent as Record<string, unknown>;
+    if (holder[leaf] !== undefined && holder[leaf] !== null) {
+      holder[leaf] = "${{ vault.get('vault', 'key') }}";
+    }
+  }
+  const json = JSON.stringify(persisted);
+  for (const field of fields) {
+    assertEquals(json.includes(`fixture-${field}`), false);
+  }
+}
+
+/** Every secret argument of a method is marked sensitive. */
+function assertSecretArgs(methodName: string, paths: string[]): void {
+  const methods = model.methods as Record<string, { arguments: unknown }>;
+  const marked = vaultedPaths(methods[methodName].arguments);
+  for (const path of paths) {
+    assertEquals(
+      marked.includes(path),
+      true,
+      `argument ${path} of ${methodName} is not marked sensitive`,
+    );
+  }
+}
+
 Deno.test({
   name: "apps model: get_app_installs_for_group fetches and writes resource",
   sanitizeResources: false,
@@ -257,7 +355,7 @@ Deno.test({
       "type": "resource",
       "attributes": {
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "app_id": "test-value",
       },
     };
@@ -309,6 +407,9 @@ Deno.test({
       assertEquals(resources[0].specName, "group_app_install");
       assertValidResource("group_app_install", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("group_app_install", resources[0].data, [
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -376,7 +477,7 @@ Deno.test({
       "type": "resource",
       "attributes": {
         "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
-        "client_secret": "snyk_cs_ctZW0JsWG^Bm`*oPo=mnV26qU_6pjxht<]S_v1",
+        "client_secret": "fixture-client_secret",
         "installed_at": "2024-04-30T16:07:46.230044Z",
         "app_id": "test-value",
       },
@@ -410,7 +511,7 @@ Deno.test({
         "group_id": "test-id-123",
         "install_id": "test-id-123",
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       }, context);
@@ -429,7 +530,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       });
@@ -439,6 +540,12 @@ Deno.test({
       assertEquals(resources[0].specName, "group_app_install_secret");
       assertValidResource("group_app_install_secret", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("group_app_install_secret", resources[0].data, [
+        "client_secret",
+      ]);
+      assertSecretArgs("update_group_app_install_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -536,7 +643,7 @@ Deno.test({
       "attributes": {
         "access_token_ttl_seconds": 3600,
         "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
-        "client_secret": "snyk_cs_ctZW0JsWG^Bm`*oPo=mnV26qU_6pjxht<]S_v1",
+        "client_secret": "fixture-client_secret",
         "context": "tenant",
         "grant_type": "authorization_code",
         "is_confidential": true,
@@ -613,6 +720,7 @@ Deno.test({
       assertEquals(resources[0].specName, "org_app");
       assertValidResource("org_app", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("org_app", resources[0].data, ["client_secret"]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -840,7 +948,7 @@ Deno.test({
       "attributes": {
         "access_token_ttl_seconds": 3600,
         "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
-        "client_secret": "snyk_cs_ctZW0JsWG^Bm`*oPo=mnV26qU_6pjxht<]S_v1",
+        "client_secret": "fixture-client_secret",
         "context": "tenant",
         "grant_type": "authorization_code",
         "is_confidential": true,
@@ -882,7 +990,7 @@ Deno.test({
       >).create_manage_app_creation_secret.execute({
         "app_id": "test-id-123",
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       }, context);
@@ -901,7 +1009,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       });
@@ -911,6 +1019,12 @@ Deno.test({
       assertEquals(resources[0].specName, "manage_app_creation_secret");
       assertValidResource("manage_app_creation_secret", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("manage_app_creation_secret", resources[0].data, [
+        "client_secret",
+      ]);
+      assertSecretArgs("create_manage_app_creation_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1001,7 +1115,7 @@ Deno.test({
       "type": "resource",
       "attributes": {
         "client_id": "test-value",
-        "client_secret": "test-value",
+        "client_secret": "fixture-client_secret",
         "app_id": "test-value",
       },
     };
@@ -1052,6 +1166,9 @@ Deno.test({
       assertEquals(resources[0].specName, "org_app_install");
       assertValidResource("org_app_install", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("org_app_install", resources[0].data, [
+        "client_secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1118,7 +1235,7 @@ Deno.test({
       "type": "resource",
       "attributes": {
         "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
-        "client_secret": "snyk_cs_ctZW0JsWG^Bm`*oPo=mnV26qU_6pjxht<]S_v1",
+        "client_secret": "fixture-client_secret",
         "installed_at": "2024-04-30T16:07:46.230044Z",
         "app_id": "test-value",
       },
@@ -1151,7 +1268,7 @@ Deno.test({
       >).update_org_app_install_secret.execute({
         "install_id": "test-id-123",
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       }, context);
@@ -1170,7 +1287,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, {
         "data": {
-          "attributes": { "mode": "replace", "secret": "test-value" },
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
           "type": "app",
         },
       });
@@ -1180,6 +1297,12 @@ Deno.test({
       assertEquals(resources[0].specName, "org_app_install_secret");
       assertValidResource("org_app_install_secret", resources[0].data);
       assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("org_app_install_secret", resources[0].data, [
+        "client_secret",
+      ]);
+      assertSecretArgs("update_org_app_install_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();

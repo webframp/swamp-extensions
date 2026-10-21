@@ -8,7 +8,12 @@ fetch with a personal access token stored in a swamp vault.
 ## Prerequisites
 
 - GitLab personal access token with `api` scope
-- Token stored in a swamp vault (e.g. `swamp vault set gitlab TOKEN <token>`)
+- Token stored in a swamp vault: `swamp vault put gitlab TOKEN` prompts for the
+  value, so it never touches shell history. Any vault type works —
+  `local_encryption`, or an extension such as `@webframp/pass`,
+  `@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+  Reference it only through `${{ vault.get("gitlab", "TOKEN") }}`, as below;
+  never pass the literal token.
 
 ## Installation
 
@@ -19,6 +24,10 @@ swamp extension pull @webframp/gitlab
 ## Usage
 
 ```bash
+# Store the token once (prompts; the value never touches shell history)
+swamp vault create local_encryption gitlab   # once, if you have no vault yet
+swamp vault put gitlab TOKEN
+
 # Create model with vault-stored token
 swamp model create @webframp/gitlab gitlab \
   --global-arg host=git.example.org \
@@ -180,10 +189,10 @@ this search`. In both cases, set `project` and search each project separately.
 
 ## Global Arguments
 
-| Argument | Required | Description                                                  |
-| -------- | -------- | ------------------------------------------------------------ |
-| `host`   | Yes      | GitLab hostname (e.g. `git.example.org`)                     |
-| `token`  | Yes      | Personal access token with `api` scope (use vault reference) |
+| Argument | Required | Description                                                                               |
+| -------- | -------- | ----------------------------------------------------------------------------------------- |
+| `host`   | Yes      | GitLab hostname (e.g. `git.example.org`)                                                  |
+| `token`  | Yes      | Personal access token with `api` scope, supplied as `${{ vault.get("gitlab", "TOKEN") }}` |
 
 ## Changelog
 

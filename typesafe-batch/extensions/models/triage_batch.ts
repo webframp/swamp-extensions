@@ -173,7 +173,11 @@ function apiKey(context: Context): string {
   const key = context.globalArgs.apiKey ?? environmentKey;
   if (!key) {
     throw new Error(
-      "No TypeSafe API key configured. Set the apiKey global argument or TYPESAFE_API_KEY.",
+      "No TypeSafe API key configured. Store it in a vault " +
+        "(swamp vault put typesafe API_KEY) and set the apiKey global " +
+        'argument to ${{ vault.get("typesafe", "API_KEY") }}. The ' +
+        "TYPESAFE_API_KEY environment variable is read as a fallback, but " +
+        "it is not redacted and is not recommended.",
     );
   }
   return key;

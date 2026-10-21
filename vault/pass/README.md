@@ -61,7 +61,7 @@ the final newline removed. pass convention puts the password on line 1 and
 optional `name: value` metadata on the lines after it:
 
 ```text
-s3cr3t-value
+<the password>
 login: user@example.com
 host: smtp.example.com
 ```
@@ -70,9 +70,9 @@ Wiring that entry into a password or API token hands the consumer the secret
 plus all its metadata, which looks like a wrong password at the far end. Two
 opt-in settings narrow what `get` returns.
 
-**`passwordOnly: true`** returns line 1 only (`s3cr3t-value` above), for every
-key the vault serves. Spaces and tabs on that line are kept; the line terminator
-is not.
+**`passwordOnly: true`** returns line 1 only (the password above), for every key
+the vault serves. Spaces and tabs on that line are kept; the line terminator is
+not.
 
 **`fieldSeparator`** lets each key select a metadata field. With
 `fieldSeparator: "#"`:
@@ -106,12 +106,11 @@ returns whatever `pass show` prints, which for a directory is its tree listing.
 `put` refuses a key that selects a field, since writing it would replace the
 whole entry.
 
+Select a field from a model the same way, with the field in the `vault.get` key:
+
 ```yaml
-globalArgs:
-  smtpUser:
-    source: vault
-    vault: my-secrets
-    key: smtp/example#login
+globalArguments:
+  smtpUser: ${{ vault.get("my-secrets", "smtp/example#login") }}
 ```
 
 ## Subprocess environment
@@ -134,22 +133,31 @@ Store and retrieve secrets using swamp vault expressions or the CLI:
 # Store a secret (interactive prompt, value hidden)
 swamp vault put my-secrets db/password
 
-# Retrieve a secret
+# Retrieve a secret. This prints the plaintext to your terminal; use it only
+# to check a value by hand. Models get secrets through vault.get (below).
 swamp vault read-secret my-secrets db/password --force --json
 
 # List all keys under the configured prefix
 swamp vault list-keys my-secrets --json
 ```
 
-Reference secrets in model definitions with vault expressions:
+Reference secrets from a model with a `vault.get` expression, either at
+`swamp model create` time:
+
+```bash
+swamp model create @example/service my-service \
+  --global-arg 'apiToken=${{ vault.get("my-secrets", "api/token") }}'
+```
+
+or in the model definition YAML:
 
 ```yaml
-globalArgs:
-  apiToken:
-    source: vault
-    vault: my-secrets
-    key: api/token
+globalArguments:
+  apiToken: ${{ vault.get("my-secrets", "api/token") }}
 ```
+
+swamp resolves the expression at run time, so the definition never holds the
+plaintext.
 
 ## Upgrading from 2026.04.13.1
 

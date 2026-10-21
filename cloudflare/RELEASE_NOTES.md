@@ -1,10 +1,16 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** The README now stores the API token with
+`swamp vault put cloudflare API_TOKEN` and wires it with
+`--global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'`. The
+previous example used a `vault://` string, which swamp does not resolve and
+would have been sent to Cloudflare as a literal token. The `apiToken`
+description on every model says the same.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The worker model's `deploy` method now marks binding values
+sensitive, so a `secret_text` binding's value is redacted from logs and run
+records. Pass it as a `vault.get` expression. Non-secret binding values in the
+same call (namespace IDs, bucket names) are redacted too.
 
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** No schema or behavioral changes beyond the redaction above.
+Model versions move to 2026.10.21.1 with no-op upgrade entries.

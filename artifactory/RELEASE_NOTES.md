@@ -1,10 +1,20 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The README, manifest and `token` argument description told you to
+pass `vault://my-vault/artifactory-token`. Swamp does not resolve that syntax,
+so the model received the literal string and authentication failed. They now use
+`${{ vault.get("artifactory", "TOKEN") }}`, and the README stores the token with
+an interactive `swamp vault put` instead of an inline value.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Fixed:** The troubleshooting section no longer claims tokens are refreshed
+automatically; it explains how to replace an expired token in the vault.
 
-## 2026.09.18.1
+**Changed:** The 401 error message names the `swamp vault put` command to update
+the token.
 
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Changed:** The manifest Quick Start creates the vault first with
+`swamp vault create local_encryption <name>` (a once-only step for a repo with
+no vault yet), so it works in a fresh repo.
+
+**Upgrade note:** If your model's `token` global argument is a `vault://…`
+string, replace it with a `vault.get` expression. No schema changes.

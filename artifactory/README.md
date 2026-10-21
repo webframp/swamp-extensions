@@ -6,16 +6,18 @@ monitoring, and diff detection for tracking package changes over time.
 
 ## Authentication
 
-Uses a JFrog Identity Token or Access Token stored in a swamp vault.
+Uses a JFrog Identity Token or Access Token. Store the token in a swamp vault
+and reference it with a `vault.get` expression; never pass the literal value.
+Any vault type works — `local_encryption`, or an extension such as
+`@webframp/pass`, `@webframp/gopass`, `@webframp/hashicorp-vault` or
+`@webframp/macos-keychain`.
 
 ```bash
-# Store token in vault
-swamp vault put my-vault artifactory-token "eyJ..."
-
-# Create model
+swamp vault create local_encryption artifactory   # once, if you have no vault yet
+swamp vault put artifactory TOKEN                 # prompts; the value never touches shell history
 swamp model create @webframp/artifactory packages \
   --global-arg url=https://packages.example.com \
-  --global-arg 'token=vault://my-vault/artifactory-token'
+  --global-arg 'token=${{ vault.get("artifactory", "TOKEN") }}'
 ```
 
 ## Methods
@@ -72,9 +74,10 @@ swamp model method run packages get_storage_info
 ### 401 always throws — check token expiry
 
 Any 401 response from Artifactory throws immediately with a message about token
-expiry. Verify your JFrog Identity Token or Access Token is still valid. Tokens
-in vault references (`vault://`) are refreshed automatically if the vault
-supports rotation.
+expiry. Verify your JFrog Identity Token or Access Token is still valid. To
+replace an expired token, generate a new one and run
+`swamp vault put artifactory TOKEN` again; the `vault.get` expression picks up
+the new value on the next run, with no model change.
 
 ### 403 on admin endpoints degrades gracefully
 

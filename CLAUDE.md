@@ -230,6 +230,96 @@ Rules:
    Require `status: "passed"` and `percentage: 100`. This is the only gate that
    catches an unscored-specifier regression.
 
+## Secrets Come From a Vault (HARD RULE)
+
+**Every secret an extension needs reaches it through a swamp vault, referenced
+by expression. Docs, examples, describe strings, error messages, and generator
+templates must never show or imply any other path, even in passing.**
+
+```bash
+# RIGHT — store once (prompted, never on the command line), reference by expression:
+swamp vault create local_encryption cloudflare      # or any vault extension
+swamp vault put cloudflare API_TOKEN
+swamp model create @webframp/cloudflare/kv cf-kv \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'
+
+# WRONG — every one of these puts a secret in plaintext somewhere:
+--global-arg apiToken=CLOUDFLARE_API_TOKEN           # literal or placeholder value
+swamp vault put cloudflare API_TOKEN "cf-…"          # shell history
+export CLOUDFLARE_API_TOKEN=…                        # env, unredacted
+swamp workflow run x --input token=…                 # recorded cleartext in run history
+token: "glpat-…"                                     # literal in .swamp.yaml
+```
+
+Any vault type satisfies the rule: `local_encryption`, or a supported extension
+(`@webframp/pass`, `@webframp/gopass`, `@webframp/hashicorp-vault`,
+`@webframp/macos-keychain`, `aws-sm`, `azure-kv`, `1password`).
+
+Rules:
+
+1. **Docs show the vault path, end to end.** Any extension that needs a token,
+   key, password, or connection string documents `swamp vault put <vault> <KEY>`
+   and the `${{ vault.get("<vault>", "<KEY>") }}` wiring. Quick Starts in
+   `manifest.yaml` descriptions follow the same rule.
+2. **Only `${{ vault.get(...) }}` is valid.** `vault://…`, `<vault:x/y>`,
+   `{{ vault "…" }}`, and `<vault-reference>` are not swamp syntax. Swamp
+   rejects them for a sensitive global arg (it refuses literal values there),
+   and passes them through as literal strings everywhere else. Either way the
+   documented path fails, and users end up pasting the real value.
+   `swamp vault set` does not exist.
+3. **Store secrets interactively or by pipe.** `swamp vault put v KEY` prompts.
+   For automation, pipe from another secret store
+   (`op read … | swamp vault put v KEY`). Never put the value on the command
+   line, and never `echo "$TOKEN" |` from an environment variable.
+4. **Datastore config uses vault expressions too.** `.swamp.yaml` datastore
+   `config` and `SWAMP_DATASTORE` resolve `"${{ vault.get(v, KEY) }}"` (but not
+   with `managedConfig: true`). Never show a literal token, key, or password in
+   a connection string.
+5. **Workflow inputs carry vault names, not secrets.** `--input` values are
+   recorded in cleartext. Pass the vault name and key, and resolve them with
+   `vault.get` inside the step. `${{ env.SECRET }}` resolves but is not
+   redacted, so do not recommend it.
+6. **Environment-variable fallbacks may exist but are never encouraged.** Code
+   such as `apiToken || Deno.env.get("X")` is allowed. Describe strings, errors,
+   and READMEs lead with `vault.get` and call the variable a discouraged
+   fallback.
+7. **Secret arguments are marked sensitive.** Global args and method arguments
+   that carry secrets use `.meta({ sensitive: true })`.
+8. **Secrets an API returns are stored in a vault, not as data.** Mark the
+   resource-schema field `.meta({ sensitive: true })` (or set
+   `sensitiveOutput: true` on the spec) and declare the field explicitly. A
+   `passthrough` schema does not redact undeclared fields. Swamp stores the
+   value in a vault and persists only a reference. Test that the written
+   resource holds no plaintext.
+9. **No token-shaped literals.** Do not show `sk-ant-api01-…`, `glpat-…`,
+   `hvs.…`, `eyJ…`, or `user:pass@` in examples. Describe the key type in words.
+10. **Generators carry the rule.** `scripts/*-codegen` README templates,
+    describe strings, error text, and sensitive-field handling follow rules 1–8,
+    so a fix lands in the template and is regenerated, never hand-edited.
+11. **AWS uses ambient identity.** Recommend SSO or named profiles
+    (`--global-arg profile=…`) or an attached role. Never present static keys in
+    environment variables or a credentials file as a setup path.
+
+Spot-check before pushing. Each command should print nothing. They skip
+release notes, which may quote the form a release replaced, and the rule text
+itself:
+
+```bash
+SKIP=(':!*RELEASE_NOTES.md' ':!*_test.ts' ':!CLAUDE.md' ':!.kiro/**' ':!docs/plans/**')
+# Invalid reference syntax:
+git grep -nE 'vault://|<vault:|\{\{ ?vault[ (]|swamp vault set' \
+  -- '*.md' '*manifest.yaml' '*.ts' "${SKIP[@]}"
+# A secret-named global arg or input given anything but a vault.get expression:
+git grep -inE -- "--(global-arg|input) +['\"]?[a-z_]*(token|api_?key|app_?key|secret|password)=" \
+  -- '*.md' '*manifest.yaml' '*.ts' '*.sh' "${SKIP[@]}" | grep -v 'vault\.get'
+# A literal secret in YAML or JSON config examples:
+git grep -inE '"?(token|password|api_?key|account_?key|client_?secret|connection_?string)"? *[:=] *"[^"$<{]{3,}' \
+  -- '*.md' '*manifest.yaml' "${SKIP[@]}" | grep -v 'vault\.get'
+```
+
+The greps catch the common shapes, not every one. Reviewing a docs change
+still means reading it against the rules above.
+
 ## Repository Maintenance Sweep
 
 Dependency refresh across the whole repo runs as a swamp workflow rather than a

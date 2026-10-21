@@ -42,9 +42,11 @@ export SWAMP_DATASTORE='@webframp/dynamodb-datastore:{"tableName":"swamp-datasto
 ```
 
 No credentials are accepted in config. This extension uses the AWS SDK's default
-credential provider chain (environment variables, shared config/ profile, or an
-attached IAM role) — the same convention as every other `@webframp/aws/*`
-extension in this repo.
+credential provider chain — the same convention as every other `@webframp/aws/*`
+extension in this repo. Sign in with an SSO named profile
+(`aws sso login --profile <name>`, then select it with `AWS_PROFILE=<name>`) or
+run with an attached IAM role; do not put static access keys in config or the
+environment.
 
 ## Required Schema
 
@@ -155,8 +157,9 @@ TTL (30s default). DynamoDB's TTL sweep has up to a 1-hour buffer, but the
 ### No `profile` in datastore config — use `AWS_PROFILE` env var
 
 The extension's config schema does not accept a `profile` field. AWS credential
-selection happens via the SDK's default provider chain. Set `AWS_PROFILE`
-externally before running swamp commands if you need a specific profile.
+selection happens via the SDK's default provider chain. Set `AWS_PROFILE` to an
+SSO named profile (after `aws sso login --profile <name>`) before running swamp
+commands if you need a specific profile.
 
 ### `autoCreateTable` requires additional IAM permissions
 

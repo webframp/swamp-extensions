@@ -41,7 +41,7 @@ const GlobalArgsSchema = z.object({
     "GitLab hostname (e.g. git.example.org)",
   ),
   token: z.string().min(1).meta({ sensitive: true }).describe(
-    "GitLab personal access token with api scope (use vault reference)",
+    'GitLab personal access token with api scope. Supply it as ${{ vault.get("gitlab", "TOKEN") }}; never pass the literal token',
   ),
 });
 
@@ -2716,7 +2716,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.21.2",
+  version: "2026.10.21.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2938,6 +2938,12 @@ export const model = {
         "create_issue milestone ids must be positive; update_issue milestone " +
         "must be a nonnegative integer or non-empty string (0 still " +
         "clears). No globalArguments change; resource schemas unchanged.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.3",
+      description:
+        "No schema changes; the token argument description and README now point to vault.get and an interactive vault put",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

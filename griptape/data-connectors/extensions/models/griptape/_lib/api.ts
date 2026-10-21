@@ -14,20 +14,47 @@ function resolveBaseUrl(baseUrl?: string): string {
 }
 
 /**
- * Resolve the Griptape Cloud API key: an explicit key (typically from the
- * model's vault-wireable apiKey global arg) takes precedence over the
- * GT_CLOUD_API_KEY environment variable. Throws when neither is set.
+ * Resolve the Griptape Cloud API key: the model's apiKey global arg (wired
+ * from a vault with a vault.get(...) expression) takes precedence. The
+ * GT_CLOUD_API_KEY environment variable is a discouraged fallback: swamp does
+ * not redact it. Throws when neither is set.
  */
 function resolveKey(apiKey?: string): string {
   const key = apiKey || Deno.env.get("GT_CLOUD_API_KEY");
   if (!key) {
     throw new Error(
-      "Griptape Cloud API key not set. Provide the apiKey global argument " +
-        "(wireable with a vault.get(...) expression) or set the " +
-        "GT_CLOUD_API_KEY environment variable.",
+      "Griptape Cloud API key not set. Store the key in a swamp vault " +
+        "(swamp vault put griptape API_KEY) and set the apiKey global " +
+        'argument to \'${{ vault.get("griptape", "API_KEY") }}\'. ' +
+        "The GT_CLOUD_API_KEY environment variable is read as a fallback, " +
+        "but it is not redacted and is not recommended.",
     );
   }
   return key;
+}
+
+/**
+ * Return a copy of `value` with each key path removed. Used to drop
+ * credentials from list items before they are written: swamp stores a
+ * sensitive resource field in a vault only when it is not inside an array, so
+ * a credential in a list item would otherwise be persisted in cleartext.
+ */
+export function omitPaths<T>(value: T, paths: string[][]): T {
+  const out = structuredClone(value);
+  for (const path of paths) {
+    let node: unknown = out;
+    for (let i = 0; i < path.length - 1; i++) {
+      if (node === null || typeof node !== "object" || Array.isArray(node)) {
+        node = undefined;
+        break;
+      }
+      node = (node as Record<string, unknown>)[path[i]];
+    }
+    if (node !== null && typeof node === "object" && !Array.isArray(node)) {
+      delete (node as Record<string, unknown>)[path[path.length - 1]];
+    }
+  }
+  return out;
 }
 
 /**

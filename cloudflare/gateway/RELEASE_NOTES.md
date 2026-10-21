@@ -1,21 +1,19 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README and the `apiToken` description now lead with a vault.
+Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
+to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
+environment variable still works as a fallback, but swamp does not redact it, so
+it is no longer recommended. The missing-token error now says the same.
 
-**Changed:** Singleton get and action methods now write their data under
-`audit_ssh_settings-current`, `create_zero_trust_account-current`,
-`list-current`, `logging_settings_for_the_zero_trust_account-current`,
-`zero_trust_account_configuration-current`,
-`zero_trust_account_information-current`,
-`zero_trust_certificates_activate_zero_trust_certificate-current`,
-`zero_trust_certificates_deactivate_zero_trust_certificate-current`,
-`zero_trust_gateway_rules_reset_expiration_zero_trust_gateway_rule-current`,
-`zero_trust_rotate_ssh_account_seed-current` instead of `latest`. Anything that
-read `data.latest("<model>", "latest")` or queried `name == "latest"` must use
-the new name.
+**Fixed:** `create_zero_trust_account` wrote to a resource the model does not
+declare, so it always failed. It now writes the resource the model declares.
 
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
+**Fixed:** Create methods whose response carries no `id` wrote every result to
+one instance named `created`, so each call overwrote the previous one. They now
+name the instance by the response's `id` when present, else by the path
+parameter that scopes the call, else by a hash of the request arguments (secret
+arguments left out). Affected: `create_proxy_endpoint`.
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Upgrade note:** Results earlier versions wrote to the `created` instance stay
+there; new runs write under the new names.

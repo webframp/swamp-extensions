@@ -12,14 +12,22 @@ item's failure.
 
 ## Install
 
+Store the API key in a swamp vault and reference it with a `vault.get`
+expression; never pass the literal value. Any vault type works —
+`local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
 ```bash
 swamp extension pull @webframp/typesafe-batch
+swamp vault create local_encryption typesafe   # once, if you have no vault yet
+swamp vault put typesafe API_KEY               # prompts; the value never touches shell history
 swamp model create @swamp/typesafe-ai jev \
-  --global-arg 'apiKey=${{ vault.get("secrets", "TYPESAFE_API_KEY") }}'
+  --global-arg 'apiKey=${{ vault.get("typesafe", "API_KEY") }}'
 ```
 
 Without `apiKey`, the method falls back to the `TYPESAFE_API_KEY` environment
-variable, as the official methods do.
+variable, as the official methods do. That fallback is not redacted and is not
+recommended.
 
 ## Usage
 

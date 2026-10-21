@@ -8,9 +8,17 @@
  * Test fixtures are synthesized from the OpenAPI response schemas.
  */
 
-import type { ClassifiedMethod } from "./method_classifier.ts";
+import {
+  type ClassifiedMethod,
+  createInstanceSource,
+  type MethodSecretPlan,
+  planSecrets,
+  resourceNameOf,
+} from "./method_classifier.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
+import type { SensitivePath } from "./sensitivity.ts";
 import type { ServiceConfig } from "../config.ts";
+import { ZOD_VERSION } from "../config.ts";
 
 /**
  * The value substituted for every path parameter in generated tests.
@@ -41,6 +49,15 @@ export function generateTestSource(
   lines.push(
     `import { createModelTestContext } from "@swamp-club/swamp-testing";`,
   );
+  const plan = planSecrets(methods);
+  const secretMethods = methods.filter((m) => {
+    const entry = plan.methods.get(m.name);
+    return entry !== undefined && m.type !== "delete" &&
+      (entry.vaulted.length > 0 || entry.strip.length > 0 || entry.dropRoot);
+  });
+  if (secretMethods.length > 0) {
+    lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
+  }
   lines.push(`import { model } from "./${modelFileName}.ts";`);
   lines.push(``);
 
@@ -134,7 +151,270 @@ export function generateTestSource(
     lines.push(``);
   }
 
+  // Every method that receives a secret gets a test proving the secret never
+  // reaches the stored resource in plaintext.
+  if (secretMethods.length > 0) {
+    lines.push(
+      `// ---------------------------------------------------------------------------`,
+    );
+    lines.push(`// Returned secrets`);
+    lines.push(
+      `// ---------------------------------------------------------------------------`,
+    );
+    lines.push(``);
+    lines.push(generateSecretHelpers());
+    lines.push(``);
+    for (const method of secretMethods) {
+      lines.push(
+        generateSecretTest(config, method, plan.methods.get(method.name)!),
+      );
+      lines.push(``);
+    }
+  }
+
   return lines.join("\n");
+}
+
+/**
+ * Helpers for the returned-secret tests. The swamp-testing context records
+ * writeResource data as given and does not perform swamp's vault step, so
+ * `persistedLikeSwamp` reproduces it: every field the resource schema marks
+ * `.meta({ sensitive: true })` along plain object properties is replaced by a
+ * vault reference, exactly the fields swamp's data writer moves into a vault.
+ * Like swamp's extractSensitiveFields, it unwraps only optional, nullable and
+ * default wrappers, and it still walks into a field it has marked.
+ */
+export function generateSecretHelpers(): string {
+  return `type ZodLike = { _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> } };
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (["optional", "nullable", "default"].includes(current._def.type) && current._def.innerType) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as { sensitive?: boolean } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type) ? current._def.innerType : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (parent && typeof parent === "object" && (parent as Record<string, unknown>)[key] != null) {
+      (parent as Record<string, unknown>)[key] = "\${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}`;
+}
+
+class GuardConflict extends Error {}
+
+/**
+ * Plant a canary value at a strip path inside a fixture, creating the arrays,
+ * maps and discriminator fields the path walks through. Returns undefined when
+ * the path's union-variant guard conflicts with a canary already planted in
+ * the same object (one object can only be one variant).
+ */
+export function plantAtPath(
+  root: unknown,
+  path: SensitivePath,
+  value: unknown,
+  claimed: Map<string, unknown> = new Map(),
+): unknown {
+  const containerFor = (next: SensitivePath[number] | undefined): unknown =>
+    next && "each" in next ? [] : {};
+  const plant = (node: unknown, i: number): unknown => {
+    const seg = path[i];
+    if ("each" in seg) {
+      const arr = Array.isArray(node) ? node : [];
+      const next = path[i + 1];
+      const el = arr.length > 0 && arr[0] !== null && typeof arr[0] === "object"
+        ? arr[0]
+        : containerFor(next);
+      arr[0] = i === path.length - 1 ? value : plant(el, i + 1);
+      return arr;
+    }
+    const obj =
+      node !== null && typeof node === "object" && !Array.isArray(node)
+        ? node as Record<string, unknown>
+        : {};
+    if ("values" in seg) {
+      const existing = obj["entry"];
+      obj["entry"] = i === path.length - 1 ? value : plant(
+        existing !== null && typeof existing === "object"
+          ? existing
+          : containerFor(path[i + 1]),
+        i + 1,
+      );
+      return obj;
+    }
+    if (seg.when) {
+      // Another canary already claimed this object for a different union
+      // variant; planting here would make one of them unreachable.
+      const where = JSON.stringify(
+        path.slice(0, i).map((p) => ("k" in p ? p.k : p)),
+      ) + `|${seg.when[0]}`;
+      if (claimed.has(where) && claimed.get(where) !== seg.when[1]) {
+        throw new GuardConflict();
+      }
+      obj[seg.when[0]] = seg.when[1];
+      claimed.set(where, seg.when[1]);
+    }
+    if (i === path.length - 1) {
+      obj[seg.k] = value;
+    } else {
+      const existing = obj[seg.k];
+      obj[seg.k] = plant(
+        existing !== null && typeof existing === "object"
+          ? existing
+          : containerFor(path[i + 1]),
+        i + 1,
+      );
+    }
+    return obj;
+  };
+  if (path.length === 0) return value;
+  const copy = structuredClone(root);
+  const before = new Map(claimed);
+  try {
+    return plant(copy, 0);
+  } catch (err) {
+    if (!(err instanceof GuardConflict)) throw err;
+    claimed.clear();
+    for (const [k, v] of before) claimed.set(k, v);
+    return undefined;
+  }
+}
+
+/** Generate the returned-secret test for one method. */
+function generateSecretTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+  plan: MethodSecretPlan,
+): string {
+  const scopeId = config.scope === "account" ? "accountId" : "zoneId";
+  const scopeVal = config.scope === "account" ? "acct-123" : "zone-123";
+  const globalArgs = { apiToken: "test-token", [scopeId]: scopeVal };
+  const pathPattern = extractPathPattern(method.operation.path, config.scope);
+  const specName = resourceNameOf(method);
+  const collection = method.operation.isCollection;
+  const fixture = generateFixture(method);
+
+  // Build the mock response with a distinct canary at every secret.
+  let mock: unknown;
+  const vaultCanaries: { path: string[]; canary: string }[] = [];
+  if (plan.wrapRoot || plan.dropRoot) {
+    mock = "VAULT-CANARY-root";
+    if (plan.wrapRoot) {
+      vaultCanaries.push({ path: ["value"], canary: "VAULT-CANARY-root" });
+    }
+  } else {
+    mock = collection ? [structuredClone(fixture)] : structuredClone(fixture);
+    const claimed = new Map<string, unknown>();
+    plan.vaulted.forEach((path, i) => {
+      const canary = `VAULT-CANARY-${i}`;
+      mock = plantAtPath(mock, path.map((k) => ({ k })), canary) ?? mock;
+      vaultCanaries.push({ path, canary });
+    });
+    plan.strip.forEach((path, i) => {
+      mock = plantAtPath(mock, path, `STRIP-CANARY-${i}`, claimed) ?? mock;
+    });
+  }
+
+  // Only the path parameters: the mock answers by path, and the response
+  // fixture is no request body. Borrowing it would spread a bare-secret
+  // string into numbered keys, or pass the spec's example secret (a JWT) as
+  // an argument.
+  const args = buildTestArgs(method);
+
+  const vaultedChecks = vaultCanaries.map(({ path, canary }) => {
+    const p = JSON.stringify(path);
+    return `      assertEquals(valueAt(data, ${p}), "${canary}");
+      assertEquals(sensitivePaths.has(${JSON.stringify(path.join("."))}), true);
+      assertEquals(String(valueAt(persisted, ${p})).startsWith("\${{ vault.get("), true);`;
+  }).join("\n");
+
+  return `Deno.test({
+  name: "${config.name} model: ${method.name} keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = ${JSON.stringify(mock)};
+    const { url, server } = startMockCfServer({
+      "${pathPattern}": { result: mockData${
+    collection ? ", isCollection: true" : ""
+  } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgs)},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
+    JSON.stringify(args)
+  }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "${specName}");
+${
+    method.type === "create" && (plan.wrapRoot || plan.dropRoot)
+      ? createdNameCheck(config, method, false, "written") + "\n"
+      : ""
+  }      const schema = (model.resources as Record<string, { schema: unknown }>)["${specName}"].schema;
+      const data = written[0].data;
+${
+    vaultCanaries.length > 0
+      ? `      const sensitivePaths = new Set(sensitivePathsOf(schema).map((p) => p.join(".")));\n`
+      : ""
+  }      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+${vaultedChecks}
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
 }
 
 /** Generate the mock HTTP server helper */
@@ -233,6 +513,8 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists((model.resources as Record<string, unknown>)[resources[0].specName]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -265,6 +547,8 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists((model.resources as Record<string, unknown>)[resources[0].specName]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -280,11 +564,15 @@ function generateExecutionTest(
     // path and the call 404s. The generated model already excludes path-param
     // names from the body for the same reason.
     const createArgs = buildFinalTestArgs(method, fixture);
+    const objectFixture = fixture !== null && typeof fixture === "object" &&
+      !Array.isArray(fixture);
+    // The id goes last: a synthesized fixture may hold `id: null`.
+    const mockData = objectFixture ? { ...fixture, id: "new-123" } : fixture;
     return `Deno.test({
   name: "${config.name} model: ${method.name} creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = ${JSON.stringify({ id: "new-123", ...fixture })};
+    const mockData = ${JSON.stringify(mockData)};
     const { url, server } = startMockCfServer({
       "${pathPattern}": { result: mockData },
     });
@@ -303,6 +591,9 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists((model.resources as Record<string, unknown>)[resources[0].specName]);
+${createdNameCheck(config, method, objectFixture)}
     } finally {
       uninstall();
       await server.shutdown();
@@ -366,6 +657,8 @@ function generateExecutionTest(
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists((model.resources as Record<string, unknown>)[resources[0].specName]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -441,6 +734,27 @@ export function extractPathPattern(path: string, scope: string): string {
   return result;
 }
 
+/**
+ * The assertion on a created instance's name: the response's id, else the
+ * scoping path parameter, else a 16-hex-digit request hash. Never the shared
+ * "created" slot.
+ */
+function createdNameCheck(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+  objectFixture: boolean,
+  written = "resources",
+): string {
+  const source = createInstanceSource(method, config);
+  if (source.idFields.includes("id") && objectFixture) {
+    return `      assertEquals(${written}[0].name, "new-123");`;
+  }
+  if (source.fallback === "path" && source.pathParams.length === 1) {
+    return `      assertEquals(${written}[0].name, "${PATH_PARAM_TEST_VALUE}");`;
+  }
+  return `      assertEquals(/^[0-9a-f]{16}$/.test(${written}[0].name), true);`;
+}
+
 /** Build test args that include path param values matching the mock pattern */
 function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
   const args: Record<string, unknown> = {};
@@ -465,7 +779,13 @@ function buildTestArgs(method: ClassifiedMethod): Record<string, unknown> {
  */
 export function buildFinalTestArgs(
   method: ClassifiedMethod,
-  fixture: Record<string, unknown>,
+  fixture: unknown,
 ): Record<string, unknown> {
-  return { ...fixture, ...buildTestArgs(method) };
+  // Only a plain object contributes fields. A string fixture would spread
+  // into numbered keys holding its characters.
+  const fields = fixture !== null && typeof fixture === "object" &&
+      !Array.isArray(fixture)
+    ? fixture as Record<string, unknown>
+    : {};
+  return { ...fields, ...buildTestArgs(method) };
 }

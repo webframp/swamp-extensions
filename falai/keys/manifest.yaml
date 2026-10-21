@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/falai/keys"
 license: Apache-2.0
-version: "2026.10.14.3"
+version: "2026.10.21.1"
 description: "fal.ai API Keys — key management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

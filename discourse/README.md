@@ -16,6 +16,16 @@ swamp extension pull @webframp/discourse
 swamp model create @webframp/discourse my-forum
 ```
 
+For a private forum, store the API key in a swamp vault first; never put the
+literal key in the definition. Any vault type works — `local_encryption`, or an
+extension such as `@webframp/pass`, `@webframp/gopass`,
+`@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption discourse   # once, if you have no vault yet
+swamp vault put discourse API_KEY               # prompts; the value never touches shell history
+```
+
 Edit the model definition:
 
 ```yaml

@@ -1878,8 +1878,10 @@ const ConfigSchema = z.object({
   baseUrl: z.string().url().default("https://gitlab.com").describe(
     "GitLab instance URL",
   ),
-  token: z.string().min(1).describe(
-    "GitLab personal access token or CI job token with api scope",
+  token: z.string().min(1).meta({ sensitive: true }).describe(
+    "GitLab personal access token or CI job token with api scope. Supply it " +
+      'with "${{ vault.get(gitlab, TOKEN) }}"; never put the literal token ' +
+      "in .swamp.yaml or SWAMP_DATASTORE.",
   ),
   username: z.string().optional().describe(
     "GitLab username (optional, defaults to 'gitlab-ci-token')",

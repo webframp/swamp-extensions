@@ -22,7 +22,7 @@ const EXTENSION_NAME = "@webframp/griptape/structures";
 
 const GlobalArgsSchema = z.object({
   apiKey: z.string().meta({ sensitive: true }).describe(
-    "Griptape Cloud API key; overrides the GT_CLOUD_API_KEY environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+    'Griptape Cloud API key. Store it in a swamp vault and wire it with a vault.get(...) expression, e.g. ${{ vault.get("griptape", "API_KEY") }}. The GT_CLOUD_API_KEY environment variable is read as a fallback, but it is not redacted and is not recommended.',
   ).optional(),
   baseUrl: z.string().describe(
     "Griptape Cloud API base URL; overrides the GT_CLOUD_BASE_URL environment variable and the built-in default.",
@@ -248,7 +248,7 @@ const InvokeStructureWebhookPostSchema = z.looseObject({
 /** Griptape Cloud Structures — deployed structures, runs, logs, and spans */
 export const model = {
   type: "@webframp/griptape/structures",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -278,6 +278,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1066,7 +1072,7 @@ export const model = {
       description: "create operation",
       arguments: z.object({
         structure_id: z.string(),
-        code_source: z.unknown().optional(),
+        code_source: z.unknown().meta({ sensitive: true }).optional(),
         force: z.boolean().optional(),
       }),
       execute: async (
@@ -1300,7 +1306,7 @@ export const model = {
         "Invoke a webhook for a structure. Must have the `webhook_enabled` flag set to `true`.",
       arguments: z.object({
         structure_id: z.string(),
-        api_key: z.string().optional(),
+        api_key: z.string().meta({ sensitive: true }).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1360,7 +1366,7 @@ export const model = {
         "Invoke a webhook for a structure, sending the POST body as the first Structure arg. Must have the `webhook_enabled` flag set to `true`.",
       arguments: z.object({
         structure_id: z.string(),
-        api_key: z.string().optional(),
+        api_key: z.string().meta({ sensitive: true }).optional(),
       }),
       execute: async (
         args: Record<string, unknown>,

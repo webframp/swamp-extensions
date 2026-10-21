@@ -12,9 +12,188 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import { schemaToZod } from "./type_mapper.ts";
+import type { SchemaObject } from "./schema_fetcher.ts";
+import { schemaToZod, type TypeMapperOptions } from "./type_mapper.ts";
 import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
+import {
+  emitsObject,
+  isSensitiveArgField,
+  isSensitiveResponseField,
+  keyPathOf,
+  SECRET_ARG_HINT,
+  type SensitivePath,
+} from "./sensitivity.ts";
+
+/** Type-mapper options for request arguments: mark secrets, hint vault use. */
+const ARG_ZOD_OPTIONS: TypeMapperOptions = {
+  indent: 2,
+  isSensitive: isSensitiveArgField,
+  sensitiveHint: SECRET_ARG_HINT,
+};
+
+/** Type-mapper options for resource schemas: mark secrets for the vault. */
+const RESOURCE_ZOD_OPTIONS: TypeMapperOptions = {
+  indent: 2,
+  lenient: true,
+  isSensitive: isSensitiveResponseField,
+};
+
+/**
+ * How one method keeps returned secrets out of plaintext storage.
+ *
+ * Swamp moves a resource field marked `{ sensitive: true }` into a vault, but
+ * only along plain object properties of the resource the method writes.
+ * Anything else is stripped before the write.
+ */
+export interface MethodSecretPlan {
+  /** Key paths of returned secrets swamp stores in a vault. */
+  vaulted: string[][];
+  /**
+   * Paths deleted from the value before writeResource, relative to that value
+   * (for a collection response, the array).
+   */
+  strip: SensitivePath[];
+  /** The response is itself a secret; the body writes `{ value: result }`. */
+  wrapRoot: boolean;
+  /**
+   * The response is itself a secret but the resource schema cannot vault it,
+   * so the body writes an empty object instead of the value.
+   */
+  dropRoot: boolean;
+  /** Names of secret inputs the method accepts. */
+  inputs: string[];
+}
+
+export interface SecretPlan {
+  methods: Map<string, MethodSecretPlan>;
+  /**
+   * Per resource: top-level fields added to the primary method's schema via
+   * `.extend()`, because another method writing the same resource returns a
+   * secret the primary's schema does not declare.
+   */
+  extensions: Map<string, Record<string, SchemaObject>>;
+}
+
+/** The resource spec a method writes to (delete methods write none). */
+export function resourceNameOf(method: ClassifiedMethod): string {
+  return method.type === "list"
+    ? method.name.replace(/^list_/, "")
+    : method.name.replace(/^(get|create|update|action)_/, "");
+}
+
+/**
+ * The schema a resource-writing method's response is emitted from. A wrapped
+ * secret response becomes `{ value: <secret> }`.
+ */
+function storedSchemaOf(method: ClassifiedMethod): SchemaObject | undefined {
+  const schema = method.operation.responseSchema;
+  if (schema && method.operation.responseSecrets?.wrapRoot) {
+    return {
+      type: "object",
+      properties: { value: { ...schema, "x-swamp-sensitive": true } },
+    };
+  }
+  return schema;
+}
+
+/** True when a resource's primary schema is a plain ZodObject (has .extend). */
+function primaryIsExtendable(primary: ClassifiedMethod): boolean {
+  if (primary.type === "list") return true;
+  const schema = storedSchemaOf(primary);
+  if (!schema) return true;
+  return emitsObject(schema) && !schema.nullable;
+}
+
+/**
+ * Decide, for every method, which returned secrets are vaulted and which are
+ * stripped. Shared by the model source, the README and the generated tests so
+ * they can never disagree.
+ */
+export function planSecrets(methods: ClassifiedMethod[]): SecretPlan {
+  const plan: SecretPlan = { methods: new Map(), extensions: new Map() };
+  const writers = new Map<string, ClassifiedMethod[]>();
+  for (const method of methods) {
+    plan.methods.set(method.name, {
+      vaulted: [],
+      strip: [],
+      wrapRoot: false,
+      dropRoot: false,
+      inputs: method.operation.inputSecrets ?? [],
+    });
+    if (method.type === "delete") continue;
+    const r = resourceNameOf(method);
+    writers.set(r, [...(writers.get(r) ?? []), method]);
+  }
+
+  for (const [resource, group] of writers) {
+    const primary = group[0];
+    const isVaultable = (m: ClassifiedMethod) =>
+      m.type !== "list" && !m.operation.isCollection;
+    const vaultableOf = (m: ClassifiedMethod) =>
+      isVaultable(m) ? m.operation.responseSecrets?.vaultable ?? [] : [];
+
+    // Fields the resource schema declares sensitive: the primary's own, plus
+    // any another writer needs and the primary's schema can be extended with.
+    const effective = new Set(vaultableOf(primary).map((p) => p.join(".")));
+    const extensions: Record<string, SchemaObject> = {};
+    if (primaryIsExtendable(primary)) {
+      for (const writer of group.slice(1)) {
+        const stored = storedSchemaOf(writer);
+        for (const path of vaultableOf(writer)) {
+          if (effective.has(path.join("."))) continue;
+          const top = path[0];
+          if (top in extensions) continue;
+          const prop = stored?.properties?.[top];
+          if (!prop) continue;
+          extensions[top] = prop;
+          for (const p of vaultableOf(writer)) {
+            if (p[0] === top) effective.add(p.join("."));
+          }
+        }
+      }
+    }
+    if (Object.keys(extensions).length > 0) {
+      plan.extensions.set(resource, extensions);
+    }
+
+    for (const writer of group) {
+      const secrets = writer.operation.responseSecrets;
+      const entry = plan.methods.get(writer.name)!;
+      const collection = writer.operation.isCollection;
+      const prefix: SensitivePath = collection ? [{ each: true }] : [];
+      const vaulted = vaultableOf(writer).filter((p) =>
+        effective.has(p.join("."))
+      );
+      const vaultedKeys = new Set(vaulted.map((p) => p.join(".")));
+      entry.vaulted = vaulted;
+      entry.wrapRoot = Boolean(secrets?.wrapRoot) && vaultedKeys.has("value");
+      entry.dropRoot = Boolean(secrets?.wrapRoot) && !entry.wrapRoot;
+
+      const strip: SensitivePath[] = [];
+      const seen = new Set<string>();
+      const add = (path: SensitivePath) => {
+        const full = [...prefix, ...path];
+        const key = JSON.stringify(full);
+        if (seen.has(key)) return;
+        seen.add(key);
+        strip.push(full);
+      };
+      for (const leaf of secrets?.leaves ?? []) {
+        const keys = keyPathOf(leaf);
+        if (!keys || !vaultedKeys.has(keys.join(".")) || collection) add(leaf);
+      }
+      // A name-flagged field the resource schema cannot vault is stripped too.
+      for (const path of vaultableOf(writer)) {
+        if (!vaultedKeys.has(path.join("."))) {
+          add(path.map((k) => ({ k })));
+        }
+      }
+      entry.strip = strip;
+    }
+  }
+  return plan;
+}
 
 export type MethodType =
   | "list"
@@ -204,6 +383,12 @@ export function generateModelSource(
   // actually references it, or deno lint fails with no-unused-vars.
   const usesSanitize = methods.some(methodEmitsSanitize);
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
+  if (methods.some((m) => methodEmitsShortHash(m, group.config))) {
+    apiImports.push("shortHash");
+  }
+  const plan = planSecrets(methods);
+  const usesStrip = [...plan.methods.values()].some((p) => p.strip.length > 0);
+  if (usesStrip) apiImports.push("stripSensitive");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -233,7 +418,7 @@ export function generateModelSource(
   lines.push(``);
 
   // Generate response schemas for each unique response shape
-  const schemaNames = generateResponseSchemas(methods, lines);
+  const schemaNames = generateResponseSchemas(methods, lines, plan);
 
   // Model definition
   lines.push(
@@ -282,7 +467,14 @@ export function generateModelSource(
   // Methods
   lines.push(`  methods: {`);
   for (const method of methods) {
-    lines.push(generateMethod(method, config, schemaNames));
+    lines.push(
+      generateMethod(
+        method,
+        config,
+        schemaNames,
+        plan.methods.get(method.name),
+      ),
+    );
   }
   lines.push(`  },`);
   lines.push(`};`);
@@ -291,11 +483,20 @@ export function generateModelSource(
   return lines.join("\n");
 }
 
+/**
+ * Describe text for the apiToken global argument. Leads with the vault; the
+ * environment-variable fallback is named only as a discouraged fallback.
+ */
+export const API_TOKEN_DESCRIPTION =
+  'Cloudflare API token. Wire it with ${{ vault.get("cloudflare", "API_TOKEN") }}; never pass the literal token. The CLOUDFLARE_API_TOKEN environment variable is read as a fallback, but it is not redacted and is not recommended.';
+
 /** Generate GlobalArgsSchema based on service scope */
 function generateGlobalArgsSchema(config: ServiceConfig): string {
   const lines = [`const GlobalArgsSchema = z.object({`];
   lines.push(
-    `  apiToken: z.string().meta({ sensitive: true }).describe("Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.").optional(),`,
+    `  apiToken: z.string().meta({ sensitive: true }).describe(${
+      JSON.stringify(API_TOKEN_DESCRIPTION)
+    }).optional(),`,
   );
 
   if (config.scope === "account") {
@@ -316,6 +517,7 @@ function generateGlobalArgsSchema(config: ServiceConfig): string {
 function generateResponseSchemas(
   methods: ClassifiedMethod[],
   lines: string[],
+  plan: SecretPlan,
 ): Map<string, string> {
   const schemaNames = new Map<string, string>();
 
@@ -326,9 +528,7 @@ function generateResponseSchemas(
 
   for (const method of methods) {
     if (method.type === "delete") continue;
-    const resourceName = method.type === "list"
-      ? method.name.replace(/^list_/, "")
-      : method.name.replace(/^(get|create|update|action)_/, "");
+    const resourceName = resourceNameOf(method);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
       methodsWithResources.push(method);
@@ -336,7 +536,7 @@ function generateResponseSchemas(
   }
 
   for (const method of methodsWithResources) {
-    const schema = method.operation.responseSchema;
+    const schema = storedSchemaOf(method);
     if (!schema) {
       schemaNames.set(method.name, "z.object({})");
       continue;
@@ -346,7 +546,9 @@ function generateResponseSchemas(
     schemaNames.set(method.name, varName);
 
     if (method.type === "list") {
-      // For list methods, generate both item schema and list wrapper
+      // For list methods, generate both item schema and list wrapper. Item
+      // fields are not marked sensitive: swamp never looks inside the items
+      // array, so list secrets are stripped by the method body instead.
       const itemVarName = toPascalCase(method.name.replace(/^list_/, "")) +
         "ItemSchema";
       const itemZod = withPassthrough(
@@ -370,12 +572,29 @@ function generateResponseSchemas(
       lines.push(`  ),`);
       lines.push(`});`);
     } else {
-      const zodStr = withPassthrough(
-        schemaToZod(schema, { indent: 2, lenient: true }, 1),
-      );
+      // A collection response written whole (an array) cannot be vaulted
+      // either; leave its fields unmarked like a list item's.
+      const opts = method.operation.isCollection
+        ? { indent: 2, lenient: true }
+        : RESOURCE_ZOD_OPTIONS;
+      const zodStr = withPassthrough(schemaToZod(schema, opts, 1));
       lines.push(`const ${varName} = ${zodStr};`);
     }
     lines.push(``);
+  }
+
+  // A resource another method also writes may need fields the primary's
+  // schema lacks, so the secret that method returns is declared and vaulted.
+  for (const method of methodsWithResources) {
+    const extensions = plan.extensions.get(resourceNameOf(method));
+    if (!extensions) continue;
+    const extra = schemaToZod(
+      { type: "object", properties: extensions },
+      RESOURCE_ZOD_OPTIONS,
+      1,
+    );
+    const base = schemaNames.get(method.name) ?? "z.object({})";
+    schemaNames.set(method.name, `${base}.extend(${extra}.shape)`);
   }
 
   // For methods that share a resource name but aren't the "primary" one,
@@ -383,16 +602,11 @@ function generateResponseSchemas(
   for (const method of methods) {
     if (method.type === "delete") continue;
     if (schemaNames.has(method.name)) continue;
-    const resourceName = method.type === "list"
-      ? method.name.replace(/^list_/, "")
-      : method.name.replace(/^(get|create|update|action)_/, "");
+    const resourceName = resourceNameOf(method);
     // Find the primary method for this resource
-    const primary = methodsWithResources.find((m) => {
-      const primaryResource = m.type === "list"
-        ? m.name.replace(/^list_/, "")
-        : m.name.replace(/^(get|create|update|action)_/, "");
-      return primaryResource === resourceName;
-    });
+    const primary = methodsWithResources.find((m) =>
+      resourceNameOf(m) === resourceName
+    );
     if (primary) {
       schemaNames.set(
         method.name,
@@ -411,6 +625,7 @@ function generateMethod(
   method: ClassifiedMethod,
   config: ServiceConfig,
   _schemaNames: Map<string, string>,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const { operation } = method;
   const lines: string[] = [];
@@ -430,7 +645,7 @@ function generateMethod(
   // disagree — a path template placeholder the spec never declares still
   // produces an `args.<name>` reference — and when they do, the generated method
   // does not compile. Deriving it removes the whole class of mismatch.
-  const bodyLines = generateExecuteBody(method, config, indent);
+  const bodyLines = generateExecuteBody(method, config, indent, secretPlan);
   const argsParam = bodyReferencesArgs(bodyLines) ? "args" : "_args";
   lines.push(
     `${indent}  execute: async (${argsParam}: Record<string, unknown>, context: { globalArgs: Record<string, string>; writeResource: (spec: string, instance: string, data: unknown) => Promise<{ name: string }>; logger: { info: (msg: string, props: Record<string, unknown>) => void } }) => {`,
@@ -470,6 +685,7 @@ function generateExecuteBody(
   method: ClassifiedMethod,
   config: ServiceConfig,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string[] {
   const { operation, type } = method;
   const lines: string[] = [];
@@ -493,17 +709,19 @@ function generateExecuteBody(
   }
 
   if (type === "list") {
-    lines.push(generateListBody(method, apiPath, indent));
+    lines.push(generateListBody(method, apiPath, indent, secretPlan));
   } else if (type === "get") {
-    lines.push(generateGetBody(method, apiPath, indent));
+    lines.push(generateGetBody(method, apiPath, indent, secretPlan));
   } else if (type === "create") {
-    lines.push(generateCreateBody(method, apiPath, indent));
+    lines.push(
+      generateCreateBody(method, config, apiPath, indent, secretPlan),
+    );
   } else if (type === "update") {
-    lines.push(generateUpdateBody(method, apiPath, indent));
+    lines.push(generateUpdateBody(method, apiPath, indent, secretPlan));
   } else if (type === "delete") {
     lines.push(generateDeleteBody(method, apiPath, indent));
   } else {
-    lines.push(generateActionBody(method, apiPath, indent));
+    lines.push(generateActionBody(method, apiPath, indent, secretPlan));
   }
 
   return lines;
@@ -544,8 +762,11 @@ function generateArgsSchema(op: GroupedOperation): string {
       );
       zodType = `z.enum([${vals.join(", ")}])`;
     }
+    const secret = isSensitiveArgField(p.name, p.schema ?? {});
     fields.push(
-      `  ${fieldName}: ${zodType}.optional()${desc},`,
+      `  ${fieldName}: ${zodType}.optional()${
+        secret ? secretDescribe(p.description) : desc
+      },`,
     );
   }
 
@@ -563,7 +784,7 @@ function generateArgsSchema(op: GroupedOperation): string {
   if (op.requestBody?.type === "array" && op.requestBody.items) {
     // Bare-array request body (e.g., PUT /schedules expects an array of cron
     // objects). Expose as a required `items` argument containing the array.
-    const itemZod = schemaToZod(op.requestBody.items, { indent: 2 }, 2);
+    const itemZod = schemaToZod(op.requestBody.items, ARG_ZOD_OPTIONS, 2);
     const desc = op.requestBody.description
       ? `.describe("${escapeStr(truncateStr(op.requestBody.description))}")`
       : "";
@@ -575,7 +796,7 @@ function generateArgsSchema(op: GroupedOperation): string {
     // Discriminated union request body (e.g., workers_secret with oneOf variants).
     // Expose the union as a required `body` argument using z.union.
     const variantZods = op.requestBody.oneOf.map((variant) =>
-      schemaToZod(variant, { indent: 2 }, 2)
+      schemaToZod(variant, ARG_ZOD_OPTIONS, 2)
     );
     const desc = op.requestBody.description
       ? `.describe("${escapeStr(truncateStr(op.requestBody.description))}")`
@@ -598,9 +819,11 @@ function generateArgsSchema(op: GroupedOperation): string {
       const fieldName = sanitizeFieldName(name);
       if (seenFields.has(fieldName)) continue;
       seenFields.add(fieldName);
-      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
+      const fieldZod = schemaToZod(prop, ARG_ZOD_OPTIONS, 2);
       const optSuffix = required.has(name) ? "" : ".optional()";
-      const desc = prop.description
+      const desc = isSensitiveArgField(name, prop)
+        ? secretDescribe(prop.description)
+        : prop.description
         ? `.describe("${escapeStr(truncateStr(prop.description))}")`
         : "";
       fields.push(
@@ -616,13 +839,78 @@ function generateArgsSchema(op: GroupedOperation): string {
   return `z.object({\n${fields.join("\n")}\n    })`;
 }
 
+/**
+ * `.describe(...)` plus `.meta({ sensitive: true })` for a secret argument:
+ * swamp redacts the value, and the description tells the caller to pass a
+ * vault reference.
+ */
+function secretDescribe(description: string | undefined): string {
+  const text = description
+    ? `${truncateStr(description)} ${SECRET_ARG_HINT}`
+    : SECRET_ARG_HINT;
+  return `.describe("${escapeStr(text)}").meta({ sensitive: true })`;
+}
+
+/**
+ * The value a method body hands to writeResource, after keeping returned
+ * secrets out of it per the method's secret plan.
+ *
+ * Returns `setup` (statement lines, each ending in a newline, or "") and `ref`
+ * (the expression to write). With nothing to strip or wrap, `ref` is `source`
+ * and the generated body is unchanged.
+ */
+function storedValue(
+  plan: MethodSecretPlan | undefined,
+  source: string,
+  indent: string,
+  name = "stored",
+): { setup: string; ref: string } {
+  if (plan?.wrapRoot) {
+    return {
+      setup:
+        `${indent}    // The response is itself a secret. Wrapping it lets swamp move it\n` +
+        `${indent}    // into a vault; the resource keeps only a vault reference.\n` +
+        `${indent}    const ${name} = { value: ${source} };\n`,
+      ref: name,
+    };
+  }
+  if (plan?.dropRoot) {
+    return {
+      setup:
+        `${indent}    // The response is itself a secret this resource cannot vault, so\n` +
+        `${indent}    // it is not stored.\n` +
+        `${indent}    const ${name} = {};\n`,
+      ref: name,
+    };
+  }
+  if (plan && plan.strip.length > 0) {
+    return {
+      setup:
+        `${indent}    // Secrets swamp cannot move into a vault (inside lists, maps or\n` +
+        `${indent}    // unions) are removed before the resource is written.\n` +
+        `${indent}    const ${name} = stripSensitive(${source}, ${
+          JSON.stringify(plan.strip)
+        });\n`,
+      ref: name,
+    };
+  }
+  return { setup: "", ref: source };
+}
+
 /** Generate list method body */
 function generateListBody(
   method: ClassifiedMethod,
   apiPath: string,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const resourceName = method.name.replace(/^list_/, "");
+  const { setup: listStrip, ref: listItems } = storedValue(
+    secretPlan,
+    "results",
+    indent,
+    "storedItems",
+  );
   const pathParamNames = method.operation.pathParams
     .map((p) => sanitizeFieldName(p.name));
 
@@ -650,8 +938,8 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
-${indent}      items: results,
+${listStrip}${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}      items: ${listItems},
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
 ${indent}      durationMs: Date.now() - startMs,
@@ -682,8 +970,8 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
-${indent}      items: results,
+${listStrip}${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}      items: ${listItems},
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
 ${indent}      durationMs: Date.now() - startMs,
@@ -699,8 +987,11 @@ function generateGetBody(
   method: ClassifiedMethod,
   apiPath: string,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const resourceName = method.name.replace(/^get_/, "");
+  const specName = resourceNameOf(method);
+  const stored = storedValue(secretPlan, "result", indent);
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
   ];
@@ -714,18 +1005,139 @@ ${indent}      "GET",
 ${indent}      \`${apiPath}\`,
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${stored.setup}${indent}    const handle = await context.writeResource("${specName}", ${instanceExpr}, ${stored.ref});
 ${indent}    context.logger.info("Fetched ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/**
+ * Response fields that identify a created resource, in the order they are
+ * tried. `id` is tried on every object response, declared or not; the others
+ * only when the response schema declares them (a Turnstile widget is keyed by
+ * its `sitekey`).
+ */
+const CREATED_ID_FIELDS = ["id", "sitekey", "uuid", "uid", "tag"];
+
+/** The id-like response fields a create body reads, in order. */
+export function createdIdFields(method: ClassifiedMethod): string[] {
+  const schema = method.operation.responseSchema;
+  // A secret response written as `{ value }` (or not at all) is no record.
+  if (
+    method.operation.responseSecrets?.wrapRoot ||
+    (schema && !emitsObject(schema))
+  ) {
+    return [];
+  }
+  const declared = new Set(Object.keys(schema?.properties ?? {}));
+  return CREATED_ID_FIELDS.filter((f) => f === "id" || declared.has(f));
+}
+
+/**
+ * Path parameters that scope a create call, excluding the service's own
+ * account/zone scope (a global argument shared by every call).
+ */
+function scopingPathParams(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+): string[] {
+  const scopeParam = config.scope === "account" ? "account_id" : "zone_id";
+  return method.operation.pathParams
+    .map((p) => p.name)
+    .filter((n) => n !== scopeParam)
+    .map(sanitizeFieldName);
+}
+
+/**
+ * How a create body names the instance it writes. Two creates must not share
+ * an instance (the second would overwrite the first, and its vaulted secret
+ * with it), and the same create must land on the same instance every time.
+ * In order: an id-like field of the response; else the path parameters that
+ * scope the call (a tunnel's management token is per tunnel); else a short
+ * hash of the request arguments, leaving out secret-valued ones.
+ */
+export function createInstanceSource(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+): { idFields: string[]; fallback: "path" | "hash"; pathParams: string[] } {
+  const pathParams = scopingPathParams(method, config);
+  return {
+    idFields: createdIdFields(method),
+    fallback: pathParams.length > 0 ? "path" : "hash",
+    pathParams,
+  };
+}
+
+function createInstanceStatement(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+  indent: string,
+  secretPlan?: MethodSecretPlan,
+): string {
+  const { idFields, fallback, pathParams } = createInstanceSource(
+    method,
+    config,
+  );
+  const lines: string[] = [];
+  let fallbackExpr: string;
+  if (fallback === "path" && pathParams.length === 1) {
+    fallbackExpr = `String(args.${pathParams[0]})`;
+  } else if (fallback === "path") {
+    // JSON delimits each part unambiguously, so ("a_b", "c") and ("a", "b_c")
+    // never meet on one name.
+    fallbackExpr = `await shortHash(JSON.stringify([${
+      pathParams.map((p) => `String(args.${p})`).join(", ")
+    }]))`;
+  } else {
+    const secretKeys = (secretPlan?.inputs ?? []).map(sanitizeFieldName);
+    lines.push(
+      `${indent}    // No id in the response and no path parameter to key on: name the`,
+      `${indent}    // instance by a hash of the request, leaving out secret arguments.`,
+      `${indent}    const secretArgs = new Set<string>(${
+        JSON.stringify([...new Set(secretKeys)].sort())
+      });`,
+      `${indent}    const requestKey = Object.entries(args)`,
+      `${indent}      .filter(([k]) => !secretArgs.has(k))`,
+      `${indent}      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));`,
+    );
+    fallbackExpr = `await shortHash(JSON.stringify(requestKey))`;
+  }
+  if (idFields.length === 0) {
+    lines.push(
+      `${indent}    const id = sanitizeInstanceName(${fallbackExpr});`,
+    );
+    return lines.join("\n");
+  }
+  const type = `{ ${idFields.map((f) => `${f}?: unknown`).join("; ")} }`;
+  lines.push(
+    `${indent}    const created = result as ${type} | null | undefined;`,
+    `${indent}    const id = sanitizeInstanceName(String(${
+      idFields.map((f) => `created?.${f}`).join(" ?? ")
+    } ?? ${fallbackExpr}));`,
+  );
+  return lines.join("\n");
+}
+
+/** True when a method's generated body calls shortHash. */
+function methodEmitsShortHash(
+  method: ClassifiedMethod,
+  config: ServiceConfig,
+): boolean {
+  if (method.type !== "create") return false;
+  const { fallback, pathParams } = createInstanceSource(method, config);
+  return fallback === "hash" || pathParams.length > 1;
 }
 
 /** Generate create method body */
 function generateCreateBody(
   method: ClassifiedMethod,
+  config: ServiceConfig,
   apiPath: string,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const resourceName = method.name.replace(/^create_/, "");
+  const specName = resourceNameOf(method);
+  const stored = storedValue(secretPlan, "result", indent);
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
@@ -772,8 +1184,8 @@ ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
-${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${createInstanceStatement(method, config, indent, secretPlan)}
+${stored.setup}${indent}    const handle = await context.writeResource("${specName}", id, ${stored.ref});
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -783,8 +1195,11 @@ function generateUpdateBody(
   method: ClassifiedMethod,
   apiPath: string,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const resourceName = method.name.replace(/^update_/, "");
+  const specName = resourceNameOf(method);
+  const stored = storedValue(secretPlan, "result", indent);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
@@ -840,7 +1255,7 @@ ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${stored.setup}${indent}    const handle = await context.writeResource("${specName}", ${instanceExpr}, ${stored.ref});
 ${indent}    context.logger.info("Updated ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -917,8 +1332,11 @@ function generateActionBody(
   method: ClassifiedMethod,
   apiPath: string,
   indent: string,
+  secretPlan?: MethodSecretPlan,
 ): string {
   const resourceName = method.name.replace(/^action_/, "");
+  const specName = resourceNameOf(method);
+  const stored = storedValue(secretPlan, "result ?? {}", indent);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
   const pathParamNames = method.operation.pathParams.map((p) =>
@@ -967,7 +1385,7 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
+${stored.setup}${indent}    const handle = await context.writeResource("${specName}", "${resourceName}-current", ${stored.ref});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -1009,7 +1427,7 @@ function sanitizeFieldName(name: string): string {
 /**
  * True when a method's generated body references sanitizeInstanceName. This
  * MUST stay in lockstep with the body generators:
- *   - create: always (wraps the API-returned id, falling back to "created")
+ *   - create: always (see createInstanceStatement)
  *   - get / update: only when a trailing path param supplies the instance id
  *     (otherwise the body uses the constant "<resource>-current"/"updated")
  *   - list ("main"), action ("<resource>-current"), delete (no resource): never
