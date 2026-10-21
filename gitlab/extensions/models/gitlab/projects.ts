@@ -2900,8 +2900,9 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "Added remove_work_item_parent and convert_work_item_type methods " +
-        "(new resources: workItemParent, workItemType). No globalArguments " +
-        "change; additive.",
+        "(new resources: workItemParent, workItemType). Method iid/iids " +
+        "arguments now require positive integers. No globalArguments " +
+        "change; resource schemas additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3722,7 +3723,7 @@ export const model = {
         "work-item details). Returns issue detail keyed by project and iid.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -3937,7 +3938,7 @@ export const model = {
         "assignees, milestone, due date, confidentiality, weight)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         title: z.string().optional(),
         description: z.string().optional(),
         labels: z.array(z.string()).optional(),
@@ -4097,7 +4098,7 @@ export const model = {
         "Add a comment to an issue, or reply into an existing thread by passing discussionId (from list_issue_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         body: z.string().min(1).describe(
           "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
         ),
@@ -4174,7 +4175,7 @@ export const model = {
       description: "Edit an existing comment on an issue by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
         body: z.string().min(1),
       }),
@@ -4232,7 +4233,7 @@ export const model = {
       description: "Delete a comment on an issue by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
       }),
       execute: async (
@@ -4281,7 +4282,7 @@ export const model = {
         "Set (replace) an issue's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -4558,7 +4559,7 @@ export const model = {
         "is a no-op. Per-issue failures are recorded and never abort the batch.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -4669,7 +4670,7 @@ export const model = {
         "GitLab does not support resolving plain issue discussions (only MR/diff discussions), so `resolvable`/`resolved` read false here.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         first: z.number().int().positive().max(100).default(50),
       }),
       execute: async (
@@ -4763,7 +4764,7 @@ export const model = {
       description: "List comments on an issue",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -4807,7 +4808,7 @@ export const model = {
         "List the most recent comments/discussion notes on a merge request (newest 50; truncated=true when older notes exist)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -5108,7 +5109,7 @@ export const model = {
         "Report an MR's mergeability: detailed_merge_status plus a plain-English summary of why it can or cannot merge.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -5180,7 +5181,7 @@ export const model = {
         "Trigger a rebase of an MR's source branch onto its target (async), polling until it finishes or errors.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         skipCi: z.boolean().default(false),
       }),
       execute: async (
@@ -5495,7 +5496,7 @@ export const model = {
         "web UI only show the iid.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -5742,7 +5743,7 @@ export const model = {
       description: "Merge a merge request",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         squash: z.boolean().default(false),
       }),
       execute: async (
@@ -5792,7 +5793,7 @@ export const model = {
       description: "Update a merge request (title, description, labels, state)",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         title: z.string().optional(),
         description: z.string().optional(),
         labels: z.array(z.string()).optional(),
@@ -5852,7 +5853,7 @@ export const model = {
         "Add a comment to a merge request, or reply into an existing thread by passing discussionId (from list_mr_discussions). To @-mention a user, put the @handle in the body normally (e.g. \"@ADADY please review\"); on the CLI, a body that STARTS with @ must be escaped as \\@ because `--arg body=@...` otherwise reads the value as a file path (e.g. --arg 'body=\\@ADADY ...').",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         body: z.string().min(1).describe(
           "Comment body (GitLab Flavored Markdown). @mentions notify the user. If the body starts with @, escape it as \\@ on the CLI so `--arg` does not treat it as a file path; a mid-body @ needs no escape.",
         ),
@@ -5929,7 +5930,7 @@ export const model = {
       description: "Edit an existing comment on a merge request by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
         body: z.string().min(1),
       }),
@@ -5987,7 +5988,7 @@ export const model = {
       description: "Delete a comment on a merge request by note id.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         noteId: z.number(),
       }),
       execute: async (
@@ -6036,7 +6037,7 @@ export const model = {
         "Set (replace) an MR's assignees by username; pass an empty list to unassign. GitLab CE keeps one; EE/Premium support multiple.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -6109,7 +6110,7 @@ export const model = {
         "is a no-op. Per-MR failures are recorded and never abort the batch.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -6222,7 +6223,7 @@ export const model = {
         "Useful to clear yourself off MRs you've already reviewed.",
       arguments: z.object({
         project: z.string().min(1),
-        iids: z.array(z.number()).min(1),
+        iids: z.array(z.number().int().positive()).min(1),
         username: z.string().optional(),
       }),
       execute: async (
@@ -6330,7 +6331,7 @@ export const model = {
         "GitLab EE/Premium supports multiple reviewers.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         usernames: z.array(z.string()).default([]),
       }),
       execute: async (
@@ -6398,7 +6399,7 @@ export const model = {
         "List resolvable discussion threads on an MR with per-thread resolution state and slim diff position (file/line). System-only threads are excluded. Filter for blockers with CEL: size(discussions.filter(d, d.resolvable && !d.resolved)).",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         first: z.number().int().positive().max(100).default(50),
       }),
       execute: async (
@@ -6490,7 +6491,7 @@ export const model = {
         "Resolve (or unresolve) a merge request discussion thread by its discussionId (from list_mr_discussions). MUTATING.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
         discussionId: z.string().min(1),
         resolved: z.boolean().default(true),
       }),
@@ -7116,7 +7117,7 @@ export const model = {
         "than GitLab itself; this never attempts a merge.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },

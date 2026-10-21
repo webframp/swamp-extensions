@@ -7972,22 +7972,30 @@ Deno.test("convert_work_item_type throws when the mutation returns no work item"
   }
 });
 
-Deno.test("work item methods reject non-integer and non-positive iids", () => {
-  for (const iid of [0, -3, 1.5]) {
-    for (
-      const method of [
-        model.methods.remove_work_item_parent,
-        model.methods.convert_work_item_type,
-      ]
-    ) {
+Deno.test("every method rejects non-integer and non-positive iids", () => {
+  // Other required fields are omitted, so parsing always fails; the check is
+  // whether the iid itself is flagged, with a valid iid as the control.
+  const iidIssues = (schema: any, input: Record<string, unknown>) =>
+    schema.safeParse(input).error?.issues.filter((i: any) =>
+      i.path[0] === "iid" || i.path[0] === "iids"
+    ) ?? [];
+  const checked: string[] = [];
+  for (const [name, method] of Object.entries(model.methods)) {
+    const shape = (method.arguments as any).shape ?? {};
+    const key = "iid" in shape ? "iid" : "iids" in shape ? "iids" : null;
+    if (!key) continue;
+    checked.push(name);
+    const wrap = (v: number) => ({ [key]: key === "iids" ? [v] : v });
+    assertEquals(iidIssues(method.arguments, wrap(5)), [], `${name} iid 5`);
+    for (const bad of [0, -3, 1.5]) {
       assertEquals(
-        method.arguments.safeParse({ project: "g/p", iid, type: "Issue" })
-          .success,
-        false,
-        `iid ${iid}`,
+        iidIssues(method.arguments, wrap(bad)).length > 0,
+        true,
+        `${name} accepted iid ${bad}`,
       );
     }
   }
+  assertEquals(checked.length, 27);
 });
 
 Deno.test("convert_work_item_type throws when GitLab keeps the old type", async () => {

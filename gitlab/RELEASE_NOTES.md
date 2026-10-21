@@ -22,6 +22,12 @@ requested state. Results land in the new `workItemParent` and
 path written as `~` (for example `group~proj-work-item-7-parent`). No globalArguments change.
 Contributed by @zWaR (#500).
 
+**Changed:** Every method that takes an `iid` or `iids` argument (27
+methods) now rejects a value that is not a positive integer, such as `0`,
+`-3` or `1.5`, at input validation. Before, such a value reached GitLab and
+failed later with a vaguer "not found" or null-payload error, so no call that
+used to succeed is affected. Resource schemas are unchanged.
+
 ## 2026.10.14.2
 
 **Added:** `search` method wrapping the GitLab REST search API at instance,
