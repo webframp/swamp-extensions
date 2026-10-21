@@ -113,6 +113,24 @@ const LineCommentSchema = z.object({
   ),
 });
 
+const DiscussionThreadSchema = z.object({
+  project: z.string().describe("Project the merge request belongs to"),
+  iid: z.number().describe("Merge request IID"),
+  discussionId: z.string().describe("GitLab discussion ID the thread opened"),
+  noteId: z.number().describe("ID of the thread's first note"),
+  body: z.string().describe("Body of the thread's first note (markdown)"),
+  postedAt: z.string().describe("Timestamp the thread was posted"),
+  fetchedAt: z.string().optional().describe(
+    "ISO 8601 timestamp when data was fetched",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 // =============================================================================
 // Helpers
 // =============================================================================
@@ -149,6 +167,17 @@ function encodeProject(project: string): string {
 
 function instanceName(prefix: string, project: string, iid: number): string {
   return `${prefix}-${encodeURIComponent(project)}-${iid}`;
+}
+
+/** First 16 hex chars of the SHA-256 of `text` — a stable instance-name key. */
+async function sha256Prefix(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(text),
+  );
+  return Array.from(new Uint8Array(digest).slice(0, 8))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function assertMrOpen(
@@ -323,7 +352,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -414,6 +443,12 @@ export const model = {
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Additive: new discussionThread resource, no changes to existing resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     mrDiff: {
@@ -437,6 +472,12 @@ export const model = {
     lineComment: {
       description: "Record of a diff-positioned line comment",
       schema: LineCommentSchema,
+      lifetime: "30d" as const,
+      garbageCollection: 20,
+    },
+    discussionThread: {
+      description: "Record of a general (unpositioned) resolvable MR thread",
+      schema: DiscussionThreadSchema,
       lifetime: "30d" as const,
       garbageCollection: 20,
     },
@@ -1046,6 +1087,98 @@ export const model = {
           newPath: args.newPath,
           newLine: args.newLine ?? null,
           oldLine: args.oldLine ?? null,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    post_discussion: {
+      description:
+        "Open a general resolvable discussion thread on an MR, not tied to a " +
+        "diff position (GitLab REST discussions API). Skips posting when the " +
+        "same body was already posted as a thread on this MR.",
+      arguments: z.object({
+        project: z.string().min(1).describe("Project path"),
+        iid: z.number().int().positive().describe("Merge request IID"),
+        body: z.string().min(1).describe("Thread body (markdown)"),
+      }),
+      execute: async (
+        args: { project: string; iid: number; body: string },
+        context: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        await assertMrOpen(context, args.project, args.iid);
+        const { host, token } = context.globalArgs;
+        const pid = encodeProject(args.project);
+
+        // Keyed by body hash — a single MR can carry many threads, and a retry
+        // with the same body must not open a second one.
+        const resourceName = `${
+          instanceName("discussionThread", args.project, args.iid)
+        }-${await sha256Prefix(args.body)}`;
+        const existing = await context.readResource(resourceName);
+        if (existing?.discussionId) {
+          context.logger.info(
+            "Discussion thread with this body already posted; skipping",
+            {
+              project: args.project,
+              iid: args.iid,
+              discussionId: existing.discussionId,
+            },
+          );
+          return { dataHandles: [] };
+        }
+
+        const discussionResp = await contextFetch(
+          `post_discussion ${args.project}!${args.iid}`,
+          host,
+          token,
+          `/projects/${pid}/merge_requests/${args.iid}/discussions`,
+          {
+            method: "POST",
+            body: JSON.stringify({ body: args.body }),
+          },
+        );
+        let discussion: any;
+        try {
+          discussion = await discussionResp.json();
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          throw new Error(
+            `post_discussion ${args.project}!${args.iid}: response was not valid JSON: ${msg}`,
+            { cause: err },
+          );
+        }
+        const note = Array.isArray(discussion?.notes)
+          ? discussion.notes[0]
+          : undefined;
+        if (!discussion?.id || !note?.id) {
+          throw new Error(
+            `post_discussion ${args.project}!${args.iid}: unexpected discussion response`,
+          );
+        }
+
+        const data = {
+          project: args.project,
+          iid: args.iid,
+          discussionId: String(discussion.id),
+          noteId: note.id,
+          body: args.body,
+          postedAt: new Date().toISOString(),
+        };
+        const handle = await context.writeResource(
+          "discussionThread",
+          resourceName,
+          {
+            ...data,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        context.logger.info("Posted discussion thread", {
+          project: args.project,
+          iid: args.iid,
+          discussionId: data.discussionId,
         });
         return { dataHandles: [handle] };
       },
