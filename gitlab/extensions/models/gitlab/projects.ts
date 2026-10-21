@@ -26,6 +26,9 @@ const REPOSITORY_TREE_MAX_PAGES = 20;
 /** Cap on pages fetched by search (100 results/page) — bounds `limit` so a broad term can't trigger unbounded pagination. */
 const SEARCH_MAX_PAGES = 10;
 
+/** Cap on lines returned by get_job_log — bounds the stored tail when a caller asks for far more than a diagnosis needs. */
+const MAX_TAIL_LINES = 10_000;
+
 /** Search scopes for which GitLab honors the `ref` parameter. */
 const SEARCH_REF_SCOPES = ["blobs", "commits", "wiki_blobs"];
 
@@ -2052,6 +2055,28 @@ function gqlMapNote(node: any): z.infer<typeof NoteSchema> {
 }
 
 /**
+ * `milestone` argument for create_issue: a positive integer id, a
+ * numeric-looking string id, or a title. A string of only zeros would parse
+ * to id 0, which names no milestone, so it is rejected like the number 0.
+ */
+const createMilestoneArg = z.union([
+  z.number().int().positive(),
+  z.string().min(1).refine((s) => !/^0+$/.test(s), {
+    message: "milestone id must be a positive integer",
+  }),
+]);
+
+/**
+ * `milestone` argument for update_issue. Same as create_issue, except that 0
+ * (or a string of only zeros) is allowed: the REST edit-issue API reads
+ * `milestone_id: 0` as "unassign the milestone".
+ */
+const updateMilestoneArg = z.union([
+  z.number().int().nonnegative(),
+  z.string().min(1),
+]);
+
+/**
  * Resolve a `milestone` argument (a numeric id, a numeric-looking string, or
  * a title) to GitLab's numeric milestone id. Neither the GraphQL nor REST
  * issue write APIs accept a milestone title directly, so a title is looked
@@ -2691,7 +2716,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.21.1",
+  version: "2026.10.21.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2903,6 +2928,16 @@ export const model = {
         "(new resources: workItemParent, workItemType). Method iid/iids " +
         "arguments now require positive integers. No globalArguments " +
         "change; resource schemas additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.2",
+      description:
+        "Note, pipeline, job, schedule and snippet id arguments now require " +
+        "positive integers; get_job_log tailLines is capped at 10000; " +
+        "create_issue milestone ids must be positive; update_issue milestone " +
+        "must be a nonnegative integer or non-empty string (0 still " +
+        "clears). No globalArguments change; resource schemas unchanged.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -3769,7 +3804,7 @@ export const model = {
         assignees: z.array(z.string()).optional().describe(
           "Usernames to assign on creation",
         ),
-        milestone: z.union([z.number(), z.string()]).optional().describe(
+        milestone: createMilestoneArg.optional().describe(
           "Milestone id, or a title to resolve to an id",
         ),
         dueDate: z.string().optional().describe(
@@ -3952,8 +3987,8 @@ export const model = {
         assignees: z.array(z.string()).optional().describe(
           "Replace (wholesale) the issue's assignees by username",
         ),
-        milestone: z.union([z.number(), z.string()]).optional().describe(
-          "Milestone id, or a title to resolve to an id",
+        milestone: updateMilestoneArg.optional().describe(
+          "Milestone id, or a title to resolve to an id; 0 clears the milestone",
         ),
         dueDate: z.string().optional().describe(
           "Due date, ISO 8601 (YYYY-MM-DD)",
@@ -4176,7 +4211,7 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number().int().positive(),
-        noteId: z.number(),
+        noteId: z.number().int().positive(),
         body: z.string().min(1),
       }),
       execute: async (
@@ -4234,7 +4269,7 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number().int().positive(),
-        noteId: z.number(),
+        noteId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number; noteId: number },
@@ -5250,7 +5285,7 @@ export const model = {
         "List a pipeline's jobs with failure_reason (script_failure = real; runner_system_failure / stuck_or_timeout_failure / job_execution_timeout / api_failure = transient). Defaults to failed jobs only.",
       arguments: z.object({
         project: z.string().min(1),
-        pipelineId: z.number(),
+        pipelineId: z.number().int().positive(),
         scope: z.enum(["failed", "success", "running", "all"]).default(
           "failed",
         ),
@@ -5315,8 +5350,8 @@ export const model = {
         "Fetch the tail of a CI job's trace/log (last N lines) to diagnose a failure.",
       arguments: z.object({
         project: z.string().min(1),
-        jobId: z.number(),
-        tailLines: z.number().default(200),
+        jobId: z.number().int().positive(),
+        tailLines: z.number().int().positive().max(MAX_TAIL_LINES).default(200),
       }),
       execute: async (
         args: { project: string; jobId: number; tailLines: number },
@@ -5335,8 +5370,7 @@ export const model = {
         // "line" (traces normally end with \n).
         const lines = full.replace(/\n$/, "").split("\n");
         const total = lines.length;
-        const n = Math.max(1, args.tailLines);
-        const tail = lines.slice(Math.max(0, total - n));
+        const tail = lines.slice(Math.max(0, total - args.tailLines));
         const handle = await ctx.writeResource(
           "jobLog",
           `${sanitizeName(args.project)}-job-${args.jobId}`,
@@ -5366,7 +5400,7 @@ export const model = {
         "Retry a CI job (e.g. after a transient failure). Returns the new job's id and status.",
       arguments: z.object({
         project: z.string().min(1),
-        jobId: z.number(),
+        jobId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; jobId: number },
@@ -5408,7 +5442,7 @@ export const model = {
       description: "Retry the failed jobs in a pipeline.",
       arguments: z.object({
         project: z.string().min(1),
-        pipelineId: z.number(),
+        pipelineId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; pipelineId: number },
@@ -5451,7 +5485,7 @@ export const model = {
         "pipeline that is still in progress instead of re-running a finished one.",
       arguments: z.object({
         project: z.string().min(1),
-        pipelineId: z.number(),
+        pipelineId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; pipelineId: number },
@@ -5553,7 +5587,7 @@ export const model = {
         "dynamically generated child pipeline.",
       arguments: z.object({
         project: z.string().min(1),
-        pipelineId: z.number(),
+        pipelineId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; pipelineId: number },
@@ -5704,7 +5738,7 @@ export const model = {
         "pipeline id — pair with get_pipeline_by_iid to find the resulting pipeline.",
       arguments: z.object({
         project: z.string().min(1),
-        scheduleId: z.number(),
+        scheduleId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; scheduleId: number },
@@ -5931,7 +5965,7 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number().int().positive(),
-        noteId: z.number(),
+        noteId: z.number().int().positive(),
         body: z.string().min(1),
       }),
       execute: async (
@@ -5989,7 +6023,7 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number().int().positive(),
-        noteId: z.number(),
+        noteId: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number; noteId: number },
@@ -7392,7 +7426,7 @@ export const model = {
         "patterns, same as get_file. Binary content is rejected rather " +
         "than decoded as corrupted text.",
       arguments: z.object({
-        id: z.number(),
+        id: z.number().int().positive(),
         project: z.string().min(1).optional().describe(
           "Project path, for a project snippet. Omit for an instance/personal snippet.",
         ),
@@ -7504,7 +7538,7 @@ export const model = {
         "Update an existing snippet's title, description, visibility, " +
         "and/or files. Only fields provided are changed.",
       arguments: z.object({
-        id: z.number(),
+        id: z.number().int().positive(),
         project: z.string().min(1).optional().describe(
           "Project path, for a project snippet. Omit for an instance/personal snippet.",
         ),
@@ -7585,7 +7619,7 @@ export const model = {
         "project is given). Throws a descriptive error on a non-2xx " +
         "response (e.g. 404 not found) rather than silently succeeding.",
       arguments: z.object({
-        id: z.number(),
+        id: z.number().int().positive(),
         project: z.string().min(1).optional().describe(
           "Project path, for a project snippet. Omit for an instance/personal snippet.",
         ),

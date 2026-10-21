@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.10.21.2"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,

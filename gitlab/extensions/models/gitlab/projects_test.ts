@@ -8000,6 +8000,141 @@ Deno.test("every method rejects non-integer and non-positive iids", () => {
   assertEquals(checked.length, 27);
 });
 
+Deno.test("every method rejects non-integer and non-positive numeric ids", () => {
+  // Same shape as the iid test above: required fields are omitted, so the
+  // check is whether the named argument itself is flagged, with 5 as control.
+  const idArgs = ["noteId", "pipelineId", "jobId", "scheduleId", "id"];
+  const argIssues = (schema: any, key: string, v: unknown) =>
+    schema.safeParse({ [key]: v }).error?.issues.filter((i: any) =>
+      i.path[0] === key
+    ) ?? [];
+  const checked: string[] = [];
+  for (const [name, method] of Object.entries(model.methods)) {
+    const shape = (method.arguments as any).shape ?? {};
+    for (const key of idArgs) {
+      if (!(key in shape)) continue;
+      checked.push(`${name}.${key}`);
+      assertEquals(argIssues(method.arguments, key, 5), [], `${name} ${key} 5`);
+      for (const bad of [0, -3, 1.5]) {
+        assertEquals(
+          argIssues(method.arguments, key, bad).length > 0,
+          true,
+          `${name} accepted ${key} ${bad}`,
+        );
+      }
+    }
+  }
+  // Fixed list on purpose, so an id argument added without the constraint,
+  // or a method whose arguments stop exposing `.shape`, fails here.
+  assertEquals(checked.sort(), [
+    "cancel_pipeline.pipelineId",
+    "delete_issue_note.noteId",
+    "delete_mr_note.noteId",
+    "delete_snippet.id",
+    "get_job_log.jobId",
+    "get_pipeline_jobs.pipelineId",
+    "get_snippet.id",
+    "list_pipeline_bridges.pipelineId",
+    "play_pipeline_schedule.scheduleId",
+    "retry_job.jobId",
+    "retry_pipeline.pipelineId",
+    "update_issue_note.noteId",
+    "update_mr_note.noteId",
+    "update_snippet.id",
+  ]);
+});
+
+Deno.test("get_job_log tailLines must be a positive integer up to 10000", () => {
+  const schema = model.methods.get_job_log.arguments;
+  const ok = { project: "g/p", jobId: 1 };
+  assertEquals(schema.parse(ok).tailLines, 200);
+  assertEquals(schema.safeParse({ ...ok, tailLines: 1 }).success, true);
+  assertEquals(schema.safeParse({ ...ok, tailLines: 10_000 }).success, true);
+  for (const bad of [0, -1, 1.5, 10_001]) {
+    assertEquals(
+      schema.safeParse({ ...ok, tailLines: bad }).success,
+      false,
+      `accepted tailLines ${bad}`,
+    );
+  }
+});
+
+Deno.test("create_issue and update_issue reject invalid milestone ids", () => {
+  const issues = (name: "create_issue" | "update_issue", v: unknown) =>
+    model.methods[name].arguments.safeParse({ milestone: v }).error?.issues
+      .filter((i: any) => i.path[0] === "milestone") ?? [];
+  for (const name of ["create_issue", "update_issue"] as const) {
+    for (const good of [5, "5", "v1.0", "1.5"]) {
+      assertEquals(
+        issues(name, good),
+        [],
+        `${name} rejected milestone ${good}`,
+      );
+    }
+    for (const bad of [-3, 1.5, ""]) {
+      assertEquals(
+        issues(name, bad).length > 0,
+        true,
+        `${name} accepted milestone ${JSON.stringify(bad)}`,
+      );
+    }
+  }
+  // GraphQL create has no "no milestone" id, so 0 is rejected there; REST
+  // update reads milestone_id 0 as "unassign", so it is allowed there.
+  for (const zero of [0, "0", "000"]) {
+    assertEquals(issues("create_issue", zero).length > 0, true);
+    assertEquals(issues("update_issue", zero), []);
+  }
+});
+
+Deno.test("update_issue milestone 0 sends milestone_id 0 to clear it", async () => {
+  const original = globalThis.fetch;
+  let sentBody: any = null;
+  let otherCalls = 0;
+  globalThis.fetch = (input: any, init?: any) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (init?.method === "PUT" && url.includes("/issues/5")) {
+      sentBody = JSON.parse(init.body as string);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            iid: 5,
+            title: "t",
+            description: "",
+            state: "opened",
+            web_url: "https://git.example.org/org/repo/-/issues/5",
+            labels: [],
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-06-10T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    otherCalls++;
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  };
+  try {
+    for (const milestone of [0, "0"]) {
+      sentBody = null;
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      const args = model.methods.update_issue.arguments.parse({
+        project: "org/repo",
+        iid: 5,
+        milestone,
+      });
+      await model.methods.update_issue.execute(args as any, context as any);
+      assertEquals(sentBody.milestone_id, 0, `milestone ${milestone}`);
+    }
+    // No milestone title lookup: 0 is an id, not a title.
+    assertEquals(otherCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("convert_work_item_type throws when GitLab keeps the old type", async () => {
   const m = mockWorkItemGraphql({
     lookup: workItemLookup({}),

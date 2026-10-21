@@ -1,61 +1,30 @@
-## 2026.10.21.1
+## 2026.10.21.2
 
-**Added:** Two methods, `remove_work_item_parent` and
-`convert_work_item_type`. They use the work-item GraphQL API
-(`workItemUpdate` with the hierarchy widget, and `workItemConvert`), which
-the REST issues API does not cover.
+**Changed:** The remaining numeric ID arguments now reject a value that is not a
+positive integer, such as `0`, `-3` or `1.5`, at input validation, before any
+request reaches GitLab. Previously these values were sent to GitLab as-is, in
+REST paths such as `/jobs/1.5` or GraphQL ids such as `gid://gitlab/Note/1.5`.
+Affected arguments:
 
-- `remove_work_item_parent` leaves a work item with no ancestor. It fails
-  unless the mutation response confirms the parent is gone. If the token
-  cannot read the parent, it fails before sending the mutation, since
-  GitLab would refuse it. Requires GitLab 17.2 or later.
-- `convert_work_item_type` changes a work item's type. Converting a Task to
-  an Issue makes it show on issue boards. Type names match the project's
-  work item types, ignoring case and surrounding whitespace. An unknown name
-  fails with the list of available types. It fails if GitLab returns a type
-  other than the one requested.
+- `noteId` on `update_issue_note`, `delete_issue_note`, `update_mr_note` and
+  `delete_mr_note`
+- `pipelineId` on `get_pipeline_jobs`, `retry_pipeline`, `cancel_pipeline` and
+  `list_pipeline_bridges`
+- `jobId` on `get_job_log` and `retry_job`
+- `scheduleId` on `play_pipeline_schedule`
+- `id` on `get_snippet`, `update_snippet` and `delete_snippet`
 
-Neither method sends a mutation when the work item is already in the
-requested state. Results land in the new `workItemParent` and
-`workItemType` resources, under the data names
-`<project>-work-item-<iid>-parent` and `-type`, with `/` in the project
-path written as `~` (for example `group~proj-work-item-7-parent`). No globalArguments change.
-Contributed by @zWaR (#500).
+**Changed:** `get_job_log` `tailLines` must be an integer from 1 to 10000.
+Before, `0` or a negative value was silently raised to 1, and any size was
+accepted. The default stays 200.
 
-**Changed:** Every method that takes an `iid` or `iids` argument (27
-methods) now rejects a value that is not a positive integer, such as `0`,
-`-3` or `1.5`, at input validation, before any request reaches GitLab.
-Previously these values were sent to GitLab as-is. For `unassign_from_issues`,
-`unassign_from_mrs` and `remove_mr_reviewers`, one invalid entry in `iids` now
-rejects the whole call. Before, the valid entries were processed and the
-invalid one was recorded under `failed`. Resource schemas are unchanged.
+**Changed:** `milestone` on `create_issue` rejects `0`, a string of only zeros
+(`"0"`), and any number that is not a positive integer. These used to be sent to
+GitLab as-is; milestone ID 0 names no milestone. On `update_issue`, `0` and
+`"0"` still clear the issue's milestone, and other non-integer or negative
+numbers are rejected. On both methods an empty string is now rejected at
+validation; before, it was looked up as a title and failed with "no milestone
+titled". Titles are unaffected, including ones that look like numbers, such as
+`"1.5"`.
 
-## 2026.10.14.2
-
-**Added:** `search` method wrapping the GitLab REST search API at instance,
-group, or project level (`/search`, `/groups/:id/search`,
-`/projects/:id/search`). Supports every REST scope (blobs, commits, issues,
-merge_requests, milestones, notes, projects, snippet_titles, users,
-wiki_blobs), plus `ref` (project only) and `state` (issues/merge_requests
-only). Results land in the new `searchResults` resource, follow
-`x-next-page` up to `limit` (max 1000), and set `truncated` when more exist.
-Invalid combinations fail before any request: `ref` outside
-blobs/commits/wiki_blobs, `state=merged` outside merge_requests, and queries
-under 2 characters. No globalArguments change.
-
-## 2026.10.14.1
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
-
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.10.07.1
-
-**Fixed:** `get_pipeline_by_iid` failed with `Field 'webUrl' doesn't exist on
-type 'Pipeline'` on GitLab instances whose GraphQL schema lacks that field.
-Closes #476.
-
-**Changed:** The query no longer requests `webUrl`. The `webUrl` in the
-`pipelineByIid` resource is now built as
-`https://<host>/<project>/-/pipelines/<id>`. No schema or `globalArguments`
-change.
+**Upgrade note:** No globalArguments change. Resource schemas are unchanged.
