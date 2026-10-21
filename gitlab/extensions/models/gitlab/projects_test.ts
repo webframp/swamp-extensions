@@ -7590,61 +7590,141 @@ Deno.test("delete_snippet throws a descriptive error on a non-2xx response (e.g.
 // Work Item Hierarchy and Type Tests
 // =============================================================================
 
-// One canned body answers both the lookup query and the mutation, since
-// mockGraphqlCapture returns the same response to every GraphQL call.
-function workItemResponse(opts: {
+// Answers the lookup query and each mutation with its own body, dispatching on
+// the operation name, so a method reading the wrong response fails the test.
+function mockWorkItemGraphql(responses: {
+  lookup: unknown;
+  update?: unknown;
+  convert?: unknown;
+}): { restore: () => void; bodies: () => any[] } {
+  const original = globalThis.fetch;
+  const all: any[] = [];
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if ((init?.method ?? "GET") !== "POST" || !url.includes("/api/graphql")) {
+      return Promise.resolve(new Response("nope", { status: 404 }));
+    }
+    const body = JSON.parse(init!.body as string);
+    all.push(body);
+    const query: string = body.query;
+    const payload = query.includes("query workItem(")
+      ? responses.lookup
+      : query.includes("mutation removeWorkItemParent(")
+      ? responses.update
+      : query.includes("mutation convertWorkItem(")
+      ? responses.convert
+      : undefined;
+    if (payload === undefined) {
+      return Promise.resolve(
+        new Response(`unexpected query: ${query}`, { status: 500 }),
+      );
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  return {
+    restore: () => {
+      globalThis.fetch = original;
+    },
+    bodies: () => all,
+  };
+}
+
+function hierarchyWidget(hasParent: boolean, parent: string | null) {
+  return { hasParent, parent: parent ? { reference: parent } : null };
+}
+
+function workItemLookup(opts: {
   type?: string;
+  hasParent?: boolean;
   parent?: string | null;
-  mutation?: Record<string, unknown>;
+  types?: Array<{ id: string; name: string }> | null;
+  nodes?: unknown[];
 }) {
+  const parent = opts.parent ?? null;
   return {
     data: {
       project: {
         workItems: {
-          nodes: [{
+          nodes: opts.nodes ?? [{
             id: "gid://gitlab/WorkItem/42",
             workItemType: { name: opts.type ?? "Task" },
             widgets: [
               {},
-              { parent: opts.parent ? { reference: opts.parent } : null },
+              hierarchyWidget(opts.hasParent ?? parent !== null, parent),
             ],
           }],
         },
-        workItemTypes: {
-          nodes: [
+        workItemTypes: opts.types === null ? null : {
+          nodes: opts.types ?? [
             { id: "gid://gitlab/WorkItems::Type/1", name: "Issue" },
             { id: "gid://gitlab/WorkItems::Type/5", name: "Task" },
           ],
         },
       },
-      ...opts.mutation,
     },
   };
 }
 
+function updateResponse(workItem: unknown, errors: string[] = []) {
+  return { data: { workItemUpdate: { workItem, errors } } };
+}
+
+function convertResponse(workItem: unknown, errors: string[] = []) {
+  return { data: { workItemConvert: { workItem, errors } } };
+}
+
+async function runRemoveParent(): Promise<
+  ReturnType<typeof createModelTestContext>
+> {
+  const tc = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await model.methods.remove_work_item_parent.execute(
+    { project: "group/proj", iid: 7 },
+    tc.context as any,
+  );
+  return tc;
+}
+
+async function runConvert(
+  type: string,
+): Promise<ReturnType<typeof createModelTestContext>> {
+  const tc = createModelTestContext({ globalArgs: TEST_GLOBAL_ARGS });
+  await model.methods.convert_work_item_type.execute(
+    { project: "group/proj", iid: 7, type },
+    tc.context as any,
+  );
+  return tc;
+}
+
 Deno.test("remove_work_item_parent clears the parent and records it", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    parent: "group/proj#1",
-    mutation: {
-      workItemUpdate: {
-        workItem: { widgets: [{ parent: null }] },
-        errors: [],
-      },
-    },
-  }));
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse({ widgets: [{}, hierarchyWidget(false, null)] }),
+  });
   try {
-    const { context, getWrittenResources } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
-    await model.methods.remove_work_item_parent.execute(
-      { project: "group/proj", iid: 7 },
-      context as any,
-    );
+    const { getWrittenResources } = await runRemoveParent();
+    const [lookup, update] = m.bodies();
     assertEquals(m.bodies().length, 2);
-    assertEquals(m.vars(), { id: "gid://gitlab/WorkItem/42" });
-    const d = getWrittenResources().find((x) =>
+    assertEquals(lookup.variables, { fullPath: "group/proj", iid: "7" });
+    assertEquals(update.variables, { id: "gid://gitlab/WorkItem/42" });
+    assertEquals(
+      update.query.includes("hierarchyWidget: { parentId: null }"),
+      true,
+    );
+    const written = getWrittenResources().find((x) =>
       x.specName === "workItemParent"
-    )!.data as any;
+    )!;
+    assertEquals(written.name, "group~proj-work-item-7-parent");
+    const d = written.data as any;
+    assertEquals(d.hadParent, true);
     assertEquals(d.previousParent, "group/proj#1");
     assertEquals(d.parent, null);
   } finally {
@@ -7653,19 +7733,32 @@ Deno.test("remove_work_item_parent clears the parent and records it", async () =
 });
 
 Deno.test("remove_work_item_parent skips the mutation when there is no parent", async () => {
-  const m = mockGraphqlCapture(workItemResponse({ parent: null }));
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({}) });
   try {
-    const { context, getWrittenResources } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
-    await model.methods.remove_work_item_parent.execute(
-      { project: "group/proj", iid: 7 },
-      context as any,
-    );
+    const { getWrittenResources } = await runRemoveParent();
     assertEquals(m.bodies().length, 1);
     const d = getWrittenResources().find((x) =>
       x.specName === "workItemParent"
     )!.data as any;
+    assertEquals(d.hadParent, false);
+    assertEquals(d.previousParent, null);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent detaches a parent the token cannot read", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ hasParent: true, parent: null }),
+    update: updateResponse({ widgets: [hierarchyWidget(false, null)] }),
+  });
+  try {
+    const { getWrittenResources } = await runRemoveParent();
+    assertEquals(m.bodies().length, 2);
+    const d = getWrittenResources().find((x) =>
+      x.specName === "workItemParent"
+    )!.data as any;
+    assertEquals(d.hadParent, true);
     assertEquals(d.previousParent, null);
   } finally {
     m.restore();
@@ -7673,115 +7766,56 @@ Deno.test("remove_work_item_parent skips the mutation when there is no parent", 
 });
 
 Deno.test("remove_work_item_parent throws when GitLab keeps the parent", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    parent: "group/proj#1",
-    mutation: {
-      workItemUpdate: {
-        workItem: { widgets: [{ parent: { reference: "group/proj#1" } }] },
-        errors: [],
-      },
-    },
-  }));
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse({
+      widgets: [hierarchyWidget(true, "group/proj#1")],
+    }),
+  });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
-    await assertRejects(
-      () =>
-        model.methods.remove_work_item_parent.execute(
-          { project: "group/proj", iid: 7 },
-          context as any,
-        ),
-      Error,
-      "kept parent",
-    );
+    await assertRejects(runRemoveParent, Error, "kept parent group/proj#1");
   } finally {
     m.restore();
   }
 });
 
-Deno.test("convert_work_item_type resolves the type name to its ID", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    mutation: {
-      workItemConvert: {
-        workItem: { workItemType: { name: "Issue" } },
-        errors: [],
-      },
-    },
-  }));
-  try {
-    const { context, getWrittenResources } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
+Deno.test("remove_work_item_parent throws when the response omits the hierarchy widget", async () => {
+  for (const workItem of [null, { widgets: [{}] }]) {
+    const m = mockWorkItemGraphql({
+      lookup: workItemLookup({ parent: "group/proj#1" }),
+      update: updateResponse(workItem),
     });
-    await model.methods.convert_work_item_type.execute(
-      { project: "group/proj", iid: 7, type: "issue" },
-      context as any,
-    );
-    assertEquals(m.vars(), {
-      id: "gid://gitlab/WorkItem/42",
-      typeId: "gid://gitlab/WorkItems::Type/1",
-    });
-    const d = getWrittenResources().find((x) => x.specName === "workItemType")!
-      .data as any;
-    assertEquals(d.previousType, "Task");
-    assertEquals(d.type, "Issue");
-  } finally {
-    m.restore();
+    try {
+      await assertRejects(runRemoveParent, Error, "removal is unconfirmed");
+    } finally {
+      m.restore();
+    }
   }
 });
 
-Deno.test("convert_work_item_type skips the mutation when the type already matches", async () => {
-  const m = mockGraphqlCapture(workItemResponse({ type: "Issue" }));
+Deno.test("remove_work_item_parent throws when the lookup has no hierarchy widget", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({
+      nodes: [{
+        id: "gid://gitlab/WorkItem/42",
+        workItemType: { name: "Task" },
+        widgets: [{}],
+      }],
+    }),
+  });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
-    await model.methods.convert_work_item_type.execute(
-      { project: "group/proj", iid: 7, type: "Issue" },
-      context as any,
-    );
+    await assertRejects(runRemoveParent, Error, "has no hierarchy widget");
     assertEquals(m.bodies().length, 1);
   } finally {
     m.restore();
   }
 });
 
-Deno.test("convert_work_item_type rejects an unknown type name", async () => {
-  const m = mockGraphqlCapture(workItemResponse({}));
-  try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
-    await assertRejects(
-      () =>
-        model.methods.convert_work_item_type.execute(
-          { project: "group/proj", iid: 7, type: "Epic" },
-          context as any,
-        ),
-      Error,
-      'unknown type "Epic" (available: Issue, Task)',
-    );
-  } finally {
-    m.restore();
-  }
-});
-
 Deno.test("remove_work_item_parent throws when the work item is not found", async () => {
-  const m = mockGraphqlCapture({
-    data: {
-      project: { workItems: { nodes: [] }, workItemTypes: { nodes: [] } },
-    },
-  });
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ nodes: [] }) });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
     await assertRejects(
-      () =>
-        model.methods.remove_work_item_parent.execute(
-          { project: "group/proj", iid: 7 },
-          context as any,
-        ),
+      runRemoveParent,
       Error,
       "work item group/proj#7 not found",
     );
@@ -7792,22 +7826,13 @@ Deno.test("remove_work_item_parent throws when the work item is not found", asyn
 });
 
 Deno.test("remove_work_item_parent surfaces workItemUpdate errors", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    parent: "group/proj#1",
-    mutation: {
-      workItemUpdate: { workItem: null, errors: ["not allowed"] },
-    },
-  }));
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: updateResponse(null, ["not allowed"]),
+  });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
     await assertRejects(
-      () =>
-        model.methods.remove_work_item_parent.execute(
-          { project: "group/proj", iid: 7 },
-          context as any,
-        ),
+      runRemoveParent,
       Error,
       "workItemUpdate failed: not allowed",
     );
@@ -7816,22 +7841,95 @@ Deno.test("remove_work_item_parent surfaces workItemUpdate errors", async () => 
   }
 });
 
-Deno.test("convert_work_item_type surfaces workItemConvert errors", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    mutation: {
-      workItemConvert: { workItem: null, errors: ["cannot convert"] },
-    },
-  }));
+Deno.test("remove_work_item_parent throws on a null workItemUpdate payload", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({ parent: "group/proj#1" }),
+    update: { data: { workItemUpdate: null } },
+  });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
+    await assertRejects(runRemoveParent, Error, "workItemUpdate returned null");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type resolves the type name to its ID", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse({ workItemType: { name: "Issue" } }),
+  });
+  try {
+    const { getWrittenResources } = await runConvert(" issue ");
+    const [lookup, convert] = m.bodies();
+    assertEquals(m.bodies().length, 2);
+    assertEquals(lookup.variables, { fullPath: "group/proj", iid: "7" });
+    assertEquals(convert.variables, {
+      id: "gid://gitlab/WorkItem/42",
+      typeId: "gid://gitlab/WorkItems::Type/1",
     });
+    const written = getWrittenResources().find((x) =>
+      x.specName === "workItemType"
+    )!;
+    assertEquals(written.name, "group~proj-work-item-7-type");
+    const d = written.data as any;
+    assertEquals(d.previousType, "Task");
+    assertEquals(d.type, "Issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type skips the mutation when the type already matches", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ type: "Issue" }) });
+  try {
+    const { getWrittenResources } = await runConvert("Issue");
+    assertEquals(m.bodies().length, 1);
+    const d = getWrittenResources().find((x) => x.specName === "workItemType")!
+      .data as any;
+    assertEquals(d.previousType, "Issue");
+    assertEquals(d.type, "Issue");
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type rejects an unknown type name", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({}) });
+  try {
     await assertRejects(
-      () =>
-        model.methods.convert_work_item_type.execute(
-          { project: "group/proj", iid: 7, type: "Issue" },
-          context as any,
-        ),
+      () => runConvert("Epic"),
+      Error,
+      'unknown type "Epic" (available: Issue, Task)',
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when GitLab returns no work item types", async () => {
+  for (const types of [null, []]) {
+    const m = mockWorkItemGraphql({ lookup: workItemLookup({ types }) });
+    try {
+      await assertRejects(
+        () => runConvert("Issue"),
+        Error,
+        "GitLab returned no work item types for group/proj",
+      );
+    } finally {
+      m.restore();
+    }
+  }
+});
+
+Deno.test("convert_work_item_type surfaces workItemConvert errors", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse(null, ["cannot convert"]),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
       Error,
       "workItemConvert failed: cannot convert",
     );
@@ -7840,24 +7938,52 @@ Deno.test("convert_work_item_type surfaces workItemConvert errors", async () => 
   }
 });
 
-Deno.test("convert_work_item_type throws when the mutation returns no work item", async () => {
-  const m = mockGraphqlCapture(workItemResponse({
-    mutation: { workItemConvert: { workItem: null, errors: [] } },
-  }));
+Deno.test("convert_work_item_type throws on a null workItemConvert payload", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: { data: { workItemConvert: null } },
+  });
   try {
-    const { context } = createModelTestContext({
-      globalArgs: TEST_GLOBAL_ARGS,
-    });
     await assertRejects(
-      () =>
-        model.methods.convert_work_item_type.execute(
-          { project: "group/proj", iid: 7, type: "Issue" },
-          context as any,
-        ),
+      () => runConvert("Issue"),
+      Error,
+      "workItemConvert returned null",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when the mutation returns no work item", async () => {
+  const m = mockWorkItemGraphql({
+    lookup: workItemLookup({}),
+    convert: convertResponse(null),
+  });
+  try {
+    await assertRejects(
+      () => runConvert("Issue"),
       Error,
       "returned no work item type",
     );
   } finally {
     m.restore();
+  }
+});
+
+Deno.test("work item methods reject non-integer and non-positive iids", () => {
+  for (const iid of [0, -3, 1.5]) {
+    for (
+      const method of [
+        model.methods.remove_work_item_parent,
+        model.methods.convert_work_item_type,
+      ]
+    ) {
+      assertEquals(
+        method.arguments.safeParse({ project: "g/p", iid, type: "Issue" })
+          .success,
+        false,
+        `iid ${iid}`,
+      );
+    }
   }
 });

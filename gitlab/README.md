@@ -159,7 +159,7 @@ view:
 | **notes**         | Comments on issue or MR           | noteableType, noteableIid, truncated                      |
 | **issueAssignees** | Assignees of an issue after a set/unassign | iid, assignees                                    |
 | **issueUnassignResult** | Fan-out unassign result across issues | username, results, failed                            |
-| **workItemParent** | Parent of a work item before/after detaching | previousParent, parent                          |
+| **workItemParent** | Parent of a work item before/after detaching | hadParent, previousParent, parent               |
 | **workItemType** | Type of a work item before/after converting | previousType, type                                 |
 | **issueDiscussions** | Discussion threads on an issue  | iid, discussions, truncated                               |
 | **releases**      | Tagged releases                   | tagName, releasedAt, truncated                            |
@@ -229,6 +229,25 @@ These methods compare the resulting assignee list against the requested list.
 If GitLab silently dropped a username (e.g. user does not exist or lacks
 project access), the method throws rather than returning a partial
 assignment.
+
+### Work item parent and type changes
+
+`remove_work_item_parent` and `convert_work_item_type` use the work-item
+GraphQL API, which the REST issues API does not cover. Both check the
+mutation response and throw if GitLab did not apply the change.
+
+- A parent the token cannot read (confidential, or in a project the token
+  cannot see) is still detected through the hierarchy widget's `hasParent`
+  and removed. The resource then records `hadParent: true` with
+  `previousParent: null`.
+- GitLab enforces hierarchy rules on conversion, and may reject turning a
+  Task into an Issue while its parent is an Issue. Run
+  `remove_work_item_parent` first.
+- `workItemTypes` can list types the instance's tier cannot create, such as
+  Epic or Objective on CE. GitLab rejects those conversions, and the error
+  is passed through.
+- GitLab marks `workItemConvert` as an Experiment, so its behavior may change
+  between GitLab releases.
 
 ### No retry or rate-limit handling
 

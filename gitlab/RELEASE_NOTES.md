@@ -1,13 +1,24 @@
 ## 2026.10.21.1
 
-**Added:** `remove_work_item_parent` and `convert_work_item_type`, using the
-work-item GraphQL API (`workItemUpdate` hierarchy widget, `workItemConvert`)
-that the REST issues API lacks. Removing a parent leaves a work item with no
-ancestor; converting a Task to an Issue makes it show on issue boards. Type
-names resolve case-insensitively against the project's work item types. Both
-are no-ops when the work item is already in the requested state. Results
-land in the new `workItemParent` and `workItemType` resources. No
-globalArguments change. Contributed by @zWaR (#500).
+**Added:** Two methods, `remove_work_item_parent` and
+`convert_work_item_type`. They use the work-item GraphQL API
+(`workItemUpdate` with the hierarchy widget, and `workItemConvert`), which
+the REST issues API does not cover.
+
+- `remove_work_item_parent` leaves a work item with no ancestor. It finds
+  the parent through `hasParent`, so it also removes a parent the token
+  cannot read. It fails unless the mutation response confirms the parent is
+  gone.
+- `convert_work_item_type` changes a work item's type. Converting a Task to
+  an Issue makes it show on issue boards. Type names match the project's
+  work item types, ignoring case and surrounding whitespace. An unknown name
+  fails with the list of available types.
+
+Neither method sends a mutation when the work item is already in the
+requested state. Results land in the new `workItemParent` and
+`workItemType` resources, under the data names
+`<project>-work-item-<iid>-parent` and `-type`. No globalArguments change.
+Contributed by @zWaR (#500).
 
 ## 2026.10.14.2
 

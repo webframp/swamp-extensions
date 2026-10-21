@@ -432,8 +432,11 @@ const IssueAssigneesSchema = z.object({
 const WorkItemParentSchema = z.object({
   project: z.string().describe("Project the work item belongs to"),
   iid: z.number().describe("Work item internal ID (project-scoped)"),
+  hadParent: z.boolean().describe(
+    "Whether the work item had a parent before the operation",
+  ),
   previousParent: z.string().nullable().describe(
-    "Full reference of the parent before removal (null when it had none)",
+    "Full reference of the parent before removal (null when it had none, or when the token cannot read it)",
   ),
   parent: z.string().nullable().describe(
     "Full reference of the parent after the operation (null when detached)",
@@ -1881,7 +1884,7 @@ query workItem($fullPath: ID!, $iid: String!) {
       nodes {
         id
         workItemType { name }
-        widgets { ... on WorkItemWidgetHierarchy { parent { reference(full: true) } } }
+        widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } }
       }
     }
     workItemTypes { nodes { id name } }
@@ -1891,7 +1894,7 @@ query workItem($fullPath: ID!, $iid: String!) {
 const REMOVE_WORK_ITEM_PARENT_MUTATION = `
 mutation removeWorkItemParent($id: WorkItemID!) {
   workItemUpdate(input: { id: $id, hierarchyWidget: { parentId: null } }) {
-    workItem { widgets { ... on WorkItemWidgetHierarchy { parent { reference(full: true) } } } }
+    workItem { widgets { ... on WorkItemWidgetHierarchy { hasParent parent { reference(full: true) } } } }
     errors
   }
 }`;
@@ -1915,13 +1918,20 @@ query mrId($fullPath: ID!, $iid: String!) {
   project(fullPath: $fullPath) { mergeRequest(iid: $iid) { id } }
 }`;
 
-// The hierarchy widget is the only widget carrying `parent`; other widgets
-// come back as empty objects from the inline fragment.
-function workItemParentRef(workItem: any): string | null {
+// The hierarchy widget is the only widget carrying `hasParent`; other widgets
+// come back as empty objects from the inline fragment. `hasParent` is read
+// separately from `parent` because GitLab nulls `parent` when the token
+// cannot read it (confidential, or in a project the token cannot see).
+// Returns null when the hierarchy widget is absent.
+function workItemHierarchy(
+  workItem: any,
+): { hasParent: boolean; parent: string | null } | null {
   const hierarchy = (workItem?.widgets ?? []).find((w: any) =>
-    w && "parent" in w
+    w && "hasParent" in w
   );
-  return hierarchy?.parent?.reference ?? null;
+  if (!hierarchy) return null;
+  const parent: string | null = hierarchy.parent?.reference ?? null;
+  return { hasParent: hierarchy.hasParent === true || parent !== null, parent };
 }
 
 async function lookupWorkItem(
@@ -4340,7 +4350,7 @@ export const model = {
         "Detach a work item (issue, task, ...) from its parent so it has no ancestor. No-op when it has no parent.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
+        iid: z.number().int().positive(),
       }),
       execute: async (
         args: { project: string; iid: number },
@@ -4355,9 +4365,16 @@ export const model = {
           args.iid,
           "remove_work_item_parent",
         );
-        const previousParent = workItemParentRef(workItem);
+        const before = workItemHierarchy(workItem);
+        if (!before) {
+          throw new Error(
+            `remove_work_item_parent: work item ${args.project}#${args.iid} has no hierarchy widget`,
+          );
+        }
+        const hadParent = before.hasParent;
+        const previousParent = before.parent;
         let parent: string | null = null;
-        if (previousParent) {
+        if (hadParent) {
           const data = await graphqlRequest(
             host,
             token,
@@ -4375,19 +4392,28 @@ export const model = {
               `workItemUpdate failed: ${result.errors.join("; ")}`,
             );
           }
-          parent = workItemParentRef(result.workItem);
-          if (parent) {
+          const after = workItemHierarchy(result.workItem);
+          if (!after) {
             throw new Error(
-              `remove_work_item_parent: GitLab kept parent ${parent}`,
+              "remove_work_item_parent: workItemUpdate returned no hierarchy widget, so the removal is unconfirmed",
             );
           }
+          if (after.hasParent) {
+            throw new Error(
+              `remove_work_item_parent: GitLab kept parent ${
+                after.parent ?? "(not readable with this token)"
+              }`,
+            );
+          }
+          parent = after.parent;
         }
         const handle = await ctx.writeResource(
           "workItemParent",
-          `${sanitizeName(args.project)}-work-item-${args.iid}`,
+          `${sanitizeName(args.project)}-work-item-${args.iid}-parent`,
           {
             project: args.project,
             iid: args.iid,
+            hadParent,
             previousParent,
             parent,
             fetchedAt: new Date().toISOString(),
@@ -4396,10 +4422,13 @@ export const model = {
           },
         );
         ctx.logger.info(
-          previousParent
+          hadParent
             ? "Removed parent {parent} from work item #{iid}"
             : "Work item #{iid} has no parent",
-          { iid: args.iid, parent: previousParent },
+          {
+            iid: args.iid,
+            parent: previousParent ?? "(not readable with this token)",
+          },
         );
         return { dataHandles: [handle] };
       },
@@ -4410,8 +4439,8 @@ export const model = {
         "Change a work item's type (e.g. Task to Issue) by type name, as listed in the project's work item types. No-op when it already has that type.",
       arguments: z.object({
         project: z.string().min(1),
-        iid: z.number(),
-        type: z.string().min(1).describe(
+        iid: z.number().int().positive(),
+        type: z.string().trim().min(1).describe(
           "Target type name, case-insensitive (e.g. Issue, Task, Incident)",
         ),
       }),
@@ -4428,9 +4457,13 @@ export const model = {
           args.iid,
           "convert_work_item_type",
         );
-        const target = types.find((t) =>
-          t.name.toLowerCase() === args.type.toLowerCase()
-        );
+        if (types.length === 0) {
+          throw new Error(
+            `convert_work_item_type: GitLab returned no work item types for ${args.project}`,
+          );
+        }
+        const wanted = args.type.trim().toLowerCase();
+        const target = types.find((t) => t.name.toLowerCase() === wanted);
         if (!target) {
           throw new Error(
             `convert_work_item_type: unknown type "${args.type}" (available: ${
@@ -4468,7 +4501,7 @@ export const model = {
         }
         const handle = await ctx.writeResource(
           "workItemType",
-          `${sanitizeName(args.project)}-work-item-${args.iid}`,
+          `${sanitizeName(args.project)}-work-item-${args.iid}-type`,
           {
             project: args.project,
             iid: args.iid,
