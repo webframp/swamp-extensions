@@ -24,9 +24,11 @@ Contributed by @zWaR (#500).
 
 **Changed:** Every method that takes an `iid` or `iids` argument (27
 methods) now rejects a value that is not a positive integer, such as `0`,
-`-3` or `1.5`, at input validation. Before, such a value reached GitLab and
-failed later with a vaguer "not found" or null-payload error, so no call that
-used to succeed is affected. Resource schemas are unchanged.
+`-3` or `1.5`, at input validation, before any request reaches GitLab.
+Previously these values were sent to GitLab as-is. For `unassign_from_issues`,
+`unassign_from_mrs` and `remove_mr_reviewers`, one invalid entry in `iids` now
+rejects the whole call. Before, the valid entries were processed and the
+invalid one was recorded under `failed`. Resource schemas are unchanged.
 
 ## 2026.10.14.2
 
