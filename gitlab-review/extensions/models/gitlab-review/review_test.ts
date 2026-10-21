@@ -29,6 +29,7 @@ Deno.test("model has all expected methods", () => {
     "approve_mr",
     "edit_draft",
     "get_mr_diff",
+    "post_discussion",
     "post_line_comment",
     "post_review",
     "unapprove_mr",
@@ -39,6 +40,7 @@ Deno.test("model has all expected methods", () => {
 Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
+    "discussionThread",
     "inlineReview",
     "lineComment",
     "mrDiff",
@@ -1069,6 +1071,287 @@ Deno.test("post_line_comment rejects closed MR", async () => {
       Error,
       "is closed",
     );
+  } finally {
+    restore();
+  }
+});
+
+// =============================================================================
+// post_discussion
+// =============================================================================
+
+function discussionFetchMock(): {
+  calls: { url: string; body: any }[];
+  restore: () => void;
+} {
+  const calls: { url: string; body: any }[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (init?.method === "POST" && url.includes("/discussions")) {
+      calls.push({ url, body: JSON.parse(String(init.body)) });
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: `discussion-${calls.length}`,
+            notes: [{ id: 700 + calls.length }],
+          }),
+          { status: 201, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(new Response("Not Found", { status: 404 }));
+  };
+  return {
+    calls,
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
+}
+
+Deno.test("post_discussion rejects an empty or blank body", () => {
+  for (const body of ["", "   ", "\r\n"]) {
+    const result = model.methods.post_discussion.arguments.safeParse({
+      project: "group/repo",
+      iid: 1,
+      body,
+    });
+    assertEquals(result.success, false, JSON.stringify(body));
+  }
+});
+
+Deno.test("post_discussion keeps leading whitespace significant", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    const args = { project: "group/repo", iid: 1 };
+    await model.methods.post_discussion.execute(
+      { ...args, body: "    x = 1" },
+      context as any,
+    );
+    await model.methods.post_discussion.execute(
+      { ...args, body: "x = 1" },
+      context as any,
+    );
+    assertEquals(calls.length, 2);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion opens a thread with no position", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await model.methods.post_discussion.execute(
+      { project: "group/repo", iid: 1, body: "use feat, not fix" },
+      context as any,
+    );
+    assertEquals(calls.length, 1);
+    assertEquals(
+      new URL(calls[0].url).pathname,
+      "/api/v4/projects/group%2Frepo/merge_requests/1/discussions",
+    );
+    assertEquals(calls[0].body, { body: "use feat, not fix" });
+
+    const resources = getWrittenResources();
+    assertEquals(resources.length, 1);
+    assertEquals(resources[0].specName, "discussionThread");
+    const data = resources[0].data as any;
+    assertEquals(data.discussionId, "discussion-1");
+    assertEquals(data.noteId, 701);
+    assertEquals(data.body, "use feat, not fix");
+    assertEquals(data.collectedBy, "@webframp/gitlab-review");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion keys distinct bodies as separate instances and skips a repeated body", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    const args = { project: "group/repo", iid: 1 };
+    await model.methods.post_discussion.execute(
+      { ...args, body: "first point" },
+      context as any,
+    );
+    await model.methods.post_discussion.execute(
+      { ...args, body: "second point" },
+      context as any,
+    );
+    const second = await model.methods.post_discussion.execute(
+      { ...args, body: "first point" },
+      context as any,
+    );
+
+    assertEquals(calls.length, 2);
+    assertEquals(second.dataHandles, []);
+    const names = getWrittenResources().map((r) => r.name);
+    assertEquals(names.length, 2);
+    assertEquals(new Set(names).size, 2);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion treats whitespace-only body differences as the same thread", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    const args = { project: "group/repo", iid: 1 };
+    await model.methods.post_discussion.execute(
+      { ...args, body: "line one\nline two" },
+      context as any,
+    );
+    const retry = await model.methods.post_discussion.execute(
+      { ...args, body: "line one\r\nline two\n" },
+      context as any,
+    );
+    assertEquals(calls.length, 1);
+    assertEquals(retry.dataHandles, []);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion does not share keys across MRs", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+      [`mrDiff-${encodeURIComponent("group/repo")}-2`]: {
+        ...OPENED_MR_DIFF,
+        iid: 2,
+      },
+    },
+  });
+
+  try {
+    await model.methods.post_discussion.execute(
+      { project: "group/repo", iid: 1, body: "same text" },
+      context as any,
+    );
+    await model.methods.post_discussion.execute(
+      { project: "group/repo", iid: 2, body: "same text" },
+      context as any,
+    );
+    assertEquals(calls.length, 2);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion throws on an unexpected discussion response", async () => {
+  const restore = mockFetch({
+    "POST /api/v4/projects/group%2Frepo/merge_requests/1/discussions": {
+      status: 201,
+      body: { id: "abc", notes: [] },
+    },
+  });
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_discussion.execute(
+          { project: "group/repo", iid: 1, body: "point" },
+          context as any,
+        ),
+      Error,
+      "unexpected discussion response",
+    );
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("post_discussion throws on a non-JSON discussion response", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(new Response("<html>oops</html>", { status: 201 }));
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_discussion.execute(
+          { project: "group/repo", iid: 1, body: "point" },
+          context as any,
+        ),
+      Error,
+      "response was not valid JSON",
+    );
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("post_discussion rejects merged MR without calling GitLab", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: {
+        ...OPENED_MR_DIFF,
+        state: "merged",
+      },
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_discussion.execute(
+          { project: "group/repo", iid: 1, body: "point" },
+          context as any,
+        ),
+      Error,
+      "is merged",
+    );
+    assertEquals(calls.length, 0);
   } finally {
     restore();
   }

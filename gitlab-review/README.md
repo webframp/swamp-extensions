@@ -49,6 +49,7 @@ globalArguments:
 | `unapprove_mr`      | Remove approval (request changes)                    | `project`, `iid`                                                        |
 | `post_review`       | Post draft as comment, optionally approve            | `project`, `iid`, `action?`                                             |
 | `post_line_comment` | Post a comment positioned on a file/line in the diff | `project`, `iid`, `body`, `newPath`, `newLine?`, `oldPath?`, `oldLine?` |
+| `post_discussion`   | Open a general resolvable thread (no diff position)  | `project`, `iid`, `body`                                                |
 
 The `action` parameter on `post_review` accepts: `comment` (default), `approve`,
 or `request_changes`.
@@ -56,14 +57,34 @@ or `request_changes`.
 `post_line_comment` requires at least one of `newLine` (added/changed lines) or
 `oldLine` (deleted lines); `oldPath` defaults to `newPath` when omitted.
 
+`post_discussion` covers review points that don't sit on a changed line: a stale
+doc outside the diff, a file the MR should also touch, a commit-type nit. Each
+call opens its own resolvable thread, so the author can resolve points one by
+one. `post_review`, by contrast, posts a single note that cannot be resolved.
+The method records each thread under a key derived from a SHA-256 of the body
+(line endings normalised, trailing whitespace trimmed) and the exact `project`
+string and `iid`. It skips posting when a thread with the same body is already
+recorded for that MR, so a retry after a successful post does not open a
+duplicate. Two cases still can:
+
+- GitLab accepts the POST but the call fails before the record is written (an
+  unparseable or unexpected response, or a client-side failure after the request
+  was sent). Check the MR before retrying.
+- The same MR is addressed under a different `project` spelling (other casing,
+  or the numeric project ID). Use one spelling consistently.
+
+Posting an identical body twice on purpose is not possible while the record is
+retained (30 days).
+
 ## Resources
 
-| Resource       | Description                        | Retention        |
-| -------------- | ---------------------------------- | ---------------- |
-| `mrDiff`       | MR metadata and file diffs         | 7d, 5 versions   |
-| `reviewDraft`  | Draft comment (editable)           | 7d, 10 versions  |
-| `reviewPosted` | Record of posted comments          | 30d, 5 versions  |
-| `lineComment`  | Record of diff-positioned comments | 30d, 20 versions |
+| Resource           | Description                          | Retention        |
+| ------------------ | ------------------------------------ | ---------------- |
+| `mrDiff`           | MR metadata and file diffs           | 7d, 5 versions   |
+| `reviewDraft`      | Draft comment (editable)             | 7d, 10 versions  |
+| `reviewPosted`     | Record of posted comments            | 30d, 5 versions  |
+| `lineComment`      | Record of diff-positioned comments   | 30d, 20 versions |
+| `discussionThread` | Record of general resolvable threads | 30d, 20 versions |
 
 The `reviewDraft` retains 10 versions. Compare drafts before approving:
 
@@ -253,6 +274,19 @@ The draft for myorg/myapp MR !2 looks good. Post it and approve.
 ```bash
 swamp model method run mr-reviewer post_review \
   --input project=myorg/myapp --input iid=2 --input action=approve
+```
+
+### Post individual resolvable points
+
+```
+For myorg/myapp MR !2, post each review point as its own thread and put the
+overall summary in the draft.
+```
+
+```bash
+swamp model method run mr-reviewer post_discussion \
+  --input project=myorg/myapp --input iid=2 \
+  --input body="docs/setup.md still describes the old flag; update it too."
 ```
 
 ### Update an already-posted comment
