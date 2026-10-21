@@ -7765,3 +7765,99 @@ Deno.test("convert_work_item_type rejects an unknown type name", async () => {
     m.restore();
   }
 });
+
+Deno.test("remove_work_item_parent throws when the work item is not found", async () => {
+  const m = mockGraphqlCapture({
+    data: {
+      project: { workItems: { nodes: [] }, workItemTypes: { nodes: [] } },
+    },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.remove_work_item_parent.execute(
+          { project: "group/proj", iid: 7 },
+          context as any,
+        ),
+      Error,
+      "work item group/proj#7 not found",
+    );
+    assertEquals(m.bodies().length, 1);
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("remove_work_item_parent surfaces workItemUpdate errors", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    parent: "group/proj#1",
+    mutation: {
+      workItemUpdate: { workItem: null, errors: ["not allowed"] },
+    },
+  }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.remove_work_item_parent.execute(
+          { project: "group/proj", iid: 7 },
+          context as any,
+        ),
+      Error,
+      "workItemUpdate failed: not allowed",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type surfaces workItemConvert errors", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    mutation: {
+      workItemConvert: { workItem: null, errors: ["cannot convert"] },
+    },
+  }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.convert_work_item_type.execute(
+          { project: "group/proj", iid: 7, type: "Issue" },
+          context as any,
+        ),
+      Error,
+      "workItemConvert failed: cannot convert",
+    );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type throws when the mutation returns no work item", async () => {
+  const m = mockGraphqlCapture(workItemResponse({
+    mutation: { workItemConvert: { workItem: null, errors: [] } },
+  }));
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.convert_work_item_type.execute(
+          { project: "group/proj", iid: 7, type: "Issue" },
+          context as any,
+        ),
+      Error,
+      "returned no work item type",
+    );
+  } finally {
+    m.restore();
+  }
+});

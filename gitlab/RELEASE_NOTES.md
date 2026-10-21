@@ -1,4 +1,4 @@
-## 2026.10.15.1
+## 2026.10.21.1
 
 **Added:** `remove_work_item_parent` and `convert_work_item_type`, using the
 work-item GraphQL API (`workItemUpdate` hierarchy widget, `workItemConvert`)
@@ -7,7 +7,7 @@ ancestor; converting a Task to an Issue makes it show on issue boards. Type
 names resolve case-insensitively against the project's work item types. Both
 are no-ops when the work item is already in the requested state. Results
 land in the new `workItemParent` and `workItemType` resources. No
-globalArguments change.
+globalArguments change. Contributed by @zWaR (#500).
 
 ## 2026.10.14.2
 

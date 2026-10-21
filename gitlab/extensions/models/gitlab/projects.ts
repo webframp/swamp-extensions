@@ -2669,7 +2669,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.14.2",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2872,6 +2872,14 @@ export const model = {
         "Added a search method wrapping the GitLab REST search API at " +
         "instance, group, or project level (new resource: searchResults). " +
         "No globalArguments change; additive.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Added remove_work_item_parent and convert_work_item_type methods " +
+        "(new resources: workItemParent, workItemType). No globalArguments " +
+        "change; additive.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -4450,7 +4458,13 @@ export const model = {
               `workItemConvert failed: ${result.errors.join("; ")}`,
             );
           }
-          type = result.workItem.workItemType.name;
+          const converted = result.workItem?.workItemType?.name;
+          if (!converted) {
+            throw new Error(
+              "convert_work_item_type: workItemConvert returned no work item type",
+            );
+          }
+          type = converted;
         }
         const handle = await ctx.writeResource(
           "workItemType",
