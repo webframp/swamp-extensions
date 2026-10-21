@@ -1099,7 +1099,7 @@ export const model = {
       arguments: z.object({
         project: z.string().min(1).describe("Project path"),
         iid: z.number().int().positive().describe("Merge request IID"),
-        body: z.string().refine((s) => s.trim().length > 0, {
+        body: z.string().min(1).refine((s) => s.trim().length > 0, {
           message: "body must not be blank",
         }).describe("Thread body (markdown)"),
       }),
