@@ -90,16 +90,16 @@ const GlobalArgsSchema = z.object({
     "Your Twitch user ID (the moderator performing actions)",
   ),
   clientId: z.string().min(1).meta({ sensitive: true }).describe(
-    "Twitch application client ID",
+    'Twitch application client ID. Supply it as ${{ vault.get("twitch", "CLIENT_ID") }}; never pass the literal value',
   ),
   clientSecret: z.string().min(1).meta({ sensitive: true }).describe(
-    "Twitch application client secret",
+    'Twitch application client secret. Supply it as ${{ vault.get("twitch", "CLIENT_SECRET") }}; never pass the literal value',
   ),
   accessToken: z.string().min(1).meta({ sensitive: true }).describe(
-    "OAuth2 access token",
+    'OAuth2 access token. Supply it as ${{ vault.get("twitch", "ACCESS_TOKEN") }}; never pass the literal value',
   ),
   refreshToken: z.string().min(1).meta({ sensitive: true }).describe(
-    "OAuth2 refresh token",
+    'OAuth2 refresh token. Supply it as ${{ vault.get("twitch", "REFRESH_TOKEN") }}; never pass the literal value',
   ),
   hasBroadcasterAuth: z.boolean().default(false).describe(
     "Set true if the broadcaster authorized this app (enables ban list and mod event reads)",
@@ -241,7 +241,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -314,6 +314,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — documentation and credential descriptions now direct secrets through vault.get expressions",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

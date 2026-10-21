@@ -20,7 +20,7 @@ carries it.
 
 ## Authentication
 
-Requires an Admin API key (`sk-ant-api01-...`). The primary owner creates it in
+Requires an Admin API key. The primary owner creates it in
 claude.ai → Organization settings → API → Keys → **+ Create key**, for all
 linked organizations, with these scopes:
 
@@ -35,7 +35,8 @@ linked organizations, with these scopes:
 
 ```bash
 swamp extension pull @webframp/anthropic/admin
-swamp vault put anthropic ADMIN_KEY
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
+swamp vault put anthropic ADMIN_KEY             # prompts; the value never touches shell history
 swamp model create @webframp/anthropic/admin claude-admin \
   --global-arg 'adminKey=${{ vault.get("anthropic", "ADMIN_KEY") }}'
 

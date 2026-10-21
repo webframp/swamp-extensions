@@ -31,6 +31,55 @@ Deno.test("dora model: has globalArguments with apiKey and appKey", () => {
   assertExists(shape.site);
 });
 
+type ZodLike = {
+  meta?: () => Record<string, unknown> | undefined;
+  _zod?: {
+    def?: {
+      type?: string;
+      innerType?: ZodLike;
+      shape?: Record<string, ZodLike>;
+    };
+  };
+};
+
+/** The wrappers swamp's unwrapSchema sees through; readonly, catch and the rest hide a field. */
+const SWAMP_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+function innerOf(schema: ZodLike | undefined): ZodLike | undefined {
+  const def = schema?._zod?.def;
+  return def && SWAMP_WRAPPERS.has(def.type ?? "") ? def.innerType : undefined;
+}
+
+function isMarkedSensitive(schema: ZodLike | undefined): boolean {
+  for (let cur = schema; cur; cur = innerOf(cur)) {
+    if (cur.meta?.()?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/** Object-field paths marked sensitive, as swamp's resource redaction finds them. */
+function sensitivePaths(schema: unknown, prefix = ""): string[] {
+  let cur = schema as ZodLike | undefined;
+  while (innerOf(cur)) cur = innerOf(cur);
+  if (cur?._zod?.def?.type !== "object") return [];
+  const shape = cur?._zod?.def?.shape;
+  if (!shape) return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(shape)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isMarkedSensitive(field)) out.push(path);
+    out.push(...sensitivePaths(field, path));
+  }
+  return out;
+}
+
+Deno.test("dora model: apiKey and appKey are marked sensitive", () => {
+  assertEquals(sensitivePaths(model.globalArguments).sort(), [
+    "apiKey",
+    "appKey",
+  ]);
+});
+
 Deno.test("dora model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.create_dora_deployment);
@@ -485,6 +534,254 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "patch_dora_deployment");
       assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dora model: create_dora_failure creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/dora/failure": { body: { "id": "new-123", "type": null } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_dora_failure.execute({ "name": "test-resource" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/dora/failure");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "dora_failure");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dora model: delete_dora_failure executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/failure/test-id-123": { body: {}, status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_dora_failure.execute(
+        { "failure_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "DELETE");
+      assertStringIncludes(req0.path, "/failure/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dora model: list_dora_failures fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/dora/failures": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "custom_tags": ["language:java", "department:engineering"],
+              "env": "production",
+              "finished_at": "2023-08-31T14:26:24Z",
+              "git": { "commit_sha": null, "repository_url": null },
+              "name": "Database outage",
+              "services": ["shopist"],
+              "severity": "SEV-1",
+              "started_at": "2023-08-31T14:26:14Z",
+              "team": "backend",
+              "version": "v1.12.07",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_dora_failures.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/dora/failures");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "dora_failures");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "dora model: get_dora_failure fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/failures/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "custom_tags": ["language:java", "department:engineering"],
+              "env": "production",
+              "finished_at": "2023-08-31T14:26:24Z",
+              "git": { "commit_sha": null, "repository_url": null },
+              "name": "Database outage",
+              "services": ["shopist"],
+              "severity": "SEV-1",
+              "started_at": "2023-08-31T14:26:14Z",
+              "team": "backend",
+              "version": "v1.12.07",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: { id: "test-id", name: "test-dora", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_dora_failure.execute({ "failure_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/failures/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "dora_failure");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();

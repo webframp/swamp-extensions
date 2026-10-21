@@ -59,8 +59,11 @@ interface DatastoreProvider {
 }
 
 const ConfigSchema = z.object({
-  connectionString: z.string().min(1).describe(
-    "PostgreSQL connection URI (supports RDS, Aurora, Aurora Serverless v2)",
+  connectionString: z.string().min(1).meta({ sensitive: true }).describe(
+    "PostgreSQL connection URI (supports RDS, Aurora, Aurora Serverless v2). " +
+      "It embeds the database password, so supply it with " +
+      '"${{ vault.get(postgres, CONNECTION_STRING) }}"; never put the ' +
+      "literal URI in .swamp.yaml or SWAMP_DATASTORE.",
   ),
   schema: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, {
     message:
@@ -368,13 +371,16 @@ export function createPostgresLock(
  * with fencing tokens. Compatible with AWS RDS, Aurora, and Aurora
  * Serverless v2.
  *
+ * The connection string embeds the database password, so it is always read
+ * from a swamp vault through a `vault.get` expression, never written literally.
+ *
  * @example
  * ```yaml
  * # .swamp.yaml
  * datastore:
  *   type: "@webframp/postgres-datastore"
  *   config:
- *     connectionString: "postgres://user:pass@host:5432/db"
+ *     connectionString: "${{ vault.get(postgres, CONNECTION_STRING) }}"
  * ```
  */
 export const datastore = {

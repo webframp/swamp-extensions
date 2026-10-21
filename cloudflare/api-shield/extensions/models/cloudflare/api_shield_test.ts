@@ -277,6 +277,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -321,6 +325,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -376,6 +384,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -389,9 +401,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": "new-123",
       "expression": "(cf.api_gateway.fallthrough_detected)",
       "title": "Fallthrough Expression for [zone.domain.tld]",
+      "id": "new-123",
     };
     const { url, server } = startMockCfServer({
       "/api_gateway/expression-template/fallthrough": { result: mockData },
@@ -425,6 +437,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -480,6 +497,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();

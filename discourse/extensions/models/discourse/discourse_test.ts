@@ -501,3 +501,14 @@ Deno.test("apiKey without apiUsername throws configuration error", async () => {
     restore();
   }
 });
+
+Deno.test("apiKey global argument is marked sensitive", () => {
+  // deno-lint-ignore no-explicit-any
+  let f = (model.globalArguments as any).shape.apiKey;
+  const meta: Record<string, unknown> = {};
+  while (f) {
+    Object.assign(meta, f.meta() ?? {});
+    f = typeof f.unwrap === "function" ? f.unwrap() : undefined;
+  }
+  assertEquals(meta.sensitive, true);
+});

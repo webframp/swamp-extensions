@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/alarm-investigation"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   CloudWatch alarm investigation and triage model.
 
@@ -11,8 +11,9 @@ description: |
 
   ## Authentication
 
-  Uses the default AWS credential chain (environment variables, shared config,
-  instance profiles, ECS task roles). No credentials are stored in swamp.
+  Uses the AWS SDK default credential chain. Supply credentials through AWS
+  SSO or a named profile (`--global-arg profile=<name>`), or an attached IAM
+  role (instance profile, ECS task role). No credentials are stored in swamp.
 
   ## Required IAM Permissions
 

@@ -82,6 +82,21 @@ export interface SchemaObject {
   pattern?: string;
   additionalProperties?: SchemaObject | boolean;
   "x-auditable"?: boolean;
+  /** Cloudflare's own marker for a credential or secret value. */
+  "x-sensitive"?: boolean;
+  /**
+   * Codegen annotation (see sensitivity.ts): this node holds a secret, either
+   * because it carries `x-sensitive` or because its `$ref` target does.
+   */
+  "x-swamp-sensitive"?: boolean;
+  /** Codegen annotation: this node, or its `$ref` target, is `writeOnly`. */
+  "x-swamp-write-only"?: boolean;
+  /**
+   * Codegen annotation: emit this object with `.passthrough()`. Set on the
+   * skeleton objects sensitivity.ts builds for opaque `$ref` fields, which
+   * declare only the path to a secret and must keep every other key.
+   */
+  "x-swamp-loose"?: boolean;
 }
 
 /** Fetch or load from cache the Cloudflare OpenAPI spec */

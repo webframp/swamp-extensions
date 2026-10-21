@@ -1,16 +1,28 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README and the `apiToken` description now lead with a vault.
+Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
+to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
+environment variable still works as a fallback, but swamp does not redact it, so
+it is no longer recommended. The missing-token error now says the same.
 
-**Changed:** Singleton get and action methods now write their data under
-`pages_deployment_retry_deployment-current`,
-`pages_deployment_rollback_deployment-current`,
-`pages_purge_build_cache-current` instead of `latest`. Anything that read
-`data.latest("<model>", "latest")` or queried `name == "latest"` must use the
-new name.
+**Changed:** Method arguments that carry a secret are now marked sensitive, so
+swamp redacts them from logs and run records. Pass them as `vault.get`
+expressions. Affected: `create_project` and `update_project`. The README's new
+"Secrets" section lists them per method.
 
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
+**Changed:** Secrets returned by `get_upload_token` are now stored in a vault,
+and the stored resource holds a `vault.get` reference instead of the value.
+Because the model now declares secret output, swamp refuses to run any of the
+model's methods, reads included, until a vault exists
+(`swamp vault create local_encryption cloudflare`). The README's "Secrets"
+section lists what each method stores.
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** Secrets inside list items, maps or unions, which swamp cannot move
+into a vault, are now removed before the result is stored. Affected:
+`get_projects`, `create_project`, `get_project`, `update_project`,
+`get_deployments`, `get_deployment_info` and 3 more.
+
+**Upgrade note:** Resources stored by earlier versions of the methods in the
+README's "Secrets" section may hold plaintext secrets; delete them with
+`swamp data delete` and rotate the affected credentials.

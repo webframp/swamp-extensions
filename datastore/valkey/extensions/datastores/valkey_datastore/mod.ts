@@ -1526,7 +1526,9 @@ const TlsConfigSchema = z.union([
 
 const ConfigSchema = z.object({
   url: z.string().min(1).describe(
-    "Valkey/Redis connection URL (redis:// or rediss:// for TLS)",
+    "Valkey/Redis connection URL (redis:// or rediss:// for TLS). Do not " +
+      "embed a password in the URL; set the password field from a vault " +
+      "instead.",
   ),
   prefix: z.string().default("swamp").describe(
     "Key namespace prefix for all swamp data",
@@ -1537,8 +1539,10 @@ const ConfigSchema = z.object({
   tls: TlsConfigSchema.default(false).describe(
     "TLS configuration: false (no TLS), true (TLS without CA verify), or object with CA path",
   ),
-  password: z.string().optional().describe(
-    "Auth password (prefer vault expression for production use)",
+  password: z.string().optional().meta({ sensitive: true }).describe(
+    "Auth password. Always supply it with " +
+      '"${{ vault.get(valkey, PASSWORD) }}"; never put the literal value in ' +
+      ".swamp.yaml or SWAMP_DATASTORE.",
   ),
   connectTimeoutMs: z.number().int().positive().default(10_000).describe(
     "Connection timeout in milliseconds",
@@ -1589,13 +1593,18 @@ function createRedisClient(parsed: ValkeyConfig): Redis {
 /**
  * Valkey/Redis datastore provider for swamp.
  *
+ * A password, when the server requires one, is always read from a swamp vault
+ * through a `vault.get` expression, never written literally.
+ *
  * @example
  * ```yaml
  * # .swamp.yaml
  * datastore:
  *   type: "@webframp/valkey-datastore"
  *   config:
- *     url: "redis://localhost:6379"
+ *     url: "rediss://your-cluster.cache.amazonaws.com:6379"
+ *     tls: true
+ *     password: "${{ vault.get(valkey, PASSWORD) }}"
  *     prefix: "swamp"
  * ```
  */

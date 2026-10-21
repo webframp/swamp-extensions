@@ -1,10 +1,18 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The README and the registry Quick Start showed `vault://reddit/...`
+global arguments and a `vault set` subcommand. Neither is swamp syntax: swamp
+has no `vault set`, and it does not resolve `vault://` strings. Because
+`clientSecret` and `password` are marked sensitive, swamp refuses a literal
+value for them, so `swamp model create` rejected the documented command
+outright; `clientId` and `username` would have been passed through as the
+literal `vault://` text. The docs now store the client secret and password with
+`swamp vault put reddit <KEY>` (interactive prompt) and wire them with
+`${{ vault.get("reddit", "...") }}`.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** Documentation only otherwise: the `clientSecret` and `password`
+global argument descriptions now say to supply the value through `vault.get`.
 
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** No code, schema, or behavioral changes. The model version
+moves to 2026.10.21.1 with an identity upgrade. The old example could not create
+an instance, so existing instances need no change.

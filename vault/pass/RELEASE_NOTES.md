@@ -1,33 +1,17 @@
-## 2026.10.20.1
+## 2026.10.21.1
 
-**Added:** `passwordOnly` config option. When `true`, `get` returns only the
-first line of an entry, which is the password by pass convention, instead of the
-whole decrypted file. Defaults to `false`.
+**Fixed:** Tracing spans reported a stale instrumentation version
+(`2026.10.20.1`) instead of the published version. The tracer version now
+matches `manifest.yaml`, and a test fails if the two drift apart again.
 
-**Added:** `fieldSeparator` config option for per-key field selection. With
-`fieldSeparator: "#"`, the key `smtp/example#login` returns the value of the
-`login:` line of `smtp/example`. Field names match case-insensitively, line 1 is
-never searched, and URI lines such as `otpauth://...` are not fields. A key
-whose text after the separator is not a field name (`team#a/entry`, `a#`) names
-an entry and is read whole. An entry named like `smtp#login` cannot be read
-whole while the separator is set. Separators containing `/` or whitespace are
-rejected. A missing field fails with an error naming the entry and field, never
-its content. `put` rejects a key that selects a field. Unset by default, so keys
-are taken literally.
+**Fixed:** The README showed model arguments in a `source: vault` / `vault:` /
+`key:` form. swamp does not support that form; secrets reach a model only
+through `${{ vault.get("<vault>", "<key>") }}`. Both examples, including the
+field-selection one (`smtp/example#login`), now use `vault.get`.
 
-**Added:** A get or put whose key selects a field records the field name in a
-new `vault.secret_field` span attribute, and `vault.secret_key` carries the
-entry path without the selector. Neither ever carries a value.
+**Changed:** The `swamp vault read-secret --force` example now warns that it
+prints the plaintext value, and the multiline-entry example no longer prints a
+password-shaped literal.
 
-**Added:** With `passwordOnly` or a field selection, a key naming a directory
-fails with "is a directory, not an entry". pass prints a tree listing for a
-directory and exits 0, so without this check the first line of that listing
-would come back as the password. These modes read file metadata under `storeDir`
-to tell the two apart, and fail rather than guess if they cannot.
-
-**Fixed:** Spans reported a stale instrumentation-scope version
-(`2026.08.20.1`); they now report the published version.
-
-**Upgrade note:** No behavior changes unless you opt in. `get` still returns the
-whole multiline entry by default. The README now documents that default and how
-it breaks a consumer that expects a bare password (#499).
+**Upgrade note:** Secret storage and retrieval behave as before; only the
+instrumentation version on emitted spans changes.

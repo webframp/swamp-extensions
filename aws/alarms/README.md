@@ -7,9 +7,10 @@ your AWS account.
 
 ## Authentication
 
-This extension uses the default AWS credential chain. Ensure your environment
-has valid AWS credentials configured (environment variables, shared credentials
-file, or IAM role).
+This extension uses the AWS SDK default credential chain. Supply credentials
+through AWS SSO or a named profile (`aws sso login --profile <name>`, then
+`--global-arg profile=<name>`), or an IAM role attached to where swamp runs (EC2
+instance profile, ECS task role). Avoid long-lived static access keys.
 
 ### Required IAM Permissions
 

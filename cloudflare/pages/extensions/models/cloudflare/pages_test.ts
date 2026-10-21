@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./pages.ts";
 
 // ---------------------------------------------------------------------------
@@ -176,6 +177,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -188,7 +193,6 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
       "build_config": null,
       "canonical_deployment": null,
       "created_on": "2017-01-01T00:00:00Z",
@@ -196,6 +200,7 @@ Deno.test({
       "domains": ["customdomain.com", "customdomain.org"],
       "framework": "test-value",
       "framework_version": "test-value",
+      "id": "new-123",
       "latest_deployment": null,
       "name": null,
       "preview_script_name": "pages-worker--1234567-preview",
@@ -246,6 +251,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -299,6 +309,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -370,6 +384,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -546,6 +564,985 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Returned secrets
+// ---------------------------------------------------------------------------
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as {
+      sensitive?: boolean;
+    } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[key] != null
+    ) {
+      (parent as Record<string, unknown>)[key] =
+        "${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}
+
+Deno.test({
+  name:
+    "pages model: get_projects keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "build_config": null,
+      "canonical_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+        },
+      },
+      "created_on": "2017-01-01T00:00:00Z",
+      "deployment_configs": {
+        "preview": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-1" },
+          },
+        },
+        "production": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-2" },
+          },
+        },
+      },
+      "domains": ["customdomain.com", "customdomain.org"],
+      "framework": "test-value",
+      "framework_version": "test-value",
+      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "latest_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-3" },
+        },
+      },
+      "name": null,
+      "preview_script_name": "pages-worker--1234567-preview",
+      "production_branch": "main",
+      "production_script_name": "pages-worker--1234567-production",
+      "source": null,
+      "subdomain": "helloworld.pages.dev",
+      "uses_functions": true,
+    }];
+    const { url, server } = startMockCfServer({
+      "/pages/projects": { result: mockData, isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_projects.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "get_projects");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["get_projects"]
+          .schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: create_project keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "build_config": null,
+      "canonical_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+        },
+      },
+      "created_on": "2017-01-01T00:00:00Z",
+      "deployment_configs": {
+        "preview": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-1" },
+          },
+        },
+        "production": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-2" },
+          },
+        },
+      },
+      "domains": ["customdomain.com", "customdomain.org"],
+      "framework": "test-value",
+      "framework_version": "test-value",
+      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "latest_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-3" },
+        },
+      },
+      "name": null,
+      "preview_script_name": "pages-worker--1234567-preview",
+      "production_branch": "main",
+      "production_script_name": "pages-worker--1234567-production",
+      "source": null,
+      "subdomain": "helloworld.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_project.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "project");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["project"]
+          .schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: get_project keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "build_config": null,
+      "canonical_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+        },
+      },
+      "created_on": "2017-01-01T00:00:00Z",
+      "deployment_configs": {
+        "preview": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-1" },
+          },
+        },
+        "production": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-2" },
+          },
+        },
+      },
+      "domains": ["customdomain.com", "customdomain.org"],
+      "framework": "test-value",
+      "framework_version": "test-value",
+      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "latest_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-3" },
+        },
+      },
+      "name": null,
+      "preview_script_name": "pages-worker--1234567-preview",
+      "production_branch": "main",
+      "production_script_name": "pages-worker--1234567-production",
+      "source": null,
+      "subdomain": "helloworld.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_project.execute({ "project_name": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "project");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["project"]
+          .schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: update_project keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "build_config": null,
+      "canonical_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+        },
+      },
+      "created_on": "2017-01-01T00:00:00Z",
+      "deployment_configs": {
+        "preview": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-1" },
+          },
+        },
+        "production": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-2" },
+          },
+        },
+      },
+      "domains": ["customdomain.com", "customdomain.org"],
+      "framework": "test-value",
+      "framework_version": "test-value",
+      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "latest_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-3" },
+        },
+      },
+      "name": null,
+      "preview_script_name": "pages-worker--1234567-preview",
+      "production_branch": "main",
+      "production_script_name": "pages-worker--1234567-production",
+      "source": null,
+      "subdomain": "helloworld.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_project.execute({ "project_name": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "project");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["project"]
+          .schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: get_deployments keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "aliases": ["https://branchname.projectname.pages.dev"],
+      "build_config": null,
+      "created_on": "2021-03-09T00:55:03.923456Z",
+      "deployment_trigger": {
+        "metadata": {
+          "branch": "main",
+          "commit_dirty": false,
+          "commit_hash": "ad9ccd918a81025731e10e40267e11273a263421",
+          "commit_message": "Update index.html",
+        },
+        "type": "ad_hoc",
+      },
+      "env_vars": {
+        "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+      },
+      "environment": "preview",
+      "id": "f64788e9-fccd-4d4a-a28a-cb84f88f6",
+      "is_skipped": true,
+      "latest_stage": null,
+      "modified_on": "2021-03-09T00:58:59.045655",
+      "project_id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "project_name": null,
+      "short_id": "f64788e9",
+      "skip_reason": "commit_message",
+      "source": null,
+      "stages": [{
+        "ended_on": "2021-06-03T15:39:03.134378Z",
+        "name": "queued",
+        "started_on": "2021-06-03T15:38:15.608194Z",
+        "status": "active",
+      }, {
+        "ended_on": null,
+        "name": "initialize",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "clone_repo",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "build",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "deploy",
+        "started_on": null,
+        "status": "idle",
+      }],
+      "url": "https://f64788e9.ninjakittens.pages.dev",
+      "uses_functions": true,
+    }];
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/deployments": {
+        result: mockData,
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_deployments.execute({ "project_name": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "get_deployments");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "get_deployments"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: get_deployment_info keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "aliases": ["https://branchname.projectname.pages.dev"],
+      "build_config": null,
+      "created_on": "2021-03-09T00:55:03.923456Z",
+      "deployment_trigger": {
+        "metadata": {
+          "branch": "main",
+          "commit_dirty": false,
+          "commit_hash": "ad9ccd918a81025731e10e40267e11273a263421",
+          "commit_message": "Update index.html",
+        },
+        "type": "ad_hoc",
+      },
+      "env_vars": {
+        "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+      },
+      "environment": "preview",
+      "id": "f64788e9-fccd-4d4a-a28a-cb84f88f6",
+      "is_skipped": true,
+      "latest_stage": null,
+      "modified_on": "2021-03-09T00:58:59.045655",
+      "project_id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "project_name": null,
+      "short_id": "f64788e9",
+      "skip_reason": "commit_message",
+      "source": null,
+      "stages": [{
+        "ended_on": "2021-06-03T15:39:03.134378Z",
+        "name": "queued",
+        "started_on": "2021-06-03T15:38:15.608194Z",
+        "status": "active",
+      }, {
+        "ended_on": null,
+        "name": "initialize",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "clone_repo",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "build",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "deploy",
+        "started_on": null,
+        "status": "idle",
+      }],
+      "url": "https://f64788e9.ninjakittens.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/deployments/test-id-123": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_deployment_info.execute({
+        "deployment_id": "test-id-123",
+        "project_name": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "deployment_info");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "deployment_info"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: pages_deployment_retry_deployment keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "aliases": ["https://branchname.projectname.pages.dev"],
+      "build_config": null,
+      "created_on": "2021-03-09T00:55:03.923456Z",
+      "deployment_trigger": {
+        "metadata": {
+          "branch": "main",
+          "commit_dirty": false,
+          "commit_hash": "ad9ccd918a81025731e10e40267e11273a263421",
+          "commit_message": "Update index.html",
+        },
+        "type": "ad_hoc",
+      },
+      "env_vars": {
+        "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+      },
+      "environment": "preview",
+      "id": "f64788e9-fccd-4d4a-a28a-cb84f88f6",
+      "is_skipped": true,
+      "latest_stage": null,
+      "modified_on": "2021-03-09T00:58:59.045655",
+      "project_id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "project_name": null,
+      "short_id": "f64788e9",
+      "skip_reason": "commit_message",
+      "source": null,
+      "stages": [{
+        "ended_on": "2021-06-03T15:39:03.134378Z",
+        "name": "queued",
+        "started_on": "2021-06-03T15:38:15.608194Z",
+        "status": "active",
+      }, {
+        "ended_on": null,
+        "name": "initialize",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "clone_repo",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "build",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "deploy",
+        "started_on": null,
+        "status": "idle",
+      }],
+      "url": "https://f64788e9.ninjakittens.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/deployments/test-id-123/retry": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).pages_deployment_retry_deployment.execute({
+        "deployment_id": "test-id-123",
+        "project_name": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "pages_deployment_retry_deployment");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "pages_deployment_retry_deployment"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: pages_deployment_rollback_deployment keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "aliases": ["https://branchname.projectname.pages.dev"],
+      "build_config": null,
+      "created_on": "2021-03-09T00:55:03.923456Z",
+      "deployment_trigger": {
+        "metadata": {
+          "branch": "main",
+          "commit_dirty": false,
+          "commit_hash": "ad9ccd918a81025731e10e40267e11273a263421",
+          "commit_message": "Update index.html",
+        },
+        "type": "ad_hoc",
+      },
+      "env_vars": {
+        "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+      },
+      "environment": "preview",
+      "id": "f64788e9-fccd-4d4a-a28a-cb84f88f6",
+      "is_skipped": true,
+      "latest_stage": null,
+      "modified_on": "2021-03-09T00:58:59.045655",
+      "project_id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "project_name": null,
+      "short_id": "f64788e9",
+      "skip_reason": "commit_message",
+      "source": null,
+      "stages": [{
+        "ended_on": "2021-06-03T15:39:03.134378Z",
+        "name": "queued",
+        "started_on": "2021-06-03T15:38:15.608194Z",
+        "status": "active",
+      }, {
+        "ended_on": null,
+        "name": "initialize",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "clone_repo",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "build",
+        "started_on": null,
+        "status": "idle",
+      }, {
+        "ended_on": null,
+        "name": "deploy",
+        "started_on": null,
+        "status": "idle",
+      }],
+      "url": "https://f64788e9.ninjakittens.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/deployments/test-id-123/rollback": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).pages_deployment_rollback_deployment.execute({
+        "deployment_id": "test-id-123",
+        "project_name": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "pages_deployment_rollback_deployment");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "pages_deployment_rollback_deployment"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: create_pages_project_connect_project_source keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "build_config": null,
+      "canonical_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-0" },
+        },
+      },
+      "created_on": "2017-01-01T00:00:00Z",
+      "deployment_configs": {
+        "preview": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-1" },
+          },
+        },
+        "production": {
+          "env_vars": {
+            "entry": { "type": "secret_text", "value": "STRIP-CANARY-2" },
+          },
+        },
+      },
+      "domains": ["customdomain.com", "customdomain.org"],
+      "framework": "test-value",
+      "framework_version": "test-value",
+      "id": "7b162ea7-7367-4d67-bcde-1160995d5",
+      "latest_deployment": {
+        "env_vars": {
+          "entry": { "type": "secret_text", "value": "STRIP-CANARY-3" },
+        },
+      },
+      "name": null,
+      "preview_script_name": "pages-worker--1234567-preview",
+      "production_branch": "main",
+      "production_script_name": "pages-worker--1234567-production",
+      "source": null,
+      "subdomain": "helloworld.pages.dev",
+      "uses_functions": true,
+    };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/source": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_pages_project_connect_project_source.execute({
+        "project_name": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "pages_project_connect_project_source");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "pages_project_connect_project_source"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "pages model: get_upload_token keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "jwt": "VAULT-CANARY-0" };
+    const { url, server } = startMockCfServer({
+      "/pages/projects/test-id-123/upload-token": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-pages", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_upload_token.execute({ "project_name": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "upload_token");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["upload_token"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["jwt"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("jwt"), true);
+      assertEquals(
+        String(valueAt(persisted, ["jwt"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
     } finally {
       uninstall();
       await server.shutdown();

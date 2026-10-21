@@ -40,7 +40,11 @@ const GlobalArgsSchema = z.object({
     .string()
     .min(1)
     .meta({ sensitive: true })
-    .describe("Azure AD client secret"),
+    .describe(
+      "Azure AD client secret. Supply it with a vault expression, e.g. " +
+        '${{ vault.get("azure", "CLIENT_SECRET") }}; never pass the ' +
+        "literal value.",
+    ),
 });
 
 /** Schema for a single deployment's token usage. */
@@ -550,7 +554,7 @@ async function getTokenMetrics(
 /** Azure OpenAI/AI Services token usage monitoring model. */
 export const model = {
   type: "@webframp/azure/openai-usage",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -637,6 +641,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — clientSecret guidance now uses vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

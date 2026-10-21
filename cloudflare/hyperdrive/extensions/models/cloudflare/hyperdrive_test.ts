@@ -144,6 +144,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -156,9 +160,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": null,
       "caching": null,
       "created_on": "2017-01-01T00:00:00Z",
+      "id": "new-123",
       "modified_on": "2017-01-01T00:00:00Z",
       "mtls": null,
       "name": null,
@@ -203,6 +207,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -253,6 +262,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -313,6 +326,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();

@@ -134,3 +134,56 @@ Deno.test("generateTestSource: delete mock uses the fal.ai error shape on 404", 
     '{ error: { type: "not_found", message: "Not found" } }',
   );
 });
+
+Deno.test("generateTestSource: emits a vault-storage test for methods with sensitive response fields", () => {
+  const keysConfig: ServiceConfig = {
+    name: "keys",
+    description: "fal.ai API Keys",
+    tags: ["API Keys"],
+    labels: [],
+  };
+  const group: ServiceGroup = {
+    config: keysConfig,
+    operations: [
+      op({
+        operationId: "createApiKey",
+        httpMethod: "post",
+        path: "/keys",
+        requestBody: {
+          type: "object",
+          properties: { alias: { type: "string" } },
+        },
+        responseSchema: {
+          type: "object",
+          properties: {
+            key_id: { type: "string" },
+            key_secret: { type: "string" },
+            key: { type: "string" },
+          },
+        },
+      }),
+    ],
+  };
+  const source = generateTestSource(
+    keysConfig,
+    classifyServiceMethods(group),
+    "keys",
+  );
+  assertStringIncludes(
+    source,
+    "create_api_key marks key, key_secret sensitive so swamp stores them in a vault",
+  );
+  assertStringIncludes(source, '"plaintext-secret-key_secret"');
+  assertStringIncludes(source, 'assertEquals(marked, ["key","key_secret"]);');
+  assertStringIncludes(source, "schema.parse(persisted);");
+});
+
+Deno.test("generateTestSource: no vault-storage test for services without sensitive fields", () => {
+  const group: ServiceGroup = { config: CONFIG, operations: [op({})] };
+  const source = generateTestSource(
+    CONFIG,
+    classifyServiceMethods(group),
+    "assets",
+  );
+  assertEquals(source.includes("stores them in a vault"), false);
+});

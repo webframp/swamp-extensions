@@ -5,9 +5,14 @@
 import { assertEquals } from "@std/assert";
 import {
   generateApiLib,
+  generateReadme,
   generateReleaseNotes,
+  generateSecretsSection,
   generateSwampYaml,
 } from "./extension_generator.ts";
+import type { ClassifiedMethod } from "./method_classifier.ts";
+import type { GroupedOperation } from "./service_grouper.ts";
+import type { ServiceConfig } from "../config.ts";
 
 // ---------------------------------------------------------------------------
 // generateSwampYaml
@@ -383,4 +388,218 @@ Deno.test("cfApiPaginatedCursor: a null result on an intermediate page does not 
       assertEquals(truncated, false);
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// README: vault-first credentials and secret-handling notes
+// ---------------------------------------------------------------------------
+
+const readmeConfig: ServiceConfig = {
+  name: "r2",
+  description: "Cloudflare R2",
+  pathPrefixes: ["/accounts/{account_id}/r2"],
+  scope: "account",
+  labels: ["cloudflare"],
+};
+
+function readmeMethod(
+  name: string,
+  type: ClassifiedMethod["type"],
+  op: Partial<GroupedOperation>,
+): ClassifiedMethod {
+  return {
+    name,
+    type,
+    description: name,
+    operation: {
+      httpMethod: "post",
+      path: "/accounts/{account_id}/r2/x",
+      operationId: name,
+      summary: name,
+      description: "",
+      pathParams: [],
+      queryParams: [],
+      isCollection: false,
+      usesCursorPagination: false,
+      deprecated: false,
+      tags: [],
+      ...op,
+    },
+  };
+}
+
+Deno.test("generateReadme: credentials go through a vault, never a literal token", () => {
+  const readme = generateReadme(readmeConfig, [
+    readmeMethod("list_buckets", "list", {}),
+  ]);
+  assertEquals(
+    readme.includes("swamp vault create local_encryption cloudflare"),
+    true,
+  );
+  assertEquals(readme.includes("swamp vault put cloudflare API_TOKEN"), true);
+  assertEquals(
+    readme.includes(
+      `--global-arg 'apiToken=\${{ vault.get("cloudflare", "API_TOKEN") }}'`,
+    ),
+    true,
+  );
+  assertEquals(readme.includes("apiToken=CLOUDFLARE_API_TOKEN"), false);
+  // The env var appears only as a discouraged fallback.
+  assertEquals(
+    readme.replace(/\s+/g, " ").includes(
+      "Swamp does not redact that variable, so it is not recommended.",
+    ),
+    true,
+  );
+  // No method handles a secret, so there is no Secrets section.
+  assertEquals(readme.includes("## Secrets"), false);
+});
+
+Deno.test("generateSecretsSection: lists secret inputs, vaulted outputs and stripped fields", () => {
+  const section = generateSecretsSection([
+    readmeMethod("create_store_credentials", "create", {
+      inputSecrets: ["token"],
+    }),
+    readmeMethod("create_temp_access_credentials", "create", {
+      responseSchema: {
+        type: "object",
+        properties: {
+          accessKeyId: { type: "string" },
+          secretAccessKey: { type: "string", "x-swamp-sensitive": true },
+        },
+      },
+      responseSecrets: {
+        wrapRoot: false,
+        vaultable: [["secretAccessKey"]],
+        leaves: [[{ k: "secretAccessKey" }]],
+      },
+    }),
+    readmeMethod("list_jobs", "list", {
+      isCollection: true,
+      responseSecrets: {
+        wrapRoot: false,
+        vaultable: [],
+        leaves: [[{ k: "destination_conf" }]],
+      },
+    }),
+  ]);
+  assertEquals(section.includes("## Secrets"), true);
+  assertEquals(
+    section.includes('`${{ vault.get("<vault>", "<KEY>") }}`'),
+    true,
+  );
+  assertEquals(
+    section.includes("| `create_store_credentials` | `token` | — | — |"),
+    true,
+  );
+  assertEquals(
+    section.includes(
+      "| `create_temp_access_credentials` | — | `secretAccessKey` | — |",
+    ),
+    true,
+  );
+  assertEquals(
+    section.includes("| `list_jobs` | — | — | `destination_conf` |"),
+    true,
+  );
+});
+
+Deno.test("generateApiLib: the missing-token error leads with the vault", () => {
+  const lib = generateApiLib();
+  const at = lib.indexOf("Cloudflare API token not set");
+  const message = lib.slice(at, lib.indexOf(");", at));
+  assertEquals(message.includes("vault.get"), true);
+  assertEquals(
+    message.indexOf("vault.get") < message.indexOf("CLOUDFLARE_API_TOKEN"),
+    true,
+  );
+  assertEquals(message.includes("not recommended"), true);
+});
+
+Deno.test("generateApiLib: stripSensitive removes secrets at runtime without touching the input", async () => {
+  const lib = generateApiLib();
+  const tmp = await Deno.makeTempFile({ suffix: ".ts" });
+  try {
+    await Deno.writeTextFile(tmp, lib);
+    const { stripSensitive } = await import(`file://${tmp}`);
+    const input = {
+      jobs: [{ id: 1, destination_conf: "s3://x?secret=1" }],
+      env_vars: {
+        A: { type: "secret_text", value: "s3cret" },
+        B: { type: "plain_text", value: "visible" },
+      },
+    };
+    const out = stripSensitive(input, [
+      [{ k: "jobs" }, { each: true }, { k: "destination_conf" }],
+      [{ k: "env_vars" }, { values: true }, {
+        k: "value",
+        when: ["type", "secret_text"],
+      }],
+    ]);
+    assertEquals(out, {
+      jobs: [{ id: 1 }],
+      env_vars: {
+        A: { type: "secret_text" },
+        B: { type: "plain_text", value: "visible" },
+      },
+    });
+    // The caller's value is not mutated.
+    assertEquals(input.jobs[0].destination_conf, "s3://x?secret=1");
+  } finally {
+    await Deno.remove(tmp);
+  }
+});
+
+const vaultedCreate = (name: string) =>
+  readmeMethod(name, "create", {
+    responseSchema: {
+      type: "object",
+      properties: { secret: { type: "string", "x-swamp-sensitive": true } },
+    },
+    responseSecrets: {
+      wrapRoot: false,
+      vaultable: [["secret"]],
+      leaves: [[{ k: "secret" }]],
+    },
+  });
+
+Deno.test("generateReadme: a model with vaulted output needs a vault for every method", () => {
+  const readme = generateReadme(readmeConfig, [
+    vaultedCreate("create_widget"),
+    readmeMethod("get_widget", "get", {}),
+  ]).replace(/\s+/g, " ");
+  // swamp infers get_widget's kind from its name: not a read, so it is
+  // refused too. The requirement is stated under Credentials and Secrets.
+  const sentence =
+    "swamp refuses to run any of its methods, reads included, until a vault exists";
+  assertEquals(readme.split(sentence).length - 1, 2);
+  assertEquals(
+    readme.includes("so a vault must exist before you run the method"),
+    false,
+  );
+});
+
+Deno.test("generateReadme: methods named list or get are the only ones exempt", () => {
+  const readme = generateReadme(readmeConfig, [
+    vaultedCreate("create"),
+    readmeMethod("list", "list", { isCollection: true }),
+    readmeMethod("get", "get", {}),
+  ]).replace(/\s+/g, " ");
+  assertEquals(
+    readme.includes(
+      "swamp refuses to run any of its methods except `list` and `get` until a vault exists",
+    ),
+    true,
+  );
+});
+
+Deno.test("generateReadme: secret inputs alone do not demand a vault", () => {
+  const readme = generateReadme(readmeConfig, [
+    readmeMethod("create_store_credentials", "create", {
+      inputSecrets: ["token"],
+    }),
+  ]);
+  assertEquals(readme.includes("## Secrets"), true);
+  assertEquals(readme.includes("refuses to run"), false);
+  assertEquals(readme.includes("inside a list, map or union"), false);
 });

@@ -23,7 +23,7 @@ const EXTENSION_NAME = "@webframp/anthropic/analytics";
 
 const GlobalArgsSchema = z.object({
   analyticsKey: z.string().min(1).meta({ sensitive: true }).describe(
-    "Analytics API key (scope read:analytics) from claude.ai (use vault reference)",
+    'Analytics API key (scope read:analytics) from claude.ai. Supply it as ${{ vault.get("anthropic", "ANALYTICS_KEY") }}; never pass the literal key',
   ),
   discountRate: z.number().min(0).max(1).default(0).describe(
     "Enterprise volume discount off list usage/token pricing, as a fraction " +
@@ -508,7 +508,7 @@ function usedAcrossProducts(user: any, field: string): boolean {
 /** Claude Enterprise Analytics — seat counts, adoption, DAU/WAU/MAU, and cost via the Analytics API. */
 export const model = {
   type: "@webframp/anthropic/analytics",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -578,6 +578,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes; the analyticsKey description and README now point to vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

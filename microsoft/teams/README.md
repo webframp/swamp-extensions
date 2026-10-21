@@ -8,7 +8,7 @@ required.
 
 | Method             | Description                                              |
 | ------------------ | -------------------------------------------------------- |
-| `bootstrap`        | Device code flow auth; outputs refresh token for vault   |
+| `bootstrap`        | Device code flow auth; stores the refresh token in vault |
 | `list_teams`       | Enumerate Teams the signed-in user belongs to            |
 | `list_channels`    | List channels in a team                                  |
 | `channel_messages` | Fetch channel messages with threaded replies (paginated) |
@@ -18,20 +18,52 @@ required.
 
 ## Setup
 
+Store the tenant and client IDs in a swamp vault and reference them with
+`vault.get` expressions. Any vault type works — `local_encryption`, or an
+extension such as `@webframp/pass`, `@webframp/gopass`,
+`@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
 ```bash
-# Store credentials in vault
-swamp vault put my-vault tenantId "e9b2b7ba-..."
-swamp vault put my-vault clientId "3f98c5a4-..."
-swamp vault put my-vault refreshToken "placeholder"
+swamp vault create local_encryption microsoft   # once, if you have no vault yet
+swamp vault put microsoft TENANT_ID             # prompts for the value
+swamp vault put microsoft CLIENT_ID             # prompts for the value
 
-# Create the model
-swamp model create @webframp/microsoft/teams my-teams
+# Create the model without a refresh token; bootstrap obtains one
+swamp model create @webframp/microsoft/teams my-teams \
+  --global-arg 'tenantId=${{ vault.get("microsoft", "TENANT_ID") }}' \
+  --global-arg 'clientId=${{ vault.get("microsoft", "CLIENT_ID") }}'
 
-# Authenticate via device code
+# Authenticate via device code and follow the prompts
 swamp model method run my-teams bootstrap
-# Follow the prompts, then store the output refresh token:
-swamp vault put my-vault refreshToken "<token from bootstrap output>"
 ```
+
+`bootstrap` never writes the refresh token to swamp data. Swamp stores it in the
+repo's default vault (`defaultVault` in `.swamp.yaml`, named `default` in a repo
+created by `swamp repo init`) under the key `TEAMS_REFRESH_TOKEN`, and the
+bootstrap data keeps only the `vault.get` reference. Show that reference with:
+
+```bash
+swamp data query 'behavior("my-teams") && name == "main"' --select content
+```
+
+Then run `swamp model edit my-teams` and add the reference as the `refreshToken`
+global argument. Copy it exactly as the bootstrap data shows it: the vault name
+is whichever vault is your repo's default, which is `default` only in a repo
+created by `swamp repo init` that has not changed it.
+
+```yaml
+globalArguments:
+  tenantId: ${{ vault.get("microsoft", "TENANT_ID") }}
+  clientId: ${{ vault.get("microsoft", "CLIENT_ID") }}
+  # Replace "default" with the vault named in the bootstrap data reference.
+  refreshToken: ${{ vault.get("default", "TEAMS_REFRESH_TOKEN") }}
+```
+
+Every other method fails with `missing_refresh_token` until `refreshToken` is
+set. Re-running `bootstrap` overwrites the vault entry, so the reference keeps
+working. Two `@webframp/microsoft/teams` models in one repo share the
+`TEAMS_REFRESH_TOKEN` key in the default vault; give each its own repo or vault
+if they sign in as different users.
 
 ## Usage
 
@@ -74,8 +106,11 @@ This extension uses the `appsvc_teams_data_client` public client app
 registration. Delegated scopes: `offline_access`, `User.Read`,
 `Team.ReadBasic.All`, `Group.Read.All`, `ChannelMessage.Read.All`, `Chat.Read`.
 
-Refresh tokens rotate on each use and expire after 90 days of inactivity. If any
-method returns `invalid_grant`, re-run `bootstrap`.
+The model reuses the refresh token `bootstrap` stored; it does not save the new
+refresh token Graph returns with each access token. Once the stored token is
+revoked or expires (after 90 days of inactivity, or sooner under your tenant's
+policy), methods return `invalid_grant`. Re-run `bootstrap` to store a fresh
+one.
 
 ## Troubleshooting
 
@@ -90,7 +125,8 @@ the device code's own `expires_in` deadline (from Entra, typically ~15 minutes)
 expired (90 days of inactivity) or been revoked (e.g. a password change). Every
 other OAuth error surfaces with its raw Graph error code/description instead —
 `invalid_grant` is the one case worth recognizing on sight, since the fix is
-always the same: re-run `bootstrap` and update `refreshToken` in the vault.
+always the same: re-run `bootstrap`, which overwrites the vault entry that
+`refreshToken` references.
 
 **`channel_messages` returns `truncated: true` with fewer messages than
 expected.** Root-message pagination is capped at `MAX_CHANNEL_PAGES = 5` pages

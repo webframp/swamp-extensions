@@ -11,6 +11,7 @@
 
 import { OUTPUT_BASE, SERVICES } from "./config.ts";
 import { fetchSchema } from "./lib/schema_fetcher.ts";
+import { clearPublicFieldFlags } from "./lib/sensitivity.ts";
 import { groupOperations } from "./lib/service_grouper.ts";
 import {
   classifyServiceMethods,
@@ -121,6 +122,7 @@ async function main() {
   // Fetch schema
   console.log(`📥 Fetching Cloudflare OpenAPI spec...`);
   const spec = await fetchSchema(join(outputBase, ".cache"));
+  clearPublicFieldFlags(spec);
   console.log(
     `   ✓ Loaded spec: ${Object.keys(spec.paths).length} paths, ${
       Object.keys(spec.components.schemas).length
@@ -248,6 +250,11 @@ async function main() {
 
   // Pass 2: write the validated plan.
   let totalExtensions = 0;
+  // Only the extension directories this run wrote are formatted afterwards.
+  // Formatting all of OUTPUT_BASE would also rewrite files the generator does
+  // not own, such as the hand-written root @webframp/cloudflare extension's
+  // README.md and RELEASE_NOTES.md that live alongside the generated ones.
+  const writtenDirs: string[] = [];
 
   for (const planned of plan) {
     const { group, methods, version, status, upgradesBlock } = planned;
@@ -335,19 +342,20 @@ async function main() {
     await Deno.writeTextFile(join(modelDir, modelFileName), modelSource);
     await Deno.writeTextFile(join(modelDir, testFileName), testSource);
     await Deno.writeTextFile(join(libDir, "api.ts"), apiLib);
+    writtenDirs.push(extDir);
   }
 
   console.log(``);
   console.log(
     `✅ Generated ${totalExtensions} extensions with ${totalMethods} total methods`,
   );
-  if (!opts.dryRun) {
+  if (!opts.dryRun && writtenDirs.length > 0) {
     console.log(`   Output directory: ${outputBase}/`);
 
-    // Post-process: run deno fmt on all generated TypeScript files
+    // Post-process: run deno fmt on the generated extension directories
     console.log(`\n🎨 Running deno fmt on generated output...`);
     const fmtCmd = new Deno.Command(Deno.execPath(), {
-      args: ["fmt", outputBase],
+      args: ["fmt", ...writtenDirs],
       stdout: "piped",
       stderr: "piped",
     });

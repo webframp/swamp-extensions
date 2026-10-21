@@ -24,8 +24,20 @@ swamp extension pull @webframp/gitlab-datastore
 
 ## Configuration
 
-Add a datastore block to your workspace or repo configuration that points to
-this extension and supplies the required credentials.
+Store the access token in a swamp vault and reference it from the datastore
+config with a `vault.get` expression; never write the literal token into
+`.swamp.yaml` or `SWAMP_DATASTORE`. Any vault type works — `local_encryption`,
+or an extension such as `@webframp/pass`, `@webframp/gopass`,
+`@webframp/hashicorp-vault` or `@webframp/macos-keychain`. Vault expressions are
+not supported with `managedConfig: true`.
+
+```bash
+swamp vault create local_encryption gitlab   # once, if you have no vault yet
+swamp vault put gitlab TOKEN                 # prompts; the value never touches shell history
+```
+
+Then add a datastore block to your repo configuration that points to this
+extension:
 
 ```yaml
 datastore:
@@ -33,9 +45,16 @@ datastore:
   config:
     projectId: "12345" # numeric ID or "group/project"
     baseUrl: "https://gitlab.com" # optional, defaults to gitlab.com
-    token: "glpat-xxxxxxxxxxxxxxxxxxxx" # API-scoped personal access token
+    token: "${{ vault.get(gitlab, TOKEN) }}" # API-scoped access token, read from the vault
     username: "my-user" # optional
     statePrefix: "swamp" # optional namespace prefix
+```
+
+The same expression works inside `SWAMP_DATASTORE`, which swamp resolves at
+startup:
+
+```bash
+export SWAMP_DATASTORE='@webframp/gitlab-datastore:{"projectId":"12345","token":"${{ vault.get(gitlab, TOKEN) }}"}'
 ```
 
 ## Usage

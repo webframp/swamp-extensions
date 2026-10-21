@@ -15,18 +15,74 @@
 
 import type { SchemaObject } from "./schema_fetcher.ts";
 
+/** A field the mapper marked `.meta({ sensitive: true })`. */
+export interface SensitiveMark {
+  /**
+   * Path from the root schema: `.` for object fields, `[]` for array items,
+   * `{}` for record values, `|` for a union member.
+   */
+  path: string;
+  /**
+   * True when every step from the root is an object field. swamp's resource
+   * redaction walks object shapes only, so a resource field is stored in a
+   * vault only when this is true. Method-argument masking walks arrays,
+   * records and unions too, so arguments do not depend on it.
+   */
+  reachable: boolean;
+}
+
 /** Configuration for type mapper output */
 export interface TypeMapperOptions {
   /** Indent level (number of spaces per level) */
   indent?: number;
   /** Maximum depth before collapsing to z.unknown() */
   maxDepth?: number;
+  /** Mark an object property sensitive when this returns true for it. */
+  isSensitiveName?: (name: string, schema: SchemaObject) => boolean;
+  /** Object-field paths (`a.b`) from the root to mark sensitive. */
+  sensitivePaths?: readonly string[];
+  /** Receives every field the mapper marked sensitive. */
+  marks?: SensitiveMark[];
 }
 
-const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
+interface ResolvedOptions {
+  indent: number;
+  maxDepth: number;
+  isSensitiveName?: (name: string, schema: SchemaObject) => boolean;
+  sensitivePaths: ReadonlySet<string>;
+  marks?: SensitiveMark[];
+}
+
+/** Where the mapper is in the schema tree, for sensitive-field paths. */
+interface Position {
+  path: string;
+  reachable: boolean;
+}
+
+const ROOT: Position = { path: "", reachable: true };
+
+const DEFAULT_OPTIONS = {
   indent: 2,
   maxDepth: 8,
 };
+
+function resolveOptions(options?: TypeMapperOptions): ResolvedOptions {
+  const o = options ?? {};
+  return {
+    indent: o.indent ?? DEFAULT_OPTIONS.indent,
+    maxDepth: o.maxDepth ?? DEFAULT_OPTIONS.maxDepth,
+    isSensitiveName: o.isSensitiveName,
+    sensitivePaths: new Set(o.sensitivePaths ?? []),
+    marks: o.marks,
+  };
+}
+
+function child(pos: Position, step: string, viaObject: boolean): Position {
+  const path = step.startsWith(".")
+    ? (pos.path ? `${pos.path}${step}` : step.slice(1))
+    : `${pos.path}${step}`;
+  return { path, reachable: pos.reachable && viaObject };
+}
 
 /**
  * Convert an OpenAPI SchemaObject to a Zod schema source code string.
@@ -36,15 +92,22 @@ export function schemaToZod(
   options?: TypeMapperOptions,
   depth = 0,
 ): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+  return toZod(schema, resolveOptions(options), depth, ROOT);
+}
 
+function toZod(
+  schema: SchemaObject,
+  opts: ResolvedOptions,
+  depth: number,
+  pos: Position,
+): string {
   if (depth > opts.maxDepth) {
     return "z.unknown()";
   }
 
   // Handle nullable wrapper
   const nullable = schema.nullable === true;
-  let base = schemaToZodInner(schema, opts, depth);
+  let base = schemaToZodInner(schema, opts, depth, pos);
 
   if (nullable) {
     base = `${base}.nullable()`;
@@ -55,8 +118,9 @@ export function schemaToZod(
 
 function schemaToZodInner(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
+  pos: Position,
 ): string {
   // Enum takes priority
   if (schema.enum) {
@@ -67,9 +131,11 @@ function schemaToZodInner(
   if (schema.oneOf || schema.anyOf) {
     const variants = (schema.oneOf ?? schema.anyOf)!;
     if (variants.length === 1) {
-      return schemaToZod(variants[0], opts, depth + 1);
+      return toZod(variants[0], opts, depth + 1, pos);
     }
-    const members = variants.map((v) => schemaToZod(v, opts, depth + 1));
+    const members = variants.map((v) =>
+      toZod(v, opts, depth + 1, child(pos, "|", false))
+    );
     return `z.union([${members.join(", ")}])`;
   }
 
@@ -82,15 +148,15 @@ function schemaToZodInner(
     case "boolean":
       return "z.boolean()";
     case "array":
-      return arrayToZod(schema, opts, depth);
+      return arrayToZod(schema, opts, depth, pos);
     case "object":
-      return objectToZod(schema, opts, depth);
+      return objectToZod(schema, opts, depth, pos);
     case "null":
       return "z.null()";
     default:
       // No type specified — could be a freeform object or unknown
       if (schema.properties) {
-        return objectToZod(schema, opts, depth);
+        return objectToZod(schema, opts, depth, pos);
       }
       return "z.unknown()";
   }
@@ -141,30 +207,38 @@ function enumToZod(values: (string | number | boolean)[]): string {
 
 function arrayToZod(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
+  pos: Position,
 ): string {
   if (!schema.items) {
     return "z.array(z.unknown())";
   }
-  const itemType = schemaToZod(schema.items, opts, depth + 1);
+  const itemType = toZod(
+    schema.items,
+    opts,
+    depth + 1,
+    child(pos, "[]", false),
+  );
   return `z.array(${itemType})`;
 }
 
 function objectToZod(
   schema: SchemaObject,
-  opts: Required<TypeMapperOptions>,
+  opts: ResolvedOptions,
   depth: number,
+  pos: Position,
 ): string {
   // Record type (additionalProperties without fixed properties)
   if (schema.additionalProperties && !schema.properties) {
     if (schema.additionalProperties === true) {
       return "z.record(z.string(), z.unknown())";
     }
-    const valueType = schemaToZod(
+    const valueType = toZod(
       schema.additionalProperties as SchemaObject,
       opts,
       depth + 1,
+      child(pos, "{}", false),
     );
     return `z.record(z.string(), ${valueType})`;
   }
@@ -180,7 +254,17 @@ function objectToZod(
   const fields: string[] = [];
   for (const [name, prop] of Object.entries(schema.properties)) {
     const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
-    let fieldType = schemaToZod(prop, opts, depth + 1);
+    const fieldPos = child(pos, `.${name}`, true);
+    let fieldType = toZod(prop, opts, depth + 1, fieldPos);
+
+    // Mark secret-bearing fields so swamp masks or vaults their values.
+    if (
+      opts.sensitivePaths.has(fieldPos.path) ||
+      opts.isSensitiveName?.(name, prop)
+    ) {
+      fieldType += ".meta({ sensitive: true })";
+      opts.marks?.push({ ...fieldPos });
+    }
 
     // Add .optional() for non-required fields
     if (!required.has(name)) {

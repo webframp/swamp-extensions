@@ -430,7 +430,7 @@ type MethodContext = {
 /** Redmine issue tracker model definition for swamp. */
 export const model = {
   type: "@webframp/redmine",
-  version: "2026.10.20.2",
+  version: "2026.10.21.1",
 
   upgrades: [
     {
@@ -567,6 +567,12 @@ export const model = {
         "No schema changes — Retry-After cap raised to 300s; https upgrade keeps credentials only on default ports",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — documentation and apiKey description now direct the key through a vault.get expression",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   globalArguments: z.object({
@@ -574,7 +580,7 @@ export const model = {
       "Redmine instance URL (e.g. https://redmine.example.com)",
     ),
     apiKey: z.string().min(1).meta({ sensitive: true }).describe(
-      "Redmine API key (40-character hex string)",
+      'Redmine API key. Store it in a swamp vault and supply it as ${{ vault.get("redmine", "API_KEY") }}; never pass the literal key',
     ),
     project: z.string().optional().describe(
       "Default project identifier (omit for cross-project queries)",

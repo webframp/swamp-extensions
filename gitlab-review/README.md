@@ -22,8 +22,10 @@ swamp extension pull @webframp/gitlab-review
 # Create a vault for GitLab credentials
 swamp vault create local_encryption gitlab
 
-# Store your token
-echo "$GITLAB_TOKEN" | swamp vault put gitlab TOKEN
+# Store your token (prompts; the value never touches shell history)
+swamp vault put gitlab TOKEN
+# ...or pipe it from another secret store, e.g.
+#   op read "op://Private/GitLab/token" | swamp vault put gitlab TOKEN
 
 # Create the model instance
 swamp model create @webframp/gitlab-review mr-reviewer

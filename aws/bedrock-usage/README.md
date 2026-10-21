@@ -97,10 +97,11 @@ swamp model method run bedrock-usage list_active_models
   underlying account, disambiguate them by `profile` name, not `accountId`.
 - **`AccessDenied` or credential errors on `ListMetrics`/`GetMetricData`.** Any
   `profile` other than the literal string `"default"` is resolved via
-  `fromIni({ profile })`, so it must exist in your `~/.aws/config` /
-  `~/.aws/credentials` (including SSO or `credential_process` profiles).
-  `"default"` bypasses `fromIni` entirely and uses the ambient AWS credential
-  chain (env vars, instance role, etc.) instead of the `[default]` profile block
+  `fromIni({ profile })`, so it must be a profile in your AWS shared config
+  (prefer SSO or `credential_process` profiles to static keys).
+  `"default"` bypasses `fromIni` entirely and uses the SDK default credential
+  chain (an attached instance or task role, for example) instead of the
+  `[default]` profile block
   specifically — errors thrown from either path are wrapped with the failing
   `profile`/`region`/`modelId` in the message to make this distinction easier to
   spot in logs.

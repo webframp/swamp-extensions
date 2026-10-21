@@ -5,7 +5,7 @@ registration managed in
 `<your-group>/<your-project>/terraform/.../oidc_applications/`.
 
 No client secret is required. Authentication uses device code flow with tokens
-cached via the swamp vault.
+stored in a swamp vault.
 
 ## Prerequisites
 
@@ -23,33 +23,49 @@ Access is restricted to members of `BETHEL-APP-AWS-CD-Everyone`.
 
 ## Vault Configuration
 
-Store these values in your swamp vault:
+Store the tenant and client IDs in a swamp vault (each command prompts for the
+value):
 
-| Key            | Value                                       |
-| -------------- | ------------------------------------------- |
-| `tenantId`     | Azure AD tenant GUID                        |
-| `clientId`     | App registration client ID                  |
-| `refreshToken` | Obtained via `bootstrap` method (see below) |
+```bash
+swamp vault create local_encryption microsoft   # once, if you have no vault yet
+swamp vault put microsoft TENANT_ID             # Azure AD tenant GUID
+swamp vault put microsoft CLIENT_ID             # App registration client ID
+```
+
+The refresh token is never entered by hand. `bootstrap` obtains it and swamp
+stores it in the repo's default vault under the key `TEAMS_REFRESH_TOKEN`.
 
 ## Initial Authentication
 
-1. Create a model instance with `tenantId` and `clientId` from the vault. Set
-   `refreshToken` to any placeholder (it will be replaced by bootstrap).
+1. Create a model instance that reads `tenantId` and `clientId` from the vault.
+   Leave `refreshToken` unset:
+   ```bash
+   swamp model create @webframp/microsoft/teams <name> \
+     --global-arg 'tenantId=${{ vault.get("microsoft", "TENANT_ID") }}' \
+     --global-arg 'clientId=${{ vault.get("microsoft", "CLIENT_ID") }}'
+   ```
 
 2. Run the `bootstrap` method:
-   ```
+   ```bash
    swamp model method run <name> bootstrap
    ```
 
 3. The method outputs a device code and verification URL. Open the URL in a
    browser, enter the code, and complete sign-in.
 
-4. On success, the method writes the new `refreshToken` to its output data. Copy
-   that value into your vault.
+4. On success, swamp stores the refresh token in the default vault and the
+   bootstrap data records only its `vault.get` reference. Show it with
+   `swamp data query 'behavior("<name>") && name == "main"' --select content`.
 
-5. Subsequent method calls use the vault's refresh token for silent auth. Tokens
-   auto-rotate on each use (Graph returns a new refresh token with each access
-   token request).
+5. Run `swamp model edit <name>` and set the `refreshToken` global argument to
+   that reference, e.g.
+   `refreshToken: ${{ vault.get("default", "TEAMS_REFRESH_TOKEN") }}`.
+
+6. Subsequent method calls exchange the vault's refresh token for an access
+   token silently. The stored token is not rotated: Graph returns a new refresh
+   token with each exchange, but the model discards it and keeps using the one
+   `bootstrap` stored. When that token is revoked or expires, methods fail with
+   `invalid_grant`; re-run `bootstrap` to store a fresh one.
 
 ## Token Expiry
 

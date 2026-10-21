@@ -24,21 +24,47 @@ versioned swamp resources.
 
 ## Authentication
 
-The model authenticates via a bearer token stored in your swamp vault. The
-`setup` method handles token generation and vault storage automatically:
+The model authenticates with an exe.dev bearer token held in a swamp vault and
+referenced with a `vault.get` expression; never pass the literal token. Any
+vault type works — `local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+The `setup` method generates the token over SSH and pipes it straight into the
+vault, so the value never appears on a command line or in swamp data:
 
 ```bash
-swamp model method run exe-dev setup
+swamp vault create local_encryption exe-dev   # once, if you have no vault yet
+swamp model create @webframp/exe-dev/vm exe-dev
+swamp model method run exe-dev setup \
+  --input vaultName=exe-dev --input secretKey=API_TOKEN
 ```
 
-This requires SSH access to exe.dev (your SSH key must be registered). The
-generated token includes permissions for all commands the model uses.
+Pass `vaultName` and `secretKey` explicitly. Without them `setup` stores the
+token in a vault named `gitlab` under the key `exe-dev-api-token` (kept for
+existing users), and the `token` reference must name that vault and key instead.
 
-Alternatively, generate a token manually:
+This requires SSH access to exe.dev (your SSH key must be registered). The
+generated token includes permissions for all commands the model uses. Then run
+`swamp model edit exe-dev` and set the global argument (swamp resolves it on
+every run, so add it after `setup` has stored the secret):
+
+```yaml
+globalArguments:
+  token: ${{ vault.get("exe-dev", "API_TOKEN") }}
+```
+
+Run `setup` again to rotate the token; it overwrites the same vault key.
+
+Alternatively, generate a token manually and pipe it into the vault in the same
+command, so it is never printed or stored in shell history. The `grep` keeps
+only the first token-shaped line (the same pattern `setup` uses) and `--yes`
+overwrites the existing value when you rotate:
 
 ```bash
 ssh exe.dev ssh-key generate-api-key --exp=30d \
-  --cmds=help,ls,new,rm,restart,resize,tag,stat,whoami,comment,"shelley install","share show","share set-public","share set-private","share add","share remove","share add-link","share remove-link"
+  --cmds=help,ls,new,rm,restart,resize,tag,stat,whoami,comment,"shelley install","share show","share set-public","share set-private","share add","share remove","share add-link","share remove-link" \
+  | grep -m1 -oE '^[[:space:]]*exe[0-9]\.[^[:space:]]+' | tr -d '[:space:]' \
+  | swamp vault put exe-dev API_TOKEN --yes
 ```
 
 ## Data Resources
@@ -74,7 +100,8 @@ swamp model method run exe-dev shelley_upgrade
 ## Requirements
 
 - SSH key registered with exe.dev (`ssh exe.dev whoami` works)
-- A swamp vault configured for token storage
+- A swamp vault for the token, wired with
+  `token: ${{ vault.get("exe-dev", "API_TOKEN") }}`
 - Network access to `https://exe.dev/exec` and `*.exe.xyz` (SSH for `exec`
   method)
 
@@ -83,9 +110,19 @@ swamp model method run exe-dev shelley_upgrade
 ### `requireToken()` throws — run `setup` first
 
 All methods except `setup` require a valid exe.dev API token in the `token`
-global arg. If the token is missing or empty, the method throws with
-instructions to run the `setup` method (which generates a token via SSH key
-exchange).
+global arg, supplied as a `vault.get` reference to wherever `setup` stored it
+(`${{ vault.get("exe-dev", "API_TOKEN") }}` for
+`--input vaultName=exe-dev --input secretKey=API_TOKEN`, or
+`${{ vault.get("gitlab", "exe-dev-api-token") }}` if you ran `setup` without
+inputs). If the token is missing or empty, the method throws with instructions
+to run the `setup` method (which generates a token via SSH key exchange and
+stores it in the vault).
+
+### `setup` fails without showing the ssh output
+
+`setup` never echoes the raw output of `ssh exe.dev ssh-key generate-api-key`,
+because it can contain the token. If the token cannot be parsed, the error says
+so and names the key label; revoke that key in exe.dev and re-run `setup`.
 
 ### 30-second API timeout
 

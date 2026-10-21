@@ -8,7 +8,8 @@ engines, custom mount paths, and Vault Enterprise namespaces.
 ## Prerequisites
 
 - A running HashiCorp Vault server (self-hosted or HCP Vault)
-- A valid Vault token with read/write access to the target KV engine
+- A valid Vault token with read/write access to the target KV engine, obtained
+  with `vault login` (see [Authentication](#authentication))
 - The `VAULT_ADDR` environment variable or an explicit address in your swamp
   configuration
 
@@ -28,11 +29,33 @@ vaults:
     type: "@webframp/hashicorp-vault"
     config:
       address: "https://vault.example.com:8200"
-      token: "hvs.CAESI..."
       mount: "secret" # default: "secret"
       kvVersion: "2" # "1" or "2" (default: "2")
       namespace: "admin" # optional, Vault Enterprise only
+      # No `token` here — see Authentication below.
 ```
+
+## Authentication
+
+Log in with the Vault CLI and leave the config `token` field unset:
+
+```bash
+vault login -method=oidc   # or any auth method your Vault server offers
+```
+
+`vault login` stores the token in `~/.vault-token` through Vault's default token
+helper, and the provider reads it from there. The token never appears in your
+swamp config, in shell history, or in the repository. Run `vault login` again
+when the token expires.
+
+The provider resolves the token in this order: the config `token` field, the
+`VAULT_TOKEN` environment variable, then `~/.vault-token`. Do not put a literal
+token in the config `token` field: the vault config is a plain file that is easy
+to commit, and the token would sit there in cleartext. `VAULT_TOKEN` is read as
+a fallback, but it is not recommended; it leaks into every child process and is
+easy to leave set. A custom Vault token helper (one configured with
+`token_helper` in `~/.vault`) is not consulted, only the `~/.vault-token` file
+the default helper writes.
 
 ## Usage
 
@@ -43,7 +66,8 @@ commands:
 # Store a secret (interactive prompt, value hidden)
 swamp vault put hashi my-app/db-password
 
-# Retrieve a secret
+# Retrieve a secret. This prints the plaintext value to your terminal; use it
+# only to check a value by hand. Models get secrets through vault.get (below).
 swamp vault read-secret hashi my-app/db-password --force --json
 
 # List all secrets
@@ -52,17 +76,25 @@ swamp vault list-keys hashi --json
 
 ## Vault expressions in model definitions
 
-Reference vault secrets inside model resource definitions using the `vault()`
-expression:
+Reference a secret from a model with a `vault.get` expression, either at
+`swamp model create` time:
+
+```bash
+swamp model create @example/postgres database \
+  --global-arg host=db.example.com \
+  --global-arg 'password=${{ vault.get("hashi", "my-app/db-password") }}'
+```
+
+or in the model definition YAML:
 
 ```yaml
-resources:
-  database:
-    type: postgres
-    properties:
-      host: db.example.com
-      password: "{{ vault('hashi', 'my-app/db-password') }}"
+globalArguments:
+  host: db.example.com
+  password: ${{ vault.get("hashi", "my-app/db-password") }}
 ```
+
+swamp resolves the expression at run time, so the definition never holds the
+plaintext.
 
 ## How it works
 
@@ -124,9 +156,9 @@ probe methodology and residual risk inventory.
 **"No Vault token found."** `resolveToken` in `hashicorp.ts` checks, in order,
 the config `token` field, the `VAULT_TOKEN` environment variable, and
 `~/.vault-token` (the file `vault login` writes). If none resolve, the provider
-throws before making any HTTP request, with a message that spells out all three
-sources. This is a client-side check, not a Vault server error — it fires even
-if the server is unreachable.
+throws before making any HTTP request and tells you to run `vault login`. This
+is a client-side check, not a Vault server error — it fires even if the server
+is unreachable.
 
 **"Vault get request failed: could not reach `<url>`: ..."** This message comes
 from `vaultFetch`, which wraps DNS, connection-refused, and TLS failures with

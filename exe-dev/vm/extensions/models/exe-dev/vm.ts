@@ -35,9 +35,10 @@ const EXTENSION_NAME = "@webframp/exe-dev/vm";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  token: z.string().optional().describe(
-    "exe.dev API bearer token (use vault reference). Generate with the " +
-      "setup method or: ssh exe.dev ssh-key generate-api-key --exp=30d. " +
+  token: z.string().optional().meta({ sensitive: true }).describe(
+    "exe.dev API bearer token. Supply it with a vault expression, e.g. " +
+      '${{ vault.get("exe-dev", "API_TOKEN") }}; never pass the literal ' +
+      "token. The setup method generates a token and stores it in a vault. " +
       "Required for all methods except setup.",
   ),
 });
@@ -336,6 +337,14 @@ export function assertFlagValue(value: string, label: string): void {
 }
 
 /**
+ * Replace anything shaped like an exe.dev API token (`exe<digit>.<...>`) so
+ * error messages never carry secret material.
+ */
+export function redactExeTokens(text: string): string {
+  return text.replace(/exe\d\.\S+/g, "[REDACTED]");
+}
+
+/**
  * Require a non-empty token from globalArgs. Throws an actionable error if
  * the token is missing (not yet bootstrapped).
  */
@@ -343,8 +352,11 @@ function requireToken(globalArgs: GlobalArgs): string {
   if (!globalArgs.token) {
     throw new Error(
       "No API token configured. Run the setup method first to generate " +
-        "and vault a token, then set your model config to: " +
-        'token: \'${{ vault.get("<vaultName>", "<secretKey>") }}\'',
+        "and vault a token, naming the vault and key explicitly (e.g. " +
+        "--input vaultName=exe-dev --input secretKey=API_TOKEN; without " +
+        'them setup uses vault "gitlab", key "exe-dev-api-token"). Then ' +
+        "set your model config to the reference setup logs, e.g. " +
+        'token: \'${{ vault.get("exe-dev", "API_TOKEN") }}\'',
     );
   }
   return globalArgs.token;
@@ -682,7 +694,7 @@ export function mapVm(raw: RawVm): z.infer<typeof VmSchema> {
  */
 export const model = {
   type: "@webframp/exe-dev/vm",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   resources: {
@@ -748,8 +760,11 @@ export const model = {
         "registered). The token covers all commands this model uses: " +
         "ls, new, rm, restart, resize, tag, stat, whoami, and comment. " +
         "Run this once to bootstrap the model, or again to rotate the token. " +
-        "After running, ensure your model YAML " +
-        'has: token: \'${{ vault.get("<vaultName>", "<secretKey>") }}\'',
+        "Pass vaultName and secretKey explicitly (defaults: vault " +
+        '"gitlab", key "exe-dev-api-token"). After running, set the ' +
+        "model's token global argument to the vault reference it logs, " +
+        "e.g. for --input vaultName=exe-dev --input secretKey=API_TOKEN: " +
+        'token: \'${{ vault.get("exe-dev", "API_TOKEN") }}\'',
       arguments: z.object({
         expiry: z.string().regex(/^\d+[dhms]$/, {
           message: "Must be a number followed by d, h, m, or s (e.g. 30d, 24h)",
@@ -757,10 +772,14 @@ export const model = {
           "Token lifetime (e.g. 7d, 30d, 90d)",
         ),
         vaultName: z.string().default("gitlab").describe(
-          "Vault to store the token in",
+          'Vault to store the token in. Defaults to "gitlab" for backward ' +
+            "compatibility; pass your vault explicitly, e.g. " +
+            "--input vaultName=exe-dev",
         ),
         secretKey: z.string().default("exe-dev-api-token").describe(
-          "Secret key name within the vault",
+          'Secret key name within the vault. Defaults to "exe-dev-api-token"' +
+            " for backward compatibility; pass it explicitly, e.g. " +
+            "--input secretKey=API_TOKEN",
         ),
       }),
       execute: async (
@@ -800,18 +819,23 @@ export const model = {
           );
 
         if (sshCode !== 0) {
+          // stderr only: stdout may carry a token even on a non-zero exit.
           throw new Error(
             `Failed to generate exe.dev API token (exit ${sshCode}): ` +
-              `${sshStderr || sshStdout}`,
+              `${redactExeTokens(sshStderr.trim()) || "(no stderr output)"}`,
           );
         }
 
         // Parse the token — exe.dev outputs a token prefixed with "exe" + digit
         const tokenMatch = sshStdout.match(/^\s*(exe\d\.\S+)/m);
         if (!tokenMatch) {
+          // Never echo the raw output: it may contain the token in a format
+          // the pattern did not anticipate.
           throw new Error(
-            "Could not parse token from ssh output. Raw output:\n" +
-              sshStdout,
+            "Could not parse an exe.dev token from the ssh output " +
+              `(${sshStdout.length} bytes, withheld because it may contain ` +
+              "secret material). A token may have been generated; revoke " +
+              `any key labelled "${label}" in exe.dev and re-run setup.`,
           );
         }
         const token = tokenMatch[1];
@@ -823,7 +847,8 @@ export const model = {
             "put",
             args.vaultName,
             args.secretKey,
-            "--stdin",
+            // The value is piped on stdin (never argv); `swamp vault put`
+            // reads piped stdin without a flag.
             "--yes",
           ],
           stdin: "piped",
@@ -850,7 +875,8 @@ export const model = {
           const vaultStderr = new TextDecoder().decode(vaultResult.stderr);
           throw new Error(
             `Token generated but failed to store in vault ` +
-              `"${args.vaultName}/${args.secretKey}": ${vaultStderr}`,
+              `"${args.vaultName}/${args.secretKey}": ` +
+              redactExeTokens(vaultStderr),
           );
         }
 
@@ -927,7 +953,10 @@ export const model = {
           "Setup script to run on first boot (max 10KiB)",
         ),
         env: z.record(z.string(), z.string()).optional().describe(
-          "Environment variables as KEY=VALUE pairs",
+          "Environment variables as KEY=VALUE pairs. Supply secret values " +
+            'with vault expressions, e.g. ${{ vault.get("<vault>", "<KEY>") }}, ' +
+            "never as literals: literal input values are recorded in the " +
+            "method run.",
         ),
         integrations: z.array(z.string()).optional().describe(
           "Integration names to attach",

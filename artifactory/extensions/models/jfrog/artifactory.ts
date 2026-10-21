@@ -22,7 +22,11 @@ const GlobalArgsSchema = z.object({
     "Artifactory base URL including context path (e.g., https://packages.example.com/artifactory)",
   ),
   token: z.string().min(1).meta({ sensitive: true })
-    .describe("vault:// reference to JFrog Identity Token or Access Token"),
+    .describe(
+      "JFrog Identity Token or Access Token. Supply it with a vault " +
+        'expression, e.g. ${{ vault.get("artifactory", "TOKEN") }}; never ' +
+        "pass the literal token.",
+    ),
 });
 
 const HealthSchema = z.object({
@@ -208,7 +212,9 @@ async function rtfApi(
     await resp.body?.cancel();
     throw new Error(
       "Artifactory authentication failed (401). Token may be expired. " +
-        "Generate a new Identity Token and update your vault.",
+        "Generate a new Identity Token and store it in your vault with " +
+        "`swamp vault put artifactory TOKEN` (or the vault and key your " +
+        "token global argument references).",
     );
   }
 
@@ -266,7 +272,7 @@ type MethodContext = {
 /** JFrog Artifactory model for package management and health monitoring. */
 export const model = {
   type: "@webframp/artifactory",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -326,6 +332,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — token guidance now uses vault.get expressions",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

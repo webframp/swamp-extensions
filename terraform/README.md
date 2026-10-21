@@ -6,11 +6,14 @@ expressions.
 
 The model shells out to `terraform show -json` (or `tofu show -json`) to read
 state from any configured backend. It writes swamp resources keyed by Terraform
-resource address, making every attribute available for downstream consumption.
+resource address, making its attributes available for downstream consumption.
+Attributes Terraform marks sensitive are masked before anything is written, for
+state that records them (Terraform 0.15 and later, and OpenTofu).
 
 ## Features
 
-- Read full Terraform or OpenTofu state into swamp resources
+- Read full Terraform or OpenTofu state into swamp resources (sensitive
+  attributes are masked when state records them)
 - List all managed resources with type, provider, and module path
 - Extract outputs (sensitive values are automatically redacted)
 - Workspace selection via global arguments
@@ -59,7 +62,19 @@ version, total resource count, and a summary array of every managed resource
 ### `read_state`
 
 Reads full state and writes one `tf_resource` per Terraform resource, keyed by
-its address. Each resource includes the complete attribute map from state.
+its address. Each resource includes the attribute map from state, with every
+attribute Terraform marks sensitive (in the state's `sensitive_values`) replaced
+by `***SENSITIVE***`. When a whole map, list or nested block is sensitive (for
+example `tags = merge(var.common_tags, { Owner = var.owner })` over a sensitive
+variable), the attribute becomes that string rather than a map with masked
+values, so consumers must not assume the original shape. Read sensitive values
+from the Terraform backend directly when you need them.
+
+Masking depends on `sensitive_values`, which `terraform show -json` emits from
+Terraform 0.15 onward and OpenTofu always emits. A resource without it (state
+from an older Terraform) is written unmasked, and `read_state` logs a warning
+naming each such resource address. Upgrade Terraform before reading state that
+holds secrets.
 
 ### `get_outputs`
 

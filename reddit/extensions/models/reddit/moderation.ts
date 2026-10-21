@@ -23,11 +23,11 @@ const GlobalArgsSchema = z.object({
   ),
   clientId: z.string().min(1).describe("Reddit OAuth2 application client ID"),
   clientSecret: z.string().min(1).meta({ sensitive: true }).describe(
-    "Reddit OAuth2 application client secret",
+    'Reddit OAuth2 application client secret. Supply it as ${{ vault.get("reddit", "CLIENT_SECRET") }}; never pass the literal value',
   ),
   username: z.string().min(1).describe("Reddit account username"),
   password: z.string().min(1).meta({ sensitive: true }).describe(
-    "Reddit account password",
+    'Reddit account password. Supply it as ${{ vault.get("reddit", "PASSWORD") }}; never pass the literal value',
   ),
   userAgent: z.string().min(1).describe(
     "User-Agent string for Reddit API requests (e.g. 'swamp:modbot:v1.0 by /u/yourname')",
@@ -221,7 +221,7 @@ interface MethodContext {
 /** Reddit moderation model providing read and action access to subreddit moderation data. */
 export const model = {
   type: "@webframp/reddit/moderation",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -293,6 +293,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — documentation now wires credentials through vault.get expressions",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

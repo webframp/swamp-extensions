@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./stream.ts";
 
 // ---------------------------------------------------------------------------
@@ -272,6 +273,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -316,6 +321,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -329,7 +338,6 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": "new-123",
       "allowedOrigins": null,
       "clippedFrom": "ea95132c15732412d22c1476fa83f27a",
       "created": null,
@@ -362,6 +370,7 @@ Deno.test({
       "uploadExpiry": null,
       "uploaded": null,
       "watermark": null,
+      "id": "new-123",
     };
     const { url, server } = startMockCfServer({
       "/stream/clip": { result: mockData },
@@ -426,6 +435,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -507,6 +521,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -527,14 +545,14 @@ Deno.test({
       "modified": null,
       "preferLowLatency": null,
       "recording": null,
-      "rtmps": null,
-      "rtmpsPlayback": null,
-      "srt": null,
-      "srtPlayback": null,
+      "rtmps": { "streamKey": null, "url": null },
+      "rtmpsPlayback": { "streamKey": null, "url": null },
+      "srt": { "passphrase": null, "url": null },
+      "srtPlayback": { "passphrase": null, "url": null },
       "status": null,
       "uid": null,
-      "webRTC": null,
-      "webRTCPlayback": null,
+      "webRTC": { "url": null },
+      "webRTCPlayback": { "url": null },
     };
     const { url, server } = startMockCfServer({
       "/stream/live_inputs/test-id-123": { result: mockData },
@@ -569,20 +587,1565 @@ Deno.test({
         "modified": null,
         "preferLowLatency": null,
         "recording": null,
-        "rtmps": null,
-        "rtmpsPlayback": null,
-        "srt": null,
-        "srtPlayback": null,
+        "rtmps": { "streamKey": null, "url": null },
+        "rtmpsPlayback": { "streamKey": null, "url": null },
+        "srt": { "passphrase": null, "url": null },
+        "srtPlayback": { "passphrase": null, "url": null },
         "status": null,
         "uid": null,
-        "webRTC": null,
-        "webRTCPlayback": null,
+        "webRTC": { "url": null },
+        "webRTCPlayback": { "url": null },
         "live_input_identifier": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Returned secrets
+// ---------------------------------------------------------------------------
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as {
+      sensitive?: boolean;
+    } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[key] != null
+    ) {
+      (parent as Record<string, unknown>)[key] =
+        "${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}
+
+Deno.test({
+  name:
+    "stream model: create_signing_keys keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "id": null,
+      "jwk": "VAULT-CANARY-0",
+      "pem": "VAULT-CANARY-1",
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/keys": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_signing_keys.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "signing_keys");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["signing_keys"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["jwk"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("jwk"), true);
+      assertEquals(
+        String(valueAt(persisted, ["jwk"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(valueAt(data, ["pem"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("pem"), true);
+      assertEquals(
+        String(valueAt(persisted, ["pem"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: create_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_a_live_input.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "a_live_input");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["a_live_input"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: get_stream_live_inputs_retrieve_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_stream_live_inputs_retrieve_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "stream_live_inputs_retrieve_a_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "stream_live_inputs_retrieve_a_live_input"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: update_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_a_live_input.execute(
+        { "live_input_identifier": "test-id-123" },
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "a_live_input");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["a_live_input"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: stream_live_inputs_disable_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/disable": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).stream_live_inputs_disable_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "stream_live_inputs_disable_a_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "stream_live_inputs_disable_a_live_input"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: stream_live_inputs_enable_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/enable": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).stream_live_inputs_enable_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "stream_live_inputs_enable_a_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "stream_live_inputs_enable_a_live_input"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: list_all_outputs_associated_with_a_specified_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "streamKey": "STRIP-CANARY-0",
+      "url": "STRIP-CANARY-1",
+    }];
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/outputs": {
+        result: mockData,
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_all_outputs_associated_with_a_specified_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "all_outputs_associated_with_a_specified_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "all_outputs_associated_with_a_specified_live_input"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: create_a_new_output_connected_to_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/outputs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_a_new_output_connected_to_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "a_new_output_connected_to_a_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "a_new_output_connected_to_a_live_input"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["streamKey"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(valueAt(data, ["url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: update_an_output keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/outputs/test-id-123": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_an_output.execute({
+        "output_identifier": "test-id-123",
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "an_output");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["an_output"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["streamKey"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(valueAt(data, ["url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: stream_live_inputs_rotate_keys_for_a_live_input keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created": null,
+      "deleteRecordingAfterDays": null,
+      "enabled": null,
+      "keysRotatedAt": null,
+      "meta": null,
+      "modified": null,
+      "preferLowLatency": null,
+      "recording": null,
+      "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
+      "rtmpsPlayback": {
+        "streamKey": "VAULT-CANARY-2",
+        "url": "VAULT-CANARY-3",
+      },
+      "srt": { "passphrase": "VAULT-CANARY-4", "url": "VAULT-CANARY-5" },
+      "srtPlayback": {
+        "passphrase": "VAULT-CANARY-6",
+        "url": "VAULT-CANARY-7",
+      },
+      "status": null,
+      "uid": null,
+      "webRTC": { "url": "VAULT-CANARY-8" },
+      "webRTCPlayback": { "url": "VAULT-CANARY-9" },
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/rotate_keys": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).stream_live_inputs_rotate_keys_for_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(
+        written[0].specName,
+        "stream_live_inputs_rotate_keys_for_a_live_input",
+      );
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "stream_live_inputs_rotate_keys_for_a_live_input"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["rtmps", "streamKey"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("rtmps.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmps", "url"]), "VAULT-CANARY-1");
+      assertEquals(sensitivePaths.has("rtmps.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmps", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["rtmpsPlayback", "streamKey"]),
+        "VAULT-CANARY-2",
+      );
+      assertEquals(sensitivePaths.has("rtmpsPlayback.streamKey"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "streamKey"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["rtmpsPlayback", "url"]), "VAULT-CANARY-3");
+      assertEquals(sensitivePaths.has("rtmpsPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["rtmpsPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "passphrase"]), "VAULT-CANARY-4");
+      assertEquals(sensitivePaths.has("srt.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srt", "url"]), "VAULT-CANARY-5");
+      assertEquals(sensitivePaths.has("srt.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srt", "url"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(
+        valueAt(data, ["srtPlayback", "passphrase"]),
+        "VAULT-CANARY-6",
+      );
+      assertEquals(sensitivePaths.has("srtPlayback.passphrase"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "passphrase"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["srtPlayback", "url"]), "VAULT-CANARY-7");
+      assertEquals(sensitivePaths.has("srtPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["srtPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTC", "url"]), "VAULT-CANARY-8");
+      assertEquals(sensitivePaths.has("webRTC.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTC", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(valueAt(data, ["webRTCPlayback", "url"]), "VAULT-CANARY-9");
+      assertEquals(sensitivePaths.has("webRTCPlayback.url"), true);
+      assertEquals(
+        String(valueAt(persisted, ["webRTCPlayback", "url"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: get_stream_webhook_view_webhooks keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "modified": "2014-01-02T02:20:00Z",
+      "notificationUrl": "https://example.com",
+      "notification_url": "https://example.com",
+      "secret": "VAULT-CANARY-0",
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/webhook": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_stream_webhook_view_webhooks.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "stream_webhook_view_webhooks");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "stream_webhook_view_webhooks"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["secret"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["secret"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: create_webhooks keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "modified": "2014-01-02T02:20:00Z",
+      "notificationUrl": "https://example.com",
+      "notification_url": "https://example.com",
+      "secret": "VAULT-CANARY-0",
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/webhook": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_webhooks.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "webhooks");
+      const schema =
+        (model.resources as Record<string, { schema: unknown }>)["webhooks"]
+          .schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["secret"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("secret"), true);
+      assertEquals(
+        String(valueAt(persisted, ["secret"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: create_signed_url_tokens_for_videos keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "token": "VAULT-CANARY-0" };
+    const { url, server } = startMockCfServer({
+      "/stream/test-id-123/token": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_signed_url_tokens_for_videos.execute({
+        "identifier": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "signed_url_tokens_for_videos");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "signed_url_tokens_for_videos"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["token"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("token"), true);
+      assertEquals(
+        String(valueAt(persisted, ["token"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
     } finally {
       uninstall();
       await server.shutdown();

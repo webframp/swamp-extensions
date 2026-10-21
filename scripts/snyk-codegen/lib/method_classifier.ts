@@ -13,7 +13,14 @@
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import type { ParameterObject } from "./schema_fetcher.ts";
-import { schemaToZod, truncateAtBoundary } from "./type_mapper.ts";
+import {
+  isSensitiveFieldName,
+  schemaToZod,
+  SECRET_ARG_GUIDANCE,
+  SENSITIVE_META,
+  truncateAtBoundary,
+} from "./type_mapper.ts";
+import type { SchemaObject } from "./schema_fetcher.ts";
 import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -211,6 +218,7 @@ export function generateModelSource(
   // references it, or deno lint fails with no-unused-vars.
   const usesSanitize = methods.some(methodEmitsSanitize);
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
+  if (methods.some(methodDropsSecrets)) apiImports.push("dropItemSecrets");
   if (apiImports.length > 0) {
     lines.push(
       `import { ${apiImports.join(", ")} } from "./_lib/api.ts";`,
@@ -296,11 +304,17 @@ export function generateModelSource(
   return lines.join("\n");
 }
 
+/** Describe text for the apiToken global argument. */
+export const API_TOKEN_DESCRIPTION =
+  'Snyk API token. Store it in a vault and wire it with ${{ vault.get("snyk", "API_TOKEN") }}; never pass the literal token.';
+
 /** Generate GlobalArgsSchema based on service scope */
 function generateGlobalArgsSchema(config: ServiceConfig): string {
   const lines = [`const GlobalArgsSchema = z.object({`];
   lines.push(
-    `  apiToken: z.string().meta({ sensitive: true }).describe("Snyk API token"),`,
+    `  apiToken: z.string().meta({ sensitive: true }).describe(${
+      JSON.stringify(API_TOKEN_DESCRIPTION)
+    }),`,
   );
 
   if (config.scope === "org") {
@@ -387,12 +401,28 @@ function generateResponseSchemas(
     let flatExpr: string | undefined;
     if (flatWriter) {
       const varName = toPascalCase(flatWriter.name) + "Schema";
-      const zodStr = withPassthrough(
+      let zodStr = withPassthrough(
         schemaToZod(flatWriter.operation.responseSchema!, {
           indent: 2,
           lenient: true,
         }, 1),
       );
+      // Swamp vaults only the fields a resource schema declares sensitive. A
+      // secret another writer of this resource returns, but the schema (built
+      // from the first writer) does not declare, would pass through in
+      // plaintext, so declare it here.
+      const declared = new Set(
+        sensitiveTopLevelFields(flatWriter.operation.responseSchema),
+      );
+      const missing = [
+        ...new Set(writers.flatMap(secretResponseFields)),
+      ].filter((f) => !declared.has(f));
+      if (missing.length > 0) {
+        zodStr = `${zodStr}.extend({\n${
+          missing.map((f) => `  ${f}: z.unknown()${SENSITIVE_META}.nullish(),`)
+            .join("\n")
+        }\n})`;
+      }
       lines.push(`const ${varName} = ${zodStr};`);
       lines.push(``);
       flatExpr = varName;
@@ -404,7 +434,24 @@ function generateResponseSchemas(
     // A non-list writer without a declared response (a 204 create) still
     // writes an object, so it counts as a flat writer with an open shape.
     const hasFlatWriter = writers.some((m) => m.type !== "list");
-    if (!flatExpr && hasFlatWriter) flatExpr = OPEN_OBJECT;
+    if (!flatExpr && hasFlatWriter) {
+      // A writer with no declared response cannot declare a secret either.
+      flatExpr = OPEN_OBJECT;
+    }
+    // Swamp finds sensitive fields by walking object shapes; it does not look
+    // inside a union, so a secret in a union's flat member would be persisted
+    // in plaintext. No Snyk resource needs this today; fail the generation
+    // rather than emit a schema that silently leaks.
+    const secretWriters = writers.filter((m) =>
+      secretResponseFields(m).length > 0
+    );
+    if (listExpr && flatExpr && secretWriters.length > 0) {
+      throw new Error(
+        `resource ${resourceNameOf(writers[0])} is a list/flat union but ${
+          secretWriters.map((m) => m.name).join(", ")
+        } return secret fields; swamp cannot vault fields inside a union`,
+      );
+    }
     const expr = listExpr && flatExpr
       ? `z.union([${listExpr}, ${flatExpr}])`
       : (listExpr ?? flatExpr ?? OPEN_OBJECT);
@@ -519,10 +566,9 @@ function generateArgsSchema(op: GroupedOperation): string {
     const fieldName = sanitizeFieldName(p.name);
     if (seenFields.has(fieldName)) continue;
     seenFields.add(fieldName);
-    const desc = p.description
-      ? `.describe("${escapeStr(truncateStr(p.description))}")`
-      : "";
-    fields.push(`  ${fieldName}: z.string()${desc},`);
+    fields.push(
+      `  ${fieldName}: z.string()${paramSuffix(p.name, p.description)},`,
+    );
   }
 
   // Query params
@@ -530,9 +576,6 @@ function generateArgsSchema(op: GroupedOperation): string {
     const fieldName = sanitizeFieldName(p.name);
     if (seenFields.has(fieldName)) continue;
     seenFields.add(fieldName);
-    const desc = p.description
-      ? `.describe("${escapeStr(truncateStr(p.description))}")`
-      : "";
     let zodType = "z.string()";
     if (isArrayParam(p)) {
       zodType = "z.union([z.string(), z.array(z.string())])";
@@ -546,7 +589,11 @@ function generateArgsSchema(op: GroupedOperation): string {
       );
       zodType = `z.enum([${vals.join(", ")}])`;
     }
-    fields.push(`  ${fieldName}: ${zodType}.optional()${desc},`);
+    fields.push(
+      `  ${fieldName}: ${zodType}.optional()${
+        paramSuffix(p.name, p.description)
+      },`,
+    );
   }
 
   // Request body fields (for create/update)
@@ -557,9 +604,13 @@ function generateArgsSchema(op: GroupedOperation): string {
       const fieldName = sanitizeFieldName(name);
       if (seenFields.has(fieldName)) continue;
       seenFields.add(fieldName);
-      const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
+      const sensitive = isSensitiveFieldName(name);
+      const fieldZod = schemaToZod(prop, { indent: 2 }, 2) +
+        (sensitive ? SENSITIVE_META : "");
       const optSuffix = required.has(name) ? "" : ".optional()";
-      const desc = prop.description
+      const desc = sensitive
+        ? `.describe("${escapeStr(secretArgDescription(prop.description))}")`
+        : prop.description
         ? `.describe("${escapeStr(truncateStr(prop.description))}")`
         : "";
       fields.push(`  ${fieldName}: ${fieldZod}${optSuffix}${desc},`);
@@ -571,6 +622,126 @@ function generateArgsSchema(op: GroupedOperation): string {
   }
 
   return `z.object({\n${fields.join("\n")}\n    })`;
+}
+
+/**
+ * The `.meta()`/`.describe()` suffix for a path or query parameter. A secret
+ * parameter is marked sensitive and its describe says to supply it from a
+ * vault. Swamp reads the marker on either side of `.optional()`.
+ */
+function paramSuffix(name: string, description?: string): string {
+  if (isSensitiveFieldName(name)) {
+    return `${SENSITIVE_META}.describe("${
+      escapeStr(secretArgDescription(description))
+    }")`;
+  }
+  return description
+    ? `.describe("${escapeStr(truncateStr(description))}")`
+    : "";
+}
+
+/** Describe text for a secret argument: the spec's text, then the guidance. */
+function secretArgDescription(description?: string): string {
+  return description
+    ? `${truncateStr(description)} ${SECRET_ARG_GUIDANCE}`
+    : SECRET_ARG_GUIDANCE;
+}
+
+/**
+ * Top-level secret properties of a flattened response schema: the fields swamp
+ * moves into a vault when a method writes the resource.
+ */
+export function sensitiveTopLevelFields(schema?: SchemaObject): string[] {
+  return Object.keys(schema?.properties ?? {}).filter(isSensitiveFieldName);
+}
+
+/**
+ * Secret fields a non-list method's response can carry. The resource it writes
+ * marks each one sensitive, so swamp stores the value in a vault and the
+ * persisted resource holds a vault reference.
+ */
+export function secretResponseFields(method: ClassifiedMethod): string[] {
+  if (method.type === "list" || method.type === "delete") return [];
+  return sensitiveTopLevelFields(method.operation.responseSchema);
+}
+
+/**
+ * Secret fields a list method's items can carry. Swamp vaults sensitive fields
+ * of objects but not of array elements, so a list drops these from every item
+ * before writing; Snyk documents them as returned only on creation.
+ */
+export function secretListItemFields(method: ClassifiedMethod): string[] {
+  if (method.type !== "list") return [];
+  return sensitiveTopLevelFields(method.operation.responseSchema);
+}
+
+/** Dotted paths of the secret arguments a method accepts. */
+export function secretArgumentPaths(method: ClassifiedMethod): string[] {
+  const op = method.operation;
+  const paths: string[] = [];
+  for (const p of [...op.pathParams, ...op.queryParams]) {
+    if (isSensitiveFieldName(p.name)) paths.push(sanitizeFieldName(p.name));
+  }
+  const walk = (schema: SchemaObject | undefined, prefix: string) => {
+    for (const [name, prop] of Object.entries(schema?.properties ?? {})) {
+      if (prefix === "" && name === "id") continue;
+      const path = prefix ? `${prefix}.${name}` : sanitizeFieldName(name);
+      if (isSensitiveFieldName(name)) paths.push(path);
+      walk(objectBranch(prop), path);
+    }
+  };
+  walk(op.requestBody, "");
+  return paths;
+}
+
+/** The object schema a property descends into (single-variant unions too). */
+function objectBranch(prop: SchemaObject): SchemaObject | undefined {
+  const variants = prop.oneOf ?? prop.anyOf;
+  if (variants?.length === 1) return objectBranch(variants[0]);
+  return prop.properties ? prop : undefined;
+}
+
+/**
+ * The statements that drop secret fields from array elements before a write,
+ * or "" when the method's response declares none. `target` is the expression
+ * holding the array.
+ */
+function itemSecretDrop(
+  fields: string[],
+  target: string,
+  indent: string,
+): string {
+  if (fields.length === 0) return "";
+  return `${indent}    const droppedSecrets = dropItemSecrets(${target}, ${
+    JSON.stringify(fields)
+  });
+${indent}    if (droppedSecrets > 0) {
+${indent}      context.logger.info("WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array", { count: droppedSecrets });
+${indent}    }
+`;
+}
+
+/** Drop secret item fields from a list's results before the write. */
+function listSecretDrop(method: ClassifiedMethod, indent: string): string {
+  return itemSecretDrop(secretListItemFields(method), "results", indent);
+}
+
+/**
+ * A non-list call whose data is an array lands under `result.items`, where
+ * swamp cannot vault the fields its resource marks sensitive; drop them there.
+ */
+function resultSecretDrop(method: ClassifiedMethod, indent: string): string {
+  return itemSecretDrop(
+    secretResponseFields(method),
+    "(result as { items?: unknown }).items",
+    indent,
+  );
+}
+
+/** True when a method's generated body calls dropItemSecrets. */
+function methodDropsSecrets(method: ClassifiedMethod): boolean {
+  return secretListItemFields(method).length > 0 ||
+    secretResponseFields(method).length > 0;
 }
 
 /** Generate list method body */
@@ -596,7 +767,7 @@ ${indent}
 ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
-${indent}
+${listSecretDrop(method, indent)}${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", "main", {
 ${indent}      items: results,
 ${indent}      truncated,
@@ -633,7 +804,9 @@ ${indent}      \`${apiPath}${qsSuffix}\`,
 ${indent}      version,
 ${indent}    );
 ${requireLine(method, indent)}${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${
+    resultSecretDrop(method, indent)
+  }${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Fetched ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -672,7 +845,9 @@ ${indent}      body,
 ${indent}    );
 ${requireLine(method, indent)}${indent}
 ${indent}    const id = sanitizeInstanceName(String((result as { id?: unknown }).id ?? "created"));
-${indent}    const handle = await context.writeResource("${resourceName}", id, result);
+${
+    resultSecretDrop(method, indent)
+  }${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -717,7 +892,9 @@ ${indent}      version,
 ${indent}      body,
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
+${
+    resultSecretDrop(method, indent)
+  }${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, result);
 ${indent}    context.logger.info("Updated ${resourceName}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }
@@ -795,7 +972,9 @@ ${indent}      \`${apiPath}${urlSuffix}\`,
 ${indent}      version,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
+${
+    resultSecretDrop(method, indent)
+  }${indent}    const handle = await context.writeResource("${resourceName}", "${resourceName}-current", result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
 }

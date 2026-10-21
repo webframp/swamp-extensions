@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/cloudflare-audit"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Cloudflare security and configuration audit workflow.
   Inspects zone settings, DNS records, WAF rules, Workers, and cache
@@ -13,16 +13,24 @@ description: |
   ```bash
   swamp extension pull @webframp/cloudflare-audit
 
+  # Store the API token in a vault (prompts; never pass it inline)
+  swamp vault create local_encryption cloudflare
+  swamp vault put cloudflare API_TOKEN
+
   swamp model create @webframp/cloudflare/zone cf-zone \
-    --global-arg apiToken=CLOUDFLARE_API_TOKEN
+    --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'
   swamp model create @webframp/cloudflare/dns cf-dns \
-    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+    --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
+    --global-arg zoneId=ZONE_ID
   swamp model create @webframp/cloudflare/waf cf-waf \
-    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+    --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
+    --global-arg zoneId=ZONE_ID
   swamp model create @webframp/cloudflare/worker cf-worker \
-    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg accountId=ACCOUNT_ID
+    --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
+    --global-arg accountId=ACCOUNT_ID
   swamp model create @webframp/cloudflare/cache cf-cache \
-    --global-arg apiToken=CLOUDFLARE_API_TOKEN --global-arg zoneId=ZONE_ID
+    --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
+    --global-arg zoneId=ZONE_ID
 
   swamp workflow run @webframp/cloudflare-audit --input zoneId=ZONE_ID
   ```

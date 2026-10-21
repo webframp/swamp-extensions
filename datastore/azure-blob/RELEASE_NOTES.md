@@ -1,10 +1,14 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The README and the datastore's JSDoc example put the connection
+string, account key and client secret into `.swamp.yaml` and `SWAMP_DATASTORE`
+as literal values. Every example now stores the credential with
+`swamp vault put` and references it with `"${{ vault.get(azure, <KEY>) }}"`,
+which swamp resolves at startup.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** `connectionString` is marked sensitive like `accountKey` and
+`clientSecret`, and all three config fields describe the `vault.get` wiring.
 
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Upgrade note:** No behavioral or schema changes. If your `.swamp.yaml` holds a
+literal credential, move it into a vault and replace it with a `vault.get`
+expression.

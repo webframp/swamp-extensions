@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./tunnel.ts";
 
 // ---------------------------------------------------------------------------
@@ -166,6 +167,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -178,7 +183,6 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": null,
       "account_tag": null,
       "config_src": null,
       "connections": null,
@@ -186,6 +190,7 @@ Deno.test({
       "conns_inactive_at": null,
       "created_at": null,
       "deleted_at": null,
+      "id": "new-123",
       "metadata": null,
       "name": null,
       "remote_config": null,
@@ -235,6 +240,11 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -293,6 +303,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -363,6 +377,10 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -403,6 +421,205 @@ Deno.test({
         context,
       );
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Returned secrets
+// ---------------------------------------------------------------------------
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function unwrapZod(schema: ZodLike): ZodLike {
+  let current = schema;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current;
+}
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as {
+      sensitive?: boolean;
+    } | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+/** Key paths swamp moves into a vault for a resource schema. */
+function sensitivePathsOf(schema: unknown, prefix: string[] = []): string[][] {
+  const object = unwrapZod(schema as ZodLike);
+  if (object._def.type !== "object" || !object._def.shape) return [];
+  const out: string[][] = [];
+  for (const [key, field] of Object.entries(object._def.shape)) {
+    if (isMarkedSensitive(field)) out.push([...prefix, key]);
+    out.push(...sensitivePathsOf(field, [...prefix, key]));
+  }
+  return out;
+}
+
+function valueAt(data: unknown, path: string[]): unknown {
+  let current = data;
+  for (const key of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+/** The resource as swamp persists it: sensitive fields become vault references. */
+function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
+  const copy = structuredClone(data);
+  for (const path of sensitivePathsOf(schema)) {
+    const parent = valueAt(copy, path.slice(0, -1));
+    const key = path[path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[key] != null
+    ) {
+      (parent as Record<string, unknown>)[key] =
+        "${{ vault.get('test-vault', '" + path.join(".") + "') }}";
+    }
+  }
+  return copy;
+}
+
+Deno.test({
+  name:
+    "tunnel model: get_a_cloudflare_tunnel_management_token keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = "VAULT-CANARY-root";
+    const { url, server } = startMockCfServer({
+      "/cfd_tunnel/test-id-123/management": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-tunnel",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_a_cloudflare_tunnel_management_token.execute({
+        "tunnel_id": "test-id-123",
+      }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "a_cloudflare_tunnel_management_token");
+      assertEquals(written[0].name, "test-id-123");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "a_cloudflare_tunnel_management_token"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["value"]), "VAULT-CANARY-root");
+      assertEquals(sensitivePaths.has("value"), true);
+      assertEquals(
+        String(valueAt(persisted, ["value"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "tunnel model: get_a_cloudflare_tunnel_token keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = "VAULT-CANARY-root";
+    const { url, server } = startMockCfServer({
+      "/cfd_tunnel/test-id-123/token": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-tunnel",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_a_cloudflare_tunnel_token.execute(
+        { "tunnel_id": "test-id-123" },
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "a_cloudflare_tunnel_token");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "a_cloudflare_tunnel_token"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["value"]), "VAULT-CANARY-root");
+      assertEquals(sensitivePaths.has("value"), true);
+      assertEquals(
+        String(valueAt(persisted, ["value"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
     } finally {
       uninstall();
       await server.shutdown();

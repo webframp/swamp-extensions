@@ -22,6 +22,18 @@ Azure SDK dependency — talks to the Blob REST API directly via `fetch`.
 
 ## Configuration
 
+Keep the storage credential in a swamp vault and reference it from the datastore
+config with a `vault.get` expression; never write the connection string, account
+key, or client secret into `.swamp.yaml` or `SWAMP_DATASTORE`. Any vault type
+works — `local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+Vault expressions are not supported with `managedConfig: true`.
+
+```bash
+swamp vault create local_encryption azure          # once, if you have no vault yet
+swamp vault put azure STORAGE_CONNECTION_STRING    # prompts; the value never touches shell history
+```
+
 ```yaml
 # .swamp.yaml
 datastore:
@@ -29,12 +41,12 @@ datastore:
   config:
     auth:
       mode: "connectionString"
-      connectionString: "AccountName=myaccount;AccountKey=...;EndpointSuffix=core.windows.net"
+      connectionString: "${{ vault.get(azure, STORAGE_CONNECTION_STRING) }}"
     container: "swamp-datastore"
     # prefix: "swamp"  # default — namespaces multiple datastores in one container
 ```
 
-Or with an account key directly:
+Or with an account key (`swamp vault put azure STORAGE_ACCOUNT_KEY`):
 
 ```yaml
 datastore:
@@ -43,11 +55,12 @@ datastore:
     auth:
       mode: "sharedKey"
       accountName: "myaccount"
-      accountKey: "..."
+      accountKey: "${{ vault.get(azure, STORAGE_ACCOUNT_KEY) }}"
     container: "swamp-datastore"
 ```
 
-Or via Azure AD service principal (client-credentials):
+Or via Azure AD service principal (client-credentials;
+`swamp vault put azure CLIENT_SECRET`):
 
 ```yaml
 datastore:
@@ -56,16 +69,17 @@ datastore:
     auth:
       mode: "servicePrincipal"
       accountName: "myaccount"
-      tenantId: "..."
-      clientId: "..."
-      clientSecret: "..."
+      tenantId: "<tenant-uuid>"
+      clientId: "<app-registration-uuid>"
+      clientSecret: "${{ vault.get(azure, CLIENT_SECRET) }}"
     container: "swamp-datastore"
 ```
 
-Or via environment variable:
+Or via environment variable. The JSON carries the same vault expression, which
+swamp resolves at startup, so the secret never sits in your environment:
 
 ```bash
-export SWAMP_DATASTORE='@webframp/azure-blob-datastore:{"auth":{"mode":"connectionString","connectionString":"AccountName=...;AccountKey=..."},"container":"swamp-datastore"}'
+export SWAMP_DATASTORE='@webframp/azure-blob-datastore:{"auth":{"mode":"connectionString","connectionString":"${{ vault.get(azure, STORAGE_CONNECTION_STRING) }}"},"container":"swamp-datastore"}'
 ```
 
 ## Required Setup

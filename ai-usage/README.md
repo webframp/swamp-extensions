@@ -13,18 +13,29 @@ shown with setup hints in the report output.
 # Pull the extension (also pulls provider dependencies)
 swamp extension pull @webframp/ai-usage
 
-# Configure providers you use (any subset works)
+# Configure providers you use (any subset works). Store every secret in a
+# vault and reference it with vault.get; never pass a literal value.
 swamp model create @webframp/aws/bedrock-usage bedrock-usage \
-  --global-arg 'profiles=["default"]' --global-arg 'regions=["us-east-1"]'
+  --global-arg 'profiles=["my-sso-profile"]' --global-arg 'regions=["us-east-1"]'
 
+swamp vault create local_encryption gcp   # once, if you have no vault yet
+swamp vault put gcp SA_KEY < key.json && rm key.json
 swamp model create @webframp/gcp/vertex-usage vertex-usage \
-  --global-arg 'projects=["my-project"]'
+  --global-arg 'projects=["my-project"]' \
+  --global-arg 'serviceAccountJson=${{ vault.get("gcp", "SA_KEY") }}'
 
+swamp vault create local_encryption azure   # once, if you have no vault yet
+swamp vault put azure CLIENT_SECRET   # prompts for the value
 swamp model create @webframp/azure/openai-usage azure-ai-usage \
-  --global-arg 'subscriptions=["sub-id"]'
+  --global-arg 'subscriptions=["sub-id"]' \
+  --global-arg 'tenantId=<tenant-uuid>' \
+  --global-arg 'clientId=<app-registration-uuid>' \
+  --global-arg 'clientSecret=${{ vault.get("azure", "CLIENT_SECRET") }}'
 
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
+swamp vault put anthropic ANALYTICS_KEY   # prompts for the value
 swamp model create @webframp/anthropic/analytics claude-analytics \
-  --global-arg 'analyticsKey=<vault-reference>'
+  --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}'
 
 # Create the unified model
 swamp model create @webframp/ai-usage ai-usage

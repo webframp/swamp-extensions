@@ -31,6 +31,55 @@ Deno.test("events model: has globalArguments with apiKey and appKey", () => {
   assertExists(shape.site);
 });
 
+type ZodLike = {
+  meta?: () => Record<string, unknown> | undefined;
+  _zod?: {
+    def?: {
+      type?: string;
+      innerType?: ZodLike;
+      shape?: Record<string, ZodLike>;
+    };
+  };
+};
+
+/** The wrappers swamp's unwrapSchema sees through; readonly, catch and the rest hide a field. */
+const SWAMP_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+function innerOf(schema: ZodLike | undefined): ZodLike | undefined {
+  const def = schema?._zod?.def;
+  return def && SWAMP_WRAPPERS.has(def.type ?? "") ? def.innerType : undefined;
+}
+
+function isMarkedSensitive(schema: ZodLike | undefined): boolean {
+  for (let cur = schema; cur; cur = innerOf(cur)) {
+    if (cur.meta?.()?.sensitive === true) return true;
+  }
+  return false;
+}
+
+/** Object-field paths marked sensitive, as swamp's resource redaction finds them. */
+function sensitivePaths(schema: unknown, prefix = ""): string[] {
+  let cur = schema as ZodLike | undefined;
+  while (innerOf(cur)) cur = innerOf(cur);
+  if (cur?._zod?.def?.type !== "object") return [];
+  const shape = cur?._zod?.def?.shape;
+  if (!shape) return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(shape)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (isMarkedSensitive(field)) out.push(path);
+    out.push(...sensitivePaths(field, path));
+  }
+  return out;
+}
+
+Deno.test("events model: apiKey and appKey are marked sensitive", () => {
+  assertEquals(sensitivePaths(model.globalArguments).sort(), [
+    "apiKey",
+    "appKey",
+  ]);
+});
+
 Deno.test("events model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_events);

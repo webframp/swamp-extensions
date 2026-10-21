@@ -185,7 +185,7 @@ Deno.test("scan_projects fails without credentials", async () => {
           context as unknown as ScanContext,
         ),
       Error,
-      "No serviceAccountJson provided",
+      '${{ vault.get("gcp", "SA_KEY") }}',
     );
   } finally {
     if (originalEnv) {

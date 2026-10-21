@@ -42,11 +42,14 @@ description: |
 
   swamp extension pull @webframp/cloudflare-audit
 
-  swamp model create @webframp/cloudflare/zone cf-zone --global-arg apiToken=vault:cf-token
-  swamp model create @webframp/cloudflare/dns cf-dns --global-arg apiToken=vault:cf-token --global-arg zoneId=ZONE_ID
-  swamp model create @webframp/cloudflare/waf cf-waf --global-arg apiToken=vault:cf-token --global-arg zoneId=ZONE_ID
-  swamp model create @webframp/cloudflare/worker cf-worker --global-arg apiToken=vault:cf-token --global-arg accountId=ACCOUNT_ID
-  swamp model create @webframp/cloudflare/cache cf-cache --global-arg apiToken=vault:cf-token --global-arg zoneId=ZONE_ID
+  swamp vault create local_encryption cloudflare
+  swamp vault put cloudflare API_TOKEN   # prompts; never pass the token inline
+
+  swamp model create @webframp/cloudflare/zone cf-zone --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}'
+  swamp model create @webframp/cloudflare/dns cf-dns --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
+  swamp model create @webframp/cloudflare/waf cf-waf --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
+  swamp model create @webframp/cloudflare/worker cf-worker --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg accountId=ACCOUNT_ID
+  swamp model create @webframp/cloudflare/cache cf-cache --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' --global-arg zoneId=ZONE_ID
 
   swamp workflow run @webframp/cloudflare-audit --input zoneId=ZONE_ID
 repository: "https://github.com/webframp/swamp-extensions"

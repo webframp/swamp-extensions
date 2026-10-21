@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/reddit/moderation"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Reddit moderation model for subreddit management.
 
@@ -15,12 +15,15 @@ description: |
 
   ```bash
   swamp extension pull @webframp/reddit/moderation
+  swamp vault create local_encryption reddit   # once, if you have no vault yet
+  swamp vault put reddit CLIENT_SECRET         # prompts; never pass secrets inline
+  swamp vault put reddit PASSWORD
   swamp model create @webframp/reddit/moderation reddit-mod \
     --global-arg subreddit=aoe4 \
-    --global-arg clientId=vault://reddit/clientId \
-    --global-arg clientSecret=vault://reddit/clientSecret \
-    --global-arg username=vault://reddit/username \
-    --global-arg password=vault://reddit/password \
+    --global-arg clientId=YOUR_CLIENT_ID \
+    --global-arg 'clientSecret=${{ vault.get("reddit", "CLIENT_SECRET") }}' \
+    --global-arg username=yourbot \
+    --global-arg 'password=${{ vault.get("reddit", "PASSWORD") }}' \
     --global-arg userAgent="swamp:aoe4mod:v1.0 (by /u/yourbot)"
   swamp model method run reddit-mod get_modqueue
   ```

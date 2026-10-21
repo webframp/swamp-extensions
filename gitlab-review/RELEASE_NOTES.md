@@ -1,18 +1,11 @@
-## 2026.10.21.1
+## 2026.10.21.2
 
-**Added:** `post_discussion` opens a general resolvable thread on a merge
-request, with no diff position. Use it for review points that don't sit on a
-changed line, such as a stale doc outside the diff or a commit-type nit. Before
-this, those points could only go into the single `post_review` note, which
-GitLab does not let anyone resolve. Arguments are `project`, `iid` and `body`.
-Like the other posting methods, it refuses a closed or merged MR (run
-`get_mr_diff` first).
+**Changed:** Documentation only: the setup example stored the token with
+`echo "$GITLAB_TOKEN" | swamp vault put gitlab TOKEN`, which assumes the token
+already sits in an environment variable. It now uses the interactive
+`swamp vault put gitlab TOKEN` prompt, or a pipe from another secret store. The
+`token` global argument description now says to supply it as
+`${{ vault.get("gitlab", "TOKEN") }}` and never as a literal.
 
-**Added:** `discussionThread` resource records each thread (`discussionId`,
-`noteId`, `body`, `postedAt`). Instances are keyed by a SHA-256 prefix of the
-body, and `post_discussion` skips posting when the same body is already recorded
-for that MR, so a retry after a successful post does not open a duplicate
-thread. The body is compared after normalising line endings and trimming
-trailing whitespace.
-
-**Upgrade note:** Additive only. Existing resources and methods are unchanged.
+**Upgrade note:** No schema or behavioral changes. The model version moves to
+2026.10.21.2 with an identity upgrade.

@@ -68,6 +68,28 @@ interface DriftFinding {
   }>;
 }
 
+/**
+ * A Terraform attribute that could not be compared because state marks it
+ * sensitive. `@webframp/terraform` `read_state` writes the mask in its place.
+ */
+interface UnverifiableField {
+  tfAddress: string;
+  tfType: string;
+  resourceId: string;
+  field: string;
+}
+
+/** Placeholder `@webframp/terraform` writes for a sensitive attribute. */
+const SENSITIVE_MASK = "***SENSITIVE***";
+
+function isMasked(value: unknown): boolean {
+  return value === SENSITIVE_MASK;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 interface AwsEc2Instance {
   instanceId: string;
   instanceType: string;
@@ -113,12 +135,18 @@ interface DriftSummary {
   missingInAws: number;
   fieldDrifts: number;
   unsupportedTypes: number;
+  /** Fields skipped because Terraform state marks them sensitive. */
+  unverifiableFields: number;
 }
 
 /** Result shape returned by {@link report.execute}. */
 interface DriftReportResult {
   markdown: string;
-  json: { summary: DriftSummary; findings: DriftFinding[] };
+  json: {
+    summary: DriftSummary;
+    findings: DriftFinding[];
+    unverifiable: UnverifiableField[];
+  };
 }
 
 /**
@@ -140,6 +168,7 @@ export const report = {
     context: WorkflowReportContext,
   ): Promise<DriftReportResult> => {
     const findings: DriftFinding[] = [];
+    const unverifiable: UnverifiableField[] = [];
     const sections: string[] = [];
     const summary = {
       timestamp: new Date().toISOString(),
@@ -150,6 +179,7 @@ export const report = {
       missingInAws: 0,
       fieldDrifts: 0,
       unsupportedTypes: 0,
+      unverifiableFields: 0,
     };
 
     // =========================================================================
@@ -318,8 +348,16 @@ export const report = {
 
       summary.comparedResources++;
 
+      // A wholly sensitive state block reaches us as the mask string, not an
+      // attribute map. Nothing in it can be compared.
+      if (!isPlainObject(tfr.values)) {
+        markUnverifiable(tfr, "(unknown)", "values");
+        continue;
+      }
+      const values = tfr.values;
+
       if (tfr.type === "aws_instance") {
-        const awsId = tfr.values.id as string | undefined;
+        const awsId = resourceIdOf(tfr, "id");
         if (!awsId) continue;
         const aws = awsEc2Map.get(awsId);
         if (!aws) {
@@ -332,17 +370,15 @@ export const report = {
           continue;
         }
         const drifts: DriftFinding["fields"] = [];
-        if (
-          tfr.values.instance_type &&
-          tfr.values.instance_type !== aws.instanceType
-        ) {
-          drifts.push({
-            field: "instance_type",
-            terraform: tfr.values.instance_type,
-            aws: aws.instanceType,
-          });
-        }
-        compareTags(tfr, aws.tags, drifts);
+        compareScalar(
+          tfr,
+          awsId,
+          "instance_type",
+          values.instance_type,
+          aws.instanceType,
+          drifts,
+        );
+        compareTags(tfr, awsId, aws.tags, drifts);
         if (drifts.length > 0) {
           findings.push({
             tfAddress: tfr.address,
@@ -353,7 +389,7 @@ export const report = {
           });
         }
       } else if (tfr.type === "aws_nat_gateway") {
-        const awsId = tfr.values.id as string | undefined;
+        const awsId = resourceIdOf(tfr, "id");
         if (!awsId) continue;
         const aws = awsNatMap.get(awsId);
         if (!aws) {
@@ -366,16 +402,15 @@ export const report = {
           continue;
         }
         const drifts: DriftFinding["fields"] = [];
-        if (
-          tfr.values.subnet_id && tfr.values.subnet_id !== aws.subnetId
-        ) {
-          drifts.push({
-            field: "subnet_id",
-            terraform: tfr.values.subnet_id,
-            aws: aws.subnetId,
-          });
-        }
-        compareTags(tfr, aws.tags, drifts);
+        compareScalar(
+          tfr,
+          awsId,
+          "subnet_id",
+          values.subnet_id,
+          aws.subnetId,
+          drifts,
+        );
+        compareTags(tfr, awsId, aws.tags, drifts);
         if (drifts.length > 0) {
           findings.push({
             tfAddress: tfr.address,
@@ -386,7 +421,7 @@ export const report = {
           });
         }
       } else if (tfr.type === "aws_lb") {
-        const awsArn = tfr.values.arn as string | undefined;
+        const awsArn = resourceIdOf(tfr, "arn");
         if (!awsArn) continue;
         const aws = awsLbMap.get(awsArn);
         if (!aws) {
@@ -399,16 +434,12 @@ export const report = {
           continue;
         }
         const drifts: DriftFinding["fields"] = [];
-        if (tfr.values.name && tfr.values.name !== aws.name) {
-          drifts.push({
-            field: "name",
-            terraform: tfr.values.name,
-            aws: aws.name,
-          });
-        }
+        compareScalar(tfr, awsArn, "name", values.name, aws.name, drifts);
         // TF uses internal=true/false, AWS uses scheme="internal"/"internet-facing"
-        const tfInternal = tfr.values.internal as boolean | undefined;
-        if (tfInternal !== undefined) {
+        const tfInternal = values.internal;
+        if (isMasked(tfInternal)) {
+          markUnverifiable(tfr, awsArn, "internal/scheme");
+        } else if (typeof tfInternal === "boolean") {
           const awsInternal = aws.scheme === "internal";
           if (tfInternal !== awsInternal) {
             drifts.push({
@@ -428,8 +459,7 @@ export const report = {
           });
         }
       } else if (tfr.type === "aws_eip") {
-        const awsAllocId = tfr.values.allocation_id as string ??
-          tfr.values.id as string | undefined;
+        const awsAllocId = resourceIdOf(tfr, "allocation_id", "id");
         if (!awsAllocId) continue;
         const aws = awsEipMap.get(awsAllocId);
         if (!aws) {
@@ -442,16 +472,15 @@ export const report = {
           continue;
         }
         const drifts: DriftFinding["fields"] = [];
-        if (
-          tfr.values.public_ip && tfr.values.public_ip !== aws.publicIp
-        ) {
-          drifts.push({
-            field: "public_ip",
-            terraform: tfr.values.public_ip,
-            aws: aws.publicIp,
-          });
-        }
-        compareTags(tfr, aws.tags, drifts);
+        compareScalar(
+          tfr,
+          awsAllocId,
+          "public_ip",
+          values.public_ip,
+          aws.publicIp,
+          drifts,
+        );
+        compareTags(tfr, awsAllocId, aws.tags, drifts);
         if (drifts.length > 0) {
           findings.push({
             tfAddress: tfr.address,
@@ -465,21 +494,87 @@ export const report = {
     }
 
     // =========================================================================
-    // Tag comparison helper
+    // Comparison helpers
     // =========================================================================
+
+    function markUnverifiable(
+      tfr: TfResource,
+      resourceId: string,
+      field: string,
+    ): void {
+      unverifiable.push({
+        tfAddress: tfr.address,
+        tfType: tfr.type,
+        resourceId,
+        field,
+      });
+    }
+
+    /**
+     * Return the first usable identifier among `fields`. A masked identifier
+     * cannot be matched against AWS, so it is recorded as unverifiable rather
+     * than reported as missing.
+     */
+    function resourceIdOf(
+      tfr: TfResource,
+      ...fields: string[]
+    ): string | undefined {
+      for (const field of fields) {
+        const v = tfr.values[field];
+        if (isMasked(v)) {
+          markUnverifiable(tfr, "(sensitive)", field);
+          return undefined;
+        }
+        if (typeof v === "string" && v !== "") return v;
+      }
+      return undefined;
+    }
+
+    function compareScalar(
+      tfr: TfResource,
+      resourceId: string,
+      field: string,
+      tfVal: unknown,
+      awsVal: unknown,
+      drifts: NonNullable<DriftFinding["fields"]>,
+    ): void {
+      if (isMasked(tfVal)) {
+        markUnverifiable(tfr, resourceId, field);
+        return;
+      }
+      if (!tfVal) return;
+      if (tfVal !== awsVal) {
+        drifts.push({ field, terraform: tfVal, aws: awsVal });
+      }
+    }
 
     function compareTags(
       tfr: TfResource,
+      resourceId: string,
       awsTags: Record<string, string> | undefined,
       drifts: NonNullable<DriftFinding["fields"]>,
     ): void {
-      // Prefer tags_all (includes default_tags) over resource-level tags
-      const tfTags =
-        (tfr.values.tags_all as Record<string, string> | undefined) ??
-          (tfr.values.tags as Record<string, string> | undefined);
-      if (!tfTags || !awsTags) return;
+      // Prefer tags_all (includes default_tags) over resource-level tags. When
+      // tags_all is present but masked, do not fall back to tags: tags omits
+      // default_tags, so every default tag would look like an extra AWS tag.
+      const tagsAll = tfr.values.tags_all;
+      const source = tagsAll !== undefined && tagsAll !== null
+        ? "tags_all"
+        : "tags";
+      const tfTags = tfr.values[source];
+      if (tfTags === undefined || tfTags === null || !awsTags) return;
+      if (!isPlainObject(tfTags)) {
+        // A wholly sensitive map (for example tags built with merge() over a
+        // sensitive variable) is the mask string. Its keys are unknown.
+        markUnverifiable(tfr, resourceId, source);
+        return;
+      }
       // Check TF → AWS: changed or missing in AWS
       for (const [key, tfVal] of Object.entries(tfTags)) {
+        if (isMasked(tfVal)) {
+          markUnverifiable(tfr, resourceId, `tags.${key}`);
+          continue;
+        }
         if (awsTags[key] !== tfVal) {
           drifts.push({
             field: `tags.${key}`,
@@ -490,7 +585,7 @@ export const report = {
       }
       // Check AWS → TF: extra tags added outside Terraform
       for (const key of Object.keys(awsTags)) {
-        if (!(key in tfTags)) {
+        if (!Object.hasOwn(tfTags, key)) {
           drifts.push({
             field: `tags.${key}`,
             terraform: "(not defined)",
@@ -509,6 +604,7 @@ export const report = {
     summary.fieldDrifts = findings.filter((f) => f.status === "field_drift")
       .length;
     summary.driftedResources = findings.length;
+    summary.unverifiableFields = unverifiable.length;
 
     // Header
     sections.push("# Terraform Drift Report\n");
@@ -535,7 +631,10 @@ export const report = {
       `| Missing in AWS | ${summary.missingInAws} |`,
     );
     sections.push(
-      `| Field-level drift | ${summary.fieldDrifts} |\n`,
+      `| Field-level drift | ${summary.fieldDrifts} |`,
+    );
+    sections.push(
+      `| Unverifiable fields (sensitive in state) | ${summary.unverifiableFields} |\n`,
     );
 
     // Supported types
@@ -590,6 +689,22 @@ export const report = {
       }
     }
 
+    if (unverifiable.length > 0) {
+      sections.push("## Unverifiable Fields\n");
+      sections.push(
+        "Terraform state marks these attributes sensitive, so their values " +
+          "are masked and were not compared. They are neither drift nor a match:\n",
+      );
+      sections.push("| TF Address | Resource ID | Field |");
+      sections.push("|-----------|-------------|-------|");
+      for (const u of unverifiable) {
+        sections.push(
+          `| \`${u.tfAddress}\` | ${u.resourceId} | ${u.field} |`,
+        );
+      }
+      sections.push("");
+    }
+
     // TF inventory summary (if available)
     if (tfInventoryData) {
       const inv = tfInventoryData as {
@@ -607,11 +722,12 @@ export const report = {
       total: summary.totalTfResources,
       compared: summary.comparedResources,
       drifted: summary.driftedResources,
+      unverifiable: summary.unverifiableFields,
     });
 
     return {
       markdown: sections.join("\n"),
-      json: { summary, findings },
+      json: { summary, findings, unverifiable },
     };
   },
 };

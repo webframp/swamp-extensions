@@ -13,6 +13,7 @@ import { OUTPUT_BASE, SERVICES } from "./config.ts";
 import { fetchSchema } from "./lib/schema_fetcher.ts";
 import { groupOperations } from "./lib/service_grouper.ts";
 import {
+  assertSensitiveOperationsExist,
   classifyServiceMethods,
   generateModelSource,
 } from "./lib/method_classifier.ts";
@@ -121,6 +122,8 @@ async function main() {
     `   ✓ Loaded spec: ${Object.keys(spec.paths).length} paths`,
   );
   console.log(``);
+
+  assertSensitiveOperationsExist(spec);
 
   const groups = groupOperations(spec, servicesToGenerate);
   console.log(`📂 Grouped operations into ${groups.length} services:`);

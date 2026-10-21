@@ -16,8 +16,10 @@ const GlobalArgsSchema = z.object({
   host: z.string().min(1).describe(
     "Discourse instance hostname (e.g. discourse.example.com)",
   ),
-  apiKey: z.string().optional().describe(
-    "API key for authenticated access. Omit for public read-only.",
+  apiKey: z.string().optional().meta({ sensitive: true }).describe(
+    "API key for authenticated access. Omit for public read-only. Supply it " +
+      'with a vault expression, e.g. ${{ vault.get("discourse", "API_KEY") }}; ' +
+      "never pass the literal key.",
   ),
   apiUsername: z.string().optional().describe(
     "Discourse username matching the API key owner. Required when apiKey is set. Use 'system' only with global admin keys.",
@@ -201,7 +203,7 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -256,6 +258,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — apiKey is now marked sensitive (vault.get only)",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

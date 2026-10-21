@@ -90,7 +90,8 @@ Workflow-scope report that aggregates triage data into actionable markdown:
 
 - Security Hub enabled with a **delegated administrator** account
 - Cross-region **finding aggregator** configured (aggregates all regions to one)
-- AWS credentials for the delegated admin account (via `AWS_PROFILE` or env)
+- AWS credentials for the delegated admin account, from AWS SSO or a named
+  profile (`--global-arg profile=<name>`) or an attached IAM role
 
 ## Quick Start
 
@@ -197,8 +198,9 @@ also requires `securityhub:GetFindings`.
 ### Profile configuration
 
 Pass `--global-arg profile=<name>` for named-profile or SSO credential
-resolution. Alternatively, set `AWS_PROFILE` as an environment variable — both
-methods work via the standard credential chain.
+resolution (`aws sso login --profile <name>` first). Without it, the SDK
+default credential chain is used, which picks up an attached IAM role. Avoid
+long-lived static access keys.
 
 ## License
 

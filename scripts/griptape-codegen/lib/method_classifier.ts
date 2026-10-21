@@ -15,8 +15,16 @@
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
 import { schemaToZod, truncateAtWord } from "./type_mapper.ts";
+import {
+  isSensitiveFieldName,
+  sensitivePaths,
+  type SensitiveTree,
+  withSensitiveMarkers,
+} from "./sensitive.ts";
 import { ZOD_VERSION } from "../config.ts";
 import type { ServiceConfig } from "../config.ts";
+
+export { isSensitiveFieldName };
 
 export type MethodType =
   | "list"
@@ -292,6 +300,9 @@ export function generateModelSource(
   if (usesApi) apiImports.push("griptapeApi");
   if (usesPaginated) apiImports.push("griptapeApiPaginated");
   if (usesSanitize) apiImports.push("sanitizeInstanceName");
+  if (methods.some((m) => listStripPaths(m).length > 0)) {
+    apiImports.push("omitPaths");
+  }
   if (apiImports.length > 0) {
     lines.push(`import { ${apiImports.join(", ")} } from "./_lib/api.ts";`);
   }
@@ -372,7 +383,7 @@ export function generateModelSource(
 function generateGlobalArgsSchema(): string {
   return [
     `const GlobalArgsSchema = z.object({`,
-    `  apiKey: z.string().meta({ sensitive: true }).describe("Griptape Cloud API key; overrides the GT_CLOUD_API_KEY environment variable. Wire with a vault.get(...) expression to source it from a vault.").optional(),`,
+    `  apiKey: z.string().meta({ sensitive: true }).describe("Griptape Cloud API key. Store it in a swamp vault and wire it with a vault.get(...) expression, e.g. \${{ vault.get(\\"griptape\\", \\"API_KEY\\") }}. The GT_CLOUD_API_KEY environment variable is read as a fallback, but it is not redacted and is not recommended.").optional(),`,
     `  baseUrl: z.string().describe("Griptape Cloud API base URL; overrides the GT_CLOUD_BASE_URL environment variable and the built-in default.").optional(),`,
     `});`,
   ].join("\n");
@@ -396,8 +407,27 @@ function generateResponseSchemas(
     }
   }
 
+  // Every method writing a resource contributes its credential paths: the
+  // schema comes from the first such method, but a later get/update may return
+  // a field the create response does not.
+  const sensitiveByResource = new Map<string, SensitiveTree>();
+  for (const method of methods) {
+    if (method.type === "delete" || method.type === "list") continue;
+    const tree = method.operation.sensitiveResponse;
+    if (!tree) continue;
+    const name = resourceNameFor(method);
+    sensitiveByResource.set(
+      name,
+      mergeSensitiveTrees(sensitiveByResource.get(name) ?? {}, tree),
+    );
+  }
+
   for (const method of methodsWithResources) {
-    const schema = method.operation.responseSchema;
+    const rawSchema = method.operation.responseSchema;
+    const sensitiveTree = sensitiveByResource.get(resourceNameFor(method));
+    const schema = rawSchema && sensitiveTree
+      ? withSensitiveMarkers(rawSchema, sensitiveTree)
+      : rawSchema;
     if (!schema) {
       schemaNames.set(method.name, NO_SCHEMA_ZOD);
       continue;
@@ -579,10 +609,34 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
   return { stmt, urlSuffix: "${qs}" };
 }
 
+/**
+ * Names of a method's arguments that carry a credential and are emitted with
+ * `.meta({ sensitive: true })`: query parameters and top-level body fields
+ * whose name is sensitive, plus body fields with a credential nested inside
+ * (see GroupedOperation.sensitiveBodyFields). Path parameters are ids.
+ */
+export function sensitiveArgNames(op: GroupedOperation): string[] {
+  const names = new Set<string>(op.sensitiveBodyFields ?? []);
+  for (const p of op.queryParams) {
+    const n = sanitizeFieldName(p.name);
+    if (isSensitiveFieldName(n)) names.add(n);
+  }
+  for (const name of Object.keys(op.requestBody?.properties ?? {})) {
+    const n = sanitizeFieldName(name);
+    if (isSensitiveFieldName(n)) names.add(n);
+  }
+  // A path parameter shadows a same-named query/body field in the schema.
+  for (const p of op.pathParams) names.delete(sanitizeFieldName(p.name));
+  return [...names].sort();
+}
+
 /** Generate the arguments schema for a method. */
 function generateArgsSchema(op: GroupedOperation): string {
   const fields: string[] = [];
   const seenFields = new Set<string>();
+  const sensitiveArgs = new Set(sensitiveArgNames(op));
+  const sensitiveMeta = (field: string) =>
+    sensitiveArgs.has(field) ? ".meta({ sensitive: true })" : "";
 
   for (const p of op.pathParams) {
     const fieldName = sanitizeFieldName(p.name);
@@ -612,7 +666,13 @@ function generateArgsSchema(op: GroupedOperation): string {
       );
       zodType = `z.enum([${vals.join(", ")}])`;
     }
-    fields.push(`  ${fieldName}: ${zodType}.optional()${desc},`);
+    // A credential passed in the query string (e.g. the structure webhook's
+    // api_key) is as secret as one in the body.
+    fields.push(
+      `  ${fieldName}: ${zodType}${
+        sensitiveMeta(fieldName)
+      }.optional()${desc},`,
+    );
   }
 
   if (op.requestBody?.type === "array" && op.requestBody.items) {
@@ -622,7 +682,9 @@ function generateArgsSchema(op: GroupedOperation): string {
       : "";
     if (!seenFields.has("items")) {
       seenFields.add("items");
-      fields.push(`  items: z.array(${itemZod})${desc},`);
+      fields.push(
+        `  items: z.array(${itemZod})${sensitiveMeta("items")}${desc},`,
+      );
     }
   } else if (op.requestBody?.oneOf) {
     const variantZods = op.requestBody.oneOf.map((v) =>
@@ -632,8 +694,10 @@ function generateArgsSchema(op: GroupedOperation): string {
       seenFields.add("body");
       fields.push(
         variantZods.length === 1
-          ? `  body: ${variantZods[0]},`
-          : `  body: z.union([${variantZods.join(", ")}]),`,
+          ? `  body: ${variantZods[0]}${sensitiveMeta("body")},`
+          : `  body: z.union([${variantZods.join(", ")}])${
+            sensitiveMeta("body")
+          },`,
       );
     }
   } else if (op.requestBody?.properties) {
@@ -645,10 +709,10 @@ function generateArgsSchema(op: GroupedOperation): string {
       const fieldZod = schemaToZod(prop, { indent: 2 }, 2);
       const optSuffix = required.has(name) ? "" : ".optional()";
       // Mark credential-bearing fields sensitive so swamp redacts them in audit
-      // logs and the UI. The spec does not flag these, so key off the name.
-      const sensitive = isSensitiveFieldName(fieldName)
-        ? ".meta({ sensitive: true })"
-        : "";
+      // logs and the UI. The spec does not flag these, so key off the name —
+      // of the field itself, or of a credential nested inside it (a
+      // connector's config.s3.aws_secret_access_key marks all of config).
+      const sensitive = sensitiveMeta(fieldName);
       const desc = prop.description
         ? `.describe("${escapeStr(truncateStr(prop.description))}")`
         : "";
@@ -684,6 +748,13 @@ function generateListBody(
     ? `sanitizeInstanceName(String(args.${sanitizeFieldName(scopeParam.name)}))`
     : '"main"';
 
+  // swamp cannot vault a field inside an array, so credentials in list items
+  // are dropped before the snapshot is written. The get method stores them.
+  const stripPaths = listStripPaths(method);
+  const itemsExpr = stripPaths.length > 0
+    ? `results.map((item) => omitPaths(item, ${JSON.stringify(stripPaths)}))`
+    : "results";
+
   return `${indent}    const startMs = Date.now();
 ${indent}    const params: Record<string, string> = {};
 ${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
@@ -704,7 +775,7 @@ ${indent}      context.logger.info("WARNING: results truncated at {count} (pagin
 ${indent}    }
 ${indent}
 ${indent}    const handle = await context.writeResource("${resourceName}", ${instanceExpr}, {
-${indent}      items: results,
+${indent}      items: ${itemsExpr},
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
 ${indent}      durationMs: Date.now() - startMs,
@@ -713,6 +784,25 @@ ${indent}    });
 ${indent}
 ${indent}    context.logger.info("Found {count} ${resourceName}", { count: results.length });
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/** Credential paths dropped from each list item before it is written. */
+export function listStripPaths(method: ClassifiedMethod): string[][] {
+  if (method.type !== "list" || !method.operation.sensitiveResponse) return [];
+  return sensitivePaths(method.operation.sensitiveResponse);
+}
+
+function mergeSensitiveTrees(
+  a: SensitiveTree,
+  b: SensitiveTree,
+): SensitiveTree {
+  const out: SensitiveTree = { ...a };
+  for (const [k, v] of Object.entries(b)) {
+    const cur = out[k];
+    if (cur === true || v === true) out[k] = true;
+    else out[k] = cur ? mergeSensitiveTrees(cur, v) : v;
+  }
+  return out;
 }
 
 /** Generate get method body. */
@@ -1029,34 +1119,6 @@ export function toPascalCase(name: string): string {
 /** Sanitize an API field name to a safe object key / identifier fragment. */
 export function sanitizeFieldName(name: string): string {
   return name.replace(/-/g, "_");
-}
-
-/**
- * True when a request-body field name denotes a credential/secret that swamp
- * should redact in logs and the UI. The Griptape spec does not flag these, so
- * the decision is name-based. Exact-match a curated set (plus a `*_token` /
- * `*_secret` / `*_password` suffix rule) rather than a broad substring test, so
- * innocuous fields like `value_count` or `token_limit` are not over-redacted.
- */
-export function isSensitiveFieldName(name: string): boolean {
-  const n = name.toLowerCase();
-  const exact = new Set([
-    "value",
-    "secret",
-    "secret_value",
-    "password",
-    "token",
-    "api_key",
-    "apikey",
-    "access_token",
-    "refresh_token",
-    "client_secret",
-    "private_key",
-    "credential",
-    "credentials",
-  ]);
-  if (exact.has(n)) return true;
-  return /_(token|secret|password|api_key|apikey)$/.test(n);
 }
 
 /** Escape a string for a double-quoted TypeScript literal. */

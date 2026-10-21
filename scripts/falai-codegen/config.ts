@@ -114,12 +114,15 @@ export const SERVICES: ServiceConfig[] = [
 ];
 
 /**
- * Response fields to strip before a `create`/`update` method persists its
- * result to the datastore, keyed by OpenAPI `operationId`. fal.ai's
- * `createApiKey` response carries a one-time secret (`key_secret`, and the
- * combined `key` field) that the API documents as returned only once and
- * never retrievable again — persisting it verbatim would expose it to
- * anyone with datastore read access (`swamp data get`, audits).
+ * Response fields that carry secrets, keyed by OpenAPI `operationId`. Each is
+ * marked `.meta({ sensitive: true })` in the method's resource schema, so
+ * swamp stores the value in a vault and persists only a `vault.get(...)`
+ * reference in the datastore. fal.ai's `createApiKey` response carries a
+ * one-time secret (`key_secret`, and the combined `key` field) that the API
+ * returns only once; storing it verbatim would expose it to anyone with
+ * datastore read access, and dropping it would leave the user with a key they
+ * can never use. Every listed field must be declared in the response schema
+ * (generation fails otherwise) — swamp only vaults fields the schema names.
  */
 export const SENSITIVE_RESPONSE_FIELDS: Record<string, string[]> = {
   createApiKey: ["key_secret", "key"],

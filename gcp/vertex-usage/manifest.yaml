@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gcp/vertex-usage"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   GCP Vertex AI and Gemini API usage and cost analysis. Reads token and request
   volume from Cloud Monitoring and dollar cost from the Cloud Billing export in
@@ -12,9 +12,11 @@ description: |
 
   ## Authentication
 
-  Service account JSON key (`serviceAccountJson` arg), a `GCP_ACCESS_TOKEN`
-  env var, or the file named by `GOOGLE_APPLICATION_CREDENTIALS` (service
-  account or `authorized_user`). No `gcloud` CLI dependency.
+  Store a service account key or an `authorized_user` ADC file in a swamp vault
+  and wire the `serviceAccountJson` global argument with a `vault.get`
+  expression. No `gcloud` CLI dependency. The `GCP_ACCESS_TOKEN` and
+  `GOOGLE_APPLICATION_CREDENTIALS` environment variables are read as
+  fallbacks, but they are not redacted and are not recommended.
 
   ## Required Permissions
 
@@ -26,8 +28,10 @@ description: |
   ## Usage
 
   ```bash
+  swamp vault create local_encryption gcp   # once, if you have no vault yet
+  swamp vault put gcp SA_KEY < key.json && rm key.json
   swamp model create @webframp/gcp/vertex-usage vertex-usage \
-    --global-arg 'serviceAccountJson=<vault:gcp/sa-key>' \
+    --global-arg 'serviceAccountJson=${{ vault.get("gcp", "SA_KEY") }}' \
     --global-arg 'billingTable=my-billing.billing.gcp_billing_export_v1_XXXXXX'
 
   # Daily token/request usage for every discovered project

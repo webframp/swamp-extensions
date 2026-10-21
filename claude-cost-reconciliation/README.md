@@ -28,6 +28,24 @@ repo:
 - a `@webframp/anthropic/analytics` instance with Enterprise Analytics API
   credentials (e.g. `claude-analytics`).
 
+Use an AWS SSO or named profile for the Cost Explorer side, and keep the
+Analytics API key in a swamp vault, referenced with a `vault.get` expression;
+never pass the literal key. Any vault type works — `local_encryption`, or an
+extension such as `@webframp/pass`, `@webframp/gopass`,
+`@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+aws sso login --profile payer-billing
+swamp model create @webframp/aws/cost-explorer aws-costs \
+  --global-arg region=us-east-1 \
+  --global-arg profile=payer-billing
+
+swamp vault create local_encryption anthropic   # once, if you have no vault yet
+swamp vault put anthropic ANALYTICS_KEY         # prompts; the value never touches shell history
+swamp model create @webframp/anthropic/analytics claude-analytics \
+  --global-arg 'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}'
+```
+
 ## Run
 
 ```bash

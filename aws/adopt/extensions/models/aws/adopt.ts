@@ -1854,7 +1854,7 @@ async function readJudgeRequest(
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/adopt-decision-report"],
 
@@ -1984,6 +1984,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — manifest documents vault-only TypeSafe key wiring",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -184,6 +184,42 @@ export const SERVICES: ServiceConfig[] = [
   },
 ];
 
+/**
+ * Response fields that carry a secret, by operationId.
+ *
+ * Each entry is a dot path into the stored resource (after JSON:API
+ * flattening). The generator marks the field `.meta({ sensitive: true })`, so
+ * swamp stores the value in a vault and the resource keeps only a vault
+ * reference. Fields whose name says they hold a credential (`client_secret`,
+ * `api_key`, `access_token`, …) are marked without an entry here; list only
+ * fields whose name gives no hint.
+ *
+ * A path must be an object field the generated schema declares, reachable
+ * without crossing an array, record or union (swamp's resource redaction does
+ * not descend into those). Generation fails when a path is missing or
+ * unreachable, so API drift cannot silently drop the protection.
+ */
+export const SENSITIVE_RESPONSE_FIELDS: Record<string, string[]> = {
+  // A global variable's value is what Synthetics tests use for passwords and
+  // tokens. Datadog returns it for every variable not flagged `secure`.
+  PatchGlobalVariable: ["value.value"],
+  // Presigned URLs are bearer credentials: anyone holding one can read or
+  // write the file until it expires.
+  GetTestFileDownloadUrl: ["url"],
+  GetTestFileMultipartPresignedUrls: ["multipart_presigned_urls_params"],
+};
+
+/**
+ * Method arguments that carry a secret, by operationId (top-level argument
+ * names). Credential-named arguments are marked without an entry here; list
+ * only arguments whose name gives no hint. Generation fails when a listed
+ * argument does not exist.
+ */
+export const SENSITIVE_ARG_FIELDS: Record<string, string[]> = {
+  // A patch replacing `/value/value` carries the global variable's value.
+  PatchGlobalVariable: ["json_patch"],
+};
+
 /** Get today's CalVer version */
 export function calver(): string {
   const now = new Date();

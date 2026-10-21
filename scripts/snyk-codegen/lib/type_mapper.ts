@@ -15,6 +15,41 @@
 
 import type { SchemaObject } from "./schema_fetcher.ts";
 
+/**
+ * Property names that hold a secret value, on either side of the API: a
+ * secret the caller sends (the `secret` attribute of a rotate request) or one
+ * the API mints and returns once (a service account's `client_secret`,
+ * `api_key` or `access_token`, an app install's `client_secret`).
+ *
+ * Matching is exact on purpose. Snyk names plenty of non-secret fields after
+ * the secret they describe (`access_token_expires_at`,
+ * `access_token_ttl_seconds`, `personal_access_token_id`, `credential_id`,
+ * `secrets_enabled`, `client_id`, `key`), and a substring match would mark
+ * them sensitive, sending timestamps and ids to a vault.
+ */
+const SENSITIVE_FIELD_NAMES: ReadonlySet<string> = new Set([
+  "access_token",
+  "api_key",
+  "client_secret",
+  "password",
+  "private_key",
+  "refresh_token",
+  "secret",
+  "token",
+]);
+
+/** True when a schema property name holds a secret value. */
+export function isSensitiveFieldName(name: string): boolean {
+  return SENSITIVE_FIELD_NAMES.has(name);
+}
+
+/** How a caller supplies a secret argument. */
+export const SECRET_ARG_GUIDANCE =
+  'Secret: supply it with a ${{ vault.get("<vault>", "<KEY>") }} expression, never the literal value.';
+
+/** The Zod metadata call that marks a field sensitive. */
+export const SENSITIVE_META = ".meta({ sensitive: true })";
+
 /** Configuration for type mapper output */
 export interface TypeMapperOptions {
   /** Indent level (number of spaces per level) */
@@ -203,6 +238,11 @@ function objectToZod(
     const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
     let fieldType = schemaToZod(prop, opts, depth + 1);
 
+    // A secret field carries swamp's sensitive marker. On a resource schema
+    // swamp stores the value in a vault and persists only a vault reference;
+    // on a method argument it redacts the value from logs and run history.
+    if (isSensitiveFieldName(name)) fieldType += SENSITIVE_META;
+
     // Add .optional() for non-required fields
     if (opts.lenient) {
       // Snyk returns null for attributes the spec types as plain values.
@@ -217,8 +257,15 @@ function objectToZod(
       fieldType += `.default(${JSON.stringify(prop.default)})`;
     }
 
-    // Add .describe() if there's a description (only for top-level fields)
-    if (prop.description && depth < 2) {
+    // Add .describe() if there's a description (only for top-level fields).
+    // A secret the caller sends always gets one, at any depth, saying how to
+    // supply it: a literal would be stored in the run's recorded arguments.
+    if (!opts.lenient && isSensitiveFieldName(name)) {
+      const lead = prop.description
+        ? `${truncateDescription(prop.description)} `
+        : "";
+      fieldType += `.describe(${JSON.stringify(lead + SECRET_ARG_GUIDANCE)})`;
+    } else if (prop.description && depth < 2) {
       fieldType += `.describe(${
         JSON.stringify(truncateDescription(prop.description))
       })`;

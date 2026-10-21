@@ -27,17 +27,34 @@ swamp extension pull @webframp/reddit/moderation
 
 ## Usage
 
+### Store the credentials
+
+Store the client secret and the account password in a swamp vault and reference
+them with `vault.get` expressions; never pass the literal values. Any vault type
+works — `local_encryption`, or an extension such as `@webframp/pass`,
+`@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption reddit   # once, if you have no vault yet
+swamp vault put reddit CLIENT_SECRET         # prompts; the value never touches shell history
+swamp vault put reddit PASSWORD
+```
+
 ### Create the model
 
 ```bash
 swamp model create @webframp/reddit/moderation reddit-mod \
   --global-arg subreddit=aoe4 \
-  --global-arg clientId=vault://reddit/clientId \
-  --global-arg clientSecret=vault://reddit/clientSecret \
-  --global-arg username=vault://reddit/username \
-  --global-arg password=vault://reddit/password \
+  --global-arg clientId=YOUR_CLIENT_ID \
+  --global-arg 'clientSecret=${{ vault.get("reddit", "CLIENT_SECRET") }}' \
+  --global-arg username=yourbot \
+  --global-arg 'password=${{ vault.get("reddit", "PASSWORD") }}' \
   --global-arg userAgent="swamp:aoe4mod:v1.0 (by /u/yourbot)"
 ```
+
+The client ID and username are identifiers, not secrets, so they can be passed
+directly. To keep them out of the definition as well, store them in the same
+vault and use `vault.get` for them too.
 
 ### Run methods
 
@@ -98,16 +115,10 @@ swamp model method run reddit-mod flair_post --input thingId=t3_abc123 --input f
 ## Authentication
 
 This model uses the Reddit OAuth2 "script app" flow. Credentials are passed as
-global arguments when creating the model instance. Sensitive values (client
-secret, password) should be stored in your swamp vault and referenced with
-`vault://` URIs:
-
-```bash
-swamp vault set reddit/clientId "your-client-id"
-swamp vault set reddit/clientSecret "your-client-secret"
-swamp vault set reddit/username "your-bot-username"
-swamp vault set reddit/password "your-bot-password"
-```
+global arguments when creating the model instance. The client secret and
+password must come from a swamp vault through `vault.get` expressions, as shown
+in [Store the credentials](#store-the-credentials); swamp resolves them at
+runtime, so the definition never holds the plaintext.
 
 The model obtains a short-lived bearer token at runtime by posting credentials
 to `https://www.reddit.com/api/v1/access_token`. Tokens are not cached between

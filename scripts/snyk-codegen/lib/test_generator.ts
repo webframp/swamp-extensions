@@ -9,7 +9,13 @@
  */
 
 import type { ClassifiedMethod } from "./method_classifier.ts";
-import { resourceNameOf } from "./method_classifier.ts";
+import {
+  resourceNameOf,
+  secretArgumentPaths,
+  secretListItemFields,
+  secretResponseFields,
+} from "./method_classifier.ts";
+import { isSensitiveFieldName } from "./type_mapper.ts";
 import type { SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
@@ -116,6 +122,15 @@ export function generateTestSource(
   lines.push(``);
   lines.push(generateMockServer());
   lines.push(``);
+  // Secret-handling helpers only when a method needs them, or deno lint
+  // rejects the unused functions.
+  const needsSecretHelpers = methods.some((m) =>
+    secretResponseFields(m).length > 0 || secretArgumentPaths(m).length > 0
+  );
+  if (needsSecretHelpers) {
+    lines.push(generateSecretHelpers());
+    lines.push(``);
+  }
 
   // Every method gets its own execute test asserting the request it sends
   // (verb, exact path, query parameters, body) and the resource it writes. A
@@ -243,6 +258,112 @@ function installFetchMock(mockUrl: string): () => void {
 }`;
 }
 
+/**
+ * Test helpers that check a model marks secrets the way swamp needs: swamp
+ * vaults a resource field marked sensitive by walking object shapes, through
+ * optional/nullable/default wrappers only (its extractSensitiveFields), and
+ * replaces the value with a vault reference before it persists the resource.
+ */
+export function generateSecretHelpers(): string {
+  return `interface ZodNode {
+  _zod: {
+    def: {
+      type: string;
+      innerType?: ZodNode;
+      shape?: Record<string, ZodNode>;
+    };
+  };
+  meta(): Record<string, unknown> | undefined;
+}
+
+const ZOD_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+/** True when the field, or any wrapper level of it, is marked sensitive. */
+function markedSensitive(node: ZodNode): boolean {
+  for (let n: ZodNode | undefined = node; n;) {
+    if (n.meta()?.sensitive === true) return true;
+    n = ZOD_WRAPPERS.has(n._zod.def.type) ? n._zod.def.innerType : undefined;
+  }
+  return false;
+}
+
+/**
+ * Paths swamp moves into a vault when it writes data with this schema. Like
+ * swamp, it walks object shapes only: not arrays, not unions.
+ */
+function vaultedPaths(schema: unknown, prefix = ""): string[] {
+  let node = schema as ZodNode;
+  while (ZOD_WRAPPERS.has(node._zod.def.type) && node._zod.def.innerType) {
+    node = node._zod.def.innerType;
+  }
+  if (node._zod.def.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(node._zod.def.shape ?? {})) {
+    const path = prefix ? \`\${prefix}.\${key}\` : key;
+    if (markedSensitive(field)) out.push(path);
+    out.push(...vaultedPaths(field, path));
+  }
+  return out;
+}
+
+/**
+ * The written resource carries each secret, every one is marked sensitive on
+ * the resource schema, and after swamp's vault substitution no secret value
+ * is left in what it persists.
+ */
+function assertSecretsVaulted(
+  specName: string,
+  data: unknown,
+  fields: string[],
+): void {
+  const resources = model.resources as Record<string, { schema: unknown }>;
+  const paths = vaultedPaths(resources[specName].schema);
+  const written = data as Record<string, unknown>;
+  for (const field of fields) {
+    assertEquals(written[field], \`fixture-\${field}\`);
+    assertEquals(
+      paths.includes(field),
+      true,
+      \`\${field} is not marked sensitive on \${specName}\`,
+    );
+  }
+  const persisted = structuredClone(written);
+  for (const path of paths) {
+    // Swamp replaces each present, non-null value at the dot path.
+    const keys = path.split(".");
+    let parent: unknown = persisted;
+    for (const key of keys.slice(0, -1)) {
+      parent = parent !== null && typeof parent === "object"
+        ? (parent as Record<string, unknown>)[key]
+        : undefined;
+    }
+    const leaf = keys[keys.length - 1];
+    if (parent === null || typeof parent !== "object") continue;
+    const holder = parent as Record<string, unknown>;
+    if (holder[leaf] !== undefined && holder[leaf] !== null) {
+      holder[leaf] = "\${{ vault.get('vault', 'key') }}";
+    }
+  }
+  const json = JSON.stringify(persisted);
+  for (const field of fields) {
+    assertEquals(json.includes(\`fixture-\${field}\`), false);
+  }
+}
+
+/** Every secret argument of a method is marked sensitive. */
+function assertSecretArgs(methodName: string, paths: string[]): void {
+  const methods = model.methods as Record<string, { arguments: unknown }>;
+  const marked = vaultedPaths(methods[methodName].arguments);
+  for (const path of paths) {
+    assertEquals(
+      marked.includes(path),
+      true,
+      \`argument \${path} of \${methodName} is not marked sensitive\`,
+    );
+  }
+}`;
+}
+
 /** One query argument a generated test sends, and what the server must see. */
 interface QueryExpectation {
   /** Method argument name (identifier-safe). */
@@ -337,7 +458,7 @@ function generateExecutionTest(
     ) {
       const field = fieldName(name);
       if (name === "id" || taken.has(field) || field in bodyFields) continue;
-      bodyFields[field] = synthesizeValue(prop);
+      bodyFields[field] = synthesizeField(name, prop);
     }
     Object.assign(args, bodyFields);
   }
@@ -414,7 +535,9 @@ ${reqAsserts}
       const data = resources[0].data as { items: unknown[]; truncated: boolean };
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
-      assertEquals(data.truncated, false);
+      assertEquals(data.truncated, false);${listSecretAsserts(method)}${
+      argSecretAsserts(method)
+    }
 ${footer}`;
   }
 
@@ -433,7 +556,7 @@ ${footer}`;
 
 ${reqAsserts}
 
-      assertEquals(getWrittenResources().length, 0);
+      assertEquals(getWrittenResources().length, 0);${argSecretAsserts(method)}
 ${footer}`;
   }
 
@@ -486,8 +609,42 @@ ${reqAsserts}
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "${resourceName}");
       assertValidResource("${resourceName}", resources[0].data);
-      assertEquals(resources[0].name, "${expectedInstance}");${dataAssert}
+      assertEquals(resources[0].name, "${expectedInstance}");${dataAssert}${
+    noBody ? "" : flatSecretAsserts(method, resourceName)
+  }${argSecretAsserts(method)}
 ${footer}`;
+}
+
+/** A flat writer's secrets must reach the written data and be vaulted. */
+function flatSecretAsserts(
+  method: ClassifiedMethod,
+  resourceName: string,
+): string {
+  const fields = secretResponseFields(method);
+  if (fields.length === 0) return "";
+  return `\n      assertSecretsVaulted("${resourceName}", resources[0].data, ${
+    JSON.stringify(fields)
+  });`;
+}
+
+/** A list must drop item secrets: swamp cannot vault inside an array. */
+function listSecretAsserts(method: ClassifiedMethod): string {
+  const fields = secretListItemFields(method);
+  if (fields.length === 0) return "";
+  return `\n      const item = data.items[0] as Record<string, unknown>;
+      for (const field of ${JSON.stringify(fields)}) {
+        assertEquals((mockItem.attributes as Record<string, unknown>)[field], \`fixture-\${field}\`);
+        assertEquals(field in item, false, \`\${field} was written in plaintext\`);
+      }`;
+}
+
+/** Secret arguments must be marked sensitive. */
+function argSecretAsserts(method: ClassifiedMethod): string {
+  const paths = secretArgumentPaths(method);
+  if (paths.length === 0) return "";
+  return `\n      assertSecretArgs("${method.name}", ${
+    JSON.stringify(paths)
+  });`;
 }
 
 /** Standard test globalArgs for a service, including its scope id. */
@@ -593,10 +750,26 @@ function generateJsonApiFixture(
   const attributes: Record<string, unknown> = {};
   for (const [name, prop] of Object.entries(schema.properties)) {
     if (name === "id" || name === "type") continue;
-    attributes[name] = synthesizeValue(prop);
+    attributes[name] = synthesizeField(name, prop);
   }
 
   return { ...base, attributes };
+}
+
+/**
+ * Synthesize a named property's value. A secret gets a recognizable
+ * placeholder (`fixture-<name>`) rather than the spec's example, which can be
+ * a real-looking token, and which the secret assertions look for.
+ */
+function synthesizeField(
+  name: string,
+  schema: SchemaObject,
+  depth = 0,
+): unknown {
+  if (isSensitiveFieldName(name) && schema.type === "string") {
+    return `fixture-${name}`;
+  }
+  return synthesizeValue(schema, depth);
 }
 
 /** Synthesize a value matching a schema (for test fixtures) */
@@ -624,7 +797,7 @@ function synthesizeValue(schema: SchemaObject, depth = 0): unknown {
       if (schema.properties) {
         const obj: Record<string, unknown> = {};
         for (const [name, prop] of Object.entries(schema.properties)) {
-          obj[name] = synthesizeValue(prop, depth + 1);
+          obj[name] = synthesizeField(name, prop, depth + 1);
         }
         return obj;
       }

@@ -6,8 +6,11 @@ import { assertEquals } from "@std/assert";
 import {
   buildFinalTestArgs,
   extractPathPattern,
+  generateTestSource,
   PATH_PARAM_TEST_VALUE,
+  plantAtPath,
 } from "./test_generator.ts";
+import type { ServiceConfig } from "../config.ts";
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import type { GroupedOperation } from "./service_grouper.ts";
 
@@ -160,4 +163,101 @@ Deno.test("extractPathPattern: drops a trailing slash", () => {
     extractPathPattern("/accounts/{account_id}/r2/", "account"),
     "/r2",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Returned-secret tests
+// ---------------------------------------------------------------------------
+
+Deno.test("plantAtPath: builds the arrays, maps and discriminators a strip path walks", () => {
+  const out = plantAtPath({ id: 1 }, [
+    { k: "env_vars" },
+    { values: true },
+    { k: "value", when: ["type", "secret_text"] },
+  ], "CANARY");
+  assertEquals(out, {
+    id: 1,
+    env_vars: { entry: { type: "secret_text", value: "CANARY" } },
+  });
+  assertEquals(
+    plantAtPath([], [{ each: true }, { k: "destination_conf" }], "C"),
+    [{ destination_conf: "C" }],
+  );
+});
+
+Deno.test("plantAtPath: refuses a second union variant in an object already claimed", () => {
+  const claimed = new Map<string, unknown>();
+  const first = plantAtPath(
+    {},
+    [
+      { k: "auth" },
+      { k: "password", when: ["scheme", "httpbasic"] },
+    ],
+    "A",
+    claimed,
+  );
+  const second = plantAtPath(
+    first,
+    [
+      { k: "auth" },
+      { k: "token", when: ["scheme", "oauthbearertoken"] },
+    ],
+    "B",
+    claimed,
+  );
+  assertEquals(second, undefined);
+  assertEquals(first, { auth: { scheme: "httpbasic", password: "A" } });
+});
+
+Deno.test("generateTestSource: emits a returned-secret test for a method that vaults a secret", () => {
+  const config: ServiceConfig = {
+    name: "access",
+    description: "Access",
+    pathPrefixes: ["/accounts/{account_id}/access"],
+    scope: "account",
+    labels: [],
+  };
+  const method = {
+    name: "create_a_service_token",
+    type: "create",
+    description: "Create a service token",
+    operation: makeOp({
+      httpMethod: "post",
+      path: "/accounts/{account_id}/access/service_tokens",
+      responseSchema: {
+        type: "object",
+        properties: {
+          client_id: { type: "string" },
+          client_secret: { type: "string", "x-swamp-sensitive": true },
+        },
+      },
+      responseSecrets: {
+        wrapRoot: false,
+        vaultable: [["client_secret"]],
+        leaves: [[{ k: "client_secret" }]],
+      },
+    }),
+  } as ClassifiedMethod;
+  const src = generateTestSource(config, [method], "access");
+  assertEquals(
+    src.includes(
+      "create_a_service_token keeps returned secrets out of the stored resource",
+    ),
+    true,
+  );
+  assertEquals(src.includes('"client_secret":"VAULT-CANARY-0"'), true);
+  assertEquals(src.includes('import { z } from "npm:zod@'), true);
+});
+
+Deno.test("generateTestSource: no returned-secret helpers when no method returns a secret", () => {
+  const config: ServiceConfig = {
+    name: "kv",
+    description: "KV",
+    pathPrefixes: ["/accounts/{account_id}/storage/kv"],
+    scope: "account",
+    labels: [],
+  };
+  const src = generateTestSource(config, [makeMethod()], "kv");
+  assertEquals(src.includes("persistedLikeSwamp"), false);
+  assertEquals(src.includes('from "npm:zod@'), false);
 });

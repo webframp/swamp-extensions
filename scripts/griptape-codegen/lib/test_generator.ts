@@ -19,9 +19,11 @@
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import {
   lastPathParam,
+  listStripPaths,
   resourceNameFor,
   sanitizeFieldName,
 } from "./method_classifier.ts";
+import { sensitivePaths } from "./sensitive.ts";
 import type { ParameterObject, SchemaObject } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 import { GRIPTAPE_API_BASE } from "../config.ts";
@@ -157,6 +159,11 @@ export function generateTestSource(
   lines.push(``);
   lines.push(generateSchemaToleranceTest(config, methods));
   lines.push(``);
+  const sensitiveTests = generateSensitiveResponseTests(config, methods);
+  if (sensitiveTests) {
+    lines.push(sensitiveTests);
+    lines.push(``);
+  }
   const helperTests = generateHelperTests(config, methods);
   if (helperTests) {
     lines.push(helperTests);
@@ -676,6 +683,134 @@ function generateSchemaToleranceTest(
   return `Deno.test("${config.name} model: response schemas tolerate unexpected data", () => {
 ${checks.join("\n")}
 });`;
+}
+
+// ---------------------------------------------------------------------------
+// Credentials in responses
+// ---------------------------------------------------------------------------
+
+/** Plaintext stand-in for a credential; must never reach a written resource. */
+const CANARY = "plaintext-credential-canary";
+
+/**
+ * Tests that a credential in a response never lands in a written resource in
+ * cleartext:
+ * - an entity resource declares each credential path with
+ *   `.meta({ sensitive: true })` where swamp's resource walk (plain objects
+ *   only, wrappers unwrapped) finds it, so swamp vaults the value;
+ * - a list method drops the credential from every item, because swamp cannot
+ *   vault a field inside an array.
+ * Returns null when no response in the service carries a credential.
+ */
+function generateSensitiveResponseTests(
+  config: ServiceConfig,
+  methods: ClassifiedMethod[],
+): string | null {
+  const tests: string[] = [];
+
+  const expected = new Map<string, Set<string>>();
+  for (const m of methods) {
+    if (m.type === "list" || m.type === "delete") continue;
+    if (!m.operation.sensitiveResponse) continue;
+    const spec = resourceNameFor(m);
+    const set = expected.get(spec) ?? new Set<string>();
+    for (const p of sensitivePaths(m.operation.sensitiveResponse)) {
+      set.add(p.join("."));
+    }
+    expected.set(spec, set);
+  }
+  for (const [spec, paths] of expected) {
+    tests.push(
+      `Deno.test("${config.name} model: ${spec} resource marks credential fields sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(resourceSchema(${JSON.stringify(spec)})),
+    ${JSON.stringify([...paths].sort())},
+  );
+});`,
+    );
+  }
+
+  for (const m of methods) {
+    const paths = listStripPaths(m);
+    if (paths.length === 0) continue;
+    const plan = planRequest(m);
+    const key = `${plan.httpMethod} ${plan.pathname}`;
+    const item: Record<string, unknown> = { kept_field: "kept" };
+    for (const path of paths) {
+      let node = item;
+      for (const k of path.slice(0, -1)) {
+        node[k] = (node[k] as Record<string, unknown>) ?? {};
+        node = node[k] as Record<string, unknown>;
+      }
+      node[path[path.length - 1]] = CANARY;
+    }
+    tests.push(`Deno.test({
+  name: "${config.name} model: ${m.name} drops credentials from list items",
+  sanitizeResources: false,
+  fn: async () => {
+    const item = ${JSON.stringify(item)};
+    await withMockApi({
+      ${JSON.stringify(key)}: { json: [item], itemsKey: ${
+      JSON.stringify(m.operation.listItemsKey ?? "data")
+    } },
+    }, async ({ run, written }) => {
+      await run(${JSON.stringify(m.name)}, ${JSON.stringify(plan.args)});
+      const stored = JSON.stringify(written()[0].data);
+      assertEquals(stored.includes(${JSON.stringify(CANARY)}), false);
+      assertStringIncludes(stored, "kept_field");
+    });
+    // The fixture itself is untouched: the method copies before dropping.
+    assertStringIncludes(JSON.stringify(item), ${JSON.stringify(CANARY)});
+  },
+});`);
+  }
+
+  if (tests.length === 0) return null;
+  return `${swampSensitivePathsHelper()}
+
+${tests.join("\n\n")}`;
+}
+
+/**
+ * The emitted helper that finds the paths swamp vaults in a resource schema,
+ * matching swamp's extractSensitiveFields: plain object shapes only, seen
+ * through optional, nullable and default wrappers and no others.
+ */
+export function swampSensitivePathsHelper(): string {
+  return `/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}`;
 }
 
 // ---------------------------------------------------------------------------

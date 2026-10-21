@@ -61,7 +61,9 @@ const LoginArgsSchema = z.object({
   ),
   username: z.string().default("AWS").describe("Registry username"),
   password: z.string().meta({ sensitive: true }).describe(
-    "Registry password or token",
+    "Registry password or token. Supply it with a vault expression, e.g. " +
+      '--input \'password=${{ vault.get("ecr", "PASSWORD") }}\'; never ' +
+      "pass the literal value, which would be recorded with the method run.",
   ),
 });
 
@@ -170,7 +172,7 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -230,6 +232,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — login password guidance now uses vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

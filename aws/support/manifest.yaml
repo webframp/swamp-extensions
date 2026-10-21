@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/support"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Manage AWS Support cases across accounts. Query case details, track
   correspondence, create new cases, and fan-out across profiles for

@@ -212,3 +212,124 @@ Deno.test({
     }
   },
 });
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test({
+  name:
+    "keys model: create_api_key marks key, key_secret sensitive so swamp stores them in a vault",
+  sanitizeResources: false,
+  fn: async () => {
+    const plaintext = {
+      "key_secret": "plaintext-secret-key_secret",
+      "key": "plaintext-secret-key",
+    };
+    const { url, server } = startMockFalServer({
+      "/keys": {
+        body: {
+          "id": "new-123",
+          "key_id": "abc123def456",
+          "key_secret": "plaintext-secret-key_secret",
+          "key": "plaintext-secret-key",
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: { id: "test-id", name: "test-keys", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_api_key.execute({
+        "alias": "Production Key",
+        "description": "CI deploy key for the main environment",
+        "preset": "API",
+        "permissions": ["models:requests:read", "models:requests:write"],
+        "expires_at": "2025-07-15T12:00:00Z",
+      }, context);
+
+      const schema = model.resources["api_key"].schema;
+      const marked = swampSensitivePaths(schema);
+      assertEquals(marked, ["key", "key_secret"]);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      const data = resources[0].data;
+      for (const [field, value] of Object.entries(plaintext)) {
+        // Handed to swamp, which vaults it — not dropped.
+        assertEquals(data[field], value);
+      }
+
+      // What swamp persists: each marked value replaced by a vault reference.
+      const persisted = structuredClone(data) as Record<string, unknown>;
+      for (const field of marked) {
+        const keys = field.split(".");
+        let holder: unknown = persisted;
+        for (const key of keys.slice(0, -1)) {
+          holder = (holder as Record<string, unknown> | undefined)?.[key];
+        }
+        if (holder !== null && typeof holder === "object") {
+          (holder as Record<string, unknown>)[keys[keys.length - 1]] =
+            "${{ vault.get('test-vault', 'keys/api_key/" + field + "') }}";
+        }
+      }
+      const stored = JSON.stringify(persisted);
+      for (const value of Object.values(plaintext)) {
+        assertEquals(stored.includes(value), false);
+      }
+      for (const field of ["key", "key_secret"]) {
+        assertEquals(
+          String(persisted[field]).startsWith("${{ vault.get("),
+          true,
+        );
+      }
+      schema.parse(persisted);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});

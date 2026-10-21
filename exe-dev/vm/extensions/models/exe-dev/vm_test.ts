@@ -8,7 +8,11 @@
  * @module
  */
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "jsr:@std/assert@1.0.19";
 import {
   assertEmail,
   assertEnvKey,
@@ -20,7 +24,9 @@ import {
   buildTagCmd,
   escapeQuotes,
   mapVm,
+  model,
   type RawVm,
+  redactExeTokens,
 } from "./vm.ts";
 
 // =============================================================================
@@ -617,4 +623,166 @@ Deno.test("mapVm: maps sharing sub-object correctly", () => {
   assertEquals(result.sharing?.teamAccess, true);
   assertEquals(result.sharing?.namedUserCount, 3);
   assertEquals(result.sharing?.shareLinkCount, 1);
+});
+
+// =============================================================================
+// Tests: setup never exposes the generated token
+// =============================================================================
+
+const FAKE_TOKEN = "exe1.fake-generated-token-value";
+
+type Spawned = { cmd: string; args: string[]; stdin: string };
+
+function mockCommands(
+  ssh: { stdout: string; stderr?: string; code?: number },
+  vault: { success: boolean; stderr?: string } = { success: true },
+): { restore: () => void; spawned: Spawned[] } {
+  const original = Deno.Command;
+  const spawned: Spawned[] = [];
+  // deno-lint-ignore no-explicit-any
+  (Deno as any).Command = class {
+    constructor(
+      private cmd: string,
+      private opts: { args: string[] },
+    ) {}
+    spawn() {
+      const rec: Spawned = { cmd: this.cmd, args: this.opts.args, stdin: "" };
+      spawned.push(rec);
+      const isSsh = this.cmd === "ssh";
+      const enc = new TextEncoder();
+      return {
+        kill() {},
+        stdin: {
+          getWriter() {
+            return {
+              write(chunk: Uint8Array) {
+                rec.stdin += new TextDecoder().decode(chunk);
+                return Promise.resolve();
+              },
+              close() {
+                return Promise.resolve();
+              },
+            };
+          },
+        },
+        output() {
+          return Promise.resolve(
+            isSsh
+              ? {
+                success: (ssh.code ?? 0) === 0,
+                code: ssh.code ?? 0,
+                stdout: enc.encode(ssh.stdout),
+                stderr: enc.encode(ssh.stderr ?? ""),
+              }
+              : {
+                success: vault.success,
+                code: vault.success ? 0 : 1,
+                stdout: enc.encode(""),
+                stderr: enc.encode(vault.stderr ?? ""),
+              },
+          );
+        },
+      };
+    }
+  };
+  return {
+    restore: () => {
+      // deno-lint-ignore no-explicit-any
+      (Deno as any).Command = original;
+    },
+    spawned,
+  };
+}
+
+function setupCtx() {
+  const logs: string[] = [];
+  const log = (msg: string, props?: Record<string, unknown>) => {
+    logs.push(msg + JSON.stringify(props ?? {}));
+  };
+  return { ctx: { globalArgs: {}, logger: { info: log, warn: log } }, logs };
+}
+
+const SETUP_ARGS = {
+  expiry: "30d",
+  vaultName: "exe-dev",
+  secretKey: "API_TOKEN",
+};
+
+Deno.test("setup: pipes the token to swamp vault put on stdin, not argv", async () => {
+  const { restore, spawned } = mockCommands({ stdout: `${FAKE_TOKEN}\n` });
+  const { ctx, logs } = setupCtx();
+  try {
+    await model.methods.setup.execute(SETUP_ARGS, ctx);
+  } finally {
+    restore();
+  }
+  const put = spawned.find((s) => s.cmd === "swamp")!;
+  assertEquals(put.args, ["vault", "put", "exe-dev", "API_TOKEN", "--yes"]);
+  assertEquals(put.stdin, FAKE_TOKEN);
+  assertEquals(JSON.stringify(logs).includes(FAKE_TOKEN), false);
+});
+
+Deno.test("setup: unparseable ssh output is not echoed in the error", async () => {
+  const leaked = "TOKEN: weird-format-secret-abc123";
+  const { restore } = mockCommands({ stdout: leaked });
+  const { ctx } = setupCtx();
+  try {
+    const err = await assertRejects(() =>
+      model.methods.setup.execute(SETUP_ARGS, ctx)
+    );
+    assertEquals((err as Error).message.includes("weird-format-secret"), false);
+    assertStringIncludes((err as Error).message, "withheld");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("setup: ssh failure error omits stdout and redacts tokens", async () => {
+  const { restore } = mockCommands({
+    stdout: FAKE_TOKEN,
+    stderr: `partial failure ${FAKE_TOKEN}`,
+    code: 1,
+  });
+  const { ctx } = setupCtx();
+  try {
+    const err = await assertRejects(() =>
+      model.methods.setup.execute(SETUP_ARGS, ctx)
+    );
+    assertEquals((err as Error).message.includes(FAKE_TOKEN), false);
+    assertStringIncludes((err as Error).message, "partial failure");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("setup: vault failure error does not include the token", async () => {
+  const { restore } = mockCommands(
+    { stdout: FAKE_TOKEN },
+    { success: false, stderr: `could not store ${FAKE_TOKEN}` },
+  );
+  const { ctx } = setupCtx();
+  try {
+    const err = await assertRejects(() =>
+      model.methods.setup.execute(SETUP_ARGS, ctx)
+    );
+    assertEquals((err as Error).message.includes(FAKE_TOKEN), false);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("redactExeTokens: masks token-shaped substrings", () => {
+  assertEquals(redactExeTokens(`a ${FAKE_TOKEN} b`), "a [REDACTED] b");
+  assertEquals(redactExeTokens("no token here"), "no token here");
+});
+
+Deno.test("token global argument is marked sensitive", () => {
+  // deno-lint-ignore no-explicit-any
+  let f = (model.globalArguments as any).shape.token;
+  const meta: Record<string, unknown> = {};
+  while (f) {
+    Object.assign(meta, f.meta() ?? {});
+    f = typeof f.unwrap === "function" ? f.unwrap() : undefined;
+  }
+  assertEquals(meta.sensitive, true);
 });

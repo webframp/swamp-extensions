@@ -19,7 +19,7 @@ const EXTENSION_NAME = "@webframp/cloudflare";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().min(1).meta({ sensitive: true }).describe(
-    "Cloudflare API token with Workers read/write permissions",
+    'Cloudflare API token with Workers read/write permissions. Wire it with ${{ vault.get("cloudflare", "API_TOKEN") }}; never pass the literal token.',
   ),
   accountId: z.string().min(1).describe("Cloudflare account ID"),
 });
@@ -128,7 +128,7 @@ export function mapBinding(
 /** Cloudflare Workers model definition with methods for script lifecycle, route management, and subdomain toggling. */
 export const model = {
   type: "@webframp/cloudflare/worker",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -201,6 +201,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Marks secret_text binding values sensitive; apiToken description leads with vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -378,7 +384,9 @@ export const model = {
             "plain_text",
           ]),
           name: z.string(),
-          value: z.string().optional(),
+          value: z.string().optional().describe(
+            "Binding value. For a secret_text binding this is a secret: pass a vault.get expression, never a literal value.",
+          ).meta({ sensitive: true }),
         })).optional().describe("Environment bindings"),
       }),
       execute: async (

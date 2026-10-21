@@ -27,19 +27,43 @@ without leaving your swamp workspace.
 swamp extension pull @webframp/cloudflare
 ```
 
+## Credentials
+
+Store the token in a swamp vault and reference it with a `vault.get` expression;
+never pass the literal value. Any vault type works — `local_encryption`, or an
+extension such as `@webframp/pass`, `@webframp/gopass`,
+`@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
+
+```bash
+swamp vault create local_encryption cloudflare   # once, if you have no vault yet
+swamp vault put cloudflare API_TOKEN             # prompts; the value never touches shell history
+```
+
 ## Configuration
 
-Create a model instance that references your Cloudflare credentials. The API
-token is marked as sensitive and stored through your configured vault provider.
+Create a model instance whose `apiToken` is a `vault.get` expression. Swamp
+resolves it from the vault at run time and redacts it from logs and run records;
+the model definition stores only the expression.
+
+```bash
+swamp model create @webframp/cloudflare/dns production-dns \
+  --global-arg 'apiToken=${{ vault.get("cloudflare", "API_TOKEN") }}' \
+  --global-arg zoneId=abc123def456
+```
+
+The same instance as YAML:
 
 ```yaml
 # swamp model instance for DNS management
 model: "@webframp/cloudflare/dns"
 name: "production-dns"
 globalArgs:
-  apiToken: "vault://cloudflare/api-token"
+  apiToken: '${{ vault.get("cloudflare", "API_TOKEN") }}'
   zoneId: "abc123def456"
 ```
+
+The worker model's `deploy` method marks binding values sensitive. Pass a
+`secret_text` binding's value as a `vault.get` expression too.
 
 ## Usage
 

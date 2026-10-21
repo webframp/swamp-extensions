@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/snyk/tests"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: "Snyk Tests — on-demand package and dependency vulnerability testing"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

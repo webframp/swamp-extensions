@@ -8,7 +8,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.5";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+  stripSensitive,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/stream";
 
@@ -18,7 +24,7 @@ const EXTENSION_NAME = "@webframp/cloudflare/stream";
 
 const GlobalArgsSchema = z.object({
   apiToken: z.string().meta({ sensitive: true }).describe(
-    "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...) expression to source it from a vault.",
+    'Cloudflare API token. Wire it with ${{ vault.get("cloudflare", "API_TOKEN") }}; never pass the literal token. The CLOUDFLARE_API_TOKEN environment variable is read as a fallback, but it is not redacted and is not recommended.',
   ).optional(),
   accountId: z.string().describe("Cloudflare account ID"),
 });
@@ -208,14 +214,30 @@ const CreateALiveInputSchema = z.object({
   modified: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
-  rtmps: z.unknown().optional(),
-  rtmpsPlayback: z.unknown().optional(),
-  srt: z.unknown().optional(),
-  srtPlayback: z.unknown().optional(),
+  rtmps: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  rtmpsPlayback: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srt: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srtPlayback: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  webRTC: z.unknown().optional(),
-  webRTCPlayback: z.unknown().optional(),
+  webRTC: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  webRTCPlayback: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
@@ -227,14 +249,30 @@ const GetStreamLiveInputsRetrieveALiveInputSchema = z.object({
   modified: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
-  rtmps: z.unknown().optional(),
-  rtmpsPlayback: z.unknown().optional(),
-  srt: z.unknown().optional(),
-  srtPlayback: z.unknown().optional(),
+  rtmps: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  rtmpsPlayback: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srt: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srtPlayback: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  webRTC: z.unknown().optional(),
-  webRTCPlayback: z.unknown().optional(),
+  webRTC: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  webRTCPlayback: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 const StreamLiveInputsDisableALiveInputSchema = z.object({
@@ -246,14 +284,30 @@ const StreamLiveInputsDisableALiveInputSchema = z.object({
   modified: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
-  rtmps: z.unknown().optional(),
-  rtmpsPlayback: z.unknown().optional(),
-  srt: z.unknown().optional(),
-  srtPlayback: z.unknown().optional(),
+  rtmps: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  rtmpsPlayback: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srt: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srtPlayback: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  webRTC: z.unknown().optional(),
-  webRTCPlayback: z.unknown().optional(),
+  webRTC: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  webRTCPlayback: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 const StreamLiveInputsEnableALiveInputSchema = z.object({
@@ -265,14 +319,30 @@ const StreamLiveInputsEnableALiveInputSchema = z.object({
   modified: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
-  rtmps: z.unknown().optional(),
-  rtmpsPlayback: z.unknown().optional(),
-  srt: z.unknown().optional(),
-  srtPlayback: z.unknown().optional(),
+  rtmps: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  rtmpsPlayback: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srt: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srtPlayback: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  webRTC: z.unknown().optional(),
-  webRTCPlayback: z.unknown().optional(),
+  webRTC: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  webRTCPlayback: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 const AllOutputsAssociatedWithASpecifiedLiveInputItemSchema = z.object({
@@ -296,16 +366,16 @@ const ListAllOutputsAssociatedWithASpecifiedLiveInputSchema = z.object({
 
 const CreateANewOutputConnectedToALiveInputSchema = z.object({
   enabled: z.unknown().optional(),
-  streamKey: z.unknown().optional(),
+  streamKey: z.unknown().optional().meta({ sensitive: true }),
   uid: z.unknown().optional(),
-  url: z.unknown().optional(),
+  url: z.unknown().optional().meta({ sensitive: true }),
 }).passthrough();
 
 const UpdateAnOutputSchema = z.object({
   enabled: z.unknown().optional(),
-  streamKey: z.unknown().optional(),
+  streamKey: z.unknown().optional().meta({ sensitive: true }),
   uid: z.unknown().optional(),
-  url: z.unknown().optional(),
+  url: z.unknown().optional().meta({ sensitive: true }),
 }).passthrough();
 
 const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
@@ -317,14 +387,30 @@ const StreamLiveInputsRotateKeysForALiveInputSchema = z.object({
   modified: z.unknown().optional(),
   preferLowLatency: z.unknown().optional(),
   recording: z.unknown().optional(),
-  rtmps: z.unknown().optional(),
-  rtmpsPlayback: z.unknown().optional(),
-  srt: z.unknown().optional(),
-  srtPlayback: z.unknown().optional(),
+  rtmps: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  rtmpsPlayback: z.object({
+    streamKey: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srt: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  srtPlayback: z.object({
+    passphrase: z.unknown().optional().meta({ sensitive: true }),
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
   status: z.unknown().optional(),
   uid: z.unknown().optional(),
-  webRTC: z.unknown().optional(),
-  webRTCPlayback: z.unknown().optional(),
+  webRTC: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
+  webRTCPlayback: z.object({
+    url: z.unknown().optional().meta({ sensitive: true }),
+  }).passthrough().nullable().optional(),
 }).passthrough();
 
 const GetStreamVideosStorageUsageSchema = z.object({
@@ -427,7 +513,7 @@ const GetStreamWebhookViewWebhooksSchema = z.object({
   ),
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
-  ),
+  ).meta({ sensitive: true }),
 }).passthrough();
 
 const CreateWebhooksSchema = z.object({
@@ -442,7 +528,7 @@ const CreateWebhooksSchema = z.object({
   ),
   secret: z.string().optional().describe(
     "The secret used to verify webhook signatures.",
-  ),
+  ).meta({ sensitive: true }),
 }).passthrough();
 
 const GetStreamVideosRetrieveVideoDetailsSchema = z.object({
@@ -611,7 +697,7 @@ const CreateTypeSpecificDownloadsSchema = z.object({
 const CreateSignedUrlTokensForVideosSchema = z.object({
   token: z.string().optional().describe(
     "The signed token used with the signed URLs feature.",
-  ),
+  ).meta({ sensitive: true }),
 }).passthrough();
 
 // =============================================================================
@@ -621,7 +707,7 @@ const CreateSignedUrlTokensForVideosSchema = z.object({
 /** Cloudflare Stream — video upload, encoding, delivery, live streaming */
 export const model = {
   type: "@webframp/cloudflare/stream",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -681,6 +767,12 @@ export const model = {
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -716,7 +808,12 @@ export const model = {
     },
     "signing_keys": {
       description: "List signing keys",
-      schema: ListSigningKeysSchema,
+      schema: ListSigningKeysSchema.extend(
+        z.object({
+          jwk: z.unknown().optional().meta({ sensitive: true }),
+          pem: z.unknown().optional().meta({ sensitive: true }),
+        }).shape,
+      ),
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -1065,8 +1162,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource(
           "stream_video_clipping_clip_videos_given_a_start_and_end_time",
@@ -1125,8 +1235,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource(
           "stream_videos_upload_videos_from_a_url",
@@ -1180,8 +1303,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource(
           "stream_videos_upload_videos_via_direct_upload_ur_ls",
@@ -1275,7 +1411,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_signing_keys",
+          "signing_keys",
           "create_signing_keys-current",
           result ?? {},
         );
@@ -1384,8 +1520,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource("a_live_input", id, result);
         context.logger.info("Created a_live_input {id}", { id });
@@ -1636,11 +1785,16 @@ export const model = {
           );
         }
 
+        // Secrets swamp cannot move into a vault (inside lists, maps or
+        // unions) are removed before the resource is written.
+        const storedItems = stripSensitive(results, [[{ "each": true }, {
+          "k": "streamKey",
+        }], [{ "each": true }, { "k": "url" }]]);
         const handle = await context.writeResource(
           "all_outputs_associated_with_a_specified_live_input",
           "main",
           {
-            items: results,
+            items: storedItems,
             truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
@@ -1660,8 +1814,12 @@ export const model = {
       arguments: z.object({
         live_input_identifier: z.string(),
         enabled: z.unknown().optional(),
-        streamKey: z.unknown(),
-        url: z.unknown(),
+        streamKey: z.unknown().describe(
+          "Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
+        url: z.unknown().describe(
+          "Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1692,8 +1850,14 @@ export const model = {
           body,
         );
 
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ?? String(args.live_input_identifier),
+          ),
         );
         const handle = await context.writeResource(
           "a_new_output_connected_to_a_live_input",
@@ -2016,8 +2180,21 @@ export const model = {
           body,
         );
 
+        // No id in the response and no path parameter to key on: name the
+        // instance by a hash of the request, leaving out secret arguments.
+        const secretArgs = new Set<string>([]);
+        const requestKey = Object.entries(args)
+          .filter(([k]) => !secretArgs.has(k))
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(
+            created?.id ?? created?.uid ??
+              await shortHash(JSON.stringify(requestKey)),
+          ),
         );
         const handle = await context.writeResource(
           "watermark_profiles_via_basic_upload",
@@ -2167,7 +2344,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_webhooks",
+          "webhooks",
           "updated",
           result,
         );
@@ -2293,7 +2470,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "update_video_details",
+          "video_details",
           "update_video_details-current",
           result ?? {},
         );
@@ -2405,8 +2582,12 @@ export const model = {
           body,
         );
 
+        const created = result as
+          | { id?: unknown; uid?: unknown }
+          | null
+          | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? created?.uid ?? String(args.identifier)),
         );
         const handle = await context.writeResource(
           "add_audio_track",
@@ -2729,7 +2910,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_downloads",
+          "downloads",
           "create_downloads-current",
           result ?? {},
         );
@@ -2797,7 +2978,7 @@ export const model = {
         );
 
         const handle = await context.writeResource(
-          "create_type_specific_downloads",
+          "type_specific_downloads",
           "create_type_specific_downloads-current",
           result ?? {},
         );
@@ -2859,8 +3040,8 @@ export const model = {
           "The optional unix epoch timestamp that specifies the time before a the token ...",
         ),
         pem: z.string().optional().describe(
-          "The optional base64 encoded private key in PEM format associated with a Strea...",
-        ),
+          "The optional base64 encoded private key in PEM format associated with a Strea... Secret: pass a vault.get expression, never a literal value.",
+        ).meta({ sensitive: true }),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -2891,8 +3072,9 @@ export const model = {
           body,
         );
 
+        const created = result as { id?: unknown } | null | undefined;
         const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
+          String(created?.id ?? String(args.identifier)),
         );
         const handle = await context.writeResource(
           "signed_url_tokens_for_videos",

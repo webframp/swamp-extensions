@@ -15,6 +15,12 @@ import type {
 } from "./schema_fetcher.ts";
 import { resolveRef, resolveSchema } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
+import {
+  annotateSensitive,
+  collectInputSecretNames,
+  prepareResponseSchema,
+  type ResponseSecrets,
+} from "./sensitivity.ts";
 
 /** A single API operation grouped into a service */
 export interface GroupedOperation {
@@ -44,6 +50,16 @@ export interface GroupedOperation {
   deprecated: boolean;
   /** Tags from the OpenAPI spec */
   tags: string[];
+  /**
+   * Names of the secrets this operation accepts (request body, at any depth,
+   * and query params). Drives the README's secret-handling notes.
+   */
+  inputSecrets?: string[];
+  /**
+   * Where the secrets in the response sit and how the generated method keeps
+   * them out of plaintext storage (see sensitivity.ts).
+   */
+  responseSecrets?: ResponseSecrets;
 }
 
 /** A complete service group ready for code generation */
@@ -270,6 +286,13 @@ function extractOperation(
   const operationId = operation.operationId ??
     `${httpMethod}_${path.replace(/[^a-zA-Z0-9]/g, "_")}`;
 
+  // Flag secret-holding nodes so the type mapper can mark them, and reshape
+  // the response schema so swamp can move its secrets into a vault.
+  annotateSensitive(spec, requestBody);
+  for (const p of queryParams) annotateSensitive(spec, p.schema);
+  const inputSecrets = collectInputSecretNames(spec, requestBody, queryParams);
+  const prepared = prepareResponseSchema(spec, responseSchema, isCollection);
+
   return {
     httpMethod,
     path,
@@ -279,11 +302,13 @@ function extractOperation(
     pathParams,
     queryParams,
     requestBody,
-    responseSchema,
+    responseSchema: prepared.schema,
     isCollection,
     usesCursorPagination: queryParams.some((p) => p.name === "cursor"),
     deprecated: operation.deprecated ?? false,
     tags: operation.tags ?? [],
+    inputSecrets,
+    responseSecrets: prepared.secrets,
   };
 }
 

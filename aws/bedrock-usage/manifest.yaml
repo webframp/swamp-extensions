@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/bedrock-usage"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   AWS Bedrock token usage monitoring — multi-account fan-out scanning of
   InputTokenCount and OutputTokenCount metrics via CloudWatch. Provides

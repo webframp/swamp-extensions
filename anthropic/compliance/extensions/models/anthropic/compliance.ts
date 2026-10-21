@@ -3,7 +3,7 @@
  *
  * Observes the compliance surface: activity feed (6-year audit trail),
  * organization directory (users, roles, groups with SCIM source), and
- * effective settings. Requires a Compliance Access Key (sk-ant-api01-...)
+ * effective settings. Requires a Compliance Access Key
  * created by the primary owner in claude.ai org settings.
  *
  * @module
@@ -21,7 +21,7 @@ const EXTENSION_NAME = "@webframp/anthropic/compliance";
 
 const GlobalArgsSchema = z.object({
   complianceKey: z.string().min(1).meta({ sensitive: true }).describe(
-    "Compliance Access Key (sk-ant-api01-...) from claude.ai org settings (use vault reference)",
+    'Compliance Access Key from claude.ai org settings. Supply it as ${{ vault.get("anthropic", "COMPLIANCE_KEY") }}; never pass the literal key',
   ),
   orgId: z.string().optional().describe(
     "Organization ID to scope queries. Omit to auto-discover from /v1/compliance/organizations.",
@@ -432,7 +432,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -514,6 +514,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "No schema changes — complianceKey description drops the token-shaped prefix and directs the key through vault.get",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

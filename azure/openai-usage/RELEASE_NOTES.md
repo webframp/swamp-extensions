@@ -1,18 +1,17 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The manifest wired `clientSecret` as `<vault:azure/sp-secret>`, which
+swamp does not resolve, and the README showed a literal
+`clientSecret=<secret-value>`. Both now store the secret with
+`swamp vault put azure CLIENT_SECRET` and wire it with
+`${{ vault.get("azure", "CLIENT_SECRET") }}`. The README states the vault is
+required, not merely recommended.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The `clientSecret` argument description says to supply it with a
+`vault.get` expression.
 
-## 2026.09.18.1
+**Changed:** The manifest Quick Start creates the vault first with
+`swamp vault create local_encryption <name>` (a once-only step for a repo with
+no vault yet), so it works in a fresh repo.
 
-**Fixed:** `list_ai_resources` no longer discards the truncation signal from
-resource discovery. If ARM pagination for a subscription exceeds the internal
-page cap, or a subscription's listing fails outright, the written
-`resource_list` resource now sets `truncated: true` and a warning is logged,
-instead of silently returning a partial list that looks complete.
-
-**Changed:** `resource_list` resources now include a `truncated` field
-(optional, defaults absent on older data).
-
-**Upgrade note:** Normalized npm:zod reference globally to 4.6.5.
+**Upgrade note:** Documentation only; no behavioral or schema changes.

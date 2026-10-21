@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/adopt"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Brownfield adoption of AWS resources into swamp models, whatever created
   them. plan_account_sweep enumerates about 40 resource types in a region
@@ -16,8 +16,9 @@ description: |
 
   ## Authentication
 
-  Uses the default AWS credential chain, or the optional `profile` global
-  argument. Required read permissions: Cloud Control (ListResources,
+  Uses the default AWS credential chain: sign in with an SSO named profile
+  (`aws sso login`) and pass it as the optional `profile` global argument, or
+  run with an attached IAM role. Required read permissions: Cloud Control (ListResources,
   GetResource) plus the service reads it makes on your behalf, which the AWS
   managed ReadOnlyAccess policy covers; STS GetCallerIdentity for the sweep;
   CloudFormation (ListStackResources) for stack adoption; and EC2, RDS, and
@@ -26,8 +27,17 @@ description: |
   The observe step runs the official @swamp/aws/* types, which take no
   `profile` argument: they use the environment's credential chain, so set
   AWS_PROFILE for the workflow run. Judgement needs a `@swamp/typesafe-ai`
-  model with a TypeSafe API key; `triage_batch` comes from
-  @webframp/typesafe-batch.
+  model whose `apiKey` global argument reads the TypeSafe API key from a
+  vault; `triage_batch` comes from @webframp/typesafe-batch. Store the key with
+  `swamp vault put typesafe API_KEY` (it prompts), the same vault and key
+  @webframp/typesafe-batch uses, and never pass the literal key:
+
+  ```bash
+  swamp vault create local_encryption typesafe   # once, if you have no vault yet
+  swamp vault put typesafe API_KEY   # prompts for the key
+  swamp model create @swamp/typesafe-ai jev \
+    --global-arg 'apiKey=${{ vault.get("typesafe", "API_KEY") }}'
+  ```
 
   ## Quick Start
 

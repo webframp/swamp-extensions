@@ -96,6 +96,11 @@ export interface SchemaObject {
   maxLength?: number;
   pattern?: string;
   additionalProperties?: SchemaObject | boolean;
+  /**
+   * Generator-internal marker (never in the upstream spec): emit the field
+   * with `.meta({ sensitive: true })`. Set by lib/sensitive.ts.
+   */
+  "x-swamp-sensitive"?: boolean;
 }
 
 /** Compute the lowercase-hex SHA-256 of a string. */

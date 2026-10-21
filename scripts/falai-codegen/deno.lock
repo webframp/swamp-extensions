@@ -5,7 +5,8 @@
     "jsr:@std/fs@1": "1.0.23",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/path@1": "1.1.4",
-    "jsr:@std/path@^1.1.4": "1.1.4"
+    "jsr:@std/path@^1.1.4": "1.1.4",
+    "npm:zod@4.6.5": "4.6.5"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -29,6 +30,11 @@
       "dependencies": [
         "jsr:@std/internal"
       ]
+    }
+  },
+  "npm": {
+    "zod@4.6.5": {
+      "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="
     }
   },
   "workspace": {

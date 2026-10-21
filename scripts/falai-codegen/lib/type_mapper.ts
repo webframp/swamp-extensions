@@ -36,12 +36,22 @@ export interface TypeMapperOptions {
    * required-ness as-is.
    */
   lenient?: boolean;
+  /**
+   * Top-level object field names to mark `.meta({ sensitive: true })`.
+   *
+   * swamp's data writer reads this metadata from the resource schema, stores
+   * each marked value in a vault, and persists only a `vault.get(...)`
+   * reference in its place. Applied to the root object's own properties only
+   * (and to each root-level union variant); nested objects never inherit it.
+   */
+  sensitiveFields?: string[];
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   indent: 2,
   maxDepth: 8,
   lenient: false,
+  sensitiveFields: [],
 };
 
 /**
@@ -183,8 +193,28 @@ function arrayToZod(
   if (!schema.items) {
     return "z.array(z.unknown())";
   }
-  const itemType = schemaToZod(schema.items, opts, depth + 1);
+  const itemType = schemaToZod(
+    schema.items,
+    { ...opts, sensitiveFields: [] },
+    depth + 1,
+  );
   return `z.array(${itemType})`;
+}
+
+/**
+ * Append `.meta({ sensitive: true })` to a field's mapped type, ahead of a
+ * trailing `.nullable()`. In zod 4.6.5 a refinement (`.min()`, `.regex()`,
+ * ...) keeps the metadata of the schema it extends, so the marker could sit
+ * anywhere in the chain; placing it last, on the inner type, is simply the one
+ * consistent spot. swamp's metadata lookup unwraps the
+ * `.nullable()`/`.optional()`/`.default()` wrappers added after it.
+ */
+function markSensitive(fieldType: string): string {
+  const marker = ".meta({ sensitive: true })";
+  const nullable = ".nullable()";
+  return fieldType.endsWith(nullable)
+    ? `${fieldType.slice(0, -nullable.length)}${marker}${nullable}`
+    : `${fieldType}${marker}`;
 }
 
 function objectToZod(
@@ -201,7 +231,7 @@ function objectToZod(
     }
     const valueType = schemaToZod(
       schema.additionalProperties as SchemaObject,
-      opts,
+      { ...opts, sensitiveFields: [] },
       depth + 1,
     );
     return `z.record(z.string(), ${valueType})`;
@@ -214,13 +244,25 @@ function objectToZod(
   const required = opts.lenient
     ? new Set<string>()
     : new Set(schema.required ?? []);
+  // Sensitive marking applies to this object's own fields only; children are
+  // mapped without it so a nested field that happens to share a name is not
+  // marked.
+  const sensitive = new Set(opts.sensitiveFields);
+  const childOpts = { ...opts, sensitiveFields: [] };
   const indent = " ".repeat(opts.indent * (depth + 1));
   const closingIndent = " ".repeat(opts.indent * depth);
 
   const fields: string[] = [];
   for (const [name, prop] of Object.entries(schema.properties)) {
     const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
-    let fieldType = schemaToZod(prop, opts, depth + 1);
+    let fieldType = schemaToZod(prop, childOpts, depth + 1);
+
+    // Before .optional()/.default()/.describe(), so for a scalar field the
+    // marker shares the field's first line, which the quality rubric's
+    // credentials check reads.
+    if (sensitive.has(name)) {
+      fieldType = markSensitive(fieldType);
+    }
 
     // Add .optional() for non-required fields
     if (!required.has(name)) {

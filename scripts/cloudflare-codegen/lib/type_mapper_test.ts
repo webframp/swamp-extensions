@@ -192,3 +192,79 @@ Deno.test("type_mapper: schemaVarName converts to PascalCase", () => {
   assertEquals(schemaVarName("get-namespace"), "GetNamespaceSchema");
   assertEquals(schemaVarName("create_database"), "CreateDatabaseSchema");
 });
+
+// ---------------------------------------------------------------------------
+// Sensitive fields
+// ---------------------------------------------------------------------------
+
+Deno.test("type_mapper: isSensitive marks a field with .meta({ sensitive: true }) and the hint", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      name: { type: "string", description: "Tunnel name" },
+      tunnel_secret: { type: "string", description: "Tunnel secret" },
+    },
+  };
+  const out = schemaToZod(schema, {
+    isSensitive: (name) => name === "tunnel_secret",
+    sensitiveHint: "Use a vault.",
+  });
+  assertEquals(
+    out.includes(
+      'tunnel_secret: z.string().optional().describe("Tunnel secret Use a vault.").meta({ sensitive: true })',
+    ),
+    true,
+  );
+  assertEquals(
+    out.includes('name: z.string().optional().describe("Tunnel name"),'),
+    true,
+  );
+});
+
+Deno.test("type_mapper: without isSensitive nothing is marked", () => {
+  const out = schemaToZod({
+    type: "object",
+    properties: { secret: { type: "string" } },
+  });
+  assertEquals(out.includes("sensitive"), false);
+});
+
+Deno.test("type_mapper: a nested secret below the describe depth still gets the hint", () => {
+  const out = schemaToZod(
+    {
+      type: "object",
+      properties: {
+        source: {
+          type: "object",
+          properties: { secretAccessKey: { type: "string" } },
+        },
+      },
+    },
+    {
+      isSensitive: (name) => name === "secretAccessKey",
+      sensitiveHint: "Use a vault.",
+    },
+    2,
+  );
+  assertEquals(
+    out.includes(
+      'secretAccessKey: z.string().optional().describe("Use a vault.").meta({ sensitive: true })',
+    ),
+    true,
+  );
+});
+
+Deno.test("type_mapper: x-swamp-loose objects keep unknown keys", () => {
+  const out = schemaToZod({
+    type: "object",
+    properties: {
+      rtmps: {
+        type: "object",
+        "x-swamp-loose": true,
+        nullable: true,
+        properties: { streamKey: { type: "string" } },
+      },
+    },
+  });
+  assertEquals(out.includes("}).passthrough().nullable().optional()"), true);
+});

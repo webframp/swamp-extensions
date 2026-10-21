@@ -60,7 +60,8 @@ per-resource drift details:
     "driftedResources": 2,
     "missingInAws": 1,
     "fieldDrifts": 1,
-    "unsupportedTypes": 4
+    "unsupportedTypes": 4,
+    "unverifiableFields": 1
   },
   "findings": [
     {
@@ -72,9 +73,28 @@ per-resource drift details:
         { "field": "instance_type", "terraform": "t3.micro", "aws": "t3.large" }
       ]
     }
+  ],
+  "unverifiable": [
+    {
+      "tfAddress": "aws_instance.api",
+      "tfType": "aws_instance",
+      "resourceId": "i-def456",
+      "field": "tags_all"
+    }
   ]
 }
 ```
+
+### Sensitive attributes
+
+`@webframp/terraform` `read_state` replaces every attribute Terraform marks
+sensitive with the string `***SENSITIVE***`, and a wholly sensitive map (for
+example `tags = merge(var.common_tags, { Owner = var.owner })` over a sensitive
+variable) becomes that string instead of a map. The report cannot compare a
+masked value, so it lists the field under `unverifiable` (and an "Unverifiable
+Fields" Markdown section) rather than reporting drift. A masked identifier
+(`id`, `arn`, `allocation_id`) skips that resource's comparison instead of
+reporting it `missing_in_aws`.
 
 ## Troubleshooting
 

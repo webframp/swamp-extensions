@@ -9,6 +9,7 @@
 
 import { z } from "npm:zod@4.6.5";
 import {
+  dropItemSecrets,
   queryEntries,
   requireBody,
   sanitizeInstanceName,
@@ -23,7 +24,9 @@ const EXTENSION_NAME = "@webframp/snyk/service-accounts";
 // =============================================================================
 
 const GlobalArgsSchema = z.object({
-  apiToken: z.string().meta({ sensitive: true }).describe("Snyk API token"),
+  apiToken: z.string().meta({ sensitive: true }).describe(
+    'Snyk API token. Store it in a vault and wire it with ${{ vault.get("snyk", "API_TOKEN") }}; never pass the literal token.',
+  ),
   orgId: z.string().describe("Snyk organization ID"),
   version: z.string().default("2024-10-15").describe("Snyk API version date"),
 });
@@ -31,7 +34,7 @@ const GlobalArgsSchema = z.object({
 const GetManyGroupServiceAccountItemSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -40,7 +43,7 @@ const GetManyGroupServiceAccountItemSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -49,7 +52,7 @@ const GetManyGroupServiceAccountItemSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -84,7 +87,7 @@ const GetManyGroupServiceAccountSchema = z.object({
 const CreateGroupServiceAccountSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -93,7 +96,7 @@ const CreateGroupServiceAccountSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -102,7 +105,7 @@ const CreateGroupServiceAccountSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -125,7 +128,7 @@ const CreateGroupServiceAccountSchema = z.object({
 const GetOneGroupServiceAccountSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -134,7 +137,7 @@ const GetOneGroupServiceAccountSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -143,7 +146,7 @@ const GetOneGroupServiceAccountSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -166,7 +169,7 @@ const GetOneGroupServiceAccountSchema = z.object({
 const UpdateServiceAccountSecretSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -175,7 +178,7 @@ const UpdateServiceAccountSecretSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -184,7 +187,7 @@ const UpdateServiceAccountSecretSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -207,7 +210,7 @@ const UpdateServiceAccountSecretSchema = z.object({
 const GetManyOrgServiceAccountsItemSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -216,7 +219,7 @@ const GetManyOrgServiceAccountsItemSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -225,7 +228,7 @@ const GetManyOrgServiceAccountsItemSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -260,7 +263,7 @@ const GetManyOrgServiceAccountsSchema = z.object({
 const CreateOrgServiceAccountSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -269,7 +272,7 @@ const CreateOrgServiceAccountSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -278,7 +281,7 @@ const CreateOrgServiceAccountSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -301,7 +304,7 @@ const CreateOrgServiceAccountSchema = z.object({
 const GetOneOrgServiceAccountSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -310,7 +313,7 @@ const GetOneOrgServiceAccountSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -319,7 +322,7 @@ const GetOneOrgServiceAccountSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -342,7 +345,7 @@ const GetOneOrgServiceAccountSchema = z.object({
 const UpdateOrgServiceAccountSecretSchema = z.object({
   id: z.string().nullish(),
   type: z.string().nullish(),
-  access_token: z.string().nullish().describe(
+  access_token: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk access token for this service account.",
   ),
   access_token_expires_at: z.string().nullish().describe(
@@ -351,7 +354,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
   access_token_ttl_seconds: z.number().nullish().describe(
     "The time, in seconds, that an oauth access token will be valid for. Defaults to 1hr if unset.",
   ),
-  api_key: z.string().nullish().describe(
+  api_key: z.string().meta({ sensitive: true }).nullish().describe(
     "The Snyk API Key for this service account.",
   ),
   auth_type: z.string().nullish().describe(
@@ -360,7 +363,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
   client_id: z.string().nullish().describe(
     "The service account's attached client-id. Used to request an access-token.",
   ),
-  client_secret: z.string().nullish().describe(
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
     "The client secret used for obtaining oauth access tokens.",
   ),
   created_at: z.string().nullish().describe(
@@ -387,7 +390,7 @@ const UpdateOrgServiceAccountSecretSchema = z.object({
 /** Snyk Service Accounts — automated access management for CI/CD */
 export const model = {
   type: "@webframp/snyk/service-accounts",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -455,6 +458,12 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.21.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -551,6 +560,17 @@ export const model = {
             { count: results.length },
           );
         }
+        const droppedSecrets = dropItemSecrets(results, [
+          "access_token",
+          "api_key",
+          "client_secret",
+        ]);
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
 
         const handle = await context.writeResource(
           "get_many_group_service_account",
@@ -629,6 +649,16 @@ export const model = {
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "group_service_account",
           id,
@@ -675,6 +705,16 @@ export const model = {
         );
         requireBody(result, "get_one_group_service_account");
 
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "one_group_service_account",
           sanitizeInstanceName(String(args.serviceaccount_id)),
@@ -734,6 +774,16 @@ export const model = {
           body,
         );
 
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "group_service_account",
           sanitizeInstanceName(String(args.serviceaccount_id)),
@@ -797,7 +847,9 @@ export const model = {
         data: z.object({
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
-            secret: z.string().optional(),
+            secret: z.string().meta({ sensitive: true }).optional().describe(
+              'Secret to delete when using `delete` mode Secret: supply it with a ${{ vault.get("<vault>", "<KEY>") }} expression, never the literal value.',
+            ),
           }),
           type: z.enum(["service_account"]),
         }),
@@ -839,6 +891,16 @@ export const model = {
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "service_account_secret",
           id,
@@ -880,6 +942,17 @@ export const model = {
           context.logger.info(
             "WARNING: results truncated at {count} (pagination cap)",
             { count: results.length },
+          );
+        }
+        const droppedSecrets = dropItemSecrets(results, [
+          "access_token",
+          "api_key",
+          "client_secret",
+        ]);
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
           );
         }
 
@@ -955,6 +1028,16 @@ export const model = {
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "org_service_account",
           id,
@@ -996,6 +1079,16 @@ export const model = {
         );
         requireBody(result, "get_one_org_service_account");
 
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "one_org_service_account",
           sanitizeInstanceName(String(args.serviceaccount_id)),
@@ -1050,6 +1143,16 @@ export const model = {
           body,
         );
 
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "org_service_account",
           sanitizeInstanceName(String(args.serviceaccount_id)),
@@ -1105,7 +1208,9 @@ export const model = {
         data: z.object({
           attributes: z.object({
             mode: z.enum(["replace", "create", "delete"]),
-            secret: z.string().optional(),
+            secret: z.string().meta({ sensitive: true }).optional().describe(
+              'Secret to delete when using `delete` mode Secret: supply it with a ${{ vault.get("<vault>", "<KEY>") }} expression, never the literal value.',
+            ),
           }),
           type: z.enum(["service_account"]),
         }),
@@ -1145,6 +1250,16 @@ export const model = {
         const id = sanitizeInstanceName(
           String((result as { id?: unknown }).id ?? "created"),
         );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["access_token", "api_key", "client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
         const handle = await context.writeResource(
           "org_service_account_secret",
           id,

@@ -2,7 +2,9 @@
 import { z } from "npm:zod@4.6.5";
 const GlobalArgs = z.object({
   host: z.string().min(1).default("swamp-club.com"),
-  apiKey: z.string().min(1).meta({ sensitive: true }),
+  apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+    'Swamp Club API key. Supply it as ${{ vault.get("swamp-club", "API_KEY") }}; never pass the literal key',
+  ),
   maxComments: z.number().int().min(1).max(100).default(50),
 }).strict();
 const idempotencyKey = z.string().min(1).regex(
@@ -63,7 +65,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.10.14.1",
+  version: "2026.10.21.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -87,6 +89,11 @@ export const model = {
     toVersion: "2026.10.14.1",
     description:
       "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.10.21.1",
+    description:
+      "No schema changes — apiKey description and README now direct the key through vault.get",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {

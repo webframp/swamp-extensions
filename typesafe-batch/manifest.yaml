@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/typesafe-batch"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: |
   Bounded batch triage for `@swamp/typesafe-ai`. Adds one method,
   `triage_batch`, that evaluates many compact `{id, state}` items against one
@@ -13,14 +13,19 @@ description: |
 
   ## Authentication
 
-  Uses the `@swamp/typesafe-ai` global arguments: `apiKey` (prefer a vault
-  reference), falling back to the `TYPESAFE_API_KEY` environment variable.
+  Uses the `@swamp/typesafe-ai` global arguments. Store the API key in a vault
+  and wire `apiKey` with a `vault.get` expression. The `TYPESAFE_API_KEY`
+  environment variable is read as a fallback, but it is not redacted and is
+  not recommended.
 
   ## Quick Start
 
   ```bash
   swamp extension pull @webframp/typesafe-batch
-  swamp model create @swamp/typesafe-ai jev
+  swamp vault create local_encryption typesafe   # once, if you have no vault yet
+  swamp vault put typesafe API_KEY   # prompts for the key
+  swamp model create @swamp/typesafe-ai jev \
+    --global-arg 'apiKey=${{ vault.get("typesafe", "API_KEY") }}'
   swamp model method run jev triage_batch --input-file batch.yaml
   swamp data get jev triage-batch-latest --json
   ```

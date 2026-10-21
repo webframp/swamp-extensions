@@ -45,7 +45,8 @@ gopass secrets:
 # List all secrets in the configured store
 swamp vault list-keys default --json
 
-# Retrieve a secret value
+# Retrieve a secret value. This prints the plaintext to your terminal; use it
+# only to check a value by hand. Models get secrets through vault.get (below).
 swamp vault read-secret default services/api-token --force --json
 
 # Store a new secret (interactive prompt, value hidden)
@@ -53,23 +54,34 @@ swamp vault put default services/new-secret
 
 # Use the team store
 swamp vault list-keys team-secrets --json
-swamp vault read-secret team-secrets shared/db-password --force --json
+swamp vault read-secret team-secrets shared/db-password --force --json  # prints plaintext
 ```
 
 ## Vault Expressions in Models
 
-Reference gopass secrets in your model definitions using vault expressions:
+Reference gopass secrets from a model with `vault.get` expressions, either at
+`swamp model create` time:
+
+```bash
+swamp model create @example/postgres database \
+  --global-arg host=db.example.com \
+  --global-arg username=admin \
+  --global-arg 'password=${{ vault.get("default", "database/prod-password") }}' \
+  --global-arg 'apiKey=${{ vault.get("team-secrets", "services/api-key") }}'
+```
+
+or in the model definition YAML:
 
 ```yaml
-resources:
-  database:
-    type: postgres
-    args:
-      host: "db.example.com"
-      username: "admin"
-      password: "{{ vault \"default\" \"database/prod-password\" }}"
-      api_key: "{{ vault \"team-secrets\" \"services/api-key\" }}"
+globalArguments:
+  host: db.example.com
+  username: admin
+  password: ${{ vault.get("default", "database/prod-password") }}
+  apiKey: ${{ vault.get("team-secrets", "services/api-key") }}
 ```
+
+swamp resolves each expression at run time, so the definition never holds the
+plaintext.
 
 ## Observability
 

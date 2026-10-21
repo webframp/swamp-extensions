@@ -29,6 +29,7 @@ interface ApiLib {
     params?: Record<string, string>,
     baseUrl?: string,
   ) => Promise<{ results: T[]; truncated: boolean; totalFetched: number }>;
+  omitPaths: <T>(value: T, paths: string[][]) => T;
 }
 
 let apiLibPromise: Promise<ApiLib> | undefined;
@@ -405,4 +406,48 @@ Deno.test("api lib: generated source applies a deadline to every fetch", () => {
   assert(src.includes("AbortSignal.timeout("));
   // The only fetch call sits behind fetchOnce, which sets the signal.
   assertEquals(src.match(/\bawait fetch\(/g)?.length, 1);
+});
+
+// ---------------------------------------------------------------------------
+// Credential handling
+// ---------------------------------------------------------------------------
+
+Deno.test("api lib: a missing key points to the vault, and calls the env var a discouraged fallback", async () => {
+  const { griptapeApi } = await loadApiLib();
+  const saved = Deno.env.get("GT_CLOUD_API_KEY");
+  Deno.env.delete("GT_CLOUD_API_KEY");
+  try {
+    const err = await assertRejects(() => griptapeApi("", "GET", "/api/x"));
+    const msg = (err as Error).message;
+    assertStringIncludes(msg, "swamp vault put griptape API_KEY");
+    assertStringIncludes(msg, '${{ vault.get("griptape", "API_KEY") }}');
+    assertStringIncludes(msg, "not redacted and is not recommended");
+  } finally {
+    if (saved === undefined) Deno.env.delete("GT_CLOUD_API_KEY");
+    else Deno.env.set("GT_CLOUD_API_KEY", saved);
+  }
+});
+
+Deno.test("api lib: omitPaths drops nested keys from a copy and tolerates absent paths", async () => {
+  const { omitPaths } = await loadApiLib();
+  const item = {
+    id: "a",
+    config: { google_drive: { access_token: "secret", file_ids: ["f"] } },
+  };
+  const out: unknown = omitPaths(item, [
+    ["config", "google_drive", "access_token"],
+    ["config", "s3", "aws_secret_access_key"],
+    ["missing", "deep", "key"],
+  ]);
+  assertEquals(out, { id: "a", config: { google_drive: { file_ids: ["f"] } } });
+  // The input is untouched.
+  assertEquals(item.config.google_drive.access_token, "secret");
+  // A non-object along the path is left alone rather than throwing.
+  assertEquals(
+    omitPaths({ config: "flat" }, [["config", "google_drive", "x"]]),
+    { config: "flat" },
+  );
+  assertEquals(omitPaths({ config: null }, [["config", "x"]]), {
+    config: null,
+  });
 });

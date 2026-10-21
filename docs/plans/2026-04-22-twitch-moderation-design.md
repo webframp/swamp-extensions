@@ -37,10 +37,10 @@ swamp model create @webframp/twitch mod-drongo \
 
 | Arg | Vault Key |
 |-----|-----------|
-| `clientId` | `${{ vault.get("twitch-client-id") }}` |
-| `clientSecret` | `${{ vault.get("twitch-client-secret") }}` |
-| `accessToken` | `${{ vault.get("twitch-access-token") }}` |
-| `refreshToken` | `${{ vault.get("twitch-refresh-token") }}` |
+| `clientId` | `${{ vault.get("twitch", "CLIENT_ID") }}` |
+| `clientSecret` | `${{ vault.get("twitch", "CLIENT_SECRET") }}` |
+| `accessToken` | `${{ vault.get("twitch", "ACCESS_TOKEN") }}` |
+| `refreshToken` | `${{ vault.get("twitch", "REFRESH_TOKEN") }}` |
 
 ### Methods
 
@@ -261,8 +261,9 @@ Copy the **Client ID** and generate a **Client Secret**.
 ### 2. Store Client Credentials in Vault
 
 ```bash
-swamp vault set twitch-client-id YOUR_CLIENT_ID
-swamp vault set twitch-client-secret YOUR_CLIENT_SECRET
+swamp vault create local_encryption twitch   # once, if you have no vault yet
+swamp vault put twitch CLIENT_ID             # each put prompts; values never touch shell history
+swamp vault put twitch CLIENT_SECRET
 ```
 
 ### 3. Authorize with Twitch
@@ -278,22 +279,28 @@ Twitch redirects to `http://localhost:3000?code=AUTHORIZATION_CODE`. Copy the
 
 ### 4. Exchange the Code for Tokens
 
+Send the client secret on stdin, never on the `curl` command line, and keep
+the response out of the terminal (step 5 stores it):
+
 ```bash
-curl -X POST 'https://id.twitch.tv/oauth2/token' \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'client_id=YOUR_CLIENT_ID' \
-  -d 'client_secret=YOUR_CLIENT_SECRET' \
-  -d 'code=AUTHORIZATION_CODE' \
-  -d 'grant_type=authorization_code' \
-  -d 'redirect_uri=http://localhost:3000'
+AUTH_CODE=paste-the-code-here
+TOKENS=$(printf 'client_id=%s&client_secret=%s&code=%s&grant_type=authorization_code&redirect_uri=http://localhost:3000' \
+    "$(swamp vault read-secret twitch CLIENT_ID --force)" \
+    "$(swamp vault read-secret twitch CLIENT_SECRET --force)" \
+    "$AUTH_CODE" |
+  curl -sS -X POST 'https://id.twitch.tv/oauth2/token' \
+    -H 'Content-Type: application/x-www-form-urlencoded' --data @-)
 ```
 
-Response:
+`swamp vault read-secret --force` prints plaintext; it is used here only inside
+a pipe. Models get secrets through `vault.get`.
+
+Response shape:
 
 ```json
 {
-  "access_token": "abc123...",
-  "refresh_token": "def456...",
+  "access_token": "<access token>",
+  "refresh_token": "<refresh token>",
   "expires_in": 14400,
   "scope": ["moderator:read:chatters", "moderation:read", "..."],
   "token_type": "bearer"
@@ -303,16 +310,18 @@ Response:
 ### 5. Store Tokens in Vault
 
 ```bash
-swamp vault set twitch-access-token ACCESS_TOKEN_FROM_RESPONSE
-swamp vault set twitch-refresh-token REFRESH_TOKEN_FROM_RESPONSE
+jq -r .access_token <<<"$TOKENS" | swamp vault put twitch ACCESS_TOKEN
+jq -r .refresh_token <<<"$TOKENS" | swamp vault put twitch REFRESH_TOKEN
+unset TOKENS AUTH_CODE
 ```
 
 ### 6. Get Your Moderator User ID
 
 ```bash
-curl -H 'Authorization: Bearer YOUR_ACCESS_TOKEN' \
-  -H 'Client-Id: YOUR_CLIENT_ID' \
-  'https://api.twitch.tv/helix/users'
+printf 'Authorization: Bearer %s\nClient-Id: %s\n' \
+    "$(swamp vault read-secret twitch ACCESS_TOKEN --force)" \
+    "$(swamp vault read-secret twitch CLIENT_ID --force)" |
+  curl -sS -H @- 'https://api.twitch.tv/helix/users'
 ```
 
 The `id` field in the response is your `moderatorId` for model creation.
@@ -320,16 +329,10 @@ The `id` field in the response is your `moderatorId` for model creation.
 ### Token Refresh (Automatic)
 
 The model refreshes expired tokens automatically. For reference, the refresh
-request looks like:
-
-```bash
-curl -X POST 'https://id.twitch.tv/oauth2/token' \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d 'client_id=YOUR_CLIENT_ID' \
-  -d 'client_secret=YOUR_CLIENT_SECRET' \
-  -d 'refresh_token=YOUR_REFRESH_TOKEN' \
-  -d 'grant_type=refresh_token'
-```
+request is a form-encoded `POST https://id.twitch.tv/oauth2/token` with
+`client_id`, `client_secret`, `refresh_token`, and
+`grant_type=refresh_token` in the body. If you ever send it by hand, pass the
+body on stdin as in step 4, never as `-d` arguments.
 
 If the refresh token expires (unused for 30+ days), re-run steps 3–5.
 

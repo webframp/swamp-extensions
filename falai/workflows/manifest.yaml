@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/falai/workflows"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.21.1"
 description: "fal.ai Workflows — workflow definitions"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

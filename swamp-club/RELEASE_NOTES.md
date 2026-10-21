@@ -1,19 +1,10 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Fixed:** The README's `swamp model create` example omitted the required
+`apiKey` global argument and only said the key "should be supplied from a Swamp
+vault". It now stores the key with `swamp vault put swamp-club API_KEY` and
+wires it with `${{ vault.get("swamp-club", "API_KEY") }}`. The `apiKey`
+argument now carries a description saying the same.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.10.12.1
-
-**Fixed:** Repeating an `idempotencyKey` on `post_ripple` no longer fails the
-workflow step. The method returned a handle with only a name when the key had
-been seen before. The runtime rejected it
-(`expected string, received undefined (path: dataId)`), so a workflow that
-repeated a key reported failure on every run. Dedup itself was unaffected: no
-duplicate ripple was ever posted.
-
-**Changed:** A repeated key now re-writes the existing `ripple` record
-unchanged and returns its full handle. Each repeat adds a version of that
-record (retention is still 20 versions) whose 30-day lifetime starts from the
-repeat. No Swamp Club API call is made on a repeat.
+**Upgrade note:** Documentation only. No code, schema, or behavioral changes.
+The model version moves to 2026.10.21.1 with an identity upgrade.

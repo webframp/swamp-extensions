@@ -6,9 +6,9 @@ each alarm as healthy, stale, silent, noisy, orphaned, or unknown.
 
 ## Authentication
 
-Uses the default AWS credential chain. Ensure your environment has valid AWS
-credentials configured (environment variables, shared credentials file, or IAM
-role).
+Uses the AWS SDK default credential chain. Supply credentials through AWS SSO or a named profile (`aws sso login --profile <name>`, then
+`--global-arg profile=<name>`), or an IAM role attached to where swamp runs (EC2
+instance profile, ECS task role). Avoid long-lived static access keys.
 
 For multi-account use, pass a shared-config profile explicitly instead of
 relying on `AWS_PROFILE`:

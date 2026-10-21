@@ -1,37 +1,31 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Changed:** The README now shows the Snyk API token stored in a swamp vault
+(`swamp vault put snyk API_TOKEN`) and wired with
+`--global-arg 'apiToken=${{ vault.get("snyk", "API_TOKEN") }}'`, replacing the
+literal-token example. The `apiToken` argument description says the same.
 
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
+**Changed:** The `access_token`, `api_key` and `client_secret` returned by
+`create_group_service_account`, `get_one_group_service_account`,
+`update_group_service_account`, `update_service_account_secret`,
+`create_org_service_account`, `get_one_org_service_account`,
+`update_org_service_account` and `update_org_service_account_secret` are now
+stored in a vault, and the persisted resource holds a `vault.get` reference in
+their place. Before, they were written to swamp data in plaintext.
 
-## 2026.10.07.1
+**Changed:** `get_many_group_service_account` and
+`get_many_org_service_accounts` drop any such value from their items, because
+swamp cannot vault a field inside a list; Snyk returns these secrets only on
+creation or rotation.
 
-**Fixed:** A request that never answers no longer hangs the method. Each attempt
-now has a 30-second deadline, and a timeout names the method and path. Rate
-limiting (HTTP 429) retries up to three times, waits at most 30 seconds between
-tries, and then reports the rate limit instead of failing with a consumed-body
-`TypeError`. An empty 2xx body (202, 204, or an empty 200) no longer fails JSON
-parsing. A malformed JSON body now reports the HTTP status and the request
-instead of a bare `SyntaxError`, and HTTP errors name the request too.
-Pagination follows a relative `next` link with or without the `/rest` prefix,
-and refuses a `next` link that leaves the Snyk API origin or the `/rest` path
-instead of sending the API token to it. A POST method named with a different
-verb wrote its result under a resource name the model never declared:
-`update_service_account_secret` now writes the declared `service_account_secret`
-resource; `update_org_service_account_secret` now writes the declared
-`org_service_account_secret` resource.
+**Changed:** Because the model now declares sensitive output, swamp refuses to
+run any of its methods, reads included, until a vault exists
+(`swamp vault create local_encryption snyk`).
 
-**Changed:** Response schemas now accept what the API returns. Enumerated
-response fields accept any value of their type, value constraints (`min`, `max`,
-pattern) are dropped, response properties may be missing or null, and nested
-objects keep fields the spec does not list, so one unexpected value no longer
-fails a whole page. Methods that read or create a single resource now fail when
-the API answers with an empty body where the spec promises content, instead of
-storing an empty resource. Operations the spec documents as returning no content
-(204) still succeed. Argument and field descriptions now end at a word boundary.
-Request arguments are unchanged.
+**Changed:** The `data.attributes.secret` argument of
+`update_service_account_secret` and `update_org_service_account_secret` is
+marked sensitive, so swamp redacts it. Supply it with a `vault.get` expression.
 
-**Upgrade note:** The loosened response schemas change validation behavior.
-Stored resources remain valid, and no data migration is needed. Anything that
-relied on a resource schema to reject an out-of-enum value or a missing field
-must now check the data itself.
+**Upgrade note:** Create a vault before running any method of this extension.
+Resources written by earlier versions keep any plaintext secret until you rerun
+the method or delete the old data.

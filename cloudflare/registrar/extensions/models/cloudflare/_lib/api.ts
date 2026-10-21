@@ -5,21 +5,80 @@
 const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 
 /**
- * Resolve the Cloudflare API token: an explicit token (typically from the
- * model's vault-wireable apiToken global arg) takes precedence over the
- * CLOUDFLARE_API_TOKEN environment variable. Throws a descriptive error when
- * neither is set.
+ * Resolve the Cloudflare API token from the apiToken global argument, which
+ * should be wired with a vault.get expression. The CLOUDFLARE_API_TOKEN
+ * environment variable is read as a fallback only; swamp does not redact it,
+ * so it is not recommended. Throws a descriptive error when neither is set.
  */
 function resolveToken(apiToken?: string): string {
   const token = apiToken || Deno.env.get("CLOUDFLARE_API_TOKEN");
   if (!token) {
     throw new Error(
-      "Cloudflare API token not set. Provide the apiToken global argument " +
-        "(wireable with a vault.get(...) expression) or set the " +
-        "CLOUDFLARE_API_TOKEN environment variable.",
+      "Cloudflare API token not set. Store the token in a vault and set the " +
+        "apiToken global argument to " +
+        '${{ vault.get("cloudflare", "API_TOKEN") }}. ' +
+        "The CLOUDFLARE_API_TOKEN environment variable is read as a fallback, " +
+        "but it is not redacted and is not recommended.",
     );
   }
   return token;
+}
+
+/**
+ * One step of a path to a returned secret: a property (optionally only when a
+ * sibling discriminator matches), every array element, or every map value.
+ */
+export interface SensitivePathSegment {
+  k?: string;
+  when?: readonly unknown[];
+  each?: boolean;
+  values?: boolean;
+}
+
+/**
+ * Return a copy of `value` with the secret at every path removed.
+ *
+ * Swamp moves a resource field marked sensitive into a vault, but only along
+ * plain object properties. Secrets inside list items, maps or unions cannot be
+ * vaulted, so the generated methods delete them before writing the resource
+ * rather than persist them in plaintext.
+ */
+export function stripSensitive<T>(
+  value: T,
+  paths: ReadonlyArray<ReadonlyArray<SensitivePathSegment>>,
+): T {
+  if (value === null || typeof value !== "object") return value;
+  const copy = structuredClone(value);
+  for (const path of paths) removePath(copy, path, 0);
+  return copy;
+}
+
+function removePath(
+  node: unknown,
+  path: ReadonlyArray<SensitivePathSegment>,
+  i: number,
+): void {
+  if (node === null || typeof node !== "object" || i >= path.length) return;
+  const seg = path[i];
+  if (seg.each) {
+    if (Array.isArray(node)) {
+      for (const el of node) removePath(el, path, i + 1);
+    }
+    return;
+  }
+  if (Array.isArray(node)) return;
+  const obj = node as Record<string, unknown>;
+  if (seg.values) {
+    for (const v of Object.values(obj)) removePath(v, path, i + 1);
+    return;
+  }
+  if (seg.k === undefined) return;
+  if (seg.when && obj[String(seg.when[0])] !== seg.when[1]) return;
+  if (i === path.length - 1) {
+    delete obj[seg.k];
+  } else {
+    removePath(obj[seg.k], path, i + 1);
+  }
 }
 
 export interface CloudflareResponse<T> {
@@ -50,6 +109,22 @@ export function sanitizeInstanceName(name: string): string {
     .replace(/[/\\]/g, "_")
     .replace(/\.\./g, "_")
     .replace(/\0/g, "");
+}
+
+/**
+ * Deterministic short hash (SHA-1, first 16 hex characters) for a resource
+ * instance name that no response field supplies, so distinct calls never
+ * share one instance.
+ */
+export async function shortHash(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-1",
+    new TextEncoder().encode(input),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 16);
 }
 
 const MAX_RETRIES = 3;

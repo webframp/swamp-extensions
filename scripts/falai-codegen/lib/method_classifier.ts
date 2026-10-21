@@ -16,7 +16,11 @@
  */
 
 import type { GroupedOperation, ServiceGroup } from "./service_grouper.ts";
-import type { ParameterObject, SchemaObject } from "./schema_fetcher.ts";
+import type {
+  OpenAPISpec,
+  ParameterObject,
+  SchemaObject,
+} from "./schema_fetcher.ts";
 import { schemaToZod } from "./type_mapper.ts";
 import { SENSITIVE_RESPONSE_FIELDS, ZOD_VERSION } from "../config.ts";
 
@@ -308,9 +312,89 @@ function resourceNameFor(method: ClassifiedMethod): string {
 function generateGlobalArgsSchema(): string {
   return [
     `const GlobalArgsSchema = z.object({`,
-    `  apiToken: z.string().meta({ sensitive: true }).describe("fal.ai API key; overrides the FAL_KEY environment variable. Wire with a vault.get(...) expression to source it from a vault.").optional(),`,
+    `  apiToken: z.string().meta({ sensitive: true }).describe("fal.ai API key. Wire it with \${{ vault.get(\\"falai\\", \\"API_KEY\\") }}; never pass the literal value. The FAL_KEY environment variable is read as a fallback, but it is not redacted and is not recommended.").optional(),`,
     `});`,
   ].join("\n");
+}
+
+/**
+ * Fail when a SENSITIVE_RESPONSE_FIELDS key names no operation in the spec.
+ * An upstream operationId rename would otherwise drop the sensitive marking
+ * silently and ship a schema that persists the secret in cleartext.
+ */
+export function assertSensitiveOperationsExist(
+  spec: OpenAPISpec,
+  sensitive: Record<string, string[]> = SENSITIVE_RESPONSE_FIELDS,
+): void {
+  const ids = new Set<string>();
+  for (const item of Object.values(spec.paths)) {
+    for (const op of Object.values(item)) {
+      if (op && !Array.isArray(op) && typeof op.operationId === "string") {
+        ids.add(op.operationId);
+      }
+    }
+  }
+  const missing = Object.keys(sensitive).filter((id) => !ids.has(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `SENSITIVE_RESPONSE_FIELDS names operation(s) not in the spec: ` +
+        `${missing.join(", ")}; update config.ts`,
+    );
+  }
+}
+
+/**
+ * Sensitive response fields for one resource: the union of the
+ * SENSITIVE_RESPONSE_FIELDS entries of every method that writes it, checked
+ * against the resource's schema (the primary method's response schema).
+ *
+ * swamp only vaults fields the resource schema declares, so a configured field
+ * the spec does not declare (renamed upstream, say), a resource with no
+ * response schema, or a list resource (whose secrets would sit inside
+ * `items`) stops generation instead of shipping a schema that persists the
+ * secret in cleartext.
+ */
+export function sensitiveFieldsForResource(
+  primary: ClassifiedMethod,
+  writers: ClassifiedMethod[],
+): string[] {
+  const fields = [
+    ...new Set(
+      writers.flatMap((m) =>
+        SENSITIVE_RESPONSE_FIELDS[m.operation.operationId] ?? []
+      ),
+    ),
+  ];
+  if (fields.length === 0) return fields;
+  const where = writers.map((m) => m.operation.operationId).join(", ");
+  if (primary.type === "list") {
+    throw new Error(
+      `${where}: sensitive response fields are only supported on ` +
+        `single-object resources, not list methods`,
+    );
+  }
+  const schema = primary.operation.responseSchema;
+  if (!schema) {
+    throw new Error(
+      `${where}: sensitive response fields configured but the spec has no ` +
+        `response schema to declare them in`,
+    );
+  }
+  const declared = new Set<string>();
+  for (const variant of [schema, ...(schema.oneOf ?? schema.anyOf ?? [])]) {
+    for (const name of Object.keys(variant.properties ?? {})) {
+      declared.add(name);
+    }
+  }
+  const missing = fields.filter((f) => !declared.has(f));
+  if (missing.length > 0) {
+    throw new Error(
+      `${where}: sensitive response field(s) ${missing.join(", ")} are not ` +
+        `declared in the response schema; update SENSITIVE_RESPONSE_FIELDS ` +
+        `in config.ts`,
+    );
+  }
+  return fields;
 }
 
 /** Generate Zod schemas for all unique response shapes */
@@ -334,6 +418,13 @@ function generateResponseSchemas(
 
   for (const method of methodsWithResources) {
     const schema = method.operation.responseSchema;
+    const resourceName = resourceNameFor(method);
+    const sensitiveFields = sensitiveFieldsForResource(
+      method,
+      methods.filter((m) =>
+        m.type !== "delete" && resourceNameFor(m) === resourceName
+      ),
+    );
     if (!schema) {
       // No response schema in the spec: keep whatever the API returns.
       schemaNames.set(method.name, "z.object({}).passthrough()");
@@ -364,7 +455,7 @@ function generateResponseSchemas(
       lines.push(`});`);
     } else {
       const zodStr = withPassthrough(
-        schemaToZod(schema, { indent: 2, lenient: true }, 1),
+        schemaToZod(schema, { indent: 2, lenient: true, sensitiveFields }, 1),
       );
       lines.push(`const ${varName} = ${zodStr};`);
     }
@@ -892,21 +983,6 @@ function generateCreateBody(
 ${indent}    // derive a deterministic, collision-resistant instance name
 ${indent}    // from the request instead of colliding every call onto "created".
 ${indent}    const id = sanitizeInstanceName(await shortHash(JSON.stringify(args)));`;
-  const sensitiveFields =
-    SENSITIVE_RESPONSE_FIELDS[method.operation.operationId];
-
-  const redactBlock = sensitiveFields?.length
-    ? `\n${indent}    // ${
-      JSON.stringify(sensitiveFields)
-    } are one-time credential fields fal.ai never
-${indent}    // returns again — persisting them would expose them to anyone with
-${indent}    // datastore read access, so they are dropped before writeResource.
-${indent}    const stored: Record<string, unknown> = { ...result };
-${indent}    for (const field of ${JSON.stringify(sensitiveFields)}) {
-${indent}      delete stored[field];
-${indent}    }\n`
-    : "";
-  const storedVar = sensitiveFields?.length ? "stored" : "result";
 
   return `${bodySetup}${queryBuild}
 ${indent}
@@ -916,9 +992,9 @@ ${indent}      "POST",
 ${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}      ${bodySetup ? "body" : "args"},
 ${indent}    );
-${redactBlock}${indent}
+${indent}
 ${idStatement}
-${indent}    const handle = await context.writeResource("${resourceName}", id, ${storedVar});
+${indent}    const handle = await context.writeResource("${resourceName}", id, result);
 ${indent}    context.logger.info("Created ${resourceName} {id}", { id });
 ${indent}    return { dataHandles: [handle] };`;
 }

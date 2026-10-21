@@ -1,10 +1,7 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
-
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.09.18.1
-
-**Upgrade note:** Normalized `npm:zod` dependency version to 4.6.5 across the
-repo. No behavioral changes in this extension.
+**Changed:** The README and the `apiToken` description now lead with a vault.
+Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
+to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
+environment variable still works as a fallback, but swamp does not redact it, so
+it is no longer recommended. The missing-token error now says the same.

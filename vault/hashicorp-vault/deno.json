@@ -7,7 +7,7 @@
     "lint": "deno lint extensions/vaults/",
     "fmt": "deno fmt extensions/vaults/",
     "fmt:check": "deno fmt --check extensions/vaults/",
-    "test": "deno test --allow-env --allow-net extensions/vaults/"
+    "test": "deno test --allow-env --allow-read=manifest.yaml --allow-net extensions/vaults/"
   },
   "lint": {
     "rules": {

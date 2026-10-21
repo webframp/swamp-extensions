@@ -1,15 +1,17 @@
-## 2026.10.14.1
+## 2026.10.21.1
 
-**Fixed:** Methods that write a singleton resource failed on current swamp with
-`Data name 'latest' is reserved for internal use`.
+**Changed:** The README and the `apiToken` description now lead with a vault.
+Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
+to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
+environment variable still works as a fallback, but swamp does not redact it, so
+it is no longer recommended. The missing-token error now says the same.
 
-**Changed:** Singleton get and action methods now write their data under
-`d1_import_database-current`, `d1_query_database-current`,
-`d1_raw_database_query-current`, `d1_time_travel_restore-current` instead of
-`latest`. Anything that read `data.latest("<model>", "latest")` or queried
-`name == "latest"` must use the new name.
+**Fixed:** Create methods whose response carries no `id` wrote every result to
+one instance named `created`, so each call overwrote the previous one. They now
+name the instance by the response's `id` or `uuid` when present, else by the
+path parameter that scopes the call, else by a hash of the request arguments
+(secret arguments left out). Affected: `create_database` and
+`create_d1_export_database`.
 
-**Upgrade note:** Data previously stored under `latest` is not migrated; re-run
-the method to populate the new name. No attribute schemas changed.
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry quality rubric scores a declared license separately from the bundled `LICENSE.md`.
+**Upgrade note:** Results earlier versions wrote to the `created` instance stay
+there; new runs write under the new names.

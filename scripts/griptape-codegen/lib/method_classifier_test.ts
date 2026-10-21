@@ -363,12 +363,27 @@ Deno.test("isSensitiveFieldName: flags credentials, spares innocuous look-alikes
       "api_key",
       "client_secret",
       "access_token",
+      "apiKey",
+      "clientSecret",
+      "aws_secret_access_key",
+      "atlassian_api_token",
+      "auth_code",
     ]
   ) {
     assertEquals(isSensitiveFieldName(n), true, n);
   }
   for (
-    const n of ["name", "value_count", "token_limit", "description", "type"]
+    const n of [
+      "name",
+      "value_count",
+      "token_limit",
+      "max_tokens",
+      "description",
+      "type",
+      "api_key_secret_id",
+      "bot_token_secret_ref",
+      "aws_access_key_id",
+    ]
   ) {
     assertEquals(isSensitiveFieldName(n), false, n);
   }
@@ -439,6 +454,99 @@ Deno.test("generateModelSource: query-param arg is appended to the URL, not drop
   const src = generateModelSource(group, methods, "2026.01.01.1");
   assertStringIncludes(src, 'const queryKeys = new Set(["api_key"])');
   assertStringIncludes(src, "${qs}");
+  // The webhook's api_key is a credential even though it rides the query
+  // string: it must be marked sensitive like a body credential.
+  assertStringIncludes(
+    src,
+    "api_key: z.string().meta({ sensitive: true }).optional()",
+  );
+  // The path param is an id, not a secret.
+  assertStringIncludes(src, "structure_id: z.string(),");
+});
+
+Deno.test("generateModelSource: body field with a nested credential is marked sensitive", () => {
+  const config: ServiceConfig = {
+    name: "data-connectors",
+    description: "Griptape Cloud Data Connectors",
+    pathPrefixes: ["/api/data-connectors"],
+    labels: ["griptape"],
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        httpMethod: "post",
+        path: "/api/data-connectors",
+        operationId: "CreateDataConnector",
+        requestBody: {
+          type: "object",
+          properties: { config: {}, name: { type: "string" } },
+        },
+        sensitiveBodyFields: ["config"],
+        responseSchema: { type: "object", properties: {} },
+      }),
+    ],
+  };
+  const src = generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+  assertStringIncludes(
+    src,
+    "config: z.unknown().meta({ sensitive: true }).optional(),",
+  );
+  assertStringIncludes(src, "name: z.string().optional(),");
+});
+
+Deno.test("generateModelSource: credential in a response is declared sensitive on the entity and dropped from list items", () => {
+  const config: ServiceConfig = {
+    name: "data-connectors",
+    description: "Griptape Cloud Data Connectors",
+    pathPrefixes: ["/api/data-connectors"],
+    labels: ["griptape"],
+  };
+  const tree = { config: { google_drive: { access_token: true as const } } };
+  const entity = {
+    type: "object",
+    properties: { data_connector_id: { type: "string" }, config: {} },
+  };
+  const group: ServiceGroup = {
+    config,
+    operations: [
+      makeOp({
+        path: "/api/data-connectors",
+        operationId: "ListDataConnectors",
+        isCollection: true,
+        listItemsKey: "data_connectors",
+        responseSchema: entity,
+        sensitiveResponse: tree,
+      }),
+      makeOp({
+        path: "/api/data-connectors/{data_connector_id}",
+        operationId: "GetDataConnector",
+        pathParams: [
+          { name: "data_connector_id", in: "path", required: true } as never,
+        ],
+        responseSchema: entity,
+        sensitiveResponse: tree,
+      }),
+    ],
+  };
+  const src = generateModelSource(
+    group,
+    classifyServiceMethods(group),
+    "2026.01.01.1",
+  );
+  // Entity resource: the path is declared down to a sensitive leaf.
+  assertStringIncludes(src, "z.unknown().meta({ sensitive: true }).nullish()");
+  assertStringIncludes(src, "google_drive: z.looseObject(");
+  // List resource: items are copied without the credential.
+  assertStringIncludes(
+    src,
+    'results.map((item) => omitPaths(item, [["config","google_drive","access_token"]]))',
+  );
+  assertStringIncludes(src, 'omitPaths } from "./_lib/api.ts"');
 });
 
 Deno.test("generateModelSource: action guards against a 204 undefined result", () => {
