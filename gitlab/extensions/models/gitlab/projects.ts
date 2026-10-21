@@ -2935,8 +2935,9 @@ export const model = {
       description:
         "Note, pipeline, job, schedule and snippet id arguments now require " +
         "positive integers; get_job_log tailLines is capped at 10000; " +
-        "create_issue milestone ids must be positive. No globalArguments " +
-        "change; resource schemas unchanged.",
+        "create_issue milestone ids must be positive; update_issue milestone " +
+        "must be a nonnegative integer or non-empty string (0 still " +
+        "clears). No globalArguments change; resource schemas unchanged.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

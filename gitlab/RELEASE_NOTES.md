@@ -3,7 +3,8 @@
 **Changed:** The remaining numeric ID arguments now reject a value that is not a
 positive integer, such as `0`, `-3` or `1.5`, at input validation, before any
 request reaches GitLab. Previously these values were sent to GitLab as-is, in
-REST paths such as `/jobs/1.5`. Affected arguments:
+REST paths such as `/jobs/1.5` or GraphQL ids such as `gid://gitlab/Note/1.5`.
+Affected arguments:
 
 - `noteId` on `update_issue_note`, `delete_issue_note`, `update_mr_note` and
   `delete_mr_note`
