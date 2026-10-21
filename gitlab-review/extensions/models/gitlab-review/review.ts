@@ -1111,10 +1111,15 @@ export const model = {
         const pid = encodeProject(args.project);
 
         // Keyed by body hash — a single MR can carry many threads, and a retry
-        // with the same body must not open a second one.
+        // with the same body must not open a second one. Line endings and
+        // surrounding whitespace are normalised first so a retry that only
+        // adds a trailing newline still matches.
+        const bodyKey = await sha256Prefix(
+          args.body.replace(/\r\n?/g, "\n").trim(),
+        );
         const resourceName = `${
           instanceName("discussionThread", args.project, args.iid)
-        }-${await sha256Prefix(args.body)}`;
+        }-${bodyKey}`;
         const existing = await context.readResource(resourceName);
         if (existing?.discussionId) {
           context.logger.info(

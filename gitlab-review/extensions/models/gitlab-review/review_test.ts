@@ -1191,6 +1191,32 @@ Deno.test("post_discussion keys distinct bodies as separate instances and skips 
   }
 });
 
+Deno.test("post_discussion treats whitespace-only body differences as the same thread", async () => {
+  const { calls, restore } = discussionFetchMock();
+  const { context } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    const args = { project: "group/repo", iid: 1 };
+    await model.methods.post_discussion.execute(
+      { ...args, body: "line one\nline two" },
+      context as any,
+    );
+    const retry = await model.methods.post_discussion.execute(
+      { ...args, body: "line one\r\nline two\n" },
+      context as any,
+    );
+    assertEquals(calls.length, 1);
+    assertEquals(retry.dataHandles, []);
+  } finally {
+    restore();
+  }
+});
+
 Deno.test("post_discussion does not share keys across MRs", async () => {
   const { calls, restore } = discussionFetchMock();
   const { context } = createModelTestContext({
@@ -1246,6 +1272,33 @@ Deno.test("post_discussion throws on an unexpected discussion response", async (
     assertEquals(getWrittenResources().length, 0);
   } finally {
     restore();
+  }
+});
+
+Deno.test("post_discussion throws on a non-JSON discussion response", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(new Response("<html>oops</html>", { status: 201 }));
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: { host: "gitlab.example.com", token: "test-token" },
+    storedResources: {
+      [`mrDiff-${encodeURIComponent("group/repo")}-1`]: OPENED_MR_DIFF,
+    },
+  });
+
+  try {
+    await assertRejects(
+      () =>
+        model.methods.post_discussion.execute(
+          { project: "group/repo", iid: 1, body: "point" },
+          context as any,
+        ),
+      Error,
+      "response was not valid JSON",
+    );
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    globalThis.fetch = original;
   }
 });
 

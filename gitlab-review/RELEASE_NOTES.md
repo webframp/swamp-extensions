@@ -11,6 +11,8 @@ Like the other posting methods, it refuses a closed or merged MR (run
 **Added:** `discussionThread` resource records each thread (`discussionId`,
 `noteId`, `body`, `postedAt`). Instances are keyed by a SHA-256 prefix of the
 body, and `post_discussion` skips posting when the same body is already recorded
-for that MR, so a retry does not open a duplicate thread.
+for that MR, so a retry after a successful post does not open a duplicate
+thread. The body is compared after normalising line endings and trimming
+surrounding whitespace.
 
 **Upgrade note:** Additive only. Existing resources and methods are unchanged.

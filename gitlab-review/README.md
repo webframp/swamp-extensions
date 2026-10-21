@@ -61,10 +61,20 @@ or `request_changes`.
 doc outside the diff, a file the MR should also touch, a commit-type nit. Each
 call opens its own resolvable thread, so the author can resolve points one by
 one. `post_review`, by contrast, posts a single note that cannot be resolved.
-The method records each thread under a key derived from a SHA-256 of the body,
-and skips posting when a thread with the same body was already recorded for that
-MR. Retries are safe, but posting an identical body twice on purpose is not
-possible while the record is retained (30 days).
+The method records each thread under a key derived from a SHA-256 of the body
+(line endings normalised, surrounding whitespace trimmed) and the exact
+`project` string and `iid`. It skips posting when a thread with the same body is
+already recorded for that MR, so a retry after a successful post does not open a
+duplicate. Two cases still can:
+
+- GitLab accepts the POST but the call fails before the record is written (an
+  unparseable response, or a client-side failure after the request was sent).
+  Check the MR before retrying.
+- The same MR is addressed under a different `project` spelling (other casing,
+  or the numeric project ID). Use one spelling consistently.
+
+Posting an identical body twice on purpose is not possible while the record is
+retained (30 days).
 
 ## Resources
 
