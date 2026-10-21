@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "check": "deno check extensions/models/editorial-review/mod.ts extensions/reports/editorial_review.ts",
+    "lint": "deno lint extensions/",
+    "fmt": "deno fmt .",
+    "fmt:check": "deno fmt --check .",
+    "test": "deno test --allow-env --allow-read --allow-write extensions/"
+  },
+  "fmt": {
+    "exclude": [".swamp/"]
+  },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-import-prefix",
+        "no-explicit-any"
+      ]
+    }
+  },
+  "imports": {
+    "@swamp-club/swamp-testing": "jsr:@swamp-club/swamp-testing@0.20260928.39",
+    "@std/assert": "jsr:@std/assert@1"
+  }
+}

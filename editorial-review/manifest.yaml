@@ -1,0 +1,69 @@
+manifestVersion: 1
+name: "@webframp/editorial-review"
+license: Apache-2.0
+version: "2026.10.21.1"
+description: |
+  Reviews prose against a fixed set of editorial principles and returns
+  structured findings plus a revised draft. The principles combine Benjamin
+  Dreyer on correctness, Verlyn Klinkenborg on the sentence, a catalogue of
+  anti-patterns common in generated prose, and a short house style.
+
+  ## Workflow — `@webframp/editorial-review`
+
+  Give it `draftPath` (a file inside the repo) or `draftText`. The
+  `@webframp/editorial-review` model's `prepare` method hashes the draft,
+  splits it into sentences and loads the bundled principles. Claude then
+  reviews the draft through `@keeb/anthropic/claude` `cli_generate_many`, which
+  uses the local `claude` CLI login and needs no API key. The answer must
+  match a JSON schema. By default a second pass re-reviews the revision for
+  violations that remain or that the revision introduced.
+
+  Set `voiceModel` to a `@dougschaefer/writing-voice` behavior to add its
+  prose rules, kill list and anti-patterns to the principles. That behavior
+  must have run its `get` method so its `voice-profile` data exists.
+
+  ## Report — `@webframp/editorial-review` (workflow scope)
+
+  - Findings from each pass, grouped by guide section, each with the
+    offending sentence, the problem and a suggested fix.
+  - The sentence-shape self-check over the original draft: sentence
+    lengths, opener counts, and the openers the guide asks you to question.
+  - Word counts before and after, with a warning when the revision grew.
+  - A line diff and the final revised draft.
+
+  The report degrades instead of throwing. When a step is missing or its
+  data cannot be read, the report still renders and says what is missing.
+
+  ## Usage
+
+  ```bash
+  swamp extension pull @webframp/editorial-review
+  swamp workflow run @webframp/editorial-review \
+    --input draftPath=docs/posts/draft.md --input contentKind="blog post"
+  swamp report get @webframp/editorial-review \
+    --workflow @webframp/editorial-review
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - editorial-review/mod.ts
+workflows:
+  - editorial-review.yaml
+reports:
+  - editorial_review.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+  - guides/editorial-principles.md
+labels:
+  - writing
+  - editorial
+  - prose
+  - review
+  - claude
+dependencies:
+  - "@keeb/anthropic@2026.10.15.1"

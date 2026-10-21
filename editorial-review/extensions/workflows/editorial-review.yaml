@@ -1,0 +1,195 @@
+id: 5de5172a-25bd-4be6-8d28-8f3acbebcb29
+name: "@webframp/editorial-review"
+description: >-
+  Review a draft against the writing-editorial principles (Dreyer for
+  correctness, Klinkenborg for the sentence, the anti-patterns and house style),
+  optionally joined by a @dougschaefer/writing-voice profile. Claude, through
+  the local claude CLI, returns structured findings and a revised draft; a
+  second pass re-reviews the revision for violations that remain or were
+  introduced. The attached workflow-scope report groups the findings by guide
+  section, runs the sentence-shape self-check, and flags revisions that grew.
+tags:
+  purpose: editorial-review
+inputs:
+  properties:
+    draftPath:
+      type: string
+      default: ""
+      description: >-
+        Path to the draft, relative to the repo root (or absolute inside it).
+        Leave empty to use draftText.
+    draftText:
+      type: string
+      default: ""
+      description: >-
+        Inline draft text, used when draftPath is empty. Either way the full
+        draft is stored in swamp data and step inputs and sent to Anthropic.
+    contentKind:
+      type: string
+      default: prose
+      description: >-
+        What the draft is (e.g. "PR description", "blog post", "release
+        notes"). Given to the editor as context.
+    voiceModel:
+      type: string
+      default: ""
+      description: >-
+        Name of an existing @dougschaefer/writing-voice behavior. Its prose
+        rules, kill list and anti-patterns join the principles. Run its get
+        method first so its voice-profile data exists. Leave empty to skip.
+    recheck:
+      type: boolean
+      default: true
+      description: >-
+        Run a second pass over the revised draft. Doubles the Claude calls.
+    model:
+      type: string
+      default: claude-opus-5-5
+      description: Claude model for both passes.
+    effort:
+      type: string
+      default: high
+      enum: [low, medium, high, xhigh, max]
+      description: claude CLI effort level for both passes.
+    timeoutSeconds:
+      type: integer
+      default: 900
+      minimum: 60
+      description: Seconds before each claude CLI call is aborted.
+    instanceName:
+      type: string
+      default: editorial-review
+      pattern: "^[a-z0-9][a-z0-9-]*$"
+      description: >-
+        Behavior name for this review's data. Both Claude passes run on
+        <instanceName>-claude. Use distinct names to keep concurrent reviews
+        apart.
+reports:
+  require:
+    - "@webframp/editorial-review"
+jobs:
+  - name: prepare
+    description: >-
+      Resolve the draft, load the bundled principles and the optional voice,
+      and write the first-pass request.
+    dependsOn: []
+    steps:
+      - name: prepare
+        description: Write the review request with hashes and prompts.
+        task:
+          type: model_method
+          modelType: "@webframp/editorial-review"
+          modelName: ${{ inputs.instanceName }}
+          methodName: prepare
+          inputs:
+            draftPath: ${{ inputs.draftPath }}
+            draftText: ${{ inputs.draftText }}
+            contentKind: ${{ inputs.contentKind }}
+            voiceModel: ${{ inputs.voiceModel }}
+        dependsOn: []
+  - name: review
+    description: First pass. Claude applies the principles to the draft.
+    dependsOn:
+      - job: prepare
+        condition:
+          type: succeeded
+    steps:
+      - name: review
+        description: >-
+          One headless claude CLI call. The principles are the system prompt,
+          the draft is the user prompt, and the answer must match the request's
+          JSON schema. The request is a method input, not a global argument, so
+          it resolves when the step runs, after prepare has written it.
+        task:
+          type: model_method
+          modelType: "@keeb/anthropic/claude"
+          modelName: ${{ inputs.instanceName + "-claude" }}
+          methodName: cli_generate_many
+          globalArgs:
+            model: ${{ inputs.model }}
+          inputs:
+            batch: editorial
+            requests: >-
+              ${{ data.latest(inputs.instanceName, "review-request").?attributes.?cliRequests.orValue(null) }}
+            concurrency: 1
+            effort: ${{ inputs.effort }}
+            timeoutSeconds: ${{ inputs.timeoutSeconds }}
+        dependsOn: []
+      - name: assert-review-shape
+        description: The first pass returned a findings list and a revised draft.
+        dependsOn:
+          - step: review
+            condition:
+              type: succeeded
+        task:
+          type: assert
+          expr: >-
+            data.latest(inputs.instanceName + "-claude", "cli-editorial-review").?attributes.?ok.orValue(false)
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-review").?attributes.?structured.?findings.hasValue()
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-review").?attributes.?structured.?revisedDraft.orValue("") != ""
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-review").?attributes.?timestamp.orValue("")
+              >= data.latest(inputs.instanceName, "review-request").?attributes.?timestamp.orValue("~")
+          message: >-
+            The first pass failed or did not return findings and a non-empty
+            revisedDraft. Check the cli-editorial-review data for the error.
+  - name: recheck
+    description: >-
+      Second pass. Re-review the revised draft for violations that remain or
+      that the revision introduced. Skipped when recheck is false.
+    dependsOn:
+      - job: review
+        condition:
+          type: succeeded
+    steps:
+      - name: prepare-recheck
+        description: Write the second-pass request from the revised draft.
+        guard: ${{ !inputs.recheck }}
+        task:
+          type: model_method
+          modelType: "@webframp/editorial-review"
+          modelName: ${{ inputs.instanceName }}
+          methodName: recheck
+          inputs:
+            revisedDraft: >-
+              ${{ data.latest(inputs.instanceName + "-claude", "cli-editorial-review").?attributes.?structured.?revisedDraft.orValue("") }}
+        dependsOn: []
+      - name: recheck-review
+        description: Second headless claude CLI call over the revised draft.
+        guard: ${{ !inputs.recheck }}
+        dependsOn:
+          - step: prepare-recheck
+            condition:
+              type: succeeded
+        task:
+          type: model_method
+          modelType: "@keeb/anthropic/claude"
+          modelName: ${{ inputs.instanceName + "-claude" }}
+          methodName: cli_generate_many
+          globalArgs:
+            model: ${{ inputs.model }}
+          inputs:
+            batch: editorial
+            requests: >-
+              ${{ data.latest(inputs.instanceName, "recheck-request").?attributes.?cliRequests.orValue(null) }}
+            concurrency: 1
+            effort: ${{ inputs.effort }}
+            timeoutSeconds: ${{ inputs.timeoutSeconds }}
+      - name: assert-recheck-shape
+        description: The second pass returned a findings list and a revised draft.
+        guard: ${{ !inputs.recheck }}
+        dependsOn:
+          - step: recheck-review
+            condition:
+              type: succeeded
+        task:
+          type: assert
+          expr: >-
+            data.latest(inputs.instanceName + "-claude", "cli-editorial-recheck").?attributes.?ok.orValue(false)
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-recheck").?attributes.?structured.?findings.hasValue()
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-recheck").?attributes.?structured.?revisedDraft.orValue("") != ""
+            && data.latest(inputs.instanceName + "-claude", "cli-editorial-recheck").?attributes.?timestamp.orValue("")
+              >= data.latest(inputs.instanceName, "recheck-request").?attributes.?timestamp.orValue("~")
+          message: >-
+            The second pass failed or did not return findings and a non-empty
+            revisedDraft. Check the cli-editorial-recheck data for the error.
+version: 1
