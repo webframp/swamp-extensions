@@ -7995,6 +7995,8 @@ Deno.test("every method rejects non-integer and non-positive iids", () => {
       );
     }
   }
+  // Fixed count on purpose: a method whose arguments stop exposing `.shape`
+  // would otherwise be skipped silently. Update it when iid methods change.
   assertEquals(checked.length, 27);
 });
 
@@ -8043,6 +8045,16 @@ Deno.test("remove_work_item_parent explains GitLab's link-not-found permission e
       Error,
       "No Work Item Link found (the token must be able to administer both the work item and its parent other/proj#1)",
     );
+  } finally {
+    m.restore();
+  }
+});
+
+Deno.test("convert_work_item_type treats a case-only type difference as already converted", async () => {
+  const m = mockWorkItemGraphql({ lookup: workItemLookup({ type: "issue" }) });
+  try {
+    await runConvert("Issue");
+    assertEquals(m.bodies().length, 1);
   } finally {
     m.restore();
   }

@@ -1961,7 +1961,7 @@ async function lookupWorkItem(
   if (!workItem) {
     throw new Error(`${method}: work item ${project}#${iid} not found`);
   }
-  return { workItem, types: data.project.workItemTypes?.nodes ?? [] };
+  return { workItem, types: data.project?.workItemTypes?.nodes ?? [] };
 }
 
 // =============================================================================
@@ -4498,7 +4498,7 @@ export const model = {
           );
         }
         let type = previousType;
-        if (previousType !== target.name) {
+        if (previousType.toLowerCase() !== target.name.toLowerCase()) {
           const data = await graphqlRequest(
             host,
             token,
