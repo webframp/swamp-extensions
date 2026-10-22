@@ -704,6 +704,7 @@ jobs:
       - name: Dispatch publish for this commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
-          gh workflow run publish.yml --repo "${{ github.repository }}" --ref main \
-            -f sha="${{ github.sha }}"
+          gh workflow run publish.yml --repo "$REPO" --ref main -f sha="$SHA"
