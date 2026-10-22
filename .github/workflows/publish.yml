@@ -5,13 +5,21 @@ on:
     # NOTE: Must match the `name:` field in ci.yml exactly
     workflows: ["CI"]
     types: [completed]
+  # CI dispatches this after a successful run on main that merge.yml started.
+  # GitHub does not raise workflow_run for runs triggered with GITHUB_TOKEN,
+  # so /lgtm merges never reached the trigger above.
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit on main to publish; CI must have passed on it
+        required: true
 
 # Serialize publishes for a branch, but never cancel one. `swamp extension push`
 # writes to the registry and published versions are immutable, so a cancelled
 # run can leave some extensions in a matrix published and others not — with no
 # way to redo the same version. Queue instead.
 concurrency:
-  group: publish-${{ github.event.workflow_run.head_branch }}
+  group: publish-${{ github.event.workflow_run.head_branch || 'main' }}
   cancel-in-progress: false
 
 jobs:
@@ -19,14 +27,14 @@ jobs:
     name: Detect changed extensions
     runs-on: ubuntu-latest
     # Only run when CI succeeded
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       extensions: ${{ steps.changes.outputs.extensions }}
       channel: ${{ steps.changes.outputs.channel }}
     steps:
       - name: Verify source repository
         env:
-          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
           BASE_REPO: ${{ github.repository }}
         run: |
           if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
@@ -36,7 +44,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.sha }}
+      - name: Check a dispatched commit
+        # A dispatched run must name main's current head, and CI must have
+        # passed on it. The diff window below starts from the head of the last
+        # successful publish run, and a dispatched run's head is main's tip
+        # at dispatch time; if another merge landed meanwhile, that merge's own
+        # CI dispatches a publish covering both, so this run stops.
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$SHA" != "$GITHUB_SHA" ]; then
+            echo "::notice::main is at ${GITHUB_SHA:0:8}, not ${SHA:0:8}; its own CI will publish both"
+            echo "STOP=1" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          OK=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&status=success&per_page=1" --jq '.total_count')
+          if [ "$OK" = "0" ]; then
+            echo "::error::CI has not passed on ${SHA:0:8}; refusing to publish"
+            exit 1
+          fi
       # Needed to compare manifest versions against the registry (see below).
       - name: Install swamp
         id: setup_swamp
@@ -55,12 +85,17 @@ jobs:
       - id: changes
         name: Find extensions with changes
         env:
-          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || 'main' }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SWAMP_SIGNIN_TOKEN: ${{ secrets.SWAMP_SIGNIN_TOKEN }}
         run: |
+          if [ "${STOP:-}" = "1" ]; then
+            echo "extensions=[]" >> "$GITHUB_OUTPUT"
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Determine channel: stable if the commit is on main, beta otherwise.
           # workflow_run.head_branch is unreliable for squash merges (reports
           # the PR branch name, not 'main'), so we check git directly.
@@ -141,7 +176,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.sha }}
       # SHA-pinned (mutable tags are a supply-chain risk on a runner holding
       # SWAMP_API_KEY) and retried once — the installer downloads without retry,
       # so a transient network blip would otherwise fail a publish.
@@ -210,7 +245,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXT_NAME: ${{ steps.manifest.outputs.name }}
           EXT_VERSION: ${{ steps.manifest.outputs.version }}
-          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha || inputs.sha }}
         working-directory: ${{ matrix.extension }}
         run: |
           TAG="${EXT_NAME}@${EXT_VERSION}"
