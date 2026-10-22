@@ -117,23 +117,17 @@ jobs:
           echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
           echo "Channel: $CHANNEL (branch: $HEAD_BRANCH, sha: ${HEAD_SHA:0:8})"
 
-          # Diff window. Publishing is triggered by a successful CI run, but CI
-          # runs can be cancelled or fail, and a manifest bump in such a commit
-          # is invisible to the next run's single-commit diff. On the stable
-          # channel, diff from the last publish run that completed successfully
-          # on main (it examined everything up to its own head), falling back to
-          # the parent commit. Beta publishes only ever consider the one commit.
+          # Diff window. On stable, look back over the last 30 commits on main
+          # and let the registry check below skip every version already
+          # published. The window used to start at the head of the last
+          # successful publish run, but publish runs that PR CI completions
+          # trigger also report main's head at the time and "succeed" without
+          # publishing, so a merged bump could fall outside the window and
+          # never publish (#514). A fixed window also covers commits whose CI
+          # was cancelled or failed. Beta publishes only consider one commit.
           BASE="HEAD~1"
           if [ "$CHANNEL" = "stable" ]; then
-            LAST=$(gh api "repos/$REPO/actions/workflows/publish.yml/runs?branch=main&status=success&per_page=30" \
-              --jq '.workflow_runs[].head_sha' | while read -r sha; do
-                if [ "$sha" != "$HEAD_SHA" ] && git merge-base --is-ancestor "$sha" "$HEAD_SHA" 2>/dev/null; then
-                  echo "$sha"; break
-                fi
-              done)
-            if [ -n "$LAST" ]; then
-              BASE="$LAST"
-            fi
+            BASE=$(git rev-parse "$HEAD_SHA~30" 2>/dev/null || git rev-list --max-parents=0 "$HEAD_SHA" | tail -1)
           fi
           echo "Diff base: $BASE"
           CHANGED_FILES=$(git diff --name-only "$BASE" "$HEAD_SHA")
