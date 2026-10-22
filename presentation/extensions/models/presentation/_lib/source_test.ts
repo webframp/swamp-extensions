@@ -172,3 +172,39 @@ Deno.test("outlineMarkdownReveal does not split on --- without blank lines", () 
   const o = outlineMarkdownReveal("# One\ntext\n---\nmore\n");
   assertEquals(o.slides.length, 1);
 });
+
+Deno.test("outlineMarkdownPandoc follows pandoc's rules and setext headings", () => {
+  const md = `Intro
+=====
+
+Hello
+
+---
+
+After a rule
+
+# Stack
+
+Child
+-----
+
+text
+
+***
+
+\`\`\`
+---
+\`\`\`
+`;
+  const o = outlineMarkdownPandoc(md);
+  assertEquals(
+    o.slides.map((s) => [s.index, s.title]),
+    [
+      ["1", "Intro"],
+      ["2", ""],
+      ["3", "Stack"],
+      ["3.2", "Child"],
+      ["3.3", ""],
+    ],
+  );
+});

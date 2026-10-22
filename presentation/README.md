@@ -25,14 +25,15 @@ swamp model create @webframp/presentation/deck talks
 
 Global arguments, all optional:
 
-| Argument            | Default                                 | Purpose                                                      |
-| ------------------- | --------------------------------------- | ------------------------------------------------------------ |
-| `theme`             | `black`                                 | Theme for decks whose source names none                      |
-| `emacs`             | `emacs`                                 | Emacs executable                                             |
-| `pandoc`            | `pandoc`                                | pandoc executable                                            |
-| `chromium`          | `chromium`                              | Chromium or Chrome executable, by name or path               |
-| `chromiumNoSandbox` | `false`                                 | Pass `--no-sandbox`; needed in some containers               |
-| `cacheDir`          | `$XDG_CACHE_HOME/webframp-presentation` | Where pinned downloads are kept (`~/.cache/...` without XDG) |
+| Argument              | Default                                 | Purpose                                                      |
+| --------------------- | --------------------------------------- | ------------------------------------------------------------ |
+| `theme`               | `black`                                 | Theme for decks whose source names none                      |
+| `emacs`               | `emacs`                                 | Emacs executable                                             |
+| `pandoc`              | `pandoc`                                | pandoc executable                                            |
+| `chromium`            | `chromium`                              | Chromium or Chrome executable, by name or path               |
+| `chromiumNoSandbox`   | `false`                                 | Pass `--no-sandbox`; needed in some containers               |
+| `buildTimeoutSeconds` | `300`                                   | Longest an Emacs or pandoc run may take before it is stopped |
+| `cacheDir`            | `$XDG_CACHE_HOME/webframp-presentation` | Where pinned downloads are kept (`~/.cache/...` without XDG) |
 
 ## Methods
 
@@ -46,25 +47,31 @@ swamp model method run talks build --input source=talk.md --input engine=reveal-
 swamp model method run talks build --input source=talk.org --input selfContained=true --input name=talk-offline
 ```
 
-| Input           | Default | Meaning                                                                  |
-| --------------- | ------- | ------------------------------------------------------------------------ |
-| `source`        |         | Path to the `.org` or `.md` file, absolute or relative to the repository |
-| `content`       |         | Source text instead of a file; needs `name` and `format`                 |
-| `format`        | `auto`  | `org`, `markdown`, or `auto` (from the extension)                        |
-| `engine`        | `auto`  | `org-re-reveal` for Org, `pandoc` or `reveal-markdown` for Markdown      |
-| `name`          | stem    | Deck name; defaults to the file name without its extension               |
-| `selfContained` | `false` | Inline every reveal.js file so the deck works offline                    |
+| Input           | Default | Meaning                                                                                                                                    |
+| --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `source`        |         | Path to the `.org` or `.md` file, absolute or relative to the repository                                                                   |
+| `content`       |         | Source text instead of a file; needs `name` and `format`. Images resolve against the repository; `#+INCLUDE` and `#+SETUPFILE` are refused |
+| `format`        | `auto`  | `org`, `markdown`, or `auto` (from the extension)                                                                                          |
+| `engine`        | `auto`  | `org-re-reveal` for Org, `pandoc` or `reveal-markdown` for Markdown                                                                        |
+| `name`          | stem    | Deck name; defaults to the name of the file as given, without its extension                                                                |
+| `selfContained` | `false` | Inline every reveal.js file so the deck works offline                                                                                      |
 
 A rebuild whose HTML is byte-identical to the last one writes no new HTML
 version. Builds are reproducible: the same source gives the same bytes.
 
 A deck name belongs to one source. Building `slides/talk.md` after `talk.org`
-fails rather than overwrite it; pass `name` to keep both.
+fails rather than overwrite it; pass `name` to keep both. The source is recorded
+relative to the repository, so a clone elsewhere, or a shared datastore, still
+matches it. A symlink keeps its own name: `current.org` pointing at `v3.org`
+builds the deck `current`.
 
 ### `outline`
 
 Reads a source without rendering it: slide titles, words of speaker notes per
-slide, the slides with none, and images that do not exist.
+slide, the slides with none, and images that do not exist. Slides are numbered
+among the content slides only. A build also counts the title and
+table-of-contents slides an engine adds, so outline slide `1` is build slide `2`
+or `3` in a default Org deck.
 
 ```bash
 swamp model method run talks outline --input source=talk.org
@@ -96,39 +103,41 @@ swamp workflow run @webframp/presentation-build \
 
 For a deck named `talk`:
 
-| Data name        | Kind     | Contents                                                                 |
-| ---------------- | -------- | ------------------------------------------------------------------------ |
-| `deck-talk`      | resource | Engine, pinned reveal.js, theme, slides, HTML hash and version, warnings |
-| `deck-talk-html` | file     | The deck (`text/html`)                                                   |
-| `outline-talk`   | resource | Slides, notes word counts, missing images                                |
-| `pdf-talk`       | resource | Page count, hashes, which HTML version was printed                       |
-| `deck-talk-pdf`  | file     | The PDF                                                                  |
+| Data name      | Kind     | Contents                                                                 |
+| -------------- | -------- | ------------------------------------------------------------------------ |
+| `deck-talk`    | resource | Engine, pinned reveal.js, theme, slides, HTML hash and version, warnings |
+| `html-talk`    | file     | The deck (`text/html`)                                                   |
+| `outline-talk` | resource | Slides, notes word counts, missing images                                |
+| `print-talk`   | resource | Page count, hashes, which HTML version was printed                       |
+| `pdf-talk`     | file     | The PDF                                                                  |
+
+Each kind of data has its own prefix, so no two decks' data can collide,
+whatever they are called.
 
 Every method also writes a `@webframp/presentation/deck-summary` report.
 
 ```bash
 # The deck, ready to open:
-swamp data query 'model("talks") && name == "deck-talk-html"' --select content > talk.html
+swamp data query 'model("talks") && name == "html-talk"' --select content > talk.html
 # The PDF, which swamp prints as base64:
-swamp data query 'model("talks") && name == "deck-talk-pdf"' --select content | base64 -d > talk.pdf
+swamp data query 'model("talks") && name == "pdf-talk"' --select content | base64 -d > talk.pdf
 # The build record as JSON:
 swamp data query 'model("talks") && name == "deck-talk"' --select content --json
 ```
 
-`--select content` prints the HTML as text and the PDF as base64, each
-followed by one newline. For a resource, add `--json`; without it the record
-prints as a table.
+`--select content` prints the HTML as text and the PDF as base64, each followed
+by one newline. For a resource, add `--json`; without it the record prints as a
+table.
 
 ## Engines
 
 **org-re-reveal** exports Org exactly as `C-c C-e v v` does in Emacs, with
 org-re-reveal 3.39.0. `#+REVEAL_THEME`, `#+REVEAL_PLUGINS`, `#+ATTR_REVEAL`
 fragments, `#+BEGIN_NOTES` and `:reveal_background:` all apply. Emacs runs with
-`-Q`, so nothing in your configuration changes the result. Three settings differ
-from an interactive export:
+`-Q`, so nothing in your configuration changes the result. It differs from an
+interactive export in a few ways:
 
-- Code blocks never run (`org-export-use-babel` is off) and file-local variables
-  are ignored. Building a deck you did not write is safe.
+- It runs nothing the deck names; see [Untrusted decks](#untrusted-decks).
 - A deck without `#+AUTHOR` has no author. Batch Emacs would otherwise fill it
   from your login and hostname.
 - There is no export timestamp, and Org's heading IDs come from a fixed seed, so
@@ -141,21 +150,50 @@ options and fragments, and turns speaker notes into visible slide text.
 start slides, and level-2 headings under a level-1 heading form a vertical
 stack. Speaker notes go in `::: notes` blocks. The extension takes pandoc's own
 reveal.js template from `pandoc -D revealjs` and moves its plugin paths to
-reveal.js 6's layout. A `theme:` in the front matter wins over the `theme`
-global argument.
+reveal.js 6's layout, and runs it with `--sandbox`, so pandoc reads only the
+files named on its command line. A `theme:` in the front matter wins over the
+`theme` global argument. A horizontal rule also starts a slide.
 
 **reveal-markdown** wraps the Markdown in a page that reveal.js's markdown
 plugin renders in the browser. A line of `---` between blank lines starts a
-slide, `--` a vertical one, and text after `Note:` is speaker notes.
+slide, `--` a vertical one, and text after `Note:` is speaker notes. Images are
+inlined wherever the Markdown names them: image links, reference definitions,
+raw `<img>` and other HTML, slide-attribute comments such as
+`<!-- .slide: data-background="bg.jpg" -->`, and CSS `url()`.
+
+## Untrusted decks
+
+A deck may come from someone else, so building one runs nothing it names and
+reads nothing outside its own directory:
+
+- Babel code blocks, `#+BIND` and file-local variables are off.
+- A `#+MACRO` whose template is `(eval ...)`, in the deck or any `#+SETUPFILE`,
+  fails the build. Org's own macros (`{{{date}}}`, `{{{title}}}`, `{{{n}}}`,
+  ...) still work.
+- A `#+REVEAL_PREAMBLE`, `_POSTAMBLE` or `_POSTSCRIPT` naming a function fails
+  the build; org-re-reveal would call it.
+- `#+INCLUDE`, `#+SETUPFILE` and any other file Emacs reads for the deck must
+  lie inside the source's directory and outside `.git` and `.swamp`, after
+  symlinks are resolved. Anything else fails the build.
+- Images, videos, fonts and stylesheets are inlined only from the same
+  directory, only as media files or `.css`, at most 32 MB each and 128 MB in
+  all. Anything else is left as a link and reported in `warnings`.
+- Emacs and pandoc are stopped after `buildTimeoutSeconds`, Chromium after
+  `timeoutSeconds`.
+
+What the deck does once it is open in a browser, its own scripts included, is up
+to the browser.
 
 ## reveal.js and pinned downloads
 
 Every deck is built against reveal.js 6.0.1. Without `selfContained`, the page
 loads it from `cdn.jsdelivr.net/npm/reveal.js@6.0.1` and each script and
 stylesheet carries an `integrity` hash, so a browser refuses a changed file.
-With `selfContained`, every reveal.js file is inlined (about 1.8 MB) and the
-deck opens offline. Either way, local images, videos and stylesheets are inlined
-as data URIs.
+With `selfContained`, every reveal.js file the deck uses is inlined, from about
+300 KB for a pandoc deck to 1.8 MB for an Org deck with all five plugins, and
+the deck opens offline. Either way, local images, videos and stylesheets are
+inlined as data URIs, within the limits under
+[Untrusted decks](#untrusted-decks).
 
 Each file the extension downloads is checked against a SHA-256 in
 `extensions/models/presentation/_lib/pins.ts`:

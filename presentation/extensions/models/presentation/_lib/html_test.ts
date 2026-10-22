@@ -7,14 +7,17 @@ import {
 } from "jsr:@std/assert@1.0.19";
 import {
   addIntegrity,
+  createInliner,
   externalResources,
   inlineLocalFiles,
   inlineReveal,
+  isLocalMedia,
   isLocalPath,
   markupOnly,
   pinnedPath,
   renderedSlides,
   segments,
+  themeOf,
 } from "./html.ts";
 import { REVEAL_CDN, REVEAL_FILES } from "./pins.ts";
 
@@ -60,42 +63,139 @@ Deno.test("isLocalPath tells files from URLs and fragments", () => {
   assert(!isLocalPath("#top"));
 });
 
-Deno.test("inlineLocalFiles inlines media and local stylesheets, never script bodies", async () => {
+Deno.test("inlineLocalFiles inlines media, styles and stylesheets, never script bodies", async () => {
   await withDir(async (dir) => {
     await Deno.mkdir(`${dir}/img`);
     await Deno.writeFile(`${dir}/img/a.png`, PNG);
-    await Deno.writeTextFile(`${dir}/extra.css`, "h1{color:red}");
+    await Deno.writeFile(`${dir}/img/it's.png`, PNG);
+    await Deno.writeTextFile(
+      `${dir}/extra.css`,
+      "h1{background:url('img/a.png')}",
+    );
     const html = [
       '<img src="img/a.png">',
+      `<img src="img/it's.png">`,
+      "<img src=img/a.png>",
       '<section data-background-image="img/a.png" data-background="#ff0000">',
+      '<div style="background: url(img/a.png)"></div>',
       '<img data-src="img/missing.png">',
       '<img src="https://example.com/r.png">',
       '<link rel="stylesheet" href="extra.css">',
       '<script>const t = `<img src="img/a.png">`;</script>',
     ].join("\n");
-    const { html: out, problems } = await inlineLocalFiles(html, dir);
+    const inliner = await createInliner(dir);
+    const { html: out, problems } = await inlineLocalFiles(html, dir, inliner);
     assertEquals(
       out.match(/src="data:image\/png;base64,/g)?.length,
-      1,
-      "only the markup img is rewritten",
+      3,
+      "the three markup images, whatever their quoting",
     );
     assertStringIncludes(out, 'data-background-image="data:image/png;base64,');
     assertStringIncludes(out, 'data-background="#ff0000"');
+    assertStringIncludes(out, 'style="background: url(&quot;data:image/png;');
     assertStringIncludes(out, '<img src="https://example.com/r.png">');
-    assertStringIncludes(out, "<style>\nh1{color:red}\n</style>");
+    assertStringIncludes(out, 'h1{background:url("data:image/png;base64,');
     assertStringIncludes(out, 'const t = `<img src="img/a.png">`;');
     assertEquals(problems, ["img/missing.png: file not found"]);
+    assertEquals(externalResources(out), [
+      "https://example.com/r.png",
+      "img/missing.png",
+    ]);
   });
 });
 
-Deno.test("addIntegrity pins CDN assets and reports unpinned CDN paths", async () => {
+Deno.test("inlining is confined to the deck's directory", async () => {
+  await withDir(async (outer) => {
+    const dir = `${outer}/deck`;
+    await Deno.mkdir(`${dir}/.git`, { recursive: true });
+    await Deno.mkdir(`${dir}/.swamp`);
+    await Deno.writeFile(`${outer}/secret.png`, PNG);
+    await Deno.writeTextFile(`${outer}/secret.css`, "x{}");
+    await Deno.writeFile(`${dir}/.git/leak.png`, PNG);
+    await Deno.writeFile(`${dir}/.swamp/leak.png`, PNG);
+    await Deno.symlink(`${outer}/secret.png`, `${dir}/link.png`);
+    await Deno.writeTextFile(`${dir}/notes.txt`, "not css");
+    await Deno.writeTextFile(`${dir}/hostname.css`, "y{}");
+    const html = [
+      '<img src="../secret.png">',
+      `<img src="${outer}/secret.png">`,
+      `<img src="file://${outer}/secret.png">`,
+      '<img src="link.png">',
+      '<img src=".git/leak.png">',
+      '<img src=".swamp/leak.png">',
+      '<link rel="stylesheet" href="../secret.css">',
+      '<link rel="stylesheet" href="notes.txt">',
+      '<link rel="stylesheet" href="/etc/hostname">',
+    ].join("\n");
+    const { html: out, problems } = await inlineLocalFiles(
+      html,
+      dir,
+      await createInliner(dir),
+    );
+    assertEquals(out.includes("data:"), false, "nothing was inlined");
+    assertEquals(out.includes("x{}"), false);
+    assertEquals(problems.length, 9);
+    for (const p of problems.slice(0, 7)) {
+      assert(/outside .*\.git or \.swamp; not inlined$/.test(p), p);
+    }
+    assertEquals(problems[7], "notes.txt: not a .css file; not inlined");
+    assertEquals(problems[8], "/etc/hostname: not a .css file; not inlined");
+  });
+});
+
+Deno.test("inlining stops at the per-file and per-deck limits", async () => {
+  await withDir(async (dir) => {
+    for (const n of ["a", "b", "c"]) {
+      await Deno.writeFile(`${dir}/${n}.png`, new Uint8Array(40));
+    }
+    await Deno.writeFile(`${dir}/big.png`, new Uint8Array(200));
+    const inliner = await createInliner(dir, { perFile: 100, total: 100 });
+    const { problems } = await inlineLocalFiles(
+      '<img src="a.png"><img src="b.png"><img src="c.png"><img src="big.png">',
+      dir,
+      inliner,
+    );
+    assertEquals(problems, [
+      "c.png: the deck would inline more than 100 bytes; not inlined",
+      "big.png: 200 bytes is over the 100-byte limit; not inlined",
+    ]);
+  });
+});
+
+Deno.test("isLocalMedia accepts only local media types", () => {
+  assert(isLocalMedia("img/a.PNG"));
+  assert(isLocalMedia("clip.mp4?t=3"));
+  assert(!isLocalMedia("notes.pdf"));
+  assert(!isLocalMedia("https://x/a.png"));
+  assert(!isLocalMedia("/etc/hostname"));
+});
+
+Deno.test("themeOf names a pinned theme and gives the href of any other", () => {
+  assertEquals(
+    themeOf(
+      `<link rel="stylesheet" href="${REVEAL_CDN}/dist/theme/moon.css" id="theme"/>`,
+      "black",
+    ),
+    "moon",
+  );
+  assertEquals(
+    themeOf(
+      '<link rel="stylesheet" href="https://evil.example/x.css" id="theme">',
+      "black",
+    ),
+    "https://evil.example/x.css",
+  );
+  assertEquals(themeOf("<p>no theme</p>", "black"), "black");
+});
+
+Deno.test("addIntegrity pins CDN assets and reports unpinned CDN paths", () => {
   const html = [
     `<link rel="stylesheet" href="${REVEAL_CDN}/dist/reveal.css"/>`,
     `<script src="${REVEAL_CDN}/dist/reveal.js"></script>`,
     `<link rel="stylesheet" href="${REVEAL_CDN}/dist/theme/nope.css">`,
     '<script src="https://other.example/x.js"></script>',
   ].join("\n");
-  const { html: out, problems } = await addIntegrity(html);
+  const { html: out, problems } = addIntegrity(html);
   assertStringIncludes(
     out,
     `href="${REVEAL_CDN}/dist/reveal.css" integrity="sha256-${
@@ -113,7 +213,7 @@ Deno.test("addIntegrity pins CDN assets and reports unpinned CDN paths", async (
     `${REVEAL_CDN}/dist/theme/nope.css: not a pinned reveal.js file`,
   ]);
   // Idempotent: a second pass adds nothing.
-  assertEquals((await addIntegrity(out)).html, out);
+  assertEquals(addIntegrity(out).html, out);
 });
 
 Deno.test("inlineReveal inlines pinned assets and escapes closing tags", async () => {

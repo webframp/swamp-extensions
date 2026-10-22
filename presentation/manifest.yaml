@@ -15,8 +15,9 @@ description: |
 
   Every download is pinned to an exact version and SHA-256: reveal.js from
   jsDelivr, org-re-reveal 3.39.0 and htmlize 1.59 by commit. Nothing is read
-  from your Emacs configuration, and building a deck never runs its code
-  blocks.
+  from your Emacs configuration. A deck is treated as untrusted: building it
+  runs no code it names (Babel, eval macros, preamble functions) and reads
+  no file outside its own directory.
 
   ## Requirements
 
@@ -35,7 +36,7 @@ description: |
   swamp model method run talks export_pdf --input name=talk
 
   # The deck itself, ready to open in a browser:
-  swamp data query 'model("talks") && name == "deck-talk-html"' \
+  swamp data query 'model("talks") && name == "html-talk"' \
     --select content > talk.html
   ```
 

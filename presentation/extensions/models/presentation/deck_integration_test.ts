@@ -186,3 +186,146 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "a deck cannot run Lisp or read files outside its directory",
+  ignore: !enabled,
+  async fn() {
+    const outer = await Deno.makeTempDir();
+    try {
+      const dir = `${outer}/deck`;
+      await Deno.mkdir(`${dir}/.git`, { recursive: true });
+      await Deno.writeTextFile(`${outer}/secret.txt`, "TOP-SECRET");
+      await Deno.writeTextFile(`${dir}/.git/config`, "TOP-SECRET");
+      const marker = `${outer}/PWNED`;
+      const decks: Record<string, string> = {
+        macro:
+          `#+MACRO: pw (eval (progn (with-temp-file "${marker}" (insert "x")) "ok"))\n* S\n{{{pw}}}\n`,
+        setup: `#+SETUPFILE: macro.org\n* T\n{{{pw}}}\n`,
+        preamble: "#+REVEAL_PREAMBLE: kill-emacs\n* S\n",
+        include: '#+INCLUDE: "../secret.txt" src text\n* S\n',
+        git: '#+INCLUDE: ".git/config" src text\n* S\n',
+        css: "#+REVEAL_EXTRA_CSS: ../secret.txt\n* S\n",
+      };
+      for (const [name, text] of Object.entries(decks)) {
+        await Deno.writeTextFile(`${dir}/${name}.org`, text);
+      }
+      for (const name of ["macro", "setup", "preamble", "include", "git"]) {
+        const c = ctxFor(dir);
+        let error = "";
+        try {
+          await model.methods.build.execute(
+            model.methods.build.arguments.parse({ source: `${name}.org` }),
+            c.context,
+          );
+        } catch (e) {
+          error = String(e);
+        }
+        assert(
+          /Refusing to (evaluate|call|read)/.test(error),
+          `${name}: ${error}`,
+        );
+        assertEquals(c.getWrittenFiles(), [], name);
+      }
+      const c = ctxFor(dir);
+      await model.methods.build.execute(
+        model.methods.build.arguments.parse({ source: "css.org" }),
+        c.context,
+      );
+      const html = new TextDecoder().decode(c.getWrittenFiles()[0].content);
+      assertEquals(html.includes("TOP-SECRET"), false);
+      const deck = c.getWrittenResources()[0].data as Deck;
+      assert(
+        deck.warnings.some((w) => w.includes("not inlined")),
+        deck.warnings.join("; "),
+      );
+      await assertRejectsNotFound(marker);
+    } finally {
+      await Deno.remove(outer, { recursive: true });
+    }
+  },
+});
+
+async function assertRejectsNotFound(path: string) {
+  try {
+    await Deno.stat(path);
+    throw new Error(`${path} exists: Lisp from the deck ran`);
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e;
+  }
+}
+
+Deno.test({
+  name:
+    "the pandoc outline matches what pandoc renders, rules and setext headings included",
+  ignore: !enabled,
+  async fn() {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(
+        `${dir}/rules.md`,
+        "Intro\n=====\n\nHello\n\n---\n\nAfter a rule\n\n# Stack\n\nChild\n-----\n\ntext\n\n***\n\nmore\n",
+      );
+      const b = ctxFor(dir);
+      await model.methods.build.execute(
+        model.methods.build.arguments.parse({ source: "rules.md" }),
+        b.context,
+      );
+      const o = ctxFor(dir);
+      await model.methods.outline.execute(
+        model.methods.outline.arguments.parse({ source: "rules.md" }),
+        o.context,
+      );
+      const built = (b.getWrittenResources()[0].data as Deck).slides;
+      const outlined = (o.getWrittenResources()[0].data as {
+        slides: Array<{ title: string }>;
+      }).slides;
+      // pandoc adds a title slide only when the document has a title.
+      assertEquals(outlined.map((s) => s.title), built.map((s) => s.title));
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "a self-contained reveal-markdown deck inlines raw HTML images and backgrounds",
+  ignore: !enabled,
+  async fn() {
+    const dir = await Deno.makeTempDir();
+    try {
+      const png = Uint8Array.from(
+        atob(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        ),
+        (ch) => ch.charCodeAt(0),
+      );
+      await Deno.writeFile(`${dir}/a.png`, png);
+      await Deno.writeTextFile(
+        `${dir}/web.md`,
+        '# One\n<img src="a.png">\n\n![ref][r]\n\n[r]: a.png\n\n---\n\n<!-- .slide: data-background="a.png" -->\n# Two\n',
+      );
+      const c = ctxFor(dir);
+      await model.methods.build.execute(
+        model.methods.build.arguments.parse({
+          source: "web.md",
+          engine: "reveal-markdown",
+          selfContained: true,
+        }),
+        c.context,
+      );
+      const deck = c.getWrittenResources()[0].data as Deck;
+      assertEquals(deck.warnings, []);
+      const html = new TextDecoder().decode(c.getWrittenFiles()[0].content);
+      assertEquals(html.match(/data:image\/png;base64,/g)?.length, 3);
+      assertEquals(
+        /["(\s]a\.png/.test(html),
+        false,
+        "no reference to a.png is left",
+      );
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  },
+});

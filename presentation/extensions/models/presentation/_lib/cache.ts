@@ -16,14 +16,21 @@ const FETCH_TIMEOUT_MS = 60_000;
 /** Largest download accepted, well above any pinned file. */
 const MAX_DOWNLOAD_BYTES = 16 * 1024 * 1024;
 
-/** Default cache directory: `$XDG_CACHE_HOME` or `~/.cache`, then our name. */
+/**
+ * Default cache directory: `$XDG_CACHE_HOME` or `~/.cache`, then our name.
+ * A relative `XDG_CACHE_HOME` is ignored, as the XDG specification requires.
+ */
 export function defaultCacheDir(): string {
   const xdg = Deno.env.get("XDG_CACHE_HOME");
   const home = Deno.env.get("HOME");
-  const base = xdg && xdg !== "" ? xdg : home ? `${home}/.cache` : null;
+  const base = xdg?.startsWith("/")
+    ? xdg
+    : home?.startsWith("/")
+    ? `${home}/.cache`
+    : null;
   if (!base) {
     throw new Error(
-      "Cannot locate a cache directory: neither XDG_CACHE_HOME nor HOME is set. Set the cacheDir global argument.",
+      "Cannot locate a cache directory: neither XDG_CACHE_HOME nor HOME is an absolute path. Set the cacheDir global argument.",
     );
   }
   return `${base}/webframp-presentation`;

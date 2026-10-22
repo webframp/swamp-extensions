@@ -5,17 +5,24 @@
  * become data URIs, pinned reveal.js assets are inlined or given subresource
  * integrity, and whatever still loads from elsewhere is reported.
  *
- * Nothing here reads or rewrites the bodies of `<script>`, `<style>` or
- * `<textarea>` elements. Inlined reveal.js code is full of HTML-looking
- * strings, and the reveal-markdown engine keeps its source in a textarea.
+ * A deck is untrusted input. Local files are inlined only from inside one
+ * allowed directory (the source's own), never from `.git` or `.swamp`, only
+ * as media or `.css`, and within per-file and total size limits.
+ *
+ * Nothing here rewrites the bodies of `<script>`, `<style>` or `<textarea>`
+ * elements. Inlined reveal.js code is full of HTML-looking strings, and the
+ * reveal-markdown engine keeps its source in a textarea.
  *
  * @module
  */
 
 import { REVEAL_CDN, REVEAL_FILES } from "./pins.ts";
 
-/** Largest local file inlined as a data URI. */
+/** Largest local file inlined. */
 export const MAX_INLINE_BYTES = 32 * 1024 * 1024;
+
+/** Largest total of local files inlined into one deck. */
+export const MAX_TOTAL_INLINE_BYTES = 128 * 1024 * 1024;
 
 const MIME: Readonly<Record<string, string>> = {
   png: "image/png",
@@ -33,22 +40,39 @@ const MIME: Readonly<Record<string, string>> = {
   mp3: "audio/mpeg",
   ogg: "audio/ogg",
   wav: "audio/wav",
+  woff: "font/woff",
+  woff2: "font/woff2",
+  ttf: "font/ttf",
+  otf: "font/otf",
 };
 
 /** Attributes that load a resource. */
-const RESOURCE_ATTRS = [
+const RESOURCE_ATTRS: ReadonlySet<string> = new Set([
   "src",
   "data-src",
   "poster",
   "data-background",
   "data-background-image",
   "data-background-video",
-];
+]);
+
+/**
+ * One attribute: name, then a double-quoted, single-quoted or unquoted
+ * value. Each quote style is matched on its own, so an apostrophe inside a
+ * double-quoted value (`src="it's.png"`) is part of the value.
+ */
+const ATTR =
+  /(\s)([A-Za-z_:][-A-Za-z0-9_:.]*)(\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+
+/** A CSS `url(...)`, quoted or not. */
+const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s'"]+))\s*\)/gi;
 
 /** A run of markup, or the untouchable body of a script/style/textarea. */
 export interface Segment {
   markup: boolean;
   text: string;
+  /** For a body: the element it belongs to, lowercased. */
+  element?: string;
 }
 
 /**
@@ -66,23 +90,16 @@ export function segments(html: string): Segment[] {
     const close = closeRe.exec(html);
     const bodyEnd = close ? close.index : html.length;
     out.push({ markup: true, text: html.slice(last, bodyStart) });
-    out.push({ markup: false, text: html.slice(bodyStart, bodyEnd) });
+    out.push({
+      markup: false,
+      text: html.slice(bodyStart, bodyEnd),
+      element: m[1].toLowerCase(),
+    });
     last = bodyEnd;
     openRe.lastIndex = bodyEnd;
   }
   out.push({ markup: true, text: html.slice(last) });
   return out;
-}
-
-async function mapMarkup(
-  html: string,
-  fn: (markup: string) => Promise<string> | string,
-): Promise<string> {
-  const parts: string[] = [];
-  for (const s of segments(html)) {
-    parts.push(s.markup ? await fn(s.text) : s.text);
-  }
-  return parts.join("");
 }
 
 /** `html` with every opaque body emptied, for scanning markup only. */
@@ -106,10 +123,43 @@ async function replaceAsync(
 }
 
 function decodeAttr(v: string): string {
-  return v.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(
+  return v.replace(/&quot;/g, '"').replace(/&#0*39;|&apos;/g, "'").replace(
     /&amp;/g,
     "&",
   );
+}
+
+interface Attr {
+  name: string;
+  value: string;
+}
+
+/** Every attribute of one tag. */
+function attrsOf(tag: string): Attr[] {
+  return [...tag.matchAll(ATTR)].map((m) => ({
+    name: m[2].toLowerCase(),
+    value: decodeAttr(m[4] ?? m[5] ?? m[6] ?? ""),
+  }));
+}
+
+function attr(tag: string, name: string): string | null {
+  return attrsOf(tag).find((a) => a.name === name)?.value ?? null;
+}
+
+/** Replace attribute values in `tag`; `fn` returns a new value or null. */
+async function mapAttrs(
+  tag: string,
+  fn: (a: Attr) => Promise<string | null>,
+): Promise<string> {
+  return await replaceAsync(tag, ATTR, async (m) => {
+    const replaced = await fn({
+      name: m[2].toLowerCase(),
+      value: decodeAttr(m[4] ?? m[5] ?? m[6] ?? ""),
+    });
+    return replaced === null
+      ? m[0]
+      : `${m[1]}${m[2]}${m[3]}"${replaced.replace(/"/g, "&quot;")}"`;
+  });
 }
 
 /** True for a reference to a local file rather than a URL or a fragment. */
@@ -129,9 +179,16 @@ function localPath(ref: string, baseDir: string): string {
   return p.startsWith("/") ? p : `${baseDir}/${p}`;
 }
 
-function mimeFor(path: string): string | null {
-  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-  return MIME[ext] ?? null;
+function extOf(path: string): string {
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  return base.includes(".")
+    ? base.slice(base.lastIndexOf(".") + 1).toLowerCase()
+    : "";
+}
+
+/** True when `ref` names a local file of a media type that can be inlined. */
+export function isLocalMedia(ref: string): boolean {
+  return isLocalPath(ref) && Object.hasOwn(MIME, extOf(ref.split(/[?#]/)[0]));
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -143,86 +200,187 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-/** Read a local media file as a data URI, or say why it cannot be. */
-export async function dataUri(
-  ref: string,
-  baseDir: string,
-): Promise<{ uri: string } | { problem: string }> {
-  const path = localPath(ref, baseDir);
-  const mime = mimeFor(path);
-  if (!mime) return { problem: `${ref}: unknown media type, left as a link` };
-  try {
-    const info = await Deno.stat(path);
-    if (!info.isFile) return { problem: `${ref}: not a file` };
-    if (info.size > MAX_INLINE_BYTES) {
-      return {
-        problem:
-          `${ref}: ${info.size} bytes is over the ${MAX_INLINE_BYTES}-byte inline limit, left as a link`,
-      };
-    }
-    return {
-      uri: `data:${mime};base64,${toBase64(await Deno.readFile(path))}`,
-    };
-  } catch (e) {
-    if (e instanceof Deno.errors.NotFound) {
-      return { problem: `${ref}: file not found` };
-    }
-    throw e;
-  }
-}
+/** Result of resolving one local reference. */
+export type Inlined = { uri: string } | { problem: string };
 
-function isStylesheet(tag: string): boolean {
-  return /\brel=(["']?)stylesheet\1/i.test(tag);
-}
-
-function attr(tag: string, name: string): string | null {
-  const m = tag.match(new RegExp(`\\s${name}=(["'])([^"']*)\\1`, "i"));
-  return m ? decodeAttr(m[2]) : null;
+/**
+ * Reads local files for inlining, confined to one directory and a total
+ * byte budget shared by everything inlined into one deck.
+ */
+export interface Inliner {
+  /** The real path of the allowed directory. */
+  readonly root: string;
+  /** A media file as a data URI. */
+  dataUri(ref: string, baseDir: string): Promise<Inlined>;
+  /** A stylesheet's text, with its own `url()` references inlined. */
+  stylesheet(
+    ref: string,
+    baseDir: string,
+  ): Promise<{ css: string; problems: string[] } | { problem: string }>;
 }
 
 /**
- * Replace local media references in resource attributes, and local
- * stylesheet links, with inline content resolved against `baseDir`. Returns
+ * Create an inliner that reads only from inside `allowedDir`. `limits`
+ * defaults to `MAX_INLINE_BYTES` per file and `MAX_TOTAL_INLINE_BYTES` in
+ * all.
+ */
+export async function createInliner(
+  allowedDir: string,
+  limits: { perFile: number; total: number } = {
+    perFile: MAX_INLINE_BYTES,
+    total: MAX_TOTAL_INLINE_BYTES,
+  },
+): Promise<Inliner> {
+  const root = await Deno.realPath(allowedDir);
+  let used = 0;
+
+  /** Resolve `ref` to a readable file inside the root, or say why not. */
+  async function resolve(
+    ref: string,
+    baseDir: string,
+  ): Promise<{ path: string; size: number } | { problem: string }> {
+    let real: string;
+    try {
+      real = await Deno.realPath(localPath(ref, baseDir));
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) {
+        return { problem: `${ref}: file not found` };
+      }
+      throw e;
+    }
+    const inside = real === root || real.startsWith(`${root}/`);
+    if (!inside || /\/\.(git|swamp)(\/|$)/.test(real.slice(root.length))) {
+      return {
+        problem:
+          `${ref}: outside ${root}, or inside .git or .swamp; not inlined`,
+      };
+    }
+    const info = await Deno.stat(real);
+    if (!info.isFile) return { problem: `${ref}: not a file` };
+    if (info.size > limits.perFile) {
+      return {
+        problem:
+          `${ref}: ${info.size} bytes is over the ${limits.perFile}-byte limit; not inlined`,
+      };
+    }
+    if (used + info.size > limits.total) {
+      return {
+        problem:
+          `${ref}: the deck would inline more than ${limits.total} bytes; not inlined`,
+      };
+    }
+    return { path: real, size: info.size };
+  }
+
+  async function dataUri(ref: string, baseDir: string): Promise<Inlined> {
+    const mime = MIME[extOf(localPath(ref, baseDir))];
+    if (!mime) return { problem: `${ref}: not a media file; not inlined` };
+    const r = await resolve(ref, baseDir);
+    if ("problem" in r) return r;
+    used += r.size;
+    return {
+      uri: `data:${mime};base64,${toBase64(await Deno.readFile(r.path))}`,
+    };
+  }
+
+  async function stylesheet(ref: string, baseDir: string) {
+    if (extOf(localPath(ref, baseDir)) !== "css") {
+      return { problem: `${ref}: not a .css file; not inlined` };
+    }
+    const r = await resolve(ref, baseDir);
+    if ("problem" in r) return r;
+    used += r.size;
+    const css = await Deno.readTextFile(r.path);
+    const cssDir = r.path.slice(0, r.path.lastIndexOf("/"));
+    return await inlineCssUrls(css, cssDir, { root, dataUri, stylesheet });
+  }
+
+  return { root, dataUri, stylesheet };
+}
+
+/** Inline the local `url()` references in `css`, resolved against `dir`. */
+export async function inlineCssUrls(
+  css: string,
+  dir: string,
+  inliner: Inliner,
+): Promise<{ css: string; problems: string[] }> {
+  const problems: string[] = [];
+  const out = await replaceAsync(css, CSS_URL, async (m) => {
+    const ref = m[1] ?? m[2] ?? m[3] ?? "";
+    if (!isLocalPath(ref)) return m[0];
+    const r = await inliner.dataUri(ref, dir);
+    if ("problem" in r) {
+      problems.push(r.problem);
+      return m[0];
+    }
+    return `url("${r.uri}")`;
+  });
+  return { css: out, problems };
+}
+
+/**
+ * Replace local references in resource attributes, `style` attributes and
+ * stylesheet links with inline content resolved against `baseDir`. Returns
  * the new HTML and one problem per reference that could not be inlined.
  */
 export async function inlineLocalFiles(
   html: string,
   baseDir: string,
+  inliner: Inliner,
 ): Promise<{ html: string; problems: string[] }> {
   const problems: string[] = [];
-  const attrRe = new RegExp(
-    `(\\s(?:${RESOURCE_ATTRS.join("|")})=)(["'])([^"']*)\\2`,
-    "gi",
+  const parts: string[] = [];
+  for (const seg of segments(html)) {
+    if (!seg.markup) {
+      parts.push(seg.text);
+      continue;
+    }
+    parts.push(
+      await replaceAsync(
+        seg.text,
+        /<([a-z][a-z0-9-]*)\b[^>]*>/gi,
+        async (m) => {
+          const tag = m[0];
+          if (m[1].toLowerCase() === "link" && isStylesheet(tag)) {
+            const href = attr(tag, "href");
+            if (href === null || !isLocalPath(href)) return tag;
+            const r = await inliner.stylesheet(href, baseDir);
+            if ("problem" in r) {
+              problems.push(r.problem);
+              return tag;
+            }
+            problems.push(...r.problems);
+            return `<style>\n${
+              r.css.replace(/<\/style/gi, "<\\/style")
+            }\n</style>`;
+          }
+          return await mapAttrs(tag, async (a) => {
+            if (a.name === "style") {
+              const r = await inlineCssUrls(a.value, baseDir, inliner);
+              problems.push(...r.problems);
+              return r.css === a.value ? null : r.css;
+            }
+            if (!RESOURCE_ATTRS.has(a.name) || !isLocalMedia(a.value)) {
+              return null;
+            }
+            const r = await inliner.dataUri(a.value, baseDir);
+            if ("problem" in r) {
+              problems.push(r.problem);
+              return null;
+            }
+            return r.uri;
+          });
+        },
+      ),
+    );
+  }
+  return { html: parts.join(""), problems };
+}
+
+function isStylesheet(tag: string): boolean {
+  return (attr(tag, "rel") ?? "").toLowerCase().split(/\s+/).includes(
+    "stylesheet",
   );
-  const out = await mapMarkup(html, async (markup) => {
-    const media = await replaceAsync(markup, attrRe, async (m) => {
-      const ref = decodeAttr(m[3]);
-      if (!isLocalPath(ref) || !mimeFor(localPath(ref, baseDir))) return m[0];
-      const r = await dataUri(ref, baseDir);
-      if ("problem" in r) {
-        problems.push(r.problem);
-        return m[0];
-      }
-      return `${m[1]}${m[2]}${r.uri}${m[2]}`;
-    });
-    return await replaceAsync(media, /<link\b[^>]*>/gi, async (m) => {
-      const href = attr(m[0], "href");
-      if (!isStylesheet(m[0]) || href === null || !isLocalPath(href)) {
-        return m[0];
-      }
-      try {
-        const css = await Deno.readTextFile(localPath(href, baseDir));
-        return `<style>\n${css.replace(/<\/style/gi, "<\\/style")}\n</style>`;
-      } catch (e) {
-        if (e instanceof Deno.errors.NotFound) {
-          problems.push(`${href}: file not found`);
-          return m[0];
-        }
-        throw e;
-      }
-    });
-  });
-  return { html: out, problems };
 }
 
 /** The pinned `dist/` path a URL refers to, or null for any other URL. */
@@ -242,18 +400,18 @@ function isCdn(url: string): boolean {
  * the pinned CDN, so a browser refuses altered files. Returns the CDN URLs it
  * could not pin.
  */
-export async function addIntegrity(
+export function addIntegrity(
   html: string,
-): Promise<{ html: string; problems: string[] }> {
+): { html: string; problems: string[] } {
   const problems: string[] = [];
-  const out = await mapMarkup(
-    html,
-    (markup) =>
-      markup.replace(/<(script|link)\b[^>]*>/gi, (tag, name: string) => {
+  const out = segments(html).map((seg) =>
+    !seg.markup ? seg.text : seg.text.replace(
+      /<(script|link)\b[^>]*>/gi,
+      (tag, name: string) => {
         const url = attr(tag, name.toLowerCase() === "script" ? "src" : "href");
-        if (
-          url === null || !isCdn(url) || /\sintegrity=/i.test(tag)
-        ) return tag;
+        if (url === null || !isCdn(url) || attr(tag, "integrity") !== null) {
+          return tag;
+        }
         const path = pinnedPath(url);
         if (!path) {
           problems.push(`${url}: not a pinned reveal.js file`);
@@ -265,8 +423,9 @@ export async function addIntegrity(
         return tag.endsWith("/>")
           ? `${tag.slice(0, -2).trimEnd()}${extra}/>`
           : `${tag.slice(0, -1)}${extra}>`;
-      }),
-  );
+      },
+    )
+  ).join("");
   return { html: out, problems };
 }
 
@@ -289,8 +448,7 @@ export async function inlineReveal(
       out.push(seg.text);
       continue;
     }
-    // A segment that ends in <script src=…> is followed by its (empty) body
-    // and the next segment starts with </script>.
+    // A segment that ends in <script src=…> is followed by its (empty) body.
     let text = seg.text;
     const scriptOpen = text.match(/<script\b[^>]*>$/i);
     const src = scriptOpen ? attr(scriptOpen[0], "src") : null;
@@ -301,14 +459,16 @@ export async function inlineReveal(
         problems.push(`${src}: not a pinned reveal.js file, left as a link`);
       } else if (body && !body.markup && body.text.trim() === "") {
         const js = decoder.decode(await fetchFile(path));
-        const kept = scriptOpen[0].replace(
-          /\s(src|integrity|crossorigin)=(["'])[^"']*\2/gi,
-          "",
-        );
-        text = text.slice(0, text.length - scriptOpen[0].length) + kept;
+        const kept = await mapAttrs(scriptOpen[0], (a) =>
+          Promise.resolve(
+            ["src", "integrity", "crossorigin"].includes(a.name) ? "" : null,
+          ));
+        text = text.slice(0, text.length - scriptOpen[0].length) +
+          kept.replace(/\s(src|integrity|crossorigin)=""/gi, "");
         parts[i + 1] = {
           markup: false,
           text: `\n${js.replace(/<\/script/gi, "<\\/script")}\n`,
+          element: "script",
         };
       }
     }
@@ -323,7 +483,7 @@ export async function inlineReveal(
         }
         const css = decoder.decode(await fetchFile(path));
         const id = attr(m[0], "id");
-        return `<style${id ? ` id="${id}"` : ""}>\n${
+        return `<style${id ? ` id="${id.replace(/"/g, "&quot;")}"` : ""}>\n${
           css.replace(/<\/style/gi, "<\\/style")
         }\n</style>`;
       }),
@@ -334,29 +494,71 @@ export async function inlineReveal(
 
 /**
  * Every resource the page still loads from outside itself: remote URLs and
- * local paths in resource attributes, script sources and stylesheet links.
- * Links a viewer clicks (`<a href>`) are not resources and are not listed.
+ * local paths in resource attributes, script sources, stylesheet links,
+ * `style` attributes and `<style>` blocks. Links a viewer clicks
+ * (`<a href>`) are not resources and are not listed.
  */
 export function externalResources(html: string): string[] {
   const found = new Set<string>();
-  const markup = markupOnly(html);
-  for (const tag of markup.matchAll(/<([a-z][a-z0-9-]*)\b[^>]*>/gi)) {
-    const name = tag[1].toLowerCase();
-    if (name === "a") continue;
-    for (const a of tag[0].matchAll(/\s([a-z-]+)=(["'])([^"']*)\2/gi)) {
-      const key = a[1].toLowerCase();
-      const value = decodeAttr(a[3]);
-      const loads = RESOURCE_ATTRS.includes(key) ||
-        (key === "href" && name === "link" &&
-          /\brel=(["']?)(stylesheet|icon|preload)\1/i.test(tag[0]));
-      if (!loads || value === "" || value.startsWith("data:")) continue;
-      if (value.startsWith("#") || /^javascript:/i.test(value)) continue;
-      // data-background also takes colours and gradients.
-      if (key.startsWith("data-background") && !/[./]/.test(value)) continue;
-      found.add(value);
+  const addCss = (css: string) => {
+    for (const m of css.matchAll(CSS_URL)) {
+      const v = m[1] ?? m[2] ?? m[3] ?? "";
+      if (v !== "" && !v.startsWith("data:") && !v.startsWith("#")) {
+        found.add(v);
+      }
+    }
+    for (const m of css.matchAll(/@import\s+(?:"([^"]*)"|'([^']*)')/gi)) {
+      found.add(m[1] ?? m[2]);
+    }
+  };
+  for (const seg of segments(html)) {
+    if (!seg.markup) {
+      // Stylesheets may still point elsewhere. Scripts are code, and the
+      // reveal-markdown source is checked when its images are inlined.
+      if (seg.element === "style") addCss(seg.text);
+      continue;
+    }
+    for (const tag of seg.text.matchAll(/<([a-z][a-z0-9-]*)\b[^>]*>/gi)) {
+      const name = tag[1].toLowerCase();
+      if (name === "a") continue;
+      for (const a of attrsOf(tag[0])) {
+        if (a.name === "style") {
+          addCss(a.value);
+          continue;
+        }
+        const loads = RESOURCE_ATTRS.has(a.name) ||
+          (a.name === "href" && name === "link" &&
+            /\b(stylesheet|icon|preload)\b/i.test(attr(tag[0], "rel") ?? ""));
+        if (!loads || a.value === "" || a.value.startsWith("data:")) continue;
+        if (a.value.startsWith("#") || /^javascript:/i.test(a.value)) continue;
+        // data-background also takes colours and gradients.
+        if (a.name.startsWith("data-background") && !/[./]/.test(a.value)) {
+          continue;
+        }
+        found.add(a.value);
+      }
     }
   }
   return [...found].sort();
+}
+
+/**
+ * The theme a rendered deck loads, from its `<link id="theme">`: the theme's
+ * name when it is a pinned reveal.js theme, otherwise the stylesheet's href,
+ * so the record never names a theme the deck does not use.
+ */
+export function themeOf(html: string, fallback: string): string {
+  for (const m of markupOnly(html).matchAll(/<link\b[^>]*>/gi)) {
+    const href = attr(m[0], "href");
+    const isTheme = attr(m[0], "id") === "theme" ||
+      (href !== null && /\/dist\/theme\/[^/]+\.css$/.test(href));
+    if (!isTheme || href === null) continue;
+    const path = pinnedPath(href);
+    return path?.startsWith("dist/theme/")
+      ? path.slice("dist/theme/".length, -".css".length)
+      : href;
+  }
+  return fallback;
 }
 
 /** One slide as rendered. */
@@ -408,9 +610,8 @@ export function renderedSlides(html: string): RenderedSlide[] {
       if (open.length === 0) h += 1;
       else if (open.length === 1) {
         open[0].children += 1;
-        const v = open[0].children;
         // Record the child slide when it closes; remember its number now.
-        open.push({ from: m.index + m[0].length, children: -v });
+        open.push({ from: m.index + m[0].length, children: -open[0].children });
         continue;
       }
       open.push({ from: m.index + m[0].length, children: 0 });
@@ -428,9 +629,8 @@ export function renderedSlides(html: string): RenderedSlide[] {
         ...describe(inner),
       });
     }
-    if (open.length === 0 && start >= 0) {
-      // Stop at the end of the slides container: the next top-level token
-      // after it would not be a slide.
+    if (open.length === 0) {
+      // Stop at the end of the slides container.
       const rest = markup.slice(m.index + m[0].length);
       const nextSection = rest.search(/<section\b/i);
       const divClose = rest.search(/<\/div\s*>/i);

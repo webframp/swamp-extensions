@@ -23,7 +23,6 @@ import {
   pdfResourceName,
 } from "./deck.ts";
 import { sha256Hex } from "./_lib/cache.ts";
-import { DECK_BEGIN, DECK_END } from "./_lib/engines.ts";
 import { REVEAL_CDN, REVEAL_FILES } from "./_lib/pins.ts";
 
 const PNG = Uint8Array.from(
@@ -112,11 +111,12 @@ async function withDeps<T>(
 
 const noElispDownload = { ensureElisp: () => Promise.resolve("/fake/elisp") };
 
-const emacsOutput = (html = ORG_HTML) => ({
-  code: 0,
-  stdout: `${DECK_BEGIN}\n${html}\n${DECK_END}\n`,
-  stderr: "",
-});
+/** A fake Emacs that writes `html` where the build script would. */
+const emacsOutput =
+  (html = ORG_HTML) => async (_cmd: string, args: string[]) => {
+    await Deno.writeTextFile(args[args.length - 1], html);
+    return { code: 0, stdout: "", stderr: "" };
+  };
 
 type BuildContext = Parameters<typeof model.methods.build.execute>[1];
 type PdfContext = Parameters<typeof model.methods.export_pdf.execute>[1];
@@ -124,14 +124,8 @@ type PdfContext = Parameters<typeof model.methods.export_pdf.execute>[1];
 function context(dir: string, storedResources = {}) {
   const base = createModelTestContext({
     repoDir: dir,
-    globalArgs: {
-      theme: "black",
-      emacs: "emacs",
-      pandoc: "pandoc",
-      chromium: "chromium",
-      chromiumNoSandbox: false,
-      cacheDir: `${dir}/cache`,
-    },
+    // Parsed by the model's schema, as swamp does, so defaults apply.
+    globalArgs: model.globalArguments.parse({ cacheDir: `${dir}/cache` }),
     storedResources,
   });
   // The test context types globalArgs loosely; the values above match the
@@ -161,14 +155,26 @@ Deno.test("model declares its type, default report, specs and methods", () => {
   assertEquals(model.files.pdf.contentType, "application/pdf");
 });
 
-Deno.test("data names never collide across specs", () => {
-  const names = [
-    deckResourceName("x"),
-    deckHtmlName("x"),
-    deckPdfName("x"),
-    outlineResourceName("x"),
-    pdfResourceName("x"),
+Deno.test("data names never collide across specs or across decks", () => {
+  const all = (n: string) => [
+    deckResourceName(n),
+    deckHtmlName(n),
+    deckPdfName(n),
+    outlineResourceName(n),
+    pdfResourceName(n),
   ];
+  // Deck names that a suffix scheme would confuse: "x-html"'s record would
+  // be "x"'s HTML, and "x-pdf"'s record "x"'s PDF.
+  const decks = [
+    "x",
+    "x-html",
+    "x-pdf",
+    "html-x",
+    "pdf-x",
+    "print-x",
+    "deck-x",
+  ];
+  const names = decks.flatMap(all);
   assertEquals(new Set(names).size, names.length);
 });
 
@@ -192,24 +198,26 @@ Deno.test("build renders Org, inlines images, pins CDN assets and records slides
       noElispDownload,
       () =>
         withMockedCommand(
-          () => emacsOutput(),
+          emacsOutput(),
           () =>
             model.methods.build.execute(buildArgs({ source: "talk.org" }), ctx),
         ),
     );
     assertEquals(calls.length, 1);
     assertEquals(calls[0].command, "emacs");
-    assertEquals(calls[0].args.slice(4), [
+    assertEquals(calls[0].args.slice(4, 9), [
       "/fake/elisp",
       await Deno.realPath(`${dir}/talk.org`),
       REVEAL_CDN,
       "black",
+      await Deno.realPath(dir),
     ]);
+    assert(calls[0].args[9].endsWith("/deck.html"));
 
     const files = getWrittenFiles();
     assertEquals(files.map((f) => [f.specName, f.name]), [[
       "html",
-      "deck-talk-html",
+      "html-talk",
     ]]);
     const html = new TextDecoder().decode(files[0].content);
     assertStringIncludes(html, 'src="data:image/png;base64,');
@@ -238,6 +246,7 @@ Deno.test("build renders Org, inlines images, pins CDN assets and records slides
       ],
     );
     assertEquals(deck.html.sha256, await sha256Hex(files[0].content));
+    assertEquals(deck.source.path, "talk.org", "recorded relative to the repo");
     assertEquals(deck.unchanged, false);
     assertEquals(deck.external, []);
     assertEquals(deck.warnings, []);
@@ -249,7 +258,7 @@ Deno.test("an identical rebuild writes no new HTML version", async () => {
     const first = context(dir);
     await withDeps(noElispDownload, () =>
       withMockedCommand(
-        () => emacsOutput(),
+        emacsOutput(),
         () =>
           model.methods.build.execute(
             buildArgs({ source: "talk.org" }),
@@ -261,7 +270,7 @@ Deno.test("an identical rebuild writes no new HTML version", async () => {
     const second = context(dir, { "deck-talk": prior });
     await withDeps(noElispDownload, () =>
       withMockedCommand(
-        () => emacsOutput(),
+        emacsOutput(),
         () =>
           model.methods.build.execute(
             buildArgs({ source: "talk.org" }),
@@ -278,14 +287,14 @@ Deno.test("an identical rebuild writes no new HTML version", async () => {
 Deno.test("build refuses a deck name that belongs to another source", async () => {
   await withDeckDir(async (dir) => {
     const { context: ctx, getWrittenResources } = context(dir, {
-      "deck-talk": { source: { path: "/elsewhere/talk.org" } },
+      "deck-talk": { source: { path: "elsewhere/talk.org" } },
     });
     await withDeps(noElispDownload, async () => {
       await assertRejects(
         () =>
           model.methods.build.execute(buildArgs({ source: "talk.org" }), ctx),
         Error,
-        'Deck name "talk" already belongs to /elsewhere/talk.org',
+        'Deck name "talk" already belongs to elsewhere/talk.org',
       );
     });
     assertEquals(getWrittenResources(), []);
@@ -299,7 +308,7 @@ Deno.test("build reports images it cannot inline and CDN files that are not pinn
     const { context: ctx, getWrittenResources } = context(dir);
     await withDeps(noElispDownload, () =>
       withMockedCommand(
-        () => emacsOutput(html),
+        emacsOutput(html),
         () =>
           model.methods.build.execute(buildArgs({ source: "talk.org" }), ctx),
       ));
@@ -327,7 +336,7 @@ Deno.test("a self-contained build inlines every pinned file", async () => {
       },
     }, () =>
       withMockedCommand(
-        () => emacsOutput(),
+        emacsOutput(),
         () =>
           model.methods.build.execute(
             buildArgs({ source: "talk.org", selfContained: true }),
@@ -355,7 +364,7 @@ Deno.test("build from content resolves images against the repository", async () 
     const { context: ctx, getWrittenResources } = context(dir);
     const { calls } = await withDeps(noElispDownload, () =>
       withMockedCommand(
-        () => emacsOutput(),
+        emacsOutput(),
         () =>
           model.methods.build.execute(
             buildArgs({ content: ORG_SOURCE, name: "inline", format: "org" }),
@@ -364,6 +373,12 @@ Deno.test("build from content resolves images against the repository", async () 
       ));
     // The engine read a temporary copy, not a file in the repository.
     assert(!calls[0].args[5].startsWith(dir));
+    // ...and may read nothing beside that copy.
+    assert(calls[0].args[8].endsWith("/content"));
+    assertEquals(
+      calls[0].args[5],
+      `${calls[0].args[8]}/deck.org`,
+    );
     const deck = getWrittenResources()[0].data as Deck;
     assertEquals(deck.name, "inline");
     assertEquals(deck.source.path, null);
@@ -497,9 +512,9 @@ Deno.test("export_pdf prints the recorded HTML version and stores the PDF", asyn
           ctx,
         ),
     );
-    assertEquals(reads, [["deck-talk-html", 3]]);
+    assertEquals(reads, [["html-talk", 3]]);
     assertEquals(printed, ["<html>deck</html>"]);
-    assertEquals(getWrittenFiles().map((f) => f.name), ["deck-talk-pdf"]);
+    assertEquals(getWrittenFiles().map((f) => f.name), ["pdf-talk"]);
     const p = getWrittenResources()[0].data as DeckPdf;
     assertEquals(p.pdf.pages, 8);
     assertEquals(p.html.version, 3);
@@ -517,7 +532,7 @@ Deno.test("export_pdf skips printing when the HTML has not changed", async () =>
     };
     const { ctx, getWrittenFiles, getWrittenResources } = pdfContext(
       dir,
-      { "deck-talk": deck, "pdf-talk": prior },
+      { "deck-talk": deck, "print-talk": prior },
       html,
     );
     await withDeps({
@@ -554,5 +569,107 @@ Deno.test("export_pdf refuses a missing build or HTML that does not match its re
       Error,
       "does not match its build record",
     );
+  });
+});
+
+Deno.test("a symlinked source keeps its own name, in build and export_pdf", async () => {
+  await withDeckDir(async (dir) => {
+    await Deno.symlink(`${dir}/talk.org`, `${dir}/current.org`);
+    const { context: ctx, getWrittenResources } = context(dir);
+    await withDeps(noElispDownload, () =>
+      withMockedCommand(
+        emacsOutput(),
+        () =>
+          model.methods.build.execute(
+            buildArgs({ source: "current.org" }),
+            ctx,
+          ),
+      ));
+    const deck = getWrittenResources()[0].data as Deck;
+    assertEquals(deck.name, "current");
+    assertEquals(deck.source.path, "talk.org");
+    const pdfArgs = model.methods.export_pdf.arguments.parse({
+      source: "current.org",
+    });
+    const { ctx: pctx, reads } = pdfContext(
+      dir,
+      { "deck-current": deck },
+      null,
+    );
+    await assertRejects(
+      () => model.methods.export_pdf.execute(pdfArgs, pctx),
+      Error,
+      "is missing",
+    );
+    assertEquals(reads, [["html-current", deck.html.version]]);
+  });
+});
+
+Deno.test("ownership survives a moved checkout, and outline checks it too", async () => {
+  await withDeckDir(async (dir) => {
+    // A record written from another clone, where the repo lived elsewhere.
+    const moved = context(dir, {
+      "deck-talk": { source: { path: "talk.org" } },
+    });
+    await withDeps(noElispDownload, () =>
+      withMockedCommand(
+        emacsOutput(),
+        () =>
+          model.methods.build.execute(
+            buildArgs({ source: "talk.org" }),
+            moved.context,
+          ),
+      ));
+    assertEquals(moved.getWrittenResources().length, 1);
+
+    const taken = context(dir, {
+      "outline-talk": { source: { path: "other/talk.org" } },
+    });
+    await assertRejects(
+      () =>
+        model.methods.outline.execute(
+          model.methods.outline.arguments.parse({ source: "talk.org" }),
+          taken.context,
+        ),
+      Error,
+      "already belongs to other/talk.org",
+    );
+    assertEquals(taken.getWrittenResources(), []);
+  });
+});
+
+Deno.test("build records an unpinned theme as the stylesheet it loads", async () => {
+  await withDeckDir(async (dir) => {
+    const html = ORG_HTML.replace(
+      `${REVEAL_CDN}/dist/theme/moon.css`,
+      "https://evil.example/x.css",
+    );
+    const { context: ctx, getWrittenResources } = context(dir);
+    await withDeps(noElispDownload, () =>
+      withMockedCommand(
+        emacsOutput(html),
+        () =>
+          model.methods.build.execute(buildArgs({ source: "talk.org" }), ctx),
+      ));
+    const deck = getWrittenResources()[0].data as Deck;
+    assertEquals(deck.theme, "https://evil.example/x.css");
+    assertEquals(deck.external, ["https://evil.example/x.css"]);
+  });
+});
+
+Deno.test("org-re-reveal and pandoc warnings reach the build record", async () => {
+  await withDeckDir(async (dir) => {
+    const { context: ctx, getWrittenResources } = context(dir);
+    await withDeps(noElispDownload, () =>
+      withMockedCommand(
+        async (_cmd, args) => {
+          await Deno.writeTextFile(args[args.length - 1], ORG_HTML);
+          return { code: 0, stdout: "", stderr: "Warning (org): odd link\n" };
+        },
+        () =>
+          model.methods.build.execute(buildArgs({ source: "talk.org" }), ctx),
+      ));
+    const deck = getWrittenResources()[0].data as Deck;
+    assertEquals(deck.warnings, ["Warning (org): odd link"]);
   });
 });

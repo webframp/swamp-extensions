@@ -25,27 +25,48 @@ const STABLE_POLLS = 4;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
+ * Settle with `p`, or reject once `deadline` (a `Date.now()` value) passes.
+ * A browser whose page never answers must not hold the method forever.
+ */
+export function beforeDeadline<T>(
+  p: Promise<T>,
+  deadline: number,
+  what: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${what} did not finish before the deadline`)),
+      Math.max(0, deadline - Date.now()),
+    );
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+
+/**
  * Open `url` (a deck with `?print-pdf`), wait until reveal.js's print layout
- * stops adding pages, and print it. Returns the PDF and the page count.
+ * stops adding pages, and print it. Every protocol call must answer before
+ * `deadline` (a `Date.now()` value). Returns the PDF and the page count.
  */
 export async function printDeck(
   cdp: Cdp,
   url: string,
-  timeoutMs: number,
+  deadline: number,
 ): Promise<{ pdf: Uint8Array; pages: number }> {
-  await cdp.send("Page.enable");
-  await cdp.send("Page.navigate", { url });
-  const deadline = Date.now() + timeoutMs;
+  const send = (method: string, params?: Record<string, unknown>) =>
+    beforeDeadline(cdp.send(method, params), deadline, method);
+  await send("Page.enable");
+  await send("Page.navigate", { url });
   let last = -1;
   let stable = 0;
   while (stable < STABLE_POLLS) {
-    if (Date.now() > deadline) {
+    if (Date.now() + POLL_MS > deadline) {
       throw new Error(
-        `reveal.js print layout did not settle within ${timeoutMs} ms (last page count ${last}). A deck that loads reveal.js from the CDN needs network access.`,
+        `reveal.js print layout did not settle in time (last page count ${last}). A deck that loads reveal.js from the CDN needs network access.`,
       );
     }
     await sleep(POLL_MS);
-    const r = await cdp.send("Runtime.evaluate", {
+    const r = await send("Runtime.evaluate", {
       expression: "document.querySelectorAll('.pdf-page').length",
       returnByValue: true,
     });
@@ -55,7 +76,7 @@ export async function printDeck(
     stable = n > 0 && n === last ? stable + 1 : 0;
     last = n;
   }
-  const printed = await cdp.send("Page.printToPDF", {
+  const printed = await send("Page.printToPDF", {
     preferCSSPageSize: true,
     printBackground: true,
   });
@@ -105,7 +126,8 @@ export function cdpOverWebSocket(ws: WebSocket): Cdp {
 
 /**
  * Launch headless Chromium on a private profile, print the deck at `url`,
- * and shut the browser down whatever happens.
+ * and shut the browser down whatever happens. Everything, startup included,
+ * must finish within `timeoutMs`.
  */
 export async function exportPdf(opts: {
   chromium: string;
@@ -114,6 +136,7 @@ export async function exportPdf(opts: {
   timeoutMs: number;
   noSandbox: boolean;
 }): Promise<{ pdf: Uint8Array; pages: number }> {
+  const deadline = Date.now() + opts.timeoutMs;
   const args = [
     "--headless=new",
     "--disable-gpu",
@@ -146,7 +169,7 @@ export async function exportPdf(opts: {
     const endpoint = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(
         () => reject(new Error("Chromium did not start its DevTools endpoint")),
-        30_000,
+        Math.max(0, deadline - Date.now()),
       );
       let seen = "";
       let ready = false;
@@ -178,17 +201,30 @@ export async function exportPdf(opts: {
       });
     });
     const port = new URL(endpoint).port;
-    const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`))
-      .json() as Array<{ type: string; webSocketDebuggerUrl: string }>;
-    const page = targets.find((t) => t.type === "page");
-    if (!page) throw new Error("Chromium opened no page");
+    // The page target can appear a moment after the endpoint does.
+    let page: { webSocketDebuggerUrl: string } | undefined;
+    while (!page) {
+      if (Date.now() > deadline) throw new Error("Chromium opened no page");
+      const res = await fetch(`http://127.0.0.1:${port}/json/list`, {
+        signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+      });
+      const targets = await res.json() as Array<
+        { type: string; webSocketDebuggerUrl: string }
+      >;
+      page = targets.find((t) => t.type === "page");
+      if (!page) await sleep(100);
+    }
     const socket = new WebSocket(page.webSocketDebuggerUrl);
     ws = socket;
-    await new Promise<void>((resolve, reject) => {
-      socket.onopen = () => resolve();
-      socket.onerror = () => reject(new Error("DevTools connection failed"));
-    });
-    return await printDeck(cdpOverWebSocket(socket), opts.url, opts.timeoutMs);
+    await beforeDeadline(
+      new Promise<void>((resolve, reject) => {
+        socket.onopen = () => resolve();
+        socket.onerror = () => reject(new Error("DevTools connection failed"));
+      }),
+      deadline,
+      "Opening the DevTools connection",
+    );
+    return await printDeck(cdpOverWebSocket(socket), opts.url, deadline);
   } finally {
     ws?.close();
     try {

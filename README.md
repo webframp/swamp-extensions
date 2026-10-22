@@ -416,7 +416,7 @@ swamp workflow run @webframp/presentation-build \
 
 # Or run the methods directly; selfContained decks work offline
 swamp model method run talks build --input source=talks/observe.org --input selfContained=true
-swamp data query 'model("talks") && name == "deck-observe-html"' --select content > observe.html
+swamp data query 'model("talks") && name == "html-observe"' --select content > observe.html
 ```
 
 ### fal.ai account and GPU compute audit

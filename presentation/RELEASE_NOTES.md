@@ -17,5 +17,11 @@ versioned swamp data.
 - The `@webframp/presentation/deck-summary` report summarises each method run.
 
 Downloads are pinned by SHA-256: reveal.js files from jsDelivr, and
-org-re-reveal 3.39.0 and htmlize 1.59 by commit. The org-re-reveal engine runs
-Emacs with `-Q` and never executes code blocks.
+org-re-reveal 3.39.0 and htmlize 1.59 by commit. Org decks build in Emacs `-Q`,
+so your configuration plays no part.
+
+Decks are treated as untrusted. A build runs nothing the deck names: no Babel,
+`#+BIND`, file-local variables, `(eval ...)` macros or preamble functions. It
+reads and inlines files only from the source's own directory, outside `.git` and
+`.swamp`, within size limits, and Emacs, pandoc and Chromium each run under a
+timeout.

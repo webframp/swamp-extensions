@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { assertEquals, assertRejects } from "jsr:@std/assert@1.0.19";
-import { type Cdp, printDeck } from "./pdf.ts";
+import { beforeDeadline, type Cdp, printDeck } from "./pdf.ts";
 
 /** A DevTools session whose page count follows `counts`, then stays at the last value. */
 function fakeCdp(counts: number[]): { cdp: Cdp; methods: string[] } {
@@ -34,7 +34,7 @@ Deno.test("printDeck waits for the print layout to settle before printing", asyn
   const { pdf, pages } = await printDeck(
     cdp,
     "file:///d.html?print-pdf",
-    20_000,
+    Date.now() + 20_000,
   );
   assertEquals(pages, 8);
   assertEquals(new TextDecoder().decode(pdf), "%PDF-1.7 fake");
@@ -48,9 +48,42 @@ Deno.test("printDeck waits for the print layout to settle before printing", asyn
 Deno.test("printDeck gives up when reveal.js never lays out pages", async () => {
   const { cdp, methods } = fakeCdp([0]);
   await assertRejects(
-    () => printDeck(cdp, "file:///d.html?print-pdf", 800),
+    () => printDeck(cdp, "file:///d.html?print-pdf", Date.now() + 800),
     Error,
     "did not settle",
   );
   assertEquals(methods.includes("Page.printToPDF"), false);
+});
+
+Deno.test("printDeck gives up when the page never answers", async () => {
+  // A deck whose script blocks the page's main thread: Runtime.evaluate
+  // never returns.
+  const cdp: Cdp = {
+    send(method) {
+      return method === "Runtime.evaluate"
+        ? new Promise(() => {})
+        : Promise.resolve({});
+    },
+  };
+  const started = Date.now();
+  await assertRejects(
+    () => printDeck(cdp, "file:///d.html?print-pdf", Date.now() + 1_000),
+    Error,
+    "Runtime.evaluate did not finish before the deadline",
+  );
+  const took = Date.now() - started;
+  assertEquals(took < 3_000, true, `took ${took} ms`);
+});
+
+Deno.test("beforeDeadline passes results through and clears its timer", async () => {
+  assertEquals(
+    await beforeDeadline(Promise.resolve(7), Date.now() + 50, "x"),
+    7,
+  );
+  await assertRejects(
+    () =>
+      beforeDeadline(Promise.reject(new Error("boom")), Date.now() + 50, "x"),
+    Error,
+    "boom",
+  );
 });

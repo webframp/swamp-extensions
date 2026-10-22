@@ -38,13 +38,15 @@ import {
 } from "./_lib/engines.ts";
 import {
   addIntegrity,
-  dataUri,
+  createInliner,
   externalResources,
   inlineLocalFiles,
+  type Inliner,
   inlineReveal,
-  isLocalPath,
+  isLocalMedia,
   pinnedPath,
   renderedSlides,
+  themeOf,
 } from "./_lib/html.ts";
 import { exportPdf } from "./_lib/pdf.ts";
 import {
@@ -92,6 +94,8 @@ const GlobalArgsSchema = z.object({
   chromiumNoSandbox: z.boolean().default(false).describe(
     "Pass --no-sandbox to Chromium. Needed in some containers and WSL; leave off otherwise",
   ),
+  buildTimeoutSeconds: z.number().int().min(10).max(3600).default(300)
+    .describe("Longest an Emacs or pandoc run may take before it is stopped"),
   cacheDir: z.string().min(1).optional().describe(
     "Where pinned downloads are cached (default: $XDG_CACHE_HOME/webframp-presentation or ~/.cache/webframp-presentation)",
   ),
@@ -108,7 +112,7 @@ const SourceArgs = {
     "Path to the .org or .md source, absolute or relative to the repository",
   ),
   content: z.string().min(1).optional().describe(
-    "Source text instead of a file (requires name and format). Relative image paths resolve against the repository",
+    "Source text instead of a file (requires name and format). Relative image paths resolve against the repository; #+INCLUDE and #+SETUPFILE are refused",
   ),
   format: z.enum(["auto", "org", "markdown"]).default("auto").describe(
     "Source format (auto: from the file extension)",
@@ -229,23 +233,27 @@ const PdfSchema = z.object({
 export type Deck = z.infer<typeof DeckSchema>;
 /** Outline of a deck source, stored as `outline-<name>`. */
 export type DeckOutline = z.infer<typeof OutlineSchema>;
-/** Record of one PDF export, stored as `pdf-<name>`. */
+/** Record of one PDF export, stored as `print-<name>`. */
 export type DeckPdf = z.infer<typeof PdfSchema>;
 
 // =============================================================================
 // Data names
 // =============================================================================
 
+// Each kind of data has its own prefix and the deck name follows it, so no
+// two decks' data names can collide whatever they are called. (A suffix
+// would not do: deck "x-html"'s record would be deck "x"'s HTML.)
+
 /** Data name of a deck's build record. */
 export const deckResourceName = (name: string) => `deck-${name}`;
 /** Data name of a deck's HTML file. */
-export const deckHtmlName = (name: string) => `deck-${name}-html`;
+export const deckHtmlName = (name: string) => `html-${name}`;
 /** Data name of a deck's PDF file. */
-export const deckPdfName = (name: string) => `deck-${name}-pdf`;
+export const deckPdfName = (name: string) => `pdf-${name}`;
 /** Data name of a deck's outline. */
 export const outlineResourceName = (name: string) => `outline-${name}`;
 /** Data name of a deck's PDF record. */
-export const pdfResourceName = (name: string) => `pdf-${name}`;
+export const pdfResourceName = (name: string) => `print-${name}`;
 
 // =============================================================================
 // Context
@@ -296,9 +304,18 @@ interface PdfContext extends DeckContext {
 
 interface LoadedSource {
   name: string;
+  /**
+   * Where the source lives, as recorded: relative to the repository when it
+   * is inside it, so a moved checkout or a shared datastore still matches.
+   * Null for inline content.
+   */
   path: string | null;
+  /** The real path of the file, for the engine to read. */
+  file: string | null;
   /** Directory relative references resolve against. */
   baseDir: string;
+  /** The one directory a deck may read and inline files from. */
+  allowedDir: string;
   text: string;
   format: Format;
   engine: Engine;
@@ -315,7 +332,9 @@ async function loadSource(
     return {
       name: args.name!,
       path: null,
+      file: null,
       baseDir: repoDir,
+      allowedDir: repoDir,
       text: args.content,
       format,
       engine: chooseEngine(format, args.engine),
@@ -335,10 +354,15 @@ async function loadSource(
   }
   const bytes = await Deno.readFile(path);
   const format = detectFormat(path, args.format);
+  const dir = path.slice(0, path.lastIndexOf("/")) || "/";
+  const repo = await Deno.realPath(repoDir);
   return {
-    name: args.name ?? deckNameFromPath(path),
-    path,
-    baseDir: path.slice(0, path.lastIndexOf("/")) || "/",
+    // Named after the path as given, so a symlink keeps its own name.
+    name: args.name ?? deckNameFromPath(given),
+    path: path.startsWith(`${repo}/`) ? path.slice(repo.length + 1) : path,
+    file: path,
+    baseDir: dir,
+    allowedDir: dir,
     text: new TextDecoder().decode(bytes),
     format,
     engine: chooseEngine(format, args.engine),
@@ -349,7 +373,7 @@ async function loadSource(
 /**
  * Refuse to let one deck name hold two different sources. Two files called
  * `talk.org` in different directories would otherwise overwrite each
- * other's data.
+ * other's data. `prior` is the deck's build record or outline.
  */
 function assertSameSource(
   prior: Record<string, unknown> | null,
@@ -380,15 +404,21 @@ async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
   }
 }
 
-/** Where the engine reads the source from: the file, or a temp copy of content. */
+/**
+ * Where the engine reads the source from, and the one directory it may read
+ * other files from: the file and its directory, or for inline content a
+ * private directory holding only a copy of it.
+ */
 async function sourceFile(
   src: LoadedSource,
   dir: string,
-): Promise<string> {
-  if (src.path !== null) return src.path;
-  const file = `${dir}/deck.${src.format === "org" ? "org" : "md"}`;
+): Promise<{ file: string; readDir: string }> {
+  if (src.file !== null) return { file: src.file, readDir: src.allowedDir };
+  const readDir = `${dir}/content`;
+  await Deno.mkdir(readDir);
+  const file = `${readDir}/deck.${src.format === "org" ? "org" : "md"}`;
   await Deno.writeTextFile(file, src.text);
-  return file;
+  return { file, readDir };
 }
 
 // =============================================================================
@@ -406,9 +436,11 @@ async function render(
   src: LoadedSource,
   g: GlobalArgs,
   dir: string,
+  inliner: Inliner,
   signal?: AbortSignal,
 ): Promise<Rendered> {
-  const file = await sourceFile(src, dir);
+  const { file, readDir } = await sourceFile(src, dir);
+  const timeoutMs = g.buildTimeoutSeconds * 1000;
   switch (src.engine) {
     case "org-re-reveal": {
       const lispDir = await deps.ensureElisp(cacheDirOf(g), signal);
@@ -420,6 +452,9 @@ async function render(
         lispDir,
         source: file,
         theme: g.theme,
+        allowedDir: readDir,
+        output: `${dir}/deck.html`,
+        timeoutMs,
         signal,
       });
       const pin = ELISP_PINS.find((p) => p.file === "org-re-reveal.el");
@@ -427,7 +462,7 @@ async function render(
         html: r.html,
         engineVersion: pin ? `org-re-reveal ${pin.version}` : null,
         slides: null,
-        warnings: [],
+        warnings: r.warnings,
       };
     }
     case "pandoc": {
@@ -436,21 +471,22 @@ async function render(
         source: file,
         theme: g.theme,
         workDir: dir,
+        timeoutMs,
         signal,
       });
       return {
         html: r.html,
         engineVersion: r.version ? `pandoc ${r.version}` : null,
         slides: null,
-        warnings: [],
+        warnings: r.warnings,
       };
     }
     case "reveal-markdown": {
       const parts = markdownParts(src.text);
       const images = await inlineMarkdownImages(
         parts.body,
-        (ref) => dataUri(ref, src.baseDir),
-        isLocalPath,
+        (ref) => inliner.dataUri(ref, src.baseDir),
+        isLocalMedia,
       );
       const theme = parts.theme ?? g.theme;
       const outline = outlineFor("reveal-markdown", src.text);
@@ -480,18 +516,6 @@ async function render(
   }
 }
 
-/** Theme a rendered deck loads, read from its theme stylesheet. */
-function themeOf(html: string, fallback: string): string {
-  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
-    const href = m[0].match(/\shref=(["'])([^"']*)\1/i)?.[2] ?? "";
-    const path = pinnedPath(href);
-    if (path?.startsWith("dist/theme/")) {
-      return path.slice("dist/theme/".length, -".css".length);
-    }
-  }
-  return fallback;
-}
-
 async function build(
   args: z.infer<typeof BuildArgsSchema>,
   context: DeckContext,
@@ -502,12 +526,13 @@ async function build(
   const prior = await context.readResource(deckResourceName(src.name));
   assertSameSource(prior, src);
 
+  const inliner = await createInliner(src.allowedDir);
   const rendered = await withTempDir((dir) =>
-    render(src, g, dir, context.signal)
+    render(src, g, dir, inliner, context.signal)
   );
   const warnings = [...rendered.warnings];
 
-  const local = await inlineLocalFiles(rendered.html, src.baseDir);
+  const local = await inlineLocalFiles(rendered.html, src.baseDir, inliner);
   warnings.push(...local.problems);
   let html = local.html;
   // Read the theme before inlining replaces the stylesheet links.
@@ -522,7 +547,7 @@ async function build(
     html = inlined.html;
     warnings.push(...inlined.problems);
   } else {
-    const pinned = await addIntegrity(html);
+    const pinned = addIntegrity(html);
     html = pinned.html;
     warnings.push(...pinned.problems);
   }
@@ -622,6 +647,10 @@ async function outline(
   context: DeckContext,
 ): Promise<{ dataHandles: DataHandle[] }> {
   const src = await loadSource(args, context.repoDir);
+  assertSameSource(
+    await context.readResource(outlineResourceName(src.name)),
+    src,
+  );
   const o = outlineFor(src.engine, src.text);
   const data: DeckOutline = {
     name: src.name,
@@ -656,6 +685,14 @@ async function outline(
 // =============================================================================
 // PDF
 // =============================================================================
+
+/**
+ * A `file://` URL for an absolute path, with each segment percent-encoded so
+ * a `#`, `%`, `?` or space in a temporary directory cannot break it.
+ */
+export function fileUrl(path: string): string {
+  return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
+}
 
 async function exportDeckPdf(
   args: z.infer<typeof ExportPdfArgsSchema>,
@@ -700,7 +737,7 @@ async function exportDeckPdf(
       await Deno.writeFile(file, html);
       return await deps.exportPdf({
         chromium: context.globalArgs.chromium,
-        url: `file://${file}?print-pdf`,
+        url: `${fileUrl(file)}?print-pdf`,
         profileDir: `${dir}/profile`,
         timeoutMs: args.timeoutSeconds * 1000,
         noSandbox: context.globalArgs.chromiumNoSandbox,
@@ -777,13 +814,13 @@ export const model = {
 
   files: {
     html: {
-      description: "A reveal.js deck, named deck-<name>-html",
+      description: "A reveal.js deck, named html-<name>",
       contentType: "text/html",
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
     pdf: {
-      description: "A deck printed to PDF, named deck-<name>-pdf",
+      description: "A deck printed to PDF, named pdf-<name>",
       contentType: "application/pdf",
       lifetime: "infinite" as const,
       garbageCollection: 10,

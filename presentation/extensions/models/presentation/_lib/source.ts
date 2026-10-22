@@ -258,8 +258,11 @@ function markdownImages(body: string): string[] {
   ) {
     if (isLocalRef(m[1])) out.push(stripFileScheme(m[1]));
   }
-  for (const m of body.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)) {
-    if (isLocalRef(m[1])) out.push(stripFileScheme(m[1]));
+  for (
+    const m of body.matchAll(/<img\b[^>]*\ssrc=(?:"([^"]*)"|'([^']*)')/gi)
+  ) {
+    const ref = m[1] ?? m[2];
+    if (ref !== "" && isLocalRef(ref)) out.push(stripFileScheme(ref));
   }
   return out;
 }
@@ -271,8 +274,9 @@ function withoutFences(body: string): string {
 
 /**
  * Outline a Markdown deck as pandoc renders it with `--slide-level=2`:
- * level-1 and level-2 headings start slides, and `::: notes` divs hold
- * speaker notes.
+ * level-1 and level-2 headings (ATX or setext) start slides, a horizontal
+ * rule starts an untitled slide at the current level, and `::: notes` divs
+ * hold speaker notes.
  */
 export function outlineMarkdownPandoc(text: string): Outline {
   const { meta, body } = splitFrontMatter(text);
@@ -290,11 +294,39 @@ export function outlineMarkdownPandoc(text: string): Outline {
     chunk = [];
   };
 
+  let prev = "";
   for (const line of withoutFences(body).split("\n")) {
+    const before = prev;
+    prev = line;
     const h = line.match(/^(#{1,2})\s+(.*?)\s*#*\s*$/);
     if (h && !inNotes) {
       flush();
       current = { level: h[1].length, title: h[2], notesWords: 0, images: [] };
+      continue;
+    }
+    const rule = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/
+      .test(line);
+    const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+    if (
+      !inNotes && underline && before.trim() !== "" &&
+      !/^\s*[-*+]\s/.test(before)
+    ) {
+      // Setext heading: the text line above belongs to the heading, not
+      // to the slide before it.
+      chunk.pop();
+      flush();
+      current = {
+        level: underline[1].startsWith("=") ? 1 : 2,
+        title: before.trim(),
+        notesWords: 0,
+        images: [],
+      };
+      continue;
+    }
+    if (!inNotes && rule && before.trim() === "") {
+      const level: number = current?.level ?? 1;
+      flush();
+      current = { level, title: "", notesWords: 0, images: [] };
       continue;
     }
     if (/^:::+\s*\{?\s*\.?notes\s*\}?\s*$/.test(line)) {

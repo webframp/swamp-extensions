@@ -5,8 +5,10 @@
  * pinned CDN; inlining for self-contained decks happens afterwards, the same
  * way for all of them.
  *
- * External tools are run with `Deno.Command(...).output()` and every setting
- * passes as an argument, never through the environment.
+ * External tools are run with `Deno.Command(...).output()`, every setting
+ * passes as an argument, never through the environment, and each run is
+ * bounded by a timeout. Engines write the deck to a file, which is read only
+ * after its size is checked.
  *
  * @module
  */
@@ -19,36 +21,53 @@ import {
   splitFrontMatter,
 } from "./source.ts";
 
-/** Marks around the HTML the Emacs build script prints. */
-export const DECK_BEGIN = "<<<WEBFRAMP-DECK-BEGIN>>>";
-export const DECK_END = "<<<WEBFRAMP-DECK-END>>>";
+/** Largest deck an engine may produce, before local files are inlined. */
+export const MAX_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
 
 /**
  * Batch export through org-re-reveal. Arguments, in order: the directory
- * holding the pinned Emacs Lisp, the source file, the reveal.js root URL and
- * the default theme.
+ * holding the pinned Emacs Lisp, the source file, the reveal.js root URL, the
+ * default theme, the one directory the deck may read files from, and the
+ * file to write the HTML to.
  *
- * - Babel never runs: exporting a deck must not execute its code blocks.
- * - File-local variables are ignored for the same reason.
- * - Output is byte-for-byte reproducible: no export timestamp, and Org's
- *   random heading IDs come from a fixed seed.
- * - Batch Emacs fills `user-full-name` from the login and host; a deck
- *   without `#+AUTHOR` gets no author rather than the machine's name.
+ * A deck is untrusted input, so the export runs nothing it names:
+ * - Babel, `#+BIND` and file-local variables are off.
+ * - A `#+MACRO` whose template is `(eval ...)`, in the file or in any
+ *   `#+SETUPFILE`, stops the export. Org's own macros still work.
+ * - A `#+REVEAL_PREAMBLE`, `_POSTAMBLE` or `_POSTSCRIPT` that names a
+ *   function stops the export; org-re-reveal would call it.
+ * - Every file the deck makes Emacs read (`#+INCLUDE`, `#+SETUPFILE`, ...)
+ *   must lie inside the allowed directory and outside `.git` and `.swamp`.
+ *   Loading Emacs Lisp is not affected.
+ *
+ * Output is byte-for-byte reproducible: no export timestamp, and Org's random
+ * heading IDs come from a fixed seed. Batch Emacs fills `user-full-name` from
+ * the login and host, so a deck without `#+AUTHOR` gets no author.
  */
 export const BUILD_EL =
   `;;; build.el --- org-re-reveal batch export  -*- lexical-binding: t; -*-
+(defvar webframp-presentation--loading-lisp nil
+  "Non-nil while Emacs reads Lisp source to load it.")
 (let* ((args command-line-args-left)
        (lisp-dir (nth 0 args))
        (source (nth 1 args))
        (root (nth 2 args))
-       (theme (nth 3 args)))
+       (theme (nth 3 args))
+       (allowed (file-name-as-directory (file-truename (nth 4 args))))
+       (output (nth 5 args)))
   (setq command-line-args-left nil)
   (add-to-list 'load-path lisp-dir)
+  ;; A one-shot export needs no cache between runs, and org-persist would
+  ;; read its index from a temporary directory outside the deck.
+  (setq org-element-cache-persistent nil
+        org-persist-autoload nil)
   (require 'org)
   (require 'ox)
+  (require 'org-macro)
   (require 'org-re-reveal)
   (setq org-export-use-babel nil
         org-confirm-babel-evaluate t
+        org-export-allow-bind-keywords nil
         enable-local-variables nil
         org-export-time-stamp-file nil
         org-re-reveal-root root
@@ -58,16 +77,48 @@ export const BUILD_EL =
         org-re-reveal-theme theme
         user-full-name ""
         user-mail-address "")
+  ;; Deck-defined macros come first; Org's four built-ins (author, email,
+  ;; title, date) are the last entries and are left alone.
+  (advice-add 'org-macro--collect-macros :filter-return
+              (lambda (templates)
+                (dolist (entry (butlast templates 4) templates)
+                  (when (and (stringp (cdr entry))
+                             (string-match-p "\\\\\`[ \\t\\n]*(eval\\\\>" (cdr entry)))
+                    (error "Refusing to evaluate macro %s: a deck may not run Lisp"
+                           (car entry))))))
+  (advice-add 'org-re-reveal--build-pre-postamble :around
+              (lambda (orig type info spec)
+                (let ((section (plist-get info (intern (format ":reveal-%s" type)))))
+                  (when (and (stringp section) (functionp (intern section)))
+                    (error "Refusing to call %s named by #+REVEAL_%s"
+                           section (upcase (format "%s" type))))
+                  (funcall orig type info spec))))
+  ;; Loading Lisp reads its source through load-with-code-conversion; this
+  ;; script itself runs inside load, so load-in-progress cannot tell them
+  ;; apart.
+  (advice-add 'load-with-code-conversion :around
+              (lambda (orig &rest load-args)
+                (let ((webframp-presentation--loading-lisp t))
+                  (apply orig load-args))))
+  (let ((guard
+         (lambda (orig file &rest rest)
+           (unless webframp-presentation--loading-lisp
+             (let ((true (file-truename (expand-file-name file))))
+               (unless (and (file-in-directory-p true allowed)
+                            (not (string-match-p "/\\\\.\\\\(git\\\\|swamp\\\\)\\\\(/\\\\|\\\\'\\\\)"
+                                                 (concat "/" (substring true (length allowed))))))
+                 (error "Refusing to read %s: outside %s" file allowed))))
+           (apply orig file rest))))
+    (advice-add 'insert-file-contents :around guard)
+    (advice-add 'insert-file-contents-literally :around guard))
   (with-current-buffer (find-file-noselect source)
     (unless (cadr (assoc "AUTHOR" (org-collect-keywords '("AUTHOR"))))
       (setq-local org-export-with-author nil))
     (random "webframp-presentation")
     (let ((html (with-current-buffer (org-export-to-buffer 're-reveal " *deck*")
                   (buffer-string)))
-          (coding-system-for-write 'utf-8))
-      (princ "${DECK_BEGIN}\\n")
-      (princ html)
-      (princ "\\n${DECK_END}\\n"))))
+          (coding-system-for-write 'utf-8-unix))
+      (with-temp-file output (insert html)))))
 `;
 
 /** Result of running a tool. */
@@ -80,17 +131,20 @@ export interface ToolRun {
 async function run(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal; timeoutMs: number },
 ): Promise<ToolRun> {
+  const timeout = AbortSignal.timeout(opts.timeoutMs);
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, timeout])
+    : timeout;
   let out: Deno.CommandOutput;
   try {
     out = await new Deno.Command(cmd, {
       args,
-      cwd: opts.cwd,
       stdin: "null",
       stdout: "piped",
       stderr: "piped",
-      signal: opts.signal,
+      signal,
     }).output();
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
@@ -99,6 +153,11 @@ async function run(
       );
     }
     throw e;
+  }
+  if (timeout.aborted) {
+    throw new Error(
+      `${cmd} did not finish within ${opts.timeoutMs / 1000} s and was stopped`,
+    );
   }
   return {
     code: out.code,
@@ -111,14 +170,34 @@ function tail(text: string, lines = 15): string {
   return text.trimEnd().split("\n").slice(-lines).join("\n");
 }
 
-/** Extract the HTML between the build script's markers. */
-export function extractDeck(stdout: string): string {
-  const begin = stdout.indexOf(`${DECK_BEGIN}\n`);
-  const end = stdout.lastIndexOf(`\n${DECK_END}`);
-  if (begin < 0 || end < begin) {
-    throw new Error("org-re-reveal produced no deck (markers missing)");
+/** Read an engine's output file, refusing one that is missing or too large. */
+export async function readEngineOutput(path: string): Promise<string> {
+  let size: number;
+  try {
+    size = (await Deno.stat(path)).size;
+  } catch (e) {
+    if (e instanceof Deno.errors.NotFound) {
+      throw new Error("the engine wrote no deck");
+    }
+    throw e;
   }
-  return stdout.slice(begin + DECK_BEGIN.length + 1, end);
+  if (size > MAX_ENGINE_OUTPUT_BYTES) {
+    throw new Error(
+      `the engine wrote ${size} bytes, over the ${MAX_ENGINE_OUTPUT_BYTES}-byte limit`,
+    );
+  }
+  return await Deno.readTextFile(path);
+}
+
+/** Lines of a tool's error output worth recording as warnings. */
+export function warningLines(
+  stderr: string,
+  engine: "org" | "pandoc",
+): string[] {
+  const lines = stderr.split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  return engine === "pandoc"
+    ? lines.filter((l) => l.startsWith("[WARNING]"))
+    : lines.filter((l) => /\bwarning\b/i.test(l));
 }
 
 /** Render an Org file with org-re-reveal. */
@@ -128,8 +207,11 @@ export async function renderOrg(opts: {
   lispDir: string;
   source: string;
   theme: string;
+  allowedDir: string;
+  output: string;
+  timeoutMs: number;
   signal?: AbortSignal;
-}): Promise<{ html: string; log: string }> {
+}): Promise<{ html: string; warnings: string[] }> {
   const r = await run(opts.emacs, [
     "--batch",
     "-Q",
@@ -139,13 +221,15 @@ export async function renderOrg(opts: {
     opts.source,
     REVEAL_CDN,
     opts.theme,
-  ], { signal: opts.signal });
+    opts.allowedDir,
+    opts.output,
+  ], { signal: opts.signal, timeoutMs: opts.timeoutMs });
   if (r.code !== 0) {
     throw new Error(`org-re-reveal export failed:\n${tail(r.stderr)}`);
   }
   return {
-    html: extractDeck(new TextDecoder().decode(r.stdout)),
-    log: tail(r.stderr),
+    html: await readEngineOutput(opts.output),
+    warnings: warningLines(r.stderr, "org"),
   };
 }
 
@@ -161,23 +245,26 @@ export function adaptPandocTemplate(template: string): string {
   );
 }
 
-/** Render a Markdown file with pandoc. */
+/**
+ * Render a Markdown file with pandoc. `--sandbox` limits pandoc to reading
+ * the files named on its command line.
+ */
 export async function renderPandoc(opts: {
   pandoc: string;
   source: string;
   theme: string;
   workDir: string;
+  timeoutMs: number;
   signal?: AbortSignal;
-}): Promise<{ html: string; log: string; version: string | null }> {
-  const ver = await run(opts.pandoc, ["--version"], { signal: opts.signal });
+}): Promise<{ html: string; warnings: string[]; version: string | null }> {
+  const limits = { signal: opts.signal, timeoutMs: opts.timeoutMs };
+  const ver = await run(opts.pandoc, ["--version"], limits);
   const version = ver.code === 0
     ? new TextDecoder().decode(ver.stdout).match(/^pandoc\S*\s+([\d.]+)/m)
       ?.[1] ?? null
     : null;
 
-  const tpl = await run(opts.pandoc, ["-D", "revealjs"], {
-    signal: opts.signal,
-  });
+  const tpl = await run(opts.pandoc, ["-D", "revealjs"], limits);
   if (tpl.code !== 0) {
     throw new Error(`pandoc -D revealjs failed:\n${tail(tpl.stderr)}`);
   }
@@ -189,8 +276,10 @@ export async function renderPandoc(opts: {
   // A default theme that the document's own `theme:` overrides.
   const defaults = `${opts.workDir}/defaults.yaml`;
   await Deno.writeTextFile(defaults, `theme: ${JSON.stringify(opts.theme)}\n`);
+  const output = `${opts.workDir}/deck.html`;
 
   const r = await run(opts.pandoc, [
+    "--sandbox",
     "--standalone",
     "--from",
     "markdown",
@@ -201,15 +290,16 @@ export async function renderPandoc(opts: {
     `--metadata-file=${defaults}`,
     "--variable",
     `revealjs-url=${REVEAL_CDN}`,
+    `--output=${output}`,
     // Callers pass an absolute path, so it can never read as an option.
     opts.source,
-  ], { signal: opts.signal });
+  ], limits);
   if (r.code !== 0) {
     throw new Error(`pandoc failed:\n${tail(r.stderr)}`);
   }
   return {
-    html: new TextDecoder().decode(r.stdout),
-    log: tail(r.stderr),
+    html: await readEngineOutput(output),
+    warnings: warningLines(r.stderr, "pandoc"),
     version,
   };
 }
@@ -235,8 +325,10 @@ export function renderRevealMarkdown(opts: {
     }
     return `${REVEAL_CDN}/${p}`;
   };
-  // A textarea ends at the first "</textarea"; keep the source from ending it.
-  const source = opts.markdown.replace(/<\/textarea/gi, "&lt;/textarea");
+  // A textarea's content is decoded as text, so escaping & and < keeps the
+  // Markdown exactly as written, entities included, and stops it from
+  // ending the textarea early.
+  const source = opts.markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -279,30 +371,52 @@ Reveal.initialize({
 `;
 }
 
-/** Inline local images in Markdown source as data URIs. */
+/**
+ * Where Markdown for reveal.js's markdown plugin can point at a local file:
+ * image links, reference definitions, `<img src>` and other resource
+ * attributes in raw HTML, slide or element attribute comments, and CSS
+ * `url()` in raw HTML styles.
+ */
+const MARKDOWN_REFS: readonly RegExp[] = [
+  /(!\[[^\]]*\]\(\s*<?)([^)\s>]+)(>?(?:\s+"[^"]*")?\s*\))/g,
+  /^( {0,3}\[[^\]]+\]:[ \t]*<?)([^\s>]+)(>?)/gm,
+  /(\s(?:src|data-src|poster|data-background|data-background-image|data-background-video)=")([^"]*)(")/gi,
+  /(\s(?:src|data-src|poster|data-background|data-background-image|data-background-video)=')([^']*)(')/gi,
+  /(url\(\s*["']?)([^"')\s]+)(["']?\s*\))/gi,
+];
+
+/**
+ * Inline the local files Markdown refers to as data URIs. `inline` resolves
+ * a reference or explains why it cannot; `isMedia` says whether a reference
+ * names a local media file worth inlining (a reference definition may point
+ * at a page instead).
+ */
 export async function inlineMarkdownImages(
   markdown: string,
   inline: (ref: string) => Promise<{ uri: string } | { problem: string }>,
-  isLocal: (ref: string) => boolean,
+  isMedia: (ref: string) => boolean,
 ): Promise<{ markdown: string; problems: string[] }> {
   const problems: string[] = [];
-  const re = /(!\[[^\]]*\]\(\s*<?)([^)\s>]+)(>?(?:\s+"[^"]*")?\s*\))/g;
-  const parts: string[] = [];
-  let last = 0;
-  for (const m of markdown.matchAll(re)) {
-    parts.push(markdown.slice(last, m.index));
-    if (isLocal(m[2])) {
-      const r = await inline(m[2]);
-      if ("uri" in r) parts.push(`${m[1]}${r.uri}${m[3]}`);
-      else {
-        problems.push(r.problem);
-        parts.push(m[0]);
-      }
-    } else parts.push(m[0]);
-    last = m.index + m[0].length;
+  let text = markdown;
+  for (const re of MARKDOWN_REFS) {
+    const parts: string[] = [];
+    let last = 0;
+    for (const m of text.matchAll(re)) {
+      parts.push(text.slice(last, m.index));
+      if (isMedia(m[2])) {
+        const r = await inline(m[2]);
+        if ("uri" in r) parts.push(`${m[1]}${r.uri}${m[3]}`);
+        else {
+          problems.push(r.problem);
+          parts.push(m[0]);
+        }
+      } else parts.push(m[0]);
+      last = m.index + m[0].length;
+    }
+    parts.push(text.slice(last));
+    text = parts.join("");
   }
-  parts.push(markdown.slice(last));
-  return { markdown: parts.join(""), problems };
+  return { markdown: text, problems };
 }
 
 /** The body of a Markdown deck and its front-matter title and theme. */
