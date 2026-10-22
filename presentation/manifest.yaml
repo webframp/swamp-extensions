@@ -1,0 +1,69 @@
+manifestVersion: 1
+name: "@webframp/presentation"
+license: Apache-2.0
+version: "2026.10.21.1"
+description: |
+  Build reveal.js presentations from Org or Markdown and keep every build,
+  outline and PDF as versioned swamp data.
+
+  Org decks render through org-re-reveal, so #+REVEAL_ options, fragments,
+  speaker notes and themes behave as they do in Emacs. Markdown decks render
+  through pandoc, or in the browser through reveal.js's markdown plugin.
+  Decks load reveal.js 6.0.1 from jsDelivr with subresource integrity, or
+  carry every file inline (selfContained) and work offline. Local images are
+  always inlined, so a stored deck never depends on files beside its source.
+
+  Every download is pinned to an exact version and SHA-256: reveal.js from
+  jsDelivr, org-re-reveal 3.39.0 and htmlize 1.59 by commit. Nothing is read
+  from your Emacs configuration, and building a deck never runs its code
+  blocks.
+
+  ## Requirements
+
+  - Emacs 27.2 or later for Org decks (its built-in Org, 9.4 or newer, is used)
+  - pandoc 3 for the pandoc engine
+  - Chromium or Chrome for export_pdf
+
+  ## Quick start
+
+  ```bash
+  swamp extension pull @webframp/presentation
+  swamp model create @webframp/presentation/deck talks
+
+  swamp model method run talks build --input source=talk.org
+  swamp model method run talks outline --input source=talk.org
+  swamp model method run talks export_pdf --input name=talk
+
+  # The deck itself, ready to open in a browser:
+  swamp data query 'model("talks") && name == "deck-talk-html"' \
+    --select content > talk.html
+  ```
+
+  Or outline, build and print in one run:
+
+  ```bash
+  swamp workflow run @webframp/presentation-build \
+    --input source=talk.org --input pdf=true
+  ```
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - presentation/deck.ts
+reports:
+  - deck_summary_report.ts
+workflows:
+  - presentation-build.yaml
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - presentation
+  - slides
+  - revealjs
+  - org-mode
+  - markdown
+  - emacs

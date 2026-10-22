@@ -129,6 +129,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/redmine-kanban`](redmine-kanban/) | Kanban flow-metrics and sprint-summary reports plus a scaffold-story workflow, built on top of `@webframp/redmine` | `@webframp/redmine` |
 | [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 | [`@webframp/bench-datastore`](bench-datastore/) | Datastore benchmarking harness — two workflow-based scenarios (throughput breadth and write-stress depth) exercising any datastore backend under sustained load without lock contention | None |
+| [`@webframp/presentation`](presentation/) | reveal.js presentations from Org (org-re-reveal) or Markdown (pandoc or reveal.js's markdown plugin), stored as versioned HTML and PDF with pinned, hash-checked reveal.js — plus an outline method, a build workflow and a deck-summary report | None (needs Emacs, pandoc or Chromium per engine) |
 
 ## Vault Extensions
 
@@ -193,6 +194,7 @@ swamp extension pull @webframp/aws/securityhub-findings
 swamp extension pull @webframp/ai-usage
 swamp extension pull @webframp/redmine-kanban
 swamp extension pull @webframp/bench-datastore
+swamp extension pull @webframp/presentation
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing
@@ -400,6 +402,21 @@ swamp model create @webframp/redmine tracker \
 
 swamp workflow run @webframp/scaffold-story \
   --input subject="ADDS | LDAP | Implement Geographic Redundancy"
+```
+
+### Presentations from Org or Markdown
+
+```bash
+swamp extension pull @webframp/presentation
+swamp model create @webframp/presentation/deck talks
+
+# Outline, build and print one deck
+swamp workflow run @webframp/presentation-build \
+  --input source=talks/observe.org --input pdf=true
+
+# Or run the methods directly; selfContained decks work offline
+swamp model method run talks build --input source=talks/observe.org --input selfContained=true
+swamp data query 'model("talks") && name == "deck-observe-html"' --select content > observe.html
 ```
 
 ### fal.ai account and GPU compute audit
