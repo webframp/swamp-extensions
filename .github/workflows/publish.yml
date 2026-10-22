@@ -57,6 +57,10 @@ jobs:
           SHA: ${{ inputs.sha }}
           REPO: ${{ github.repository }}
         run: |
+          if ! [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::sha must be a full 40-character commit hash"
+            exit 1
+          fi
           if [ "$SHA" != "$GITHUB_SHA" ]; then
             echo "::notice::main is at ${GITHUB_SHA:0:8}, not ${SHA:0:8}; its own CI will publish both"
             echo "STOP=1" >> "$GITHUB_ENV"
