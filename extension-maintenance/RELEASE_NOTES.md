@@ -1,3 +1,22 @@
+## 2026.10.22.1
+
+**Fixed:** Existing definitions created against an earlier version were stranded
+on upgrade. The model shipped new versions without a corresponding `upgrades`
+chain, so swamp could not migrate a definition's `typeVersion` and logged a
+warning that global arguments would not be migrated. This release backfills the
+full upgrade chain through every shipped version and terminates it at the
+current version, so stale definitions migrate cleanly. The transform is identity
+— no stored global argument value changes.
+
+**Changed:** The chain records the addition of the `min_dependency_age_hours`
+global argument (default 24) and additive optional report fields. Existing
+`ext-maint` definitions keep their configured arguments; the new argument takes
+its schema default.
+
+**Upgrade note:** No action required. On the next method run, each existing
+definition's `typeVersion` advances to 2026.10.22.1 with its global arguments
+preserved.
+
 ## 2026.10.14.1
 
 **Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry

@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/azure-blob-datastore-bootstrap"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.10.22.1"
 description: |
   One-shot bootstrap for @webframp/azure-blob-datastore. Creates an Azure
   Storage account with a blob container, then switches the current swamp
