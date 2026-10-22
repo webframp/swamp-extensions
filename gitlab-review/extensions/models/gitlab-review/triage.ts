@@ -55,13 +55,15 @@ export const extension = {
     post_inline_review: {
       description:
         "Post a SHA-bound batch of validated changed-line comments, optionally removing approval.",
+      // Not strict: swamp merges the definition's globalArguments (host, token) into
+      // the method arguments before validating them; the default object strips them.
       arguments: z.object({
         project: z.string().min(1),
         iid: z.number().int().positive(),
         expectedHeadSha: z.string().min(1),
         comments: z.array(Comment).min(1).max(50),
         action: z.enum(["comment", "request_changes"]),
-      }).strict(),
+      }),
       execute: async (
         args: {
           project: string;

@@ -281,3 +281,26 @@ Deno.test("post_inline_review does not repost a discussion already recorded from
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("post_inline_review arguments accept the global args swamp merges in", () => {
+  // swamp merges a definition's globalArguments under per-method arguments before
+  // validating them, so the schema must tolerate host/token alongside its own keys.
+  const result = extension.methods[0].post_inline_review.arguments.safeParse({
+    host: "gitlab.example.com",
+    token: "test-token",
+    project,
+    iid,
+    expectedHeadSha: "expected-head",
+    action: "comment",
+    comments: [{ path: "src/example.ts", newLine: 1, body: "Review note" }],
+  });
+
+  assertEquals(result.error, undefined);
+  assertEquals(result.data, {
+    project,
+    iid,
+    expectedHeadSha: "expected-head",
+    action: "comment",
+    comments: [{ path: "src/example.ts", newLine: 1, body: "Review note" }],
+  });
+});
