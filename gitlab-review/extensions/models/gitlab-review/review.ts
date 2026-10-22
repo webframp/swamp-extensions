@@ -352,7 +352,7 @@ mutation updateNote($id: NoteID!, $body: String!) {
 /** GitLab MR review model — fetch diffs, draft reviews, post comments via GraphQL (REST fallback for diffs & approvals). */
 export const model = {
   type: "@webframp/gitlab-review",
-  version: "2026.10.21.2",
+  version: "2026.10.22.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -453,6 +453,12 @@ export const model = {
       toVersion: "2026.10.21.2",
       description:
         "No schema changes — README stores the token at the vault prompt instead of echoing it from an environment variable",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.22.1",
+      description:
+        "No schema changes — post_inline_review accepts the global arguments swamp merges into method arguments",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

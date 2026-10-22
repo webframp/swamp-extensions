@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab-review"
 license: Apache-2.0
-version: "2026.10.21.2"
+version: "2026.10.22.1"
 description: |
   AI-assisted GitLab merge request code review with human approval gate.
   Uses GraphQL for notes and MR metadata, REST fallback for diff content
