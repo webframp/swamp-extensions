@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aurora-datastore-bootstrap"
 license: Apache-2.0
-version: "2026.10.22.1"
+version: "2026.10.22.2"
 description: |
   One-shot bootstrap for @webframp/postgres-datastore targeting AWS Aurora
   Serverless v2 (PostgreSQL). Creates an Aurora cluster with a serverless
@@ -35,9 +35,13 @@ description: |
 
   swamp model create command/shell swamp-aurora-setup
 
+  # Store the master password in a vault (prompts for the value):
+  swamp vault create local_encryption aurora
+  swamp vault put aurora MASTER_PASSWORD
+
   swamp workflow run @webframp/bootstrap-aurora-datastore \
     --input region=us-east-1 \
-    --input master_password=<your-password>
+    --input master_password='${{ vault.get("aurora", "MASTER_PASSWORD") }}'
 
   swamp datastore status
   ```

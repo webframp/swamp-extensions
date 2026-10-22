@@ -1,3 +1,20 @@
+## 2026.10.22.2
+
+**Fixed:** The README and manifest Quick Start documented `token` as a literal
+`--input token=glpat-...` value. Workflow `--input` values are recorded in
+cleartext in the run history, so a token written that way leaks. The docs now
+store the token with `swamp vault put gitlab TOKEN` (which prompts for the
+value) and pass it as a `${{ vault.get("gitlab", "TOKEN") }}` expression, which
+swamp redacts. This earns the registry `secret-safe-docs` quality factor.
+
+**Changed:** Docs only. No model schema, method, or behavior change. The
+`upgrades` chain gains an identity entry terminating at this version so existing
+definitions migrate cleanly.
+
+**Upgrade note:** No action required. On the next method run, each existing
+definition's `typeVersion` advances to 2026.10.22.2 with its global arguments
+preserved.
+
 ## 2026.10.22.1
 
 **Fixed:** Existing definitions created against an earlier version were stranded

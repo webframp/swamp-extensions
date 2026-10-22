@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab-datastore-bootstrap"
 license: Apache-2.0
-version: "2026.10.22.1"
+version: "2026.10.22.2"
 description: |
   One-shot bootstrap for @webframp/gitlab-datastore. Validates access to a
   GitLab project, optionally creates a scoped project access token, and
@@ -28,9 +28,13 @@ description: |
 
   swamp model create command/shell swamp-gitlab-setup
 
+  # Store the GitLab token in a vault (prompts for the value):
+  swamp vault create local_encryption gitlab
+  swamp vault put gitlab TOKEN
+
   swamp workflow run @webframp/bootstrap-gitlab-datastore \
     --input project_id=12345 \
-    --input token=glpat-xxxxxxxxxxxxxxxxxxxx
+    --input token='${{ vault.get("gitlab", "TOKEN") }}'
 
   swamp datastore status
   ```

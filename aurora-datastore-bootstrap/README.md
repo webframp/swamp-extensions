@@ -21,12 +21,28 @@ swamp model create @webframp/aurora-datastore-bootstrap/provisioner \
   swamp-aurora-provisioner
 swamp model create command/shell swamp-aurora-setup
 
+# Store the master password in a vault (prompts for the value — never put a
+# secret on the command line or in an --input, which is recorded in cleartext).
+swamp vault create local_encryption aurora
+swamp vault put aurora MASTER_PASSWORD
+
 swamp workflow run @webframp/bootstrap-aurora-datastore \
   --input region=us-east-1 \
-  --input master_password=YourSecurePass123
+  --input master_password='${{ vault.get("aurora", "MASTER_PASSWORD") }}'
 
 swamp datastore status
 ```
+
+`master_password` is a secret. Store it in a vault (the command prompts for the
+value) and pass it as a `${{ vault.get("aurora", "MASTER_PASSWORD") }}`
+expression:
+
+```bash
+swamp vault put aurora MASTER_PASSWORD
+```
+
+Any vault type works — `local_encryption` or an extension such as
+`@webframp/pass`, `@webframp/macos-keychain`, or `@webframp/hashicorp-vault`.
 
 ## Inputs
 

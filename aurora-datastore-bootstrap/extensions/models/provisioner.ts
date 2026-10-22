@@ -504,7 +504,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/aurora-datastore-bootstrap/provisioner",
-  version: "2026.10.22.1",
+  version: "2026.10.22.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -577,6 +577,12 @@ export const model = {
       toVersion: "2026.10.22.1",
       description:
         "Backfill upgrade chain so existing definitions migrate instead of stranding; identity transform preserves all global arguments",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.22.2",
+      description:
+        "Docs-only: README and manifest now store master_password in a vault instead of a literal --input value. No schema changes; identity transform preserves all global arguments",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

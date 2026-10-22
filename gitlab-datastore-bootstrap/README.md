@@ -23,19 +23,34 @@ swamp model create @webframp/gitlab-datastore-bootstrap/provisioner \
   swamp-gitlab-provisioner
 swamp model create command/shell swamp-gitlab-setup
 
+# Store the GitLab token in a vault (prompts for the value — never put a secret
+# on the command line or in an --input, which is recorded in cleartext).
+swamp vault create local_encryption gitlab
+swamp vault put gitlab TOKEN
+
 # Basic: use your existing PAT
 swamp workflow run @webframp/bootstrap-gitlab-datastore \
   --input project_id=12345 \
-  --input token=glpat-xxxxxxxxxxxxxxxxxxxx
+  --input token='${{ vault.get("gitlab", "TOKEN") }}'
 
 # With dedicated project token (recommended for shared use)
 swamp workflow run @webframp/bootstrap-gitlab-datastore \
   --input project_id=mygroup/myproject \
-  --input token=glpat-xxxxxxxxxxxxxxxxxxxx \
+  --input token='${{ vault.get("gitlab", "TOKEN") }}' \
   --input create_project_token=true
 
 swamp datastore status
 ```
+
+`token` is a secret. Store it in a vault (the command prompts for the value) and
+pass it as a `${{ vault.get("gitlab", "TOKEN") }}` expression:
+
+```bash
+swamp vault put gitlab TOKEN
+```
+
+Any vault type works — `local_encryption` or an extension such as
+`@webframp/pass`, `@webframp/macos-keychain`, or `@webframp/hashicorp-vault`.
 
 ## Inputs
 
