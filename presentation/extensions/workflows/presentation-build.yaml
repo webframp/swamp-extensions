@@ -1,0 +1,83 @@
+id: 8596b518-de49-4c55-b9b4-6f223f88fc9a
+name: "@webframp/presentation-build"
+description: |
+  Build one deck: outline the source, render it, and optionally print it to
+  PDF. Each step runs only if the one before it succeeded, so a source that
+  fails to build never reaches the PDF step.
+
+  Requires an @webframp/presentation/deck instance, named by the `deck`
+  input (default `talks`):
+
+    swamp model create @webframp/presentation/deck talks
+
+  The deck's data name comes from the source file name. To choose another
+  name or an engine other than the default, run the methods directly:
+
+    swamp model method run talks build --input source=talk.md \
+      --input name=talk-web --input engine=reveal-markdown
+
+  All three steps target the same model and run in order.
+version: 1
+tags:
+  extension: "@webframp/presentation"
+  category: "presentation"
+reports:
+  require:
+    - "@swamp/workflow-summary"
+inputs:
+  properties:
+    deck:
+      type: string
+      default: talks
+      description: Name of the @webframp/presentation/deck instance
+    source:
+      type: string
+      description: Path to the .org or .md source, absolute or relative to the repository
+    selfContained:
+      type: boolean
+      default: false
+      description: Inline every reveal.js file so the deck works offline
+    pdf:
+      type: boolean
+      default: false
+      description: Also print the deck to PDF with headless Chromium
+  required:
+    - source
+jobs:
+  - name: deck
+    description: Outline, build and optionally print one deck
+    steps:
+      - name: outline
+        description: Read the source without rendering it
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.deck }}
+          methodName: outline
+          inputs:
+            source: ${{ inputs.source }}
+      - name: build
+        description: Render the deck and store its HTML
+        dependsOn:
+          - step: outline
+            condition:
+              type: succeeded
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.deck }}
+          methodName: build
+          inputs:
+            source: ${{ inputs.source }}
+            selfContained: ${{ inputs.selfContained }}
+      - name: pdf
+        description: Print the build to PDF (skipped unless pdf is true)
+        dependsOn:
+          - step: build
+            condition:
+              type: succeeded
+        guard: ${{ !inputs.pdf }}
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.deck }}
+          methodName: export_pdf
+          inputs:
+            source: ${{ inputs.source }}
