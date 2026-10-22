@@ -81,7 +81,7 @@ repository: "https://github.com/webframp/swamp-extensions"
 models:
   - aws/php2shell_hunt.ts
 dependencies:
-  - "@swamp/typesafe-ai"
+  - "@swamp/typesafe-ai@2026.09.15.1"
 additionalFiles:
   - README.md
   - LICENSE.md

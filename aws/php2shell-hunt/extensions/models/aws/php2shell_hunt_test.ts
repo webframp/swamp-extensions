@@ -839,6 +839,74 @@ Deno.test("jev enrichment: low noul clears the RCE-hint noise to no_signal", asy
   }
 });
 
+Deno.test("jev clearance holds when Security Hub mirrors the same GuardDuty finding", async () => {
+  // Regression for the CI-caught HIGH: with Security Hub enabled (the default),
+  // the same GuardDuty RCE-hint finding the direct lane feeds to jev ALSO
+  // re-appears as a non-CVE Security Hub hit. If the SH fold credited it to
+  // guardDutyRceHintCount unconditionally, it would undo jev's clearance and
+  // force possible_probe. jev cleared it (0.05), so the verdict must stay
+  // no_signal even though SH surfaced the mirror.
+  const restores = [
+    mockInspector(() => ({ findings: [] })),
+    mockGuardDutyWithRceFinding(),
+    mockClient(SecurityHubClient, () => ({
+      Findings: [
+        {
+          Id: "arn:sh:mirror",
+          AwsAccountId: "111111111111",
+          Region: "us-east-1",
+          ProductName: "GuardDuty",
+          Types: ["TTPs/Impact"],
+          Severity: { Label: "MEDIUM" },
+          Title: "Backdoor-shaped finding (mirrored from GuardDuty)",
+          // no Vulnerabilities / no CVE -> non-CVE hit, the else branch
+        },
+      ],
+    })),
+  ];
+  try {
+    const ctx = createMockContext(
+      model.globalArguments.parse({
+        regions: ["us-east-1"],
+        scope: "self",
+        jevBehavior: "jev-test",
+      }),
+      {
+        runModel: () => Promise.resolve({ ok: true, resources: [] }),
+        readModelData: () =>
+          Promise.resolve([
+            { name: "noul-p2s-0", attributes: { noul: 0.05 } },
+          ]),
+      },
+    );
+    await model.methods.hunt.execute(
+      {
+        since: PHP2SHELL_IOCS.earliestKnownExploitation,
+        logGroupNames: [],
+        useSecurityHub: true,
+        jevMaxCalls: 15,
+      },
+      ctx as unknown as Parameters<typeof model.methods.hunt.execute>[1],
+    );
+    const report = ctx.written.find((w) => w.spec === "exposure_report")!
+      .data as {
+        jevEnriched: boolean;
+        orgVerdict: string;
+        accounts: Array<{ evidence: { guardDutyRceHintCount: number } }>;
+      };
+    assertEquals(report.jevEnriched, true);
+    // The Security Hub mirror must NOT re-inflate the raw heuristic.
+    const totalRce = report.accounts.reduce(
+      (n, a) => n + a.evidence.guardDutyRceHintCount,
+      0,
+    );
+    assertEquals(totalRce, 0);
+    assertEquals(report.orgVerdict, "no_signal");
+  } finally {
+    for (const r of restores) r();
+  }
+});
+
 Deno.test("jev runModel ok:false => not enriched, honest skip, heuristic fallback", async () => {
   const restores = [
     mockInspector(() => ({ findings: [] })),

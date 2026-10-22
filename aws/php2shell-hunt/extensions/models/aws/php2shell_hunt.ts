@@ -517,8 +517,11 @@ async function resolveAccountIds(
       accountId: null,
       reason:
         `Could not list AWS Organizations accounts (${errMessage(err)}). ` +
-        "Falling back to the credentialed account only. Point the profile at " +
-        "the delegated-admin or management account for org-wide scope.",
+        "Account filtering is therefore disabled: the hunt proceeds against " +
+        "whatever the supplied credentials can see — which, for a " +
+        "delegated-admin or management account, is still org-wide member " +
+        "findings, NOT a single account. Grant organizations:ListAccounts to " +
+        "get an explicit per-account breakdown.",
     });
     return { accountIds: [], skipped };
   } finally {
@@ -581,7 +584,7 @@ async function scanInspectorLane(
           const matchedCve = (f.packageVulnerabilityDetails?.vulnerabilityId &&
               cves.includes(f.packageVulnerabilityDetails.vulnerabilityId))
             ? f.packageVulnerabilityDetails.vulnerabilityId
-            : (cves.find((c) => (f.title ?? "").includes(c)) ?? cves[0]);
+            : (cves.find((c) => (f.title ?? "").includes(c)) ?? "UNKNOWN");
           const res = f.resources?.[0];
           hits.push({
             findingArn: f.findingArn ?? "",
@@ -2004,10 +2007,15 @@ export const model = {
               if (!ev.inspectorCves.includes(h.matchedCve)) {
                 ev.inspectorCves.push(h.matchedCve);
               }
-            } else {
-              // A GuardDuty/Inspector finding that merely exists in Security
-              // Hub is behavioral corroboration, not confirmation of vulnerable
-              // PHP. Count it at the possible_probe tier, never confirmed.
+            } else if (!jevEnriched) {
+              // A non-CVE GuardDuty/Inspector finding surfaced via Security Hub
+              // is behavioral corroboration at the possible_probe tier. But
+              // Security Hub aggregates the SAME GuardDuty findings the direct
+              // lane already collected, so when jev enrichment ran — and has
+              // already judged those findings per-signal (jevConfirmedCount) —
+              // re-adding them here would silently undo jev's clearance and
+              // neutralise the enrichment. Only credit the raw heuristic when
+              // jev did NOT run.
               ev.guardDutyRceHintCount++;
             }
           }
