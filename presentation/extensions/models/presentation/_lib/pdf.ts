@@ -7,20 +7,31 @@
  * finished laying out its print view and produces one blank page. Driving
  * the browser over the protocol lets us wait until the layout settles.
  *
+ * A deck is untrusted. It is served from a one-file loopback HTTP server,
+ * never opened as a `file://` page, and every request the page makes is
+ * intercepted: only the deck itself, `data:`/`blob:` URLs and `https:`
+ * requests to public hosts go through. A deck cannot pull local files or
+ * local services into the PDF.
+ *
  * @module
  */
 
-/** The protocol calls the printer needs. */
+/** The protocol calls and events the printer needs. */
 export interface Cdp {
   send(
     method: string,
     params?: Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+  /** Call `handler` with the params of every `event` the browser sends. */
+  on(event: string, handler: (params: Record<string, unknown>) => void): void;
 }
 
 /** How long to wait between layout checks, and how many equal counts in a row mean settled. */
 const POLL_MS = 250;
 const STABLE_POLLS = 4;
+
+/** How long Chromium gets to exit after SIGTERM, then after SIGKILL. */
+const EXIT_GRACE_MS = 3_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -43,18 +54,68 @@ export function beforeDeadline<T>(
   return Promise.race([p, late]).finally(() => clearTimeout(timer));
 }
 
+/** True for a host name or address on this machine or a private network. */
+export function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h === "0.0.0.0") {
+    return true;
+  }
+  if (h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h)) {
+    return true;
+  }
+  if (h.startsWith("::ffff:")) return isPrivateHost(h.slice(7));
+  const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (!v4) return false;
+  const [a, b] = [Number(v4[1]), Number(v4[2])];
+  return a === 127 || a === 10 || a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+    (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+}
+
+/**
+ * Whether the page may load `url`: the deck itself (`deckUrl`, any query),
+ * `data:` and `blob:` URLs, and `https:` to a public host. Anything else,
+ * `file:` and plain `http:` included, is refused.
+ */
+export function mayLoad(url: string, deckUrl: string): boolean {
+  if (url.split(/[?#]/)[0] === deckUrl.split(/[?#]/)[0]) return true;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.protocol === "data:" || u.protocol === "blob:") return true;
+  return u.protocol === "https:" && !isPrivateHost(u.hostname);
+}
+
 /**
  * Open `url` (a deck with `?print-pdf`), wait until reveal.js's print layout
- * stops adding pages, and print it. Every protocol call must answer before
- * `deadline` (a `Date.now()` value). Returns the PDF and the page count.
+ * stops adding pages, and print it. Every request the page makes passes
+ * through `mayLoad`. Every protocol call must answer before `deadline` (a
+ * `Date.now()` value). Returns the PDF, the page count and the URLs refused.
  */
 export async function printDeck(
   cdp: Cdp,
   url: string,
   deadline: number,
-): Promise<{ pdf: Uint8Array; pages: number }> {
+): Promise<{ pdf: Uint8Array; pages: number; blocked: string[] }> {
   const send = (method: string, params?: Record<string, unknown>) =>
     beforeDeadline(cdp.send(method, params), deadline, method);
+  const blocked = new Set<string>();
+  cdp.on("Fetch.requestPaused", (p) => {
+    const requestId = p.requestId;
+    const request = p.request as { url?: unknown } | undefined;
+    const target = typeof request?.url === "string" ? request.url : "";
+    if (mayLoad(target, url)) {
+      cdp.send("Fetch.continueRequest", { requestId }).catch(() => {});
+    } else {
+      blocked.add(target.length > 200 ? `${target.slice(0, 200)}…` : target);
+      cdp.send("Fetch.failRequest", { requestId, errorReason: "AccessDenied" })
+        .catch(() => {});
+    }
+  });
+  await send("Fetch.enable", { patterns: [{ urlPattern: "*" }] });
   await send("Page.enable");
   await send("Page.navigate", { url });
   let last = -1;
@@ -85,7 +146,7 @@ export async function printDeck(
   const bin = atob(data);
   const pdf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) pdf[i] = bin.charCodeAt(i);
-  return { pdf, pages: last };
+  return { pdf, pages: last, blocked: [...blocked].sort() };
 }
 
 /** A protocol session over a WebSocket. */
@@ -98,8 +159,16 @@ export function cdpOverWebSocket(ws: WebSocket): Cdp {
       reject: (e: Error) => void;
     }
   >();
+  const handlers = new Map<
+    string,
+    Array<(p: Record<string, unknown>) => void>
+  >();
   ws.onmessage = (e) => {
     const msg = JSON.parse(String(e.data));
+    if (typeof msg.method === "string") {
+      for (const h of handlers.get(msg.method) ?? []) h(msg.params ?? {});
+      return;
+    }
     const p = typeof msg.id === "number" ? pending.get(msg.id) : undefined;
     if (!p) return;
     pending.delete(msg.id);
@@ -121,21 +190,57 @@ export function cdpOverWebSocket(ws: WebSocket): Cdp {
         ws.send(JSON.stringify({ id: n, method, params }));
       });
     },
+    on(event, handler) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
   };
 }
 
+/** Stop Chromium: SIGTERM, then SIGKILL if it has not exited in time. */
+async function stop(child: Deno.ChildProcess): Promise<void> {
+  const exited = (ms: number) =>
+    Promise.race([child.status.then(() => true), sleep(ms).then(() => false)]);
+  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+    try {
+      child.kill(signal);
+    } catch {
+      return; // Already exited.
+    }
+    if (await exited(EXIT_GRACE_MS)) return;
+  }
+}
+
 /**
- * Launch headless Chromium on a private profile, print the deck at `url`,
- * and shut the browser down whatever happens. Everything, startup included,
- * must finish within `timeoutMs`.
+ * Serve `html` at `/deck.html` on a loopback port until the returned server
+ * is shut down. Nothing else is served.
+ */
+function serveDeck(html: Uint8Array): { url: string; server: Deno.HttpServer } {
+  let port = 0;
+  const server = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen: (a) => (port = a.port) },
+    (req) =>
+      new URL(req.url).pathname === "/deck.html"
+        ? new Response(html as BodyInit, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        })
+        : new Response("not found", { status: 404 }),
+  );
+  port = server.addr.port;
+  return { url: `http://127.0.0.1:${port}/deck.html`, server };
+}
+
+/**
+ * Launch headless Chromium on a private profile, print `html`, and shut the
+ * browser down whatever happens. Everything, startup included, must finish
+ * within `timeoutMs`.
  */
 export async function exportPdf(opts: {
   chromium: string;
-  url: string;
+  html: Uint8Array;
   profileDir: string;
   timeoutMs: number;
   noSandbox: boolean;
-}): Promise<{ pdf: Uint8Array; pages: number }> {
+}): Promise<{ pdf: Uint8Array; pages: number; blocked: string[] }> {
   const deadline = Date.now() + opts.timeoutMs;
   const args = [
     "--headless=new",
@@ -164,6 +269,7 @@ export async function exportPdf(opts: {
     throw e;
   }
   let ws: WebSocket | null = null;
+  const served = serveDeck(opts.html);
   const reader = child.stderr.pipeThrough(new TextDecoderStream()).getReader();
   try {
     const endpoint = await new Promise<string>((resolve, reject) => {
@@ -224,15 +330,15 @@ export async function exportPdf(opts: {
       deadline,
       "Opening the DevTools connection",
     );
-    return await printDeck(cdpOverWebSocket(socket), opts.url, deadline);
+    return await printDeck(
+      cdpOverWebSocket(socket),
+      `${served.url}?print-pdf`,
+      deadline,
+    );
   } finally {
     ws?.close();
-    try {
-      child.kill("SIGTERM");
-    } catch {
-      // Already exited.
-    }
+    await stop(child);
     await reader.cancel().catch(() => {});
-    await child.status;
+    await served.server.shutdown();
   }
 }

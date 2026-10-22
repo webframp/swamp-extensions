@@ -200,11 +200,12 @@ text
   assertEquals(
     o.slides.map((s) => [s.index, s.title]),
     [
+      // As pandoc 3.7 renders it.
       ["1", "Intro"],
-      ["2", ""],
-      ["3", "Stack"],
-      ["3.2", "Child"],
-      ["3.3", ""],
+      ["1.2", ""],
+      ["2", "Stack"],
+      ["2.2", "Child"],
+      ["2.3", ""],
     ],
   );
 });

@@ -500,10 +500,13 @@ Deno.test("export_pdf prints the recorded HTML version and stores the PDF", asyn
     const printed: string[] = [];
     await withDeps(
       {
-        exportPdf: async (o) => {
-          printed.push(await Deno.readTextFile(new URL(o.url).pathname));
-          assert(o.url.endsWith("?print-pdf"));
-          return { pdf: new TextEncoder().encode("%PDF"), pages: 8 };
+        exportPdf: (o) => {
+          printed.push(new TextDecoder().decode(o.html));
+          return Promise.resolve({
+            pdf: new TextEncoder().encode("%PDF"),
+            pages: 8,
+            blocked: [],
+          });
         },
       },
       () =>
@@ -587,7 +590,8 @@ Deno.test("a symlinked source keeps its own name, in build and export_pdf", asyn
       ));
     const deck = getWrittenResources()[0].data as Deck;
     assertEquals(deck.name, "current");
-    assertEquals(deck.source.path, "talk.org");
+    // Owned by the path as given, so repointing the link keeps the deck.
+    assertEquals(deck.source.path, "current.org");
     const pdfArgs = model.methods.export_pdf.arguments.parse({
       source: "current.org",
     });

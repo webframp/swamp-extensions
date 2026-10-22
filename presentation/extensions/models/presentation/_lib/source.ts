@@ -73,6 +73,29 @@ export function deckNameFromPath(path: string): string {
   return name;
 }
 
+/** Normalize an absolute POSIX path: collapse `.`, `..` and repeated `/`. */
+export function normalizePath(path: string): string {
+  const out: string[] = [];
+  for (const part of path.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") out.pop();
+    else out.push(part);
+  }
+  return `/${out.join("/")}`;
+}
+
+/**
+ * The path of absolute `to` relative to directory `from`, both normalized:
+ * `relativePath("/r/a", "/r/b/c.org")` is `"../b/c.org"`.
+ */
+export function relativePath(from: string, to: string): string {
+  const a = normalizePath(from).split("/").filter((x) => x !== "");
+  const b = normalizePath(to).split("/").filter((x) => x !== "");
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return [...Array(a.length - i).fill(".."), ...b.slice(i)].join("/") || ".";
+}
+
 /** One slide in a source outline. */
 export interface OutlineSlide {
   /**
@@ -267,16 +290,30 @@ function markdownImages(body: string): string[] {
   return out;
 }
 
-/** Remove fenced code blocks so headings and notes inside them are ignored. */
+/**
+ * Replace fenced code blocks with a placeholder line, so headings and notes
+ * inside them are ignored but the slide still counts as having content.
+ */
 function withoutFences(body: string): string {
-  return body.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, "");
+  return body.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, "(code)");
+}
+
+/** A heading's title without pandoc attributes such as `{.unnumbered}` or `{#id}`. */
+function headingTitle(text: string): string {
+  return text.replace(/\s*\{[^{}]*\}\s*$/, "").trim();
 }
 
 /**
- * Outline a Markdown deck as pandoc renders it with `--slide-level=2`:
- * level-1 and level-2 headings (ATX or setext) start slides, a horizontal
- * rule starts an untitled slide at the current level, and `::: notes` divs
- * hold speaker notes.
+ * Outline a Markdown deck as pandoc renders it with `--slide-level=2`,
+ * following what pandoc 3 actually does:
+ * - a level-1 heading starts a top-level slide;
+ * - once a level-1 heading has appeared, every level-2 heading and every
+ *   horizontal rule starts a slide in its vertical stack; before one, they
+ *   start top-level slides;
+ * - content before the first heading is an untitled slide;
+ * - ATX and setext headings count, `{...}` attributes are not part of the
+ *   title, and rules inside lists or block quotes do not split slides;
+ * - `::: notes` divs hold speaker notes.
  */
 export function outlineMarkdownPandoc(text: string): Outline {
   const { meta, body } = splitFrontMatter(text);
@@ -285,49 +322,66 @@ export function outlineMarkdownPandoc(text: string): Outline {
   let chunk: string[] = [];
   let inNotes = false;
   let notes: string[] = [];
+  let sawLevel1 = false;
+  // A slide a rule started; pandoc drops it if nothing follows the rule.
+  let fromRule = false;
 
-  const flush = () => {
-    if (current) {
+  // pandoc keeps an empty rule slide before a level-1 heading, and drops
+  // one before a level-2 heading.
+  const flush = (nextLevel = 1) => {
+    const hasContent = chunk.some((l) => l.trim() !== "");
+    if (current && !(fromRule && !hasContent && nextLevel === 2)) {
       current.images = markdownImages(chunk.join("\n"));
       raw.push(current);
+    } else if (!current && hasContent) {
+      // Content before the first heading: pandoc makes it a slide.
+      raw.push({
+        level: 1,
+        title: "",
+        notesWords: 0,
+        images: markdownImages(chunk.join("\n")),
+      });
     }
     chunk = [];
+  };
+  const start = (headingLevel: number, title: string, rule = false) => {
+    flush(headingLevel);
+    fromRule = rule;
+    if (headingLevel === 1) sawLevel1 = true;
+    current = {
+      level: headingLevel === 1 || !sawLevel1 ? 1 : 2,
+      title,
+      notesWords: 0,
+      images: [],
+    };
   };
 
   let prev = "";
   for (const line of withoutFences(body).split("\n")) {
     const before = prev;
     prev = line;
-    const h = line.match(/^(#{1,2})\s+(.*?)\s*#*\s*$/);
-    if (h && !inNotes) {
-      flush();
-      current = { level: h[1].length, title: h[2], notesWords: 0, images: [] };
-      continue;
-    }
-    const rule = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/
-      .test(line);
-    const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
-    if (
-      !inNotes && underline && before.trim() !== "" &&
-      !/^\s*[-*+]\s/.test(before)
-    ) {
-      // Setext heading: the text line above belongs to the heading, not
-      // to the slide before it.
-      chunk.pop();
-      flush();
-      current = {
-        level: underline[1].startsWith("=") ? 1 : 2,
-        title: before.trim(),
-        notesWords: 0,
-        images: [],
-      };
-      continue;
-    }
-    if (!inNotes && rule && before.trim() === "") {
-      const level: number = current?.level ?? 1;
-      flush();
-      current = { level, title: "", notesWords: 0, images: [] };
-      continue;
+    if (!inNotes) {
+      const h = line.match(/^(#{1,2})\s+(.*?)\s*#*\s*$/);
+      if (h) {
+        start(h[1].length, headingTitle(h[2]));
+        continue;
+      }
+      const underline = /^ {0,3}(=+|-+)[ \t]*$/.exec(line);
+      const plainAbove = before.trim() !== "" &&
+        !/^\s*([-*+>]|\d+[.)])\s/.test(before) && !/^\s*>/.test(before);
+      if (underline && plainAbove) {
+        // Setext heading: the line above is its title, not slide content.
+        chunk.pop();
+        start(underline[1].startsWith("=") ? 1 : 2, headingTitle(before));
+        continue;
+      }
+      const rule =
+        /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/
+          .test(line);
+      if (rule && before.trim() === "") {
+        start(2, "", true);
+        continue;
+      }
     }
     if (/^:::+\s*\{?\s*\.?notes\s*\}?\s*$/.test(line)) {
       inNotes = true;
@@ -335,7 +389,8 @@ export function outlineMarkdownPandoc(text: string): Outline {
       continue;
     }
     if (inNotes && /^:::+\s*$/.test(line)) {
-      if (current) current.notesWords += words(notes.join(" "));
+      const target = current as Omit<OutlineSlide, "index"> | null;
+      if (target) target.notesWords += words(notes.join(" "));
       inNotes = false;
       continue;
     }

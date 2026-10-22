@@ -30,15 +30,25 @@ export const MAX_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024;
  * default theme, the one directory the deck may read files from, and the
  * file to write the HTML to.
  *
- * A deck is untrusted input, so the export runs nothing it names:
- * - Babel, `#+BIND` and file-local variables are off.
- * - A `#+MACRO` whose template is `(eval ...)`, in the file or in any
- *   `#+SETUPFILE`, stops the export. Org's own macros still work.
- * - A `#+REVEAL_PREAMBLE`, `_POSTAMBLE` or `_POSTSCRIPT` that names a
- *   function stops the export; org-re-reveal would call it.
- * - Every file the deck makes Emacs read (`#+INCLUDE`, `#+SETUPFILE`, ...)
- *   must lie inside the allowed directory and outside `.git` and `.swamp`.
- *   Loading Emacs Lisp is not affected.
+ * A deck is untrusted input. The export is deny-by-default:
+ * - No subprocess, network connection or URL fetch can start, so neither
+ *   version control (a crafted `.git/config`) nor Tramp (`/ssh:` paths) can
+ *   run anything. Tramp is off besides.
+ * - Nothing can be written, deleted, renamed or created except the output
+ *   file.
+ * - Every file the deck makes Emacs read must lie inside the allowed
+ *   directory and outside `.git` and `.swamp` (in any letter case).
+ * - No `(eval ...)` macro template runs, whether from `#+MACRO`, a
+ *   `#+SETUPFILE`, or `#+TITLE`, `#+AUTHOR`, `#+EMAIL` or `#+DATE`. The one
+ *   exception is the template Org itself generates for a `#+DATE` that is a
+ *   single timestamp.
+ * - Babel, `#+BIND` and file-local variables are off; a pre/postamble that
+ *   names a function stops the export.
+ * - A src block's language selects a major mode only from a fixed list of
+ *   core modes; any other language is shown unhighlighted.
+ * Loading Emacs Lisp (Org itself, the pinned files) is exempt from the
+ * process and read rules, and every wrapped function is checked to exist,
+ * so a different Org fails the build instead of running unguarded.
  *
  * Output is byte-for-byte reproducible: no export timestamp, and Org's random
  * heading IDs come from a fixed seed. Batch Emacs fills `user-full-name` from
@@ -48,27 +58,52 @@ export const BUILD_EL =
   `;;; build.el --- org-re-reveal batch export  -*- lexical-binding: t; -*-
 (defvar webframp-presentation--loading-lisp nil
   "Non-nil while Emacs reads Lisp source to load it.")
+(defvar webframp-presentation--done nil
+  "Non-nil once the deck is exported; Emacs's own exit hooks then run freely.")
+(setq tramp-mode nil
+      vc-handled-backends nil
+      find-file-hook nil
+      enable-local-variables nil
+      enable-dir-local-variables nil
+      file-name-handler-alist
+      (seq-remove (lambda (h) (string-match-p "tramp" (format "%s" (cdr h))))
+                  file-name-handler-alist))
 (let* ((args command-line-args-left)
        (lisp-dir (nth 0 args))
        (source (nth 1 args))
        (root (nth 2 args))
        (theme (nth 3 args))
        (allowed (file-name-as-directory (file-truename (nth 4 args))))
-       (output (nth 5 args)))
+       (output (expand-file-name (nth 5 args)))
+       (allowed-modes
+        '(fundamental-mode text-mode org-mode emacs-lisp-mode lisp-mode
+          lisp-data-mode scheme-mode sh-mode python-mode ruby-mode perl-mode
+          cperl-mode js-mode js-json-mode json-mode css-mode html-mode
+          mhtml-mode sgml-mode nxml-mode xml-mode sql-mode c-mode c++-mode
+          java-mode makefile-mode makefile-gmake-mode diff-mode conf-mode
+          conf-unix-mode tex-mode latex-mode prolog-mode octave-mode
+          fortran-mode f90-mode pascal-mode tcl-mode awk-mode)))
   (setq command-line-args-left nil)
   (add-to-list 'load-path lisp-dir)
   ;; A one-shot export needs no cache between runs, and org-persist would
-  ;; read its index from a temporary directory outside the deck.
+  ;; read and write its index outside the deck.
   (setq org-element-cache-persistent nil
         org-persist-autoload nil)
   (require 'org)
   (require 'ox)
+  (require 'ox-html)
   (require 'org-macro)
+  (require 'org-src)
   (require 'org-re-reveal)
+  (dolist (fn '(org-macro--collect-macros org-macro--find-keyword-value
+                org-re-reveal--build-pre-postamble org-src-get-lang-mode
+                load-with-code-conversion))
+    (unless (fboundp fn)
+      (error "Unsupported Org or org-re-reveal: %s is missing; refusing to build without its guard"
+             fn)))
   (setq org-export-use-babel nil
         org-confirm-babel-evaluate t
         org-export-allow-bind-keywords nil
-        enable-local-variables nil
         org-export-time-stamp-file nil
         org-re-reveal-root root
         org-re-reveal-revealjs-version "6"
@@ -77,15 +112,69 @@ export const BUILD_EL =
         org-re-reveal-theme theme
         user-full-name ""
         user-mail-address "")
-  ;; Deck-defined macros come first; Org's four built-ins (author, email,
-  ;; title, date) are the last entries and are left alone.
+  (advice-add 'load-with-code-conversion :around
+              (lambda (orig &rest load-args)
+                (let ((webframp-presentation--loading-lisp t))
+                  (apply orig load-args))))
+  ;; Processes and network: none, outside Lisp loading.
+  (dolist (fn '(make-process call-process call-process-region start-process
+                process-file start-file-process make-network-process
+                open-network-stream make-serial-process shell-command
+                async-shell-command url-retrieve url-retrieve-synchronously))
+    (when (fboundp fn)
+      (advice-add fn :around
+                  (lambda (orig &rest fn-args)
+                    (if webframp-presentation--loading-lisp
+                        (apply orig fn-args)
+                      (error "Refusing to run %s: a deck may not start processes or connections"
+                             fn))))))
+  ;; Writes: only the output file.
+  (advice-add 'write-region :around
+              (lambda (orig start end file &rest rest)
+                (unless (or webframp-presentation--done
+                            (equal (expand-file-name file) output))
+                  (error "Refusing to write %s: a deck may not write files" file))
+                (apply orig start end file rest)))
+  (dolist (fn '(delete-file delete-directory rename-file copy-file
+                make-directory make-directory-internal make-symbolic-link
+                add-name-to-file set-file-modes set-file-times))
+    (when (fboundp fn)
+      (advice-add fn :around
+                  (lambda (orig file &rest rest)
+                    (if webframp-presentation--done
+                        (apply orig file rest)
+                      (error "Refusing to %s %s: a deck may not change files"
+                             fn file))))))
+  ;; Reads: only inside the allowed directory.
+  (let ((guard
+         (lambda (orig file &rest rest)
+           (unless webframp-presentation--loading-lisp
+             (let* ((case-fold-search t)
+                    (true (file-truename (expand-file-name file))))
+               (unless (and (not (file-remote-p file))
+                            (file-in-directory-p true allowed)
+                            (not (string-match-p "/\\\\.\\\\(git\\\\|swamp\\\\)\\\\(/\\\\|\\\\'\\\\)"
+                                                 (concat "/" (substring true (length allowed))))))
+                 (error "Refusing to read %s: outside the deck's directory" file))))
+           (apply orig file rest))))
+    (advice-add 'insert-file-contents :around guard)
+    (advice-add 'insert-file-contents-literally :around guard))
+  ;; Macro templates: no eval, except Org's own form for a timestamp DATE.
   (advice-add 'org-macro--collect-macros :filter-return
               (lambda (templates)
-                (dolist (entry (butlast templates 4) templates)
-                  (when (and (stringp (cdr entry))
-                             (string-match-p "\\\\\`[ \\t\\n]*(eval\\\\>" (cdr entry)))
-                    (error "Refusing to evaluate macro %s: a deck may not run Lisp"
-                           (car entry))))))
+                (dolist (entry templates templates)
+                  (let ((name (car entry)) (value (cdr entry)))
+                    (when (and (stringp value)
+                               (string-match-p "\\\\\`[ \\t\\n]*(eval\\\\>" value)
+                               (not (and (equal name "date")
+                                         (let* ((raw (org-macro--find-keyword-value "DATE"))
+                                                (date (and raw (org-element-parse-secondary-string
+                                                                raw (org-element-restriction 'keyword)))))
+                                           (and (consp date) (not (cdr date))
+                                                (org-element-type-p (car date) 'timestamp)
+                                                (equal value (org-macro--find-date)))))))
+                      (error "Refusing to evaluate macro %s: a deck may not run Lisp"
+                             name))))))
   (advice-add 'org-re-reveal--build-pre-postamble :around
               (lambda (orig type info spec)
                 (let ((section (plist-get info (intern (format ":reveal-%s" type)))))
@@ -93,32 +182,21 @@ export const BUILD_EL =
                     (error "Refusing to call %s named by #+REVEAL_%s"
                            section (upcase (format "%s" type))))
                   (funcall orig type info spec))))
-  ;; Loading Lisp reads its source through load-with-code-conversion; this
-  ;; script itself runs inside load, so load-in-progress cannot tell them
-  ;; apart.
-  (advice-add 'load-with-code-conversion :around
-              (lambda (orig &rest load-args)
-                (let ((webframp-presentation--loading-lisp t))
-                  (apply orig load-args))))
-  (let ((guard
-         (lambda (orig file &rest rest)
-           (unless webframp-presentation--loading-lisp
-             (let ((true (file-truename (expand-file-name file))))
-               (unless (and (file-in-directory-p true allowed)
-                            (not (string-match-p "/\\\\.\\\\(git\\\\|swamp\\\\)\\\\(/\\\\|\\\\'\\\\)"
-                                                 (concat "/" (substring true (length allowed))))))
-                 (error "Refusing to read %s: outside %s" file allowed))))
-           (apply orig file rest))))
-    (advice-add 'insert-file-contents :around guard)
-    (advice-add 'insert-file-contents-literally :around guard))
-  (with-current-buffer (find-file-noselect source)
-    (unless (cadr (assoc "AUTHOR" (org-collect-keywords '("AUTHOR"))))
-      (setq-local org-export-with-author nil))
-    (random "webframp-presentation")
-    (let ((html (with-current-buffer (org-export-to-buffer 're-reveal " *deck*")
-                  (buffer-string)))
-          (coding-system-for-write 'utf-8-unix))
-      (with-temp-file output (insert html)))))
+  (advice-add 'org-src-get-lang-mode :filter-return
+              (lambda (mode)
+                (if (memq mode allowed-modes) mode 'fundamental-mode)))
+  (unwind-protect
+      (with-current-buffer (find-file-noselect source)
+        (unless (cadr (assoc "AUTHOR" (org-collect-keywords '("AUTHOR"))))
+          (setq-local org-export-with-author nil))
+        (random "webframp-presentation")
+        (let ((html (with-current-buffer (org-export-to-buffer 're-reveal " *deck*")
+                      (buffer-string)))
+              (coding-system-for-write 'utf-8-unix))
+          (with-temp-file output (insert html))))
+    ;; Exported or refused, the deck can do nothing more; let Emacs's own
+    ;; exit hooks (org-persist removing its temporary directory) clean up.
+    (setq webframp-presentation--done t)))
 `;
 
 /** Result of running a tool. */

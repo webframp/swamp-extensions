@@ -163,21 +163,28 @@ raw `<img>` and other HTML, slide-attribute comments such as
 
 ## Untrusted decks
 
-A deck may come from someone else, so building one runs nothing it names and
-reads nothing outside its own directory:
+A deck may come from someone else. Building one is deny-by-default:
 
-- Babel code blocks, `#+BIND` and file-local variables are off.
-- A `#+MACRO` whose template is `(eval ...)`, in the deck or any `#+SETUPFILE`,
-  fails the build. Org's own macros (`{{{date}}}`, `{{{title}}}`, `{{{n}}}`,
-  ...) still work.
-- A `#+REVEAL_PREAMBLE`, `_POSTAMBLE` or `_POSTSCRIPT` naming a function fails
-  the build; org-re-reveal would call it.
-- `#+INCLUDE`, `#+SETUPFILE` and any other file Emacs reads for the deck must
-  lie inside the source's directory and outside `.git` and `.swamp`, after
-  symlinks are resolved. Anything else fails the build.
+- No subprocess, network connection or URL fetch can start inside Emacs, so
+  neither version control (a crafted `.git/config`) nor Tramp (`/ssh:` paths)
+  can run anything.
+- Nothing can be written, deleted or created except the output file.
+- No `(eval ...)` macro template runs, whether from `#+MACRO`, a `#+SETUPFILE`,
+  or `#+TITLE`, `#+AUTHOR`, `#+EMAIL` or `#+DATE`. Org's own macros, and
+  `{{{date}}}` for a timestamp `#+DATE`, still work.
+- Babel, `#+BIND` and file-local variables are off; a pre/postamble naming a
+  function fails the build; a src block's language selects only a core major
+  mode, otherwise it is shown unhighlighted.
+- `#+INCLUDE`, `#+SETUPFILE` and any other file Emacs reads must lie inside the
+  source's directory and outside `.git` and `.swamp`, after symlinks are
+  resolved. Anything else fails the build.
 - Images, videos, fonts and stylesheets are inlined only from the same
   directory, only as media files or `.css`, at most 32 MB each and 128 MB in
   all. Anything else is left as a link and reported in `warnings`.
+- `export_pdf` serves the deck over loopback HTTP, never as a `file://` page,
+  and refuses every request except the deck itself, `data:` and `https:` to
+  public hosts. What it refused is recorded in the `print-<name>` record's
+  `blocked` list.
 - Emacs and pandoc are stopped after `buildTimeoutSeconds`, Chromium after
   `timeoutSeconds`.
 

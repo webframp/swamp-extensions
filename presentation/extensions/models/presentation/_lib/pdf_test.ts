@@ -10,6 +10,7 @@ function fakeCdp(counts: number[]): { cdp: Cdp; methods: string[] } {
   return {
     methods,
     cdp: {
+      on() {},
       send(method, params) {
         methods.push(method);
         if (method === "Runtime.evaluate") {
@@ -38,8 +39,9 @@ Deno.test("printDeck waits for the print layout to settle before printing", asyn
   );
   assertEquals(pages, 8);
   assertEquals(new TextDecoder().decode(pdf), "%PDF-1.7 fake");
-  assertEquals(methods[0], "Page.enable");
-  assertEquals(methods[1], "Page.navigate");
+  assertEquals(methods[0], "Fetch.enable");
+  assertEquals(methods[1], "Page.enable");
+  assertEquals(methods[2], "Page.navigate");
   assertEquals(methods.at(-1), "Page.printToPDF");
   // Printed only after the first 8 is seen again four times in a row.
   assertEquals(methods.filter((m) => m === "Runtime.evaluate").length, 9);
@@ -59,6 +61,7 @@ Deno.test("printDeck gives up when the page never answers", async () => {
   // A deck whose script blocks the page's main thread: Runtime.evaluate
   // never returns.
   const cdp: Cdp = {
+    on() {},
     send(method) {
       return method === "Runtime.evaluate"
         ? new Promise(() => {})

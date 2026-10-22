@@ -62,8 +62,10 @@ import {
   detectFormat,
   type Engine,
   type Format,
+  normalizePath,
   type Outline,
   outlineFor,
+  relativePath,
 } from "./_lib/source.ts";
 
 /**
@@ -225,6 +227,8 @@ const PdfSchema = z.object({
   }),
   selfContained: z.boolean(),
   unchanged: z.boolean(),
+  /** Requests the page made that printing refused (local files, http:, private hosts). */
+  blocked: z.array(z.string()),
   durationMs: z.number(),
   exportedAt: z.string(),
 });
@@ -269,9 +273,22 @@ interface Logger {
   warning(msg: string, props?: Record<string, unknown>): void;
 }
 
+interface DataRepository {
+  getContent(
+    modelType: unknown,
+    modelId: string,
+    name: string,
+    version?: number,
+  ): Promise<Uint8Array | null>;
+}
+
 interface DeckContext {
   globalArgs: GlobalArgs;
   repoDir: string;
+  modelType?: unknown;
+  modelId?: string;
+  /** Always present under swamp; optional so build can run without it. */
+  dataRepository?: DataRepository;
   signal?: AbortSignal;
   logger: Logger;
   writeResource(
@@ -288,14 +305,7 @@ interface DeckContext {
 interface PdfContext extends DeckContext {
   modelType: unknown;
   modelId: string;
-  dataRepository: {
-    getContent(
-      modelType: unknown,
-      modelId: string,
-      name: string,
-      version?: number,
-    ): Promise<Uint8Array | null>;
-  };
+  dataRepository: DataRepository;
 }
 
 // =============================================================================
@@ -355,11 +365,13 @@ async function loadSource(
   const bytes = await Deno.readFile(path);
   const format = detectFormat(path, args.format);
   const dir = path.slice(0, path.lastIndexOf("/")) || "/";
-  const repo = await Deno.realPath(repoDir);
   return {
-    // Named after the path as given, so a symlink keeps its own name.
+    // Named and owned by the path as given, not where a symlink points, so
+    // repointing current.org from v3.org to v4.org keeps deck "current".
+    // Relative to the repository, so no machine's home directory ends up
+    // in a record others may read.
     name: args.name ?? deckNameFromPath(given),
-    path: path.startsWith(`${repo}/`) ? path.slice(repo.length + 1) : path,
+    path: relativePath(normalizePath(repoDir), normalizePath(absolute)),
     file: path,
     baseDir: dir,
     allowedDir: dir,
@@ -569,7 +581,17 @@ async function build(
   const bytes = new TextEncoder().encode(html);
   const sha256 = await sha256Hex(bytes);
   const priorHtml = (prior as Deck | null)?.html;
-  const unchanged = priorHtml?.sha256 === sha256;
+  // Keep the last HTML version only if it is identical and still stored; a
+  // lost file is written again rather than reported unchanged forever.
+  const unchanged = priorHtml?.sha256 === sha256 &&
+    (context.dataRepository === undefined ||
+      context.modelId === undefined ||
+      await context.dataRepository.getContent(
+          context.modelType,
+          context.modelId,
+          deckHtmlName(src.name),
+          priorHtml.version,
+        ) !== null);
 
   const handles: DataHandle[] = [];
   let version: number;
@@ -686,14 +708,6 @@ async function outline(
 // PDF
 // =============================================================================
 
-/**
- * A `file://` URL for an absolute path, with each segment percent-encoded so
- * a `#`, `%`, `?` or space in a temporary directory cannot break it.
- */
-export function fileUrl(path: string): string {
-  return `file://${path.split("/").map(encodeURIComponent).join("/")}`;
-}
-
 async function exportDeckPdf(
   args: z.infer<typeof ExportPdfArgsSchema>,
   context: PdfContext,
@@ -728,21 +742,29 @@ async function exportDeckPdf(
     | null;
   const handles: DataHandle[] = [];
   let pdfInfo: DeckPdf["pdf"];
-  const unchanged = prior?.html.sha256 === deck.html.sha256;
+  let blocked: string[] = prior?.blocked ?? [];
+  // Keep the last PDF only if it was printed from this HTML and is still
+  // stored; a lost file is printed again rather than reported unchanged.
+  const unchanged = prior?.html.sha256 === deck.html.sha256 &&
+    await context.dataRepository.getContent(
+        context.modelType,
+        context.modelId,
+        deckPdfName(name),
+        prior.pdf.version,
+      ) !== null;
   if (unchanged && prior) {
     pdfInfo = prior.pdf;
   } else {
-    const printed = await withTempDir(async (dir) => {
-      const file = `${dir}/deck.html`;
-      await Deno.writeFile(file, html);
-      return await deps.exportPdf({
+    const printed = await withTempDir((dir) =>
+      deps.exportPdf({
         chromium: context.globalArgs.chromium,
-        url: `${fileUrl(file)}?print-pdf`,
+        html,
         profileDir: `${dir}/profile`,
         timeoutMs: args.timeoutSeconds * 1000,
         noSandbox: context.globalArgs.chromiumNoSandbox,
-      });
-    });
+      })
+    );
+    blocked = printed.blocked;
     const handle = await context.createFileWriter("pdf", deckPdfName(name))
       .writeAll(printed.pdf);
     handles.push(handle);
@@ -760,6 +782,7 @@ async function exportDeckPdf(
     pdf: pdfInfo,
     selfContained: deck.reveal.selfContained,
     unchanged,
+    blocked,
     durationMs: Date.now() - started,
     exportedAt: new Date().toISOString(),
   };

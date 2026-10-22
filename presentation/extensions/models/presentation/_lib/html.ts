@@ -10,8 +10,10 @@
  * as media or `.css`, and within per-file and total size limits.
  *
  * Nothing here rewrites the bodies of `<script>`, `<style>` or `<textarea>`
- * elements. Inlined reveal.js code is full of HTML-looking strings, and the
- * reveal-markdown engine keeps its source in a textarea.
+ * elements, or comments. Inlined reveal.js code is full of HTML-looking
+ * strings, and the reveal-markdown engine keeps its source in a textarea.
+ * Tags are scanned quote-aware, so a `>` inside an attribute value does not
+ * end a tag.
  *
  * @module
  */
@@ -46,15 +48,49 @@ const MIME: Readonly<Record<string, string>> = {
   otf: "font/otf",
 };
 
-/** Attributes that load a resource. */
+/** Attributes that load a resource, on any element. */
 const RESOURCE_ATTRS: ReadonlySet<string> = new Set([
   "src",
   "data-src",
+  "srcset",
+  "data-srcset",
   "poster",
+  "data",
+  "background",
+  "xlink:href",
   "data-background",
   "data-background-image",
   "data-background-video",
 ]);
+
+/** Attributes whose value is a `srcset` list rather than one URL. */
+const SRCSET_ATTRS: ReadonlySet<string> = new Set(["srcset", "data-srcset"]);
+
+/** SVG elements whose plain `href` loads a resource. */
+const SVG_HREF_ELEMENTS: ReadonlySet<string> = new Set([
+  "image",
+  "use",
+  "feimage",
+  "script",
+]);
+
+/** `<link rel>` values that make the browser fetch the href. */
+const FETCHING_RELS =
+  /\b(stylesheet|icon|preload|modulepreload|prefetch|manifest|apple-touch-icon)\b/i;
+
+/**
+ * The inside of a tag, quote-aware: a `>` inside a quoted attribute value
+ * does not end the tag.
+ */
+const TAG_BODY = String.raw`(?:"[^"]*"|'[^']*'|[^'">])*`;
+
+/** A regex matching opening tags of `names` (an alternation). */
+function tagRe(names: string, flags = "gi"): RegExp {
+  return new RegExp(`<(${names})\\b${TAG_BODY}>`, flags);
+}
+
+/** Any opening tag; group 1 is the element name. */
+const ANY_TAG = () => tagRe("[a-z][a-z0-9:-]*");
 
 /**
  * One attribute: name, then a double-quoted, single-quoted or unquoted
@@ -67,23 +103,40 @@ const ATTR =
 /** A CSS `url(...)`, quoted or not. */
 const CSS_URL = /url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s'"]+))\s*\)/gi;
 
-/** A run of markup, or the untouchable body of a script/style/textarea. */
+/** A run of markup, or the untouchable body of a script/style/textarea or a comment. */
 export interface Segment {
   markup: boolean;
   text: string;
-  /** For a body: the element it belongs to, lowercased. */
+  /** For a body: the element it belongs to, lowercased, or `comment`. */
   element?: string;
 }
 
 /**
  * Split `html` into markup and opaque bodies, in order. Opening and closing
- * tags of script, style and textarea elements count as markup.
+ * tags of script, style and textarea elements count as markup; a comment is
+ * opaque as a whole.
  */
 export function segments(html: string): Segment[] {
   const out: Segment[] = [];
-  const openRe = /<(script|style|textarea)\b[^>]*>/gi;
+  const openRe = new RegExp(
+    `<!--|<(script|style|textarea)\\b${TAG_BODY}>`,
+    "gi",
+  );
   let last = 0;
   for (let m = openRe.exec(html); m; m = openRe.exec(html)) {
+    if (m[0] === "<!--") {
+      const end = html.indexOf("-->", m.index + 4);
+      const stop = end < 0 ? html.length : end + 3;
+      out.push({ markup: true, text: html.slice(last, m.index) });
+      out.push({
+        markup: false,
+        text: html.slice(m.index, stop),
+        element: "comment",
+      });
+      last = stop;
+      openRe.lastIndex = stop;
+      continue;
+    }
     const bodyStart = m.index + m[0].length;
     const closeRe = new RegExp(`</${m[1]}\\s*>`, "gi");
     closeRe.lastIndex = bodyStart;
@@ -102,7 +155,7 @@ export function segments(html: string): Segment[] {
   return out;
 }
 
-/** `html` with every opaque body emptied, for scanning markup only. */
+/** `html` with every opaque body and comment removed, for scanning markup only. */
 export function markupOnly(html: string): string {
   return segments(html).filter((s) => s.markup).map((s) => s.text).join("");
 }
@@ -162,6 +215,30 @@ async function mapAttrs(
   });
 }
 
+/** Remove the named attributes from `tag`. */
+function dropAttrs(tag: string, names: readonly string[]): string {
+  return tag.replace(
+    ATTR,
+    (whole, _sp, name: string) =>
+      names.includes(name.toLowerCase()) ? "" : whole,
+  );
+}
+
+/** Whether attribute `name` on element `element` loads a resource. */
+function loadsResource(element: string, name: string, tag: string): boolean {
+  if (RESOURCE_ATTRS.has(name)) return true;
+  if (name !== "href") return false;
+  return SVG_HREF_ELEMENTS.has(element) || element === "base" ||
+    (element === "link" && FETCHING_RELS.test(attr(tag, "rel") ?? ""));
+}
+
+/** The URLs one resource attribute value names. */
+function urlsOf(name: string, value: string): string[] {
+  if (!SRCSET_ATTRS.has(name)) return [value];
+  return value.split(/,(?=\s*\S)/).map((c) => c.trim().split(/\s+/)[0])
+    .filter((u) => u !== "");
+}
+
 /** True for a reference to a local file rather than a URL or a fragment. */
 export function isLocalPath(ref: string): boolean {
   if (ref === "" || ref.startsWith("#") || ref.startsWith("//")) return false;
@@ -203,6 +280,9 @@ function toBase64(bytes: Uint8Array): string {
 /** Result of resolving one local reference. */
 export type Inlined = { uri: string } | { problem: string };
 
+/** Where a local reference is, or why it may not be read. */
+export type Located = { path: string; size: number } | { problem: string };
+
 /**
  * Reads local files for inlining, confined to one directory and a total
  * byte budget shared by everything inlined into one deck.
@@ -210,6 +290,8 @@ export type Inlined = { uri: string } | { problem: string };
 export interface Inliner {
   /** The real path of the allowed directory. */
   readonly root: string;
+  /** Where `ref` is, if it may be read: inside the root, a file, small enough. */
+  locate(ref: string, baseDir: string): Promise<Located>;
   /** A media file as a data URI. */
   dataUri(ref: string, baseDir: string): Promise<Inlined>;
   /** A stylesheet's text, with its own `url()` references inlined. */
@@ -222,7 +304,8 @@ export interface Inliner {
 /**
  * Create an inliner that reads only from inside `allowedDir`. `limits`
  * defaults to `MAX_INLINE_BYTES` per file and `MAX_TOTAL_INLINE_BYTES` in
- * all.
+ * all. Problems name references as written, never absolute paths, since
+ * they are stored in records others may read.
  */
 export async function createInliner(
   allowedDir: string,
@@ -234,11 +317,7 @@ export async function createInliner(
   const root = await Deno.realPath(allowedDir);
   let used = 0;
 
-  /** Resolve `ref` to a readable file inside the root, or say why not. */
-  async function resolve(
-    ref: string,
-    baseDir: string,
-  ): Promise<{ path: string; size: number } | { problem: string }> {
+  async function locate(ref: string, baseDir: string): Promise<Located> {
     let real: string;
     try {
       real = await Deno.realPath(localPath(ref, baseDir));
@@ -249,10 +328,10 @@ export async function createInliner(
       throw e;
     }
     const inside = real === root || real.startsWith(`${root}/`);
-    if (!inside || /\/\.(git|swamp)(\/|$)/.test(real.slice(root.length))) {
+    if (!inside || /\/\.(git|swamp)(\/|$)/i.test(real.slice(root.length))) {
       return {
         problem:
-          `${ref}: outside ${root}, or inside .git or .swamp; not inlined`,
+          `${ref}: outside the deck's directory, or inside .git or .swamp; not inlined`,
       };
     }
     const info = await Deno.stat(real);
@@ -275,7 +354,7 @@ export async function createInliner(
   async function dataUri(ref: string, baseDir: string): Promise<Inlined> {
     const mime = MIME[extOf(localPath(ref, baseDir))];
     if (!mime) return { problem: `${ref}: not a media file; not inlined` };
-    const r = await resolve(ref, baseDir);
+    const r = await locate(ref, baseDir);
     if ("problem" in r) return r;
     used += r.size;
     return {
@@ -287,15 +366,16 @@ export async function createInliner(
     if (extOf(localPath(ref, baseDir)) !== "css") {
       return { problem: `${ref}: not a .css file; not inlined` };
     }
-    const r = await resolve(ref, baseDir);
+    const r = await locate(ref, baseDir);
     if ("problem" in r) return r;
     used += r.size;
     const css = await Deno.readTextFile(r.path);
     const cssDir = r.path.slice(0, r.path.lastIndexOf("/"));
-    return await inlineCssUrls(css, cssDir, { root, dataUri, stylesheet });
+    return await inlineCssUrls(css, cssDir, self);
   }
 
-  return { root, dataUri, stylesheet };
+  const self: Inliner = { root, locate, dataUri, stylesheet };
+  return self;
 }
 
 /** Inline the local `url()` references in `css`, resolved against `dir`. */
@@ -318,10 +398,17 @@ export async function inlineCssUrls(
   return { css: out, problems };
 }
 
+function isStylesheet(tag: string): boolean {
+  return (attr(tag, "rel") ?? "").toLowerCase().split(/\s+/).includes(
+    "stylesheet",
+  );
+}
+
 /**
- * Replace local references in resource attributes, `style` attributes and
- * stylesheet links with inline content resolved against `baseDir`. Returns
- * the new HTML and one problem per reference that could not be inlined.
+ * Replace local references in resource attributes (`srcset` candidates
+ * included), `style` attributes and stylesheet links with inline content
+ * resolved against `baseDir`. Returns the new HTML and one problem per
+ * reference that could not be inlined.
  */
 export async function inlineLocalFiles(
   html: string,
@@ -329,6 +416,15 @@ export async function inlineLocalFiles(
   inliner: Inliner,
 ): Promise<{ html: string; problems: string[] }> {
   const problems: string[] = [];
+  const inlineOne = async (ref: string): Promise<string | null> => {
+    if (!isLocalMedia(ref)) return null;
+    const r = await inliner.dataUri(ref, baseDir);
+    if ("problem" in r) {
+      problems.push(r.problem);
+      return null;
+    }
+    return r.uri;
+  };
   const parts: string[] = [];
   for (const seg of segments(html)) {
     if (!seg.markup) {
@@ -336,51 +432,46 @@ export async function inlineLocalFiles(
       continue;
     }
     parts.push(
-      await replaceAsync(
-        seg.text,
-        /<([a-z][a-z0-9-]*)\b[^>]*>/gi,
-        async (m) => {
-          const tag = m[0];
-          if (m[1].toLowerCase() === "link" && isStylesheet(tag)) {
-            const href = attr(tag, "href");
-            if (href === null || !isLocalPath(href)) return tag;
-            const r = await inliner.stylesheet(href, baseDir);
-            if ("problem" in r) {
-              problems.push(r.problem);
-              return tag;
-            }
-            problems.push(...r.problems);
-            return `<style>\n${
-              r.css.replace(/<\/style/gi, "<\\/style")
-            }\n</style>`;
+      await replaceAsync(seg.text, ANY_TAG(), async (m) => {
+        const tag = m[0];
+        const element = m[1].toLowerCase();
+        if (element === "link" && isStylesheet(tag)) {
+          const href = attr(tag, "href");
+          if (href === null || !isLocalPath(href)) return tag;
+          const r = await inliner.stylesheet(href, baseDir);
+          if ("problem" in r) {
+            problems.push(r.problem);
+            return tag;
           }
-          return await mapAttrs(tag, async (a) => {
-            if (a.name === "style") {
-              const r = await inlineCssUrls(a.value, baseDir, inliner);
-              problems.push(...r.problems);
-              return r.css === a.value ? null : r.css;
+          problems.push(...r.problems);
+          return `<style>\n${
+            r.css.replace(/<\/style/gi, "<\\/style")
+          }\n</style>`;
+        }
+        return await mapAttrs(tag, async (a) => {
+          if (a.name === "style") {
+            const r = await inlineCssUrls(a.value, baseDir, inliner);
+            problems.push(...r.problems);
+            return r.css === a.value ? null : r.css;
+          }
+          if (!loadsResource(element, a.name, tag)) return null;
+          if (SRCSET_ATTRS.has(a.name)) {
+            let changed = false;
+            const out: string[] = [];
+            for (const candidate of a.value.split(/,(?=\s*\S)/)) {
+              const [url, ...descriptor] = candidate.trim().split(/\s+/);
+              const uri = url ? await inlineOne(url) : null;
+              if (uri) changed = true;
+              out.push([uri ?? url, ...descriptor].join(" "));
             }
-            if (!RESOURCE_ATTRS.has(a.name) || !isLocalMedia(a.value)) {
-              return null;
-            }
-            const r = await inliner.dataUri(a.value, baseDir);
-            if ("problem" in r) {
-              problems.push(r.problem);
-              return null;
-            }
-            return r.uri;
-          });
-        },
-      ),
+            return changed ? out.join(", ") : null;
+          }
+          return await inlineOne(a.value);
+        });
+      }),
     );
   }
   return { html: parts.join(""), problems };
-}
-
-function isStylesheet(tag: string): boolean {
-  return (attr(tag, "rel") ?? "").toLowerCase().split(/\s+/).includes(
-    "stylesheet",
-  );
 }
 
 /** The pinned `dist/` path a URL refers to, or null for any other URL. */
@@ -406,7 +497,7 @@ export function addIntegrity(
   const problems: string[] = [];
   const out = segments(html).map((seg) =>
     !seg.markup ? seg.text : seg.text.replace(
-      /<(script|link)\b[^>]*>/gi,
+      tagRe("script|link"),
       (tag, name: string) => {
         const url = attr(tag, name.toLowerCase() === "script" ? "src" : "href");
         if (url === null || !isCdn(url) || attr(tag, "integrity") !== null) {
@@ -441,6 +532,7 @@ export async function inlineReveal(
   const problems: string[] = [];
   const decoder = new TextDecoder();
   const parts = segments(html);
+  const scriptAtEnd = new RegExp(`<script\\b${TAG_BODY}>$`, "i");
   const out: string[] = [];
   for (let i = 0; i < parts.length; i++) {
     const seg = parts[i];
@@ -450,7 +542,7 @@ export async function inlineReveal(
     }
     // A segment that ends in <script src=…> is followed by its (empty) body.
     let text = seg.text;
-    const scriptOpen = text.match(/<script\b[^>]*>$/i);
+    const scriptOpen = text.match(scriptAtEnd);
     const src = scriptOpen ? attr(scriptOpen[0], "src") : null;
     if (scriptOpen && src !== null && isCdn(src)) {
       const path = pinnedPath(src);
@@ -459,12 +551,8 @@ export async function inlineReveal(
         problems.push(`${src}: not a pinned reveal.js file, left as a link`);
       } else if (body && !body.markup && body.text.trim() === "") {
         const js = decoder.decode(await fetchFile(path));
-        const kept = await mapAttrs(scriptOpen[0], (a) =>
-          Promise.resolve(
-            ["src", "integrity", "crossorigin"].includes(a.name) ? "" : null,
-          ));
         text = text.slice(0, text.length - scriptOpen[0].length) +
-          kept.replace(/\s(src|integrity|crossorigin)=""/gi, "");
+          dropAttrs(scriptOpen[0], ["src", "integrity", "crossorigin"]);
         parts[i + 1] = {
           markup: false,
           text: `\n${js.replace(/<\/script/gi, "<\\/script")}\n`,
@@ -473,7 +561,7 @@ export async function inlineReveal(
       }
     }
     out.push(
-      await replaceAsync(text, /<link\b[^>]*>/gi, async (m) => {
+      await replaceAsync(text, tagRe("link"), async (m) => {
         const href = attr(m[0], "href");
         if (!isStylesheet(m[0]) || href === null || !isCdn(href)) return m[0];
         const path = pinnedPath(href);
@@ -494,48 +582,46 @@ export async function inlineReveal(
 
 /**
  * Every resource the page still loads from outside itself: remote URLs and
- * local paths in resource attributes, script sources, stylesheet links,
- * `style` attributes and `<style>` blocks. Links a viewer clicks
- * (`<a href>`) are not resources and are not listed.
+ * local paths in resource attributes (`srcset` candidates, SVG `href`,
+ * `<base href>` included), script sources, fetching `<link>`s, `style`
+ * attributes and `<style>` blocks. Links a viewer clicks (`<a href>`) and
+ * anything inside comments are not resources and are not listed.
  */
 export function externalResources(html: string): string[] {
   const found = new Set<string>();
+  const add = (v: string) => {
+    if (v === "" || v.startsWith("data:") || v.startsWith("#")) return;
+    if (/^javascript:/i.test(v)) return;
+    found.add(v);
+  };
   const addCss = (css: string) => {
-    for (const m of css.matchAll(CSS_URL)) {
-      const v = m[1] ?? m[2] ?? m[3] ?? "";
-      if (v !== "" && !v.startsWith("data:") && !v.startsWith("#")) {
-        found.add(v);
-      }
-    }
+    for (const m of css.matchAll(CSS_URL)) add(m[1] ?? m[2] ?? m[3] ?? "");
     for (const m of css.matchAll(/@import\s+(?:"([^"]*)"|'([^']*)')/gi)) {
-      found.add(m[1] ?? m[2]);
+      add(m[1] ?? m[2]);
     }
   };
   for (const seg of segments(html)) {
     if (!seg.markup) {
-      // Stylesheets may still point elsewhere. Scripts are code, and the
-      // reveal-markdown source is checked when its images are inlined.
+      // Stylesheets may still point elsewhere. Scripts are code, comments
+      // load nothing, and the reveal-markdown source is checked when its
+      // images are inlined.
       if (seg.element === "style") addCss(seg.text);
       continue;
     }
-    for (const tag of seg.text.matchAll(/<([a-z][a-z0-9-]*)\b[^>]*>/gi)) {
-      const name = tag[1].toLowerCase();
-      if (name === "a") continue;
+    for (const tag of seg.text.matchAll(ANY_TAG())) {
+      const element = tag[1].toLowerCase();
+      if (element === "a") continue;
       for (const a of attrsOf(tag[0])) {
         if (a.name === "style") {
           addCss(a.value);
           continue;
         }
-        const loads = RESOURCE_ATTRS.has(a.name) ||
-          (a.name === "href" && name === "link" &&
-            /\b(stylesheet|icon|preload)\b/i.test(attr(tag[0], "rel") ?? ""));
-        if (!loads || a.value === "" || a.value.startsWith("data:")) continue;
-        if (a.value.startsWith("#") || /^javascript:/i.test(a.value)) continue;
+        if (!loadsResource(element, a.name, tag[0])) continue;
         // data-background also takes colours and gradients.
         if (a.name.startsWith("data-background") && !/[./]/.test(a.value)) {
           continue;
         }
-        found.add(a.value);
+        for (const u of urlsOf(a.name, a.value)) add(u);
       }
     }
   }
@@ -548,7 +634,7 @@ export function externalResources(html: string): string[] {
  * so the record never names a theme the deck does not use.
  */
 export function themeOf(html: string, fallback: string): string {
-  for (const m of markupOnly(html).matchAll(/<link\b[^>]*>/gi)) {
+  for (const m of markupOnly(html).matchAll(tagRe("link"))) {
     const href = attr(m[0], "href");
     const isTheme = attr(m[0], "id") === "theme" ||
       (href !== null && /\/dist\/theme\/[^/]+\.css$/.test(href));
@@ -569,11 +655,26 @@ export interface RenderedSlide {
   hasNotes: boolean;
 }
 
-function textOf(s: string): string {
-  return s.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/&#39;|&rsquo;|&#8217;/g, "'").replace(/&amp;/g, "&")
-    .replace(/\s+/g, " ").trim();
+/** Plain text of an HTML fragment, without Org's headline tags. */
+export function textOf(s: string): string {
+  return s
+    // Org renders headline tags as <span class="tag"><span …>x</span></span>.
+    .replace(
+      /<span\b[^>]*class="tag"[^>]*>(?:<span\b[^>]*>[^<]*<\/span>|[^<])*<\/span>/gi,
+      "",
+    )
+    .replace(/<[^>]*>/g, "")
+    .replace(
+      /&#x([0-9a-f]+);/gi,
+      (_, h: string) => String.fromCodePoint(parseInt(h, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&nbsp;?/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&rsquo;|&apos;/g, "'").replace(
+      /&amp;/g,
+      "&",
+    )
+    .replace(/[\s ]+/g, " ").trim();
 }
 
 function describe(inner: string): { title: string; hasNotes: boolean } {
@@ -597,7 +698,7 @@ export function renderedSlides(html: string): RenderedSlide[] {
   );
   if (start < 0) return [];
   const slides: RenderedSlide[] = [];
-  const tokenRe = /<section\b[^>]*>|<\/section\s*>/gi;
+  const tokenRe = new RegExp(`<section\\b${TAG_BODY}>|</section\\s*>`, "gi");
   tokenRe.lastIndex = start;
   interface Open {
     from: number;
