@@ -15,6 +15,8 @@ on:
 # complete.
 concurrency:
   group: ci-${{ github.ref }}
+  # Never cancel on main: after an /lgtm merge the dispatched run is the one
+  # whose dispatch-publish job starts publish.yml.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Single source of truth for the Deno version. Referenced by every setup-deno
@@ -685,3 +687,24 @@ jobs:
             echo "::error::CI security review has CHANGES_REQUESTED state on PR — blocking merge"
             exit 1
           fi
+
+  dispatch-publish:
+    # merge.yml starts CI on main with GITHUB_TOKEN, and GitHub raises no
+    # workflow_run event for runs a GITHUB_TOKEN started, so publish.yml never
+    # ran after an /lgtm merge. workflow_dispatch is the one event
+    # GITHUB_TOKEN may raise; dispatch publish once every main gate passed.
+    # Push-triggered runs keep reaching publish through workflow_run.
+    name: Dispatch publish
+    needs: [extension-check, scripts-check, reserved-data-names, quality-gate, manifest-validate]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch publish for this commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh workflow run publish.yml --repo "$REPO" --ref main -f sha="$SHA"
