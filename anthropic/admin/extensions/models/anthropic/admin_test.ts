@@ -1556,3 +1556,40 @@ Deno.test("set_member_roles: cancel during a group re-read reports Cancelled", a
   assertEquals(data.aborted, "Cancelled");
   assertEquals(data.changed.length, 100);
 });
+
+Deno.test("set_member_roles: cancel on a re-read's last request stops before the next write", async () => {
+  // Cancelling on the member-list read leaves no request for the re-read to
+  // fail on, so the re-read always completes and the loop must notice.
+  const all = users(150);
+  const controller = new AbortController();
+  let memberReads = 0;
+  const api = fakeApi({
+    users: all,
+    groups: [baseGroup(all.map((u) => u.id))],
+    listOverride: (p) => {
+      if (
+        p === "/v1/organizations/rbac_groups/rbac_group_base/members" &&
+        ++memberReads === 2
+      ) {
+        controller.abort(new Error("cancelled"));
+      }
+      return undefined;
+    },
+  });
+  const { context, getWrittenResources } = ctx(controller.signal);
+  await withFakeApi(api, async () => {
+    await assertRejects(
+      () =>
+        model.methods.set_member_roles.execute(
+          { ...MANAGED, dryRun: false },
+          context as any,
+        ),
+      Error,
+      "Cancelled",
+    );
+  });
+  const data = getWrittenResources()[0].data as any;
+  assertEquals(data.aborted, "Cancelled");
+  assertEquals(data.changed.length, 100);
+  assertEquals(writes(api).length, 100);
+});
