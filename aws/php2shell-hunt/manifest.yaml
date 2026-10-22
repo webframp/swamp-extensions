@@ -1,0 +1,101 @@
+manifestVersion: 1
+name: "@webframp/aws/php2shell-hunt"
+license: Apache-2.0
+version: "2026.10.22.1"
+description: |
+  Head-hunt exposure and indicators of compromise for the PHP2Shell remote code
+  execution vulnerabilities CVE-2026-109618 and CVE-2026-109619 across AWS,
+  using only the signals AWS already collects — no SSH, no in-guest access.
+
+  Unlike @swamp/cve/php-rce-2026-10 (which scans and patches hosts directly over
+  SSH/Docker), this model is strictly read-only AWS-side telemetry. It observes:
+
+  - Amazon Inspector v2 findings for the two CVEs (vulnerable PHP inventory)
+  - GuardDuty findings since 2026-10-17 correlated to the published IOC IPs and
+    to RCE/backdoor-shaped finding types
+  - CloudWatch Logs Insights over VPC flow logs (IOC IP contact) and over
+    WAF/ALB/application logs (the PHP_SESSION_UPLOAD_PROGRESS upload marker)
+  - Security Hub (opportunistic): one aggregated query when a central
+    aggregator is present; the hunt still works fully without it
+
+  Scope spans a single account, a named set of accounts, or every active account
+  in an AWS Organization resolved from a delegated-administrator account. Each
+  method fans out across a configurable region list internally.
+
+  The output is deliberately honest about what it could NOT inspect. A clean
+  result is `no_signal` only for lanes that actually ran; any lane that could
+  not run is recorded in `lanesSkipped` with a reason, and an account with no
+  runnable lane is `inconclusive`, never `no_signal`.
+
+  ## Authentication
+
+  Uses the default AWS credential chain, or the `profile` global argument
+  (fromIni / SSO token cache). Point at the delegated-admin account for
+  organization scope.
+
+  ## Required IAM Permissions
+
+  - `inspector2:ListFindings`
+  - `guardduty:ListDetectors`, `guardduty:ListFindings`, `guardduty:GetFindings`
+  - `logs:StartQuery`, `logs:GetQueryResults`
+  - `securityhub:GetFindings` (optional lane)
+  - `organizations:ListAccounts` (organization scope only)
+
+  ## Coverage caveats
+
+  - Amazon Inspector only sees SSM-managed EC2, scanned ECR images, and Lambda.
+    Absence of an Inspector hit is NOT proof of safety for unmanaged hosts.
+  - The logs lane needs explicit `logGroupNames`; flow/WAF/ALB groups cannot be
+    auto-discovered and S3-delivered logs are out of reach of Logs Insights.
+
+  ## Usage
+
+  ```bash
+  # Single account, default US regions
+  AWS_PROFILE="my-account/ReadOnlyPlus" \
+    swamp behavior create @webframp/aws/php2shell-hunt hunt
+
+  # Emit the indicator set as queryable data
+  swamp behavior run hunt show_iocs
+
+  # Full hunt, single account, with flow + WAF log groups
+  swamp behavior run hunt hunt \
+    --input 'logGroupNames=["/vpc/flowlogs","/aws/waf/php-app"]'
+
+  # Org-wide from the delegated-admin account
+  swamp behavior create @webframp/aws/php2shell-hunt org-hunt \
+    --global-arg scope=organization \
+    --global-arg 'regions=["us-east-1","us-east-2","us-west-2"]'
+  swamp behavior run org-hunt hunt
+  ```
+
+  ## Methods
+
+  - **show_iocs** - Emit the PHP2Shell indicator set as data (no AWS calls)
+  - **scan_inspector** - Inspector v2 findings for the CVEs across regions
+  - **scan_guardduty** - GuardDuty findings correlated to IOC IPs / RCE types
+  - **scan_logs** - Logs Insights: IOC IP contact + upload marker
+  - **scan_securityhub** - Opportunistic aggregated Security Hub lane
+  - **hunt** - Run all lanes, correlate, write a per-account exposure verdict
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - aws/php2shell_hunt.ts
+dependencies:
+  - "@swamp/typesafe-ai"
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - aws
+  - cve
+  - guardduty
+  - inspector
+  - incident-response
+  - php
+  - security
+  - threat-hunting
