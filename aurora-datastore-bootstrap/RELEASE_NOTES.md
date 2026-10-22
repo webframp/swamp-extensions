@@ -1,3 +1,21 @@
+## 2026.10.22.2
+
+**Fixed:** The README and manifest Quick Start documented `master_password` as a
+literal `--input master_password=...` value. Workflow `--input` values are
+recorded in cleartext in the run history, so a password written that way leaks.
+The docs now store the password with `swamp vault put aurora MASTER_PASSWORD`
+(which prompts for the value) and pass it as a
+`${{ vault.get("aurora", "MASTER_PASSWORD") }}` expression, which swamp redacts.
+This earns the registry `secret-safe-docs` quality factor.
+
+**Changed:** Docs only. No model schema, method, or behavior change. The
+`upgrades` chain gains an identity entry terminating at this version so existing
+definitions migrate cleanly.
+
+**Upgrade note:** No action required. On the next method run, each existing
+definition's `typeVersion` advances to 2026.10.22.2 with its global arguments
+preserved.
+
 ## 2026.10.22.1
 
 **Fixed:** Existing definitions created against an earlier version were stranded
