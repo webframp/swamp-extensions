@@ -20,6 +20,7 @@ import {
   BatchUpdateFindingsCommand,
   GetFindingsCommand,
   SecurityHubClient,
+  type SortCriterion,
 } from "npm:@aws-sdk/client-securityhub@3.1139.0";
 import {
   ListAccountsCommand,
@@ -308,6 +309,63 @@ function createClient(globalArgs: GlobalArgs): SecurityHubClient {
   return new SecurityHubClient(makeClientConfig(globalArgs));
 }
 
+/**
+ * ASFF finding fields that are safe and meaningful to sort findings by. This is
+ * a curated subset of the fields Security Hub accepts in SortCriteria.Field —
+ * severity, the observation/update timestamps, and a few identity fields a
+ * triager actually orders on. Constraining it with an enum means an invalid
+ * sort field fails at the swamp boundary with a clear message instead of
+ * surfacing as an opaque InvalidInputException from the AWS API mid-run.
+ */
+export const SortFieldSchema = z
+  .enum([
+    "SeverityNormalized",
+    "SeverityLabel",
+    "UpdatedAt",
+    "CreatedAt",
+    "FirstObservedAt",
+    "LastObservedAt",
+    "Confidence",
+    "Criticality",
+    "ProductName",
+    "Title",
+    "AwsAccountId",
+  ])
+  .describe(
+    "Field to sort findings by. Defaults to SeverityNormalized (worst first).",
+  );
+
+/**
+ * Sort direction for findings. Maps to Security Hub's SortCriteria.SortOrder;
+ * `desc` puts the highest severity or newest timestamp first.
+ */
+export const SortOrderSchema = z
+  .enum(["asc", "desc"])
+  .describe("Sort direction. Defaults to desc (highest/newest first).");
+
+const DEFAULT_SORT_FIELD = "SeverityNormalized";
+const DEFAULT_SORT_ORDER = "desc";
+
+/**
+ * Build the SortCriteria for a GetFindings call. Always returns a single
+ * criterion: the caller-supplied field/order when given, otherwise the default
+ * severity-descending sort. Every findings query is sorted — an unsorted query
+ * under a page cap keeps an arbitrary slice, which silently biases truncated
+ * results and (for count aggregations) corrupts the tallies.
+ */
+function buildSortCriteria(
+  sortField?: string,
+  sortOrder?: string,
+): SortCriterion[] {
+  return [
+    {
+      Field: sortField ?? DEFAULT_SORT_FIELD,
+      SortOrder:
+        (sortOrder ?? DEFAULT_SORT_ORDER) as SortCriterion["SortOrder"],
+    },
+  ];
+}
+
 /** Map an AWS finding to our normalized summary schema. */
 function mapFindingSummary(f: AwsSecurityFinding) {
   return {
@@ -371,7 +429,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.10.21.1",
+  version: "2026.10.23.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -487,6 +545,18 @@ export const model = {
         "No schema changes — documentation recommends SSO, named profiles, or an attached IAM role for AWS credentials",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.10.23.1",
+      description:
+        "Sort findings by severity (SeverityNormalized desc) by default on " +
+        "every GetFindings query; get_severity_summary previously paged " +
+        "unsorted, so a truncated summary could undercount the worst " +
+        "findings. list_findings and list_all_findings gain optional " +
+        "sortField/sortOrder overrides, and both now encode the sort in the " +
+        "resource instance name so a different sort cannot silently overwrite " +
+        "a prior truncated slice. No stored-attribute changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     finding_list: {
@@ -577,6 +647,8 @@ export const model = {
           .max(100)
           .default(100)
           .describe("Maximum findings to return"),
+        sortField: SortFieldSchema.optional(),
+        sortOrder: SortOrderSchema.optional(),
       }),
       execute: async (
         args: {
@@ -587,6 +659,8 @@ export const model = {
           startTime: string;
           endTime?: string;
           limit: number;
+          sortField?: string;
+          sortOrder?: string;
         },
         context: {
           globalArgs: GlobalArgs;
@@ -645,9 +719,7 @@ export const model = {
               new GetFindingsCommand({
                 Filters: filters as AwsSecurityFindingFilters,
                 MaxResults: args.limit,
-                SortCriteria: [
-                  { Field: "SeverityNormalized", SortOrder: "desc" },
-                ],
+                SortCriteria: buildSortCriteria(args.sortField, args.sortOrder),
               }),
             );
           } catch (err) {
@@ -684,6 +756,8 @@ export const model = {
             w: args.workflowStatus,
             st: args.startTime,
             et: args.endTime,
+            sf: args.sortField,
+            so: args.sortOrder,
           });
 
           context.logger.info(
@@ -896,6 +970,7 @@ export const model = {
                 new GetFindingsCommand({
                   Filters: filters as AwsSecurityFindingFilters,
                   MaxResults: 100,
+                  SortCriteria: buildSortCriteria(),
                   NextToken: nextToken,
                 }),
               );
@@ -1549,6 +1624,8 @@ export const model = {
           .max(5)
           .default(5)
           .describe("Maximum pages to fetch (100 findings per page, max 500)"),
+        sortField: SortFieldSchema.optional(),
+        sortOrder: SortOrderSchema.optional(),
       }),
       execute: async (
         args: {
@@ -1557,6 +1634,8 @@ export const model = {
           workflowStatus: string;
           startTime: string;
           maxPages: number;
+          sortField?: string;
+          sortOrder?: string;
         },
         context: {
           globalArgs: GlobalArgs;
@@ -1611,9 +1690,10 @@ export const model = {
                 new GetFindingsCommand({
                   Filters: filters as AwsSecurityFindingFilters,
                   MaxResults: 100,
-                  SortCriteria: [
-                    { Field: "SeverityNormalized", SortOrder: "desc" },
-                  ],
+                  SortCriteria: buildSortCriteria(
+                    args.sortField,
+                    args.sortOrder,
+                  ),
                   NextToken: nextToken,
                 }),
               );
@@ -1658,6 +1738,8 @@ export const model = {
             s: args.severityLabel,
             w: args.workflowStatus,
             t: args.startTime,
+            sf: args.sortField,
+            so: args.sortOrder,
           });
           const handle = await context.writeResource(
             "full_export",
