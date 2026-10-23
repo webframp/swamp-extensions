@@ -857,3 +857,157 @@ Deno.test({
     }
   },
 });
+
+// =============================================================================
+// Sort behavior — default severity-desc everywhere, override on list methods
+// =============================================================================
+
+Deno.test({
+  name: "list_findings sorts by SeverityNormalized desc by default",
+  sanitizeResources: false,
+  fn: async () => {
+    // deno-lint-ignore no-explicit-any
+    let captured: any;
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        captured = command.input;
+        return { Findings: [finding1] };
+      }
+      return {};
+    });
+    try {
+      await model.methods.list_findings.execute(
+        { startTime: "24h", limit: 100, workflowStatus: "NEW" },
+        createMockContext(),
+      );
+      assertEquals(captured.SortCriteria, [
+        { Field: "SeverityNormalized", SortOrder: "desc" },
+      ]);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "list_findings passes through a sort override",
+  sanitizeResources: false,
+  fn: async () => {
+    // deno-lint-ignore no-explicit-any
+    let captured: any;
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        captured = command.input;
+        return { Findings: [finding1] };
+      }
+      return {};
+    });
+    try {
+      await model.methods.list_findings.execute(
+        {
+          startTime: "24h",
+          limit: 100,
+          workflowStatus: "NEW",
+          sortField: "UpdatedAt",
+          sortOrder: "asc",
+        },
+        createMockContext(),
+      );
+      assertEquals(captured.SortCriteria, [
+        { Field: "UpdatedAt", SortOrder: "asc" },
+      ]);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "list_all_findings passes through a sort override",
+  sanitizeResources: false,
+  fn: async () => {
+    // deno-lint-ignore no-explicit-any
+    let captured: any;
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        captured = command.input;
+        return { Findings: [finding1] };
+      }
+      return {};
+    });
+    try {
+      await model.methods.list_all_findings.execute(
+        {
+          startTime: "24h",
+          maxPages: 1,
+          workflowStatus: "NEW",
+          sortField: "CreatedAt",
+          sortOrder: "desc",
+        },
+        createMockContext(),
+      );
+      assertEquals(captured.SortCriteria, [
+        { Field: "CreatedAt", SortOrder: "desc" },
+      ]);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name: "get_severity_summary sorts by severity desc so a truncated summary " +
+    "counts the worst findings first",
+  sanitizeResources: false,
+  fn: async () => {
+    // deno-lint-ignore no-explicit-any
+    let captured: any;
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        captured = command.input;
+        return { Findings: [finding1] };
+      }
+      return {};
+    });
+    try {
+      await model.methods.get_severity_summary.execute(
+        { startTime: "24h", workflowStatus: "NEW" },
+        createMockContext(),
+      );
+      assertEquals(captured.SortCriteria, [
+        { Field: "SeverityNormalized", SortOrder: "desc" },
+      ]);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test("list_findings rejects an unknown sortField", () => {
+  const result = model.methods.list_findings.arguments.safeParse({
+    sortField: "NotARealField",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("list_findings rejects an invalid sortOrder", () => {
+  const result = model.methods.list_findings.arguments.safeParse({
+    sortOrder: "sideways",
+  });
+  assertEquals(result.success, false);
+});
+
+Deno.test("get_severity_summary exposes no sort override arguments", () => {
+  // The aggregation method consumes the truncated set, so its severity order
+  // is a correctness guarantee, not a caller preference. It must not accept a
+  // sort override — an unknown key parses but is stripped, leaving no field.
+  const parsed = model.methods.get_severity_summary.arguments.safeParse({
+    sortField: "UpdatedAt",
+    sortOrder: "asc",
+  });
+  assertEquals(parsed.success, true);
+  if (parsed.success) {
+    assertEquals("sortField" in parsed.data, false);
+    assertEquals("sortOrder" in parsed.data, false);
+  }
+});
