@@ -335,6 +335,10 @@ export const SortFieldSchema = z
     "Field to sort findings by. Defaults to SeverityNormalized (worst first).",
   );
 
+/**
+ * Sort direction for findings. Maps to Security Hub's SortCriteria.SortOrder;
+ * `desc` puts the highest severity or newest timestamp first.
+ */
 export const SortOrderSchema = z
   .enum(["asc", "desc"])
   .describe("Sort direction. Defaults to desc (highest/newest first).");
