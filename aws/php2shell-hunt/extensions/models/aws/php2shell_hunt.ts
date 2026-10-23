@@ -58,6 +58,7 @@ import {
   type QueryStatus,
   type ResultField,
   StartQueryCommand,
+  StopQueryCommand,
 } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
 import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
 import {
@@ -349,6 +350,10 @@ const LogScanSchema = z.object({
   signals: z.array(LogSignalSchema),
   iocIpContactCount: z.number(),
   uploadMarkerCount: z.number(),
+  truncated: z.boolean().describe(
+    "True if any Logs Insights query returned the 1000-row limit, so a count " +
+      "may undercount the true number of matches",
+  ),
   regionsScanned: z.array(z.string()),
   logGroupsQueried: z.array(z.string()),
   skipped: z.array(SkippedLaneSchema),
@@ -802,10 +807,29 @@ async function runInsightsQuery(
   const queryId = start.queryId;
   if (!queryId) return [];
 
+  // Best-effort stop so a timed-out/aborted query does not keep running (and
+  // billing) in AWS. Swallows its own errors — stopping is a courtesy, not a
+  // correctness requirement.
+  const stopQuery = async () => {
+    try {
+      await client.send(new StopQueryCommand({ queryId }));
+    } catch {
+      // ignore — the query may have already completed or stopped
+    }
+  };
+
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    if (signal?.aborted) break;
+    if (signal?.aborted) {
+      await stopQuery();
+      throw new Error("Logs Insights query aborted");
+    }
     await new Promise((r) => setTimeout(r, 1500));
+    // Re-check abort after the sleep so cancellation is honoured promptly.
+    if (signal?.aborted) {
+      await stopQuery();
+      throw new Error("Logs Insights query aborted");
+    }
     const res = await client.send(
       new GetQueryResultsCommand({ queryId }),
     );
@@ -825,6 +849,7 @@ async function runInsightsQuery(
       throw new Error(`Logs Insights query ${status}`);
     }
   }
+  await stopQuery();
   throw new Error("Logs Insights query did not complete within 60s");
 }
 
@@ -842,6 +867,7 @@ async function scanLogsLane(
   {
     signals: z.infer<typeof LogSignalSchema>[];
     regionsQueried: string[];
+    truncated: boolean;
     skipped: SkippedLane[];
   }
 > {
@@ -849,6 +875,8 @@ async function scanLogsLane(
   const skipped: SkippedLane[] = [];
   const regionsQueried: string[] = [];
   const now = new Date();
+  const INSIGHTS_LIMIT = 1000;
+  let truncated = false;
 
   if (logGroupNames.length === 0) {
     skipped.push({
@@ -861,7 +889,7 @@ async function scanLogsLane(
         "Insights cannot read). Pass logGroupNames to run this lane. It was " +
         "not run — treat the upload-marker and flow-log IP checks as unchecked.",
     });
-    return { signals, regionsQueried, skipped };
+    return { signals, regionsQueried, truncated, skipped };
   }
 
   // Query each region's log groups. A log group is regional; callers pass the
@@ -887,6 +915,7 @@ async function scanLogsLane(
           signal,
         );
         regionCompletedAQuery = true;
+        if (rows.length >= INSIGHTS_LIMIT) truncated = true;
         if (rows.length > 0) {
           signals.push({
             kind: "ioc_ip_contact",
@@ -908,9 +937,13 @@ async function scanLogsLane(
         });
       }
 
-      // Lane B: upload marker in request/WAF/ALB logs.
+      // Lane B: upload marker in request/WAF/ALB logs. Escape every regex
+      // metacharacter (not just / and \) so an extended payloadStrings entry
+      // cannot break the Logs Insights regex.
       const markerFilters = payloadStrings
-        .map((s) => `@message like /${s.replace(/[/\\]/g, "\\$&")}/`)
+        .map((s) =>
+          `@message like /${s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}/`
+        )
         .join(" or ");
       const markerQuery = `fields @timestamp, @message ` +
         `| filter ${markerFilters} ` +
@@ -925,6 +958,7 @@ async function scanLogsLane(
           signal,
         );
         regionCompletedAQuery = true;
+        if (rows.length >= INSIGHTS_LIMIT) truncated = true;
         if (rows.length > 0) {
           signals.push({
             kind: "upload_marker",
@@ -950,7 +984,7 @@ async function scanLogsLane(
     }
   }
   logger.info("Logs lane: {count} signal group(s)", { count: signals.length });
-  return { signals, regionsQueried, skipped };
+  return { signals, regionsQueried, truncated, skipped };
 }
 
 /**
@@ -1250,25 +1284,31 @@ async function enrichWithJev(
       });
     } catch (err) {
       // runModel can throw (e.g. a sensitive-argument rejection) rather than
-      // returning {ok:false}; treat any throw as a clean, honest skip.
+      // returning {ok:false}. On ANY failure we return EMPTY scoredKeys /
+      // probabilities — never the partial set accumulated so far. Otherwise a
+      // signal jev already confirmed (in scoredKeys) would be suppressed from
+      // the raw fold yet excluded from jevConfirmedCount (enriched=false),
+      // silently dropping a positive signal. Empty collections guarantee every
+      // signal falls back to the raw heuristic on partial OR complete failure.
       return {
         enriched: false,
-        probabilities,
-        scoredKeys,
+        probabilities: {},
+        scoredKeys: new Set<string>(),
         skipReason: `jev enrichment errored (${errMessage(err)}). Confirm a ` +
           `@swamp/typesafe-ai behavior named "${jevBehavior}" exists with a ` +
-          "vault-backed apiKey. Signals fall back to the un-enriched " +
+          "vault-backed apiKey. All signals fall back to the un-enriched " +
           "heuristic." + truncatedNote,
       };
     }
     if (!res.ok) {
+      // Same invariant as the catch above: empty collections, full fallback.
       return {
         enriched: false,
-        probabilities,
-        scoredKeys,
+        probabilities: {},
+        scoredKeys: new Set<string>(),
         skipReason:
           `jev enrichment failed via runModel (${res.error.message}). ` +
-          "Signals fall back to the un-enriched heuristic." + truncatedNote,
+          "All signals fall back to the un-enriched heuristic." + truncatedNote,
       };
     }
     // Read back the noul probability for this call's instance. Match the
@@ -1536,8 +1576,15 @@ export const model = {
       arguments: z.object({
         cves: z
           .array(z.string())
+          .max(
+            10,
+            "Inspector's vulnerabilityId filter accepts at most 10 values",
+          )
           .default([...PHP2SHELL_IOCS.cves])
-          .describe("CVE IDs to match (defaults to the two PHP2Shell CVEs)"),
+          .describe(
+            "CVE IDs to match (defaults to the two PHP2Shell CVEs; max 10 — " +
+              "the Inspector vulnerabilityId filter limit)",
+          ),
       }),
       execute: async (args: { cves: string[] }, context: MethodContext) => {
         const startMs = Date.now();
@@ -1656,16 +1703,17 @@ export const model = {
         const startMs = Date.now();
         const { regions, profile } = context.globalArgs;
         const since = parseTime(args.since);
-        const { signals, regionsQueried, skipped } = await scanLogsLane(
-          [...PHP2SHELL_IOCS.ipIndicators],
-          [...PHP2SHELL_IOCS.payloadStrings],
-          since,
-          regions,
-          args.logGroupNames,
-          profile,
-          context.signal,
-          context.logger,
-        );
+        const { signals, regionsQueried, truncated, skipped } =
+          await scanLogsLane(
+            [...PHP2SHELL_IOCS.ipIndicators],
+            [...PHP2SHELL_IOCS.payloadStrings],
+            since,
+            regions,
+            args.logGroupNames,
+            profile,
+            context.signal,
+            context.logger,
+          );
         const handle = await context.writeResource("log_scan", "logs", {
           signals,
           iocIpContactCount: signals
@@ -1674,6 +1722,7 @@ export const model = {
           uploadMarkerCount: signals
             .filter((s) => s.kind === "upload_marker")
             .reduce((n, s) => n + s.matchCount, 0),
+          truncated,
           regionsScanned: regionsQueried,
           logGroupsQueried: args.logGroupNames,
           skipped,
@@ -1974,9 +2023,12 @@ export const model = {
           // (jevConfirmedCount), so it must NOT also count toward the raw
           // heuristic. An rce-hint signal jev did NOT score (capped, missed,
           // or jev not enriched) still counts raw so it is never silently
-          // dropped.
+          // dropped. The `jevEnriched &&` guard is defensive: scoredKeys is
+          // empty whenever enrichment did not succeed, so suppression can only
+          // apply to genuinely jev-scored signals.
           const jevKey = `gd:${s.accountId || "unknown"}:${i}`;
-          if (s.rceHint && !jevScored.has(jevKey)) {
+          const suppressedByJev = jevEnriched && jevScored.has(jevKey);
+          if (s.rceHint && !suppressedByJev) {
             ev.guardDutyRceHintCount++;
           }
         }
@@ -1992,9 +2044,11 @@ export const model = {
           const ev = ensure(key);
           if (s.kind === "ioc_ip_contact") {
             ev.logIocIpContactCount += s.matchCount;
-          } else if (!jevScored.has(`log:${i}`)) {
+          } else if (!(jevEnriched && jevScored.has(`log:${i}`))) {
             // Upload markers jev scored are governed by jevConfirmedCount; only
-            // count un-scored ones toward the raw heuristic.
+            // count un-scored ones toward the raw heuristic. The jevEnriched
+            // guard mirrors the GuardDuty fold: suppression applies only to
+            // genuinely jev-scored signals.
             ev.logUploadMarkerCount += s.matchCount;
           }
         }
