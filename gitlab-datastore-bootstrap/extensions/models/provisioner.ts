@@ -31,8 +31,9 @@ const GlobalArgsSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "GitLab personal access token with api scope (used to validate and optionally create project token)",
-    ),
+      "GitLab personal access token with api scope (used to validate and optionally create project token). Secret: pass a vault.get expression, never a literal value.",
+    )
+    .meta({ sensitive: true }),
   username: z
     .string()
     .optional()
@@ -73,7 +74,8 @@ const ProvisionResultSchema = z.object({
     .describe("Whether a new project access token was created"),
   datastoreConfig: z
     .string()
-    .describe("JSON config for swamp datastore setup command"),
+    .describe("JSON config for swamp datastore setup command")
+    .meta({ sensitive: true }),
   validatedAt: z.string().describe("ISO 8601 timestamp of validation"),
   durationMs: z.number().describe("Total provisioning duration in ms"),
   fetchedAt: z.string().optional().describe(
@@ -231,7 +233,7 @@ async function createProjectToken(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/gitlab-datastore-bootstrap/provisioner",
-  version: "2026.10.22.2",
+  version: "2026.10.22.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -314,6 +316,12 @@ export const model = {
       toVersion: "2026.10.22.2",
       description:
         "Docs-only: README and manifest now store the GitLab token in a vault instead of a literal --input value. No schema changes; identity transform preserves all global arguments",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.22.3",
+      description:
+        "Marked the token global argument and the datastoreConfig result field sensitive so swamp vaults them and persists vault references instead of plaintext. datastoreConfig embeds the active (possibly newly created) project access token. No stored-key change; identity transform preserves all attributes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

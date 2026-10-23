@@ -1,3 +1,20 @@
+## 2026.10.22.3
+
+**Changed:** The `token` global argument and the `datastoreConfig` field of the
+provision result are now marked sensitive. Swamp stores their values in a vault
+and persists a `${{ vault.get(...) }}` reference in place of the plaintext.
+`datastoreConfig` is a JSON blob that embeds the active GitLab token — the
+provided personal access token, or a project access token this provisioner
+creates — so it carried a live credential in cleartext before this release.
+
+**Upgrade note:** No action required for the global argument — the README and
+manifest already instruct passing `token` as a
+`${{ vault.get("gitlab", "TOKEN") }}` expression. For stored results: any
+automation that read `datastoreConfig` directly from `swamp data` now receives a
+vault reference and must resolve it through the vault rather than reading a
+literal value. The `upgrades` chain gains an identity entry terminating at this
+version so existing definitions migrate cleanly.
+
 ## 2026.10.22.2
 
 **Fixed:** The README and manifest Quick Start documented `token` as a literal

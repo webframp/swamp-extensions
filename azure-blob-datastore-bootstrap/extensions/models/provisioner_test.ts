@@ -91,7 +91,7 @@ Deno.test("model exports correct type and version", () => {
     model.type,
     "@webframp/azure-blob-datastore-bootstrap/provisioner",
   );
-  assertEquals(model.version, "2026.10.22.1");
+  assertEquals(model.version, "2026.10.22.2");
 });
 
 Deno.test("model has provision method", () => {
@@ -283,4 +283,52 @@ Deno.test("provision throws when connection string unavailable", async () => {
       "Could not retrieve connection string",
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// Sensitive-field conformance
+//
+// Verify the schema marks credential-bearing fields sensitive so swamp vaults
+// them and persists a vault reference instead of the plaintext value. Mirrors
+// the cloudflare/r2 isMarkedSensitive / sensitivePathsOf helpers.
+// ---------------------------------------------------------------------------
+
+import { z } from "npm:zod@4.6.5";
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as
+      | { sensitive?: boolean }
+      | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+function shapeOf(schema: unknown): Record<string, ZodLike> {
+  let current = schema as ZodLike;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current._def.shape ?? {};
+}
+
+Deno.test("sensitive: provision result credential fields are marked sensitive", () => {
+  const shape = shapeOf(model.resources.state.schema);
+  assertEquals(isMarkedSensitive(shape.connectionString), true);
+  assertEquals(isMarkedSensitive(shape.datastoreConfig), true);
+  // Non-secret siblings stay unmarked.
+  assertEquals(isMarkedSensitive(shape.storageAccount), false);
+  assertEquals(isMarkedSensitive(shape.containerName), false);
 });
