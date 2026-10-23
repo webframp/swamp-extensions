@@ -1,4 +1,4 @@
-## 2026.10.22.1
+## 2026.10.23.1
 
 **Fixed:** `get_severity_summary` paged through findings with no sort order.
 Under its five-page (500-finding) cap, a busy organization could truncate the
@@ -6,6 +6,14 @@ result to an arbitrary slice, which for a count aggregation undercounts the
 severity tallies rather than just dropping rows. It now sorts
 `SeverityNormalized` descending like every other query, so a truncated summary
 counts the most severe findings first.
+
+**Fixed:** `list_findings` and `list_all_findings` now encode the sort field and
+order in their resource instance name. Previously two calls with identical
+filters but different sorts hashed to the same resource slot, so a second call
+could silently overwrite a prior truncated slice (e.g. replacing the 100 most
+severe findings with the 100 oldest) with no signal to any consumer. Sort order
+is a correctness property under truncation, so it now participates in instance
+identity.
 
 **Added:** `list_findings` and `list_all_findings` accept optional `sortField`
 and `sortOrder` arguments. `sortField` is one of `SeverityNormalized`,

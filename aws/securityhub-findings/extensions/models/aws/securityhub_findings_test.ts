@@ -1011,3 +1011,66 @@ Deno.test("get_severity_summary exposes no sort override arguments", () => {
     assertEquals("sortOrder" in parsed.data, false);
   }
 });
+
+Deno.test({
+  name:
+    "list_findings: same filters + different sort → different instance name",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        // Truncated result (NextToken present) — the exact scenario where a
+        // silent overwrite with a different sort slice would corrupt data.
+        return { Findings: [finding1], NextToken: "more" };
+      }
+      return {};
+    });
+    try {
+      const base = { startTime: "24h", limit: 100, workflowStatus: "NEW" };
+      const ctxA = createMockContext();
+      const ctxB = createMockContext();
+      await model.methods.list_findings.execute(
+        { ...base, sortField: "SeverityNormalized", sortOrder: "desc" },
+        ctxA,
+      );
+      await model.methods.list_findings.execute(
+        { ...base, sortField: "CreatedAt", sortOrder: "asc" },
+        ctxB,
+      );
+      // Different sort must NOT collide on the same resource slot.
+      assertEquals(ctxA.written[0].name !== ctxB.written[0].name, true);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "list_all_findings: same filters + different sort → different instance name",
+  sanitizeResources: false,
+  fn: async () => {
+    const restore = mockSecurityHub((command) => {
+      if (command.constructor.name === "GetFindingsCommand") {
+        return { Findings: [finding1], NextToken: "more" };
+      }
+      return {};
+    });
+    try {
+      const base = { startTime: "24h", maxPages: 1, workflowStatus: "NEW" };
+      const ctxA = createMockContext();
+      const ctxB = createMockContext();
+      await model.methods.list_all_findings.execute(
+        { ...base, sortField: "SeverityNormalized", sortOrder: "desc" },
+        ctxA,
+      );
+      await model.methods.list_all_findings.execute(
+        { ...base, sortField: "CreatedAt", sortOrder: "asc" },
+        ctxB,
+      );
+      assertEquals(ctxA.written[0].name !== ctxB.written[0].name, true);
+    } finally {
+      restore();
+    }
+  },
+});

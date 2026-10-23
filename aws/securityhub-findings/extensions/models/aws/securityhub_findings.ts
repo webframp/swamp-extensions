@@ -425,7 +425,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.10.22.1",
+  version: "2026.10.23.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -542,13 +542,15 @@ export const model = {
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
     {
-      toVersion: "2026.10.22.1",
+      toVersion: "2026.10.23.1",
       description:
         "Sort findings by severity (SeverityNormalized desc) by default on " +
         "every GetFindings query; get_severity_summary previously paged " +
         "unsorted, so a truncated summary could undercount the worst " +
         "findings. list_findings and list_all_findings gain optional " +
-        "sortField/sortOrder overrides. No stored-attribute changes.",
+        "sortField/sortOrder overrides, and both now encode the sort in the " +
+        "resource instance name so a different sort cannot silently overwrite " +
+        "a prior truncated slice. No stored-attribute changes.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -750,6 +752,8 @@ export const model = {
             w: args.workflowStatus,
             st: args.startTime,
             et: args.endTime,
+            sf: args.sortField,
+            so: args.sortOrder,
           });
 
           context.logger.info(
@@ -1730,6 +1734,8 @@ export const model = {
             s: args.severityLabel,
             w: args.workflowStatus,
             t: args.startTime,
+            sf: args.sortField,
+            so: args.sortOrder,
           });
           const handle = await context.writeResource(
             "full_export",
