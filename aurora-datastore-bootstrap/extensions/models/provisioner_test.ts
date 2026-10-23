@@ -102,7 +102,7 @@ const DEFAULT_ARGS = {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/aurora-datastore-bootstrap/provisioner");
-  assertEquals(model.version, "2026.10.22.2");
+  assertEquals(model.version, "2026.10.22.3");
 });
 
 Deno.test("model has provision method", () => {
@@ -469,4 +469,57 @@ Deno.test("provision encodes password in connection string", async () => {
     assertEquals(config.connectionString, connStr);
     assertEquals(config.ssl, "require");
   });
+});
+
+// ---------------------------------------------------------------------------
+// Sensitive-field conformance
+//
+// Verify the schema marks credential-bearing fields sensitive so swamp vaults
+// them and persists a vault reference instead of the plaintext value. Mirrors
+// the cloudflare/r2 isMarkedSensitive / sensitivePathsOf helpers.
+// ---------------------------------------------------------------------------
+
+import { z } from "npm:zod@4.6.5";
+
+type ZodLike = {
+  _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };
+};
+
+function isMarkedSensitive(field: ZodLike): boolean {
+  let current: ZodLike | undefined = field;
+  while (current) {
+    const meta = z.globalRegistry.get(current as unknown as z.ZodType) as
+      | { sensitive?: boolean }
+      | undefined;
+    if (meta?.sensitive) return true;
+    current = ["optional", "nullable", "default"].includes(current._def.type)
+      ? current._def.innerType
+      : undefined;
+  }
+  return false;
+}
+
+function shapeOf(schema: unknown): Record<string, ZodLike> {
+  let current = schema as ZodLike;
+  while (
+    ["optional", "nullable", "default"].includes(current._def.type) &&
+    current._def.innerType
+  ) {
+    current = current._def.innerType;
+  }
+  return current._def.shape ?? {};
+}
+
+Deno.test("sensitive: master_password global argument is marked sensitive", () => {
+  const shape = shapeOf(model.globalArguments);
+  assertEquals(isMarkedSensitive(shape.master_password), true);
+});
+
+Deno.test("sensitive: provision result credential fields are marked sensitive", () => {
+  const shape = shapeOf(model.resources.state.schema);
+  assertEquals(isMarkedSensitive(shape.connectionString), true);
+  assertEquals(isMarkedSensitive(shape.datastoreConfig), true);
+  // Non-secret siblings stay unmarked.
+  assertEquals(isMarkedSensitive(shape.region), false);
+  assertEquals(isMarkedSensitive(shape.clusterEndpoint), false);
 });

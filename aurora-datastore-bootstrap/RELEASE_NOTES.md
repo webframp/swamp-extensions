@@ -1,3 +1,22 @@
+## 2026.10.22.3
+
+**Changed:** `master_password` (global argument) and the `connectionString` and
+`datastoreConfig` fields of the provision result are now marked sensitive. Swamp
+stores their values in a vault and persists a `${{ vault.get(...) }}` reference
+in place of the plaintext, instead of writing the live database password into
+state. `connectionString` embeds the password and `datastoreConfig` is a JSON
+blob that embeds `connectionString`, so both carried the credential in cleartext
+before this release.
+
+**Upgrade note:** No action required for the global argument — the README and
+manifest already instruct passing `master_password` as a
+`${{ vault.get("aurora", "MASTER_PASSWORD") }}` expression. For stored results:
+any automation that read `connectionString` or `datastoreConfig` directly from
+`swamp data` now receives a vault reference and must resolve it through the
+vault rather than reading a literal value. The `upgrades` chain gains an
+identity entry terminating at this version so existing definitions migrate
+cleanly.
+
 ## 2026.10.22.2
 
 **Fixed:** The README and manifest Quick Start documented `master_password` as a

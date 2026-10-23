@@ -41,7 +41,10 @@ const GlobalArgsSchema = z.object({
   master_password: z
     .string()
     .min(8)
-    .describe("Master database password (8+ chars)"),
+    .describe(
+      "Master database password (8+ chars). Secret: pass a vault.get expression, never a literal value.",
+    )
+    .meta({ sensitive: true }),
   database_name: z
     .string()
     .min(1)
@@ -124,11 +127,13 @@ const ProvisionResultSchema = z.object({
   policyCreated: z.boolean().describe("Whether the policy was newly created"),
   connectionString: z
     .string()
-    .describe("PostgreSQL connection string for datastore config"),
+    .describe("PostgreSQL connection string for datastore config")
+    .meta({ sensitive: true }),
   datastoreConfig: z
     .string()
     .optional()
-    .describe("JSON config for swamp datastore setup command"),
+    .describe("JSON config for swamp datastore setup command")
+    .meta({ sensitive: true }),
   provisionedAt: z.string().describe("ISO 8601 timestamp"),
   durationMs: z.number().describe("Total provisioning duration in ms"),
   fetchedAt: z.string().optional().describe(
@@ -504,7 +509,7 @@ async function ensurePolicy(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/aurora-datastore-bootstrap/provisioner",
-  version: "2026.10.22.2",
+  version: "2026.10.22.3",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -583,6 +588,12 @@ export const model = {
       toVersion: "2026.10.22.2",
       description:
         "Docs-only: README and manifest now store master_password in a vault instead of a literal --input value. No schema changes; identity transform preserves all global arguments",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.22.3",
+      description:
+        "Marked master_password, connectionString, and datastoreConfig sensitive so swamp vaults them and persists vault references instead of plaintext credentials. No stored-key change; identity transform preserves all attributes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
