@@ -1,0 +1,44 @@
+<task-notification>
+<task-id>a499c2036a3ae389e</task-id>
+<tool-use-id>toolu_01LAMNCJzuk6GKx7G4QzaBEk</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a499c2036a3ae389e.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit docs batch 2+3" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Findings for batch2 and batch3 (9 files, every one read in full; no files were modified):
+
+```
+docs/plans/2026-04-14-cloudflare-audit-design.md:45 | 1 | medium | --global-arg apiToken=REDACTED | Replace with --global-arg 'apiToken=REDACTED vault.get(cloudflare, API_TOKEN) }}' and add a `swamp vault put cloudflare API_TOKEN` step first.
+docs/plans/2026-04-14-cloudflare-audit-design.md:46 | 1 | medium | swamp model create @webframp/cloudflare/dns cf-dns --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression. `vault:cf-token` is not valid swamp syntax and would be passed as a literal string.
+docs/plans/2026-04-14-cloudflare-audit-design.md:47 | 1 | medium | swamp model create @webframp/cloudflare/waf cf-waf --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-design.md:48 | 1 | medium | swamp model create @webframp/cloudflare/worker cf-worker --global-arg apiToken=REDACTED --global-arg accountId=ACCOUNT_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-design.md:49 | 1 | medium | swamp model create @webframp/cloudflare/cache cf-cache --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression.
+
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1632 | 1 | high | --global-arg apiToken=REDACTED | This is the manifest Quick Start template, so it gets published. Use 'apiToken=REDACTED vault.get(cloudflare, API_TOKEN) }}' plus a `swamp vault put` step.
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1634 | 1 | high | --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1636 | 1 | high | --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1638 | 1 | high | --global-arg apiToken=REDACTED --global-arg accountId=ACCOUNT_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1640 | 1 | high | --global-arg apiToken=REDACTED --global-arg zoneId=ZONE_ID | Same fix: vault.get expression.
+docs/plans/2026-04-14-cloudflare-audit-plan.md:1626 | 10 | medium | ## Quick Start  (manifest description; no vault step anywhere in the plan) | Add `swamp vault put cloudflare API_TOKEN` (interactive) before the model-create lines.
+
+docs/plans/2026-04-14-redmine-extension.md:111 | 1 | high | --global-arg apiKey=YOUR_API_KEY \ | This is the manifest Quick Start template. Use 'apiKey=REDACTED vault.get(redmine, API_KEY) }}' after `swamp vault put redmine API_KEY`.
+docs/plans/2026-04-14-redmine-extension.md:7 | 10 | low | Credentials (host URL + API key) passed as global arguments with sensitive marking. | State that the apiKey global arg must come from a vault.get expression; `sensitive` marking alone does not keep it out of the definition.
+docs/plans/2026-04-14-redmine-extension.md:2525 | 10 | low | Add an entry for the redmine extension in the root `README.md` extension table | The README task has no vault guidance. Require the usage example to show the vault.get pattern for apiKey.
+
+docs/plans/2026-04-14-terraform-extension.md:472 | 7 | medium | values: r.values, | read_state writes every resource attribute to swamp data and ignores `sensitive_values`, so DB passwords and keys end up on disk in plaintext. Redact the sensitive paths first.
+docs/plans/2026-04-14-terraform-extension.md:274 | 7 | low | sensitive_values?: Record&lt;string, unknown&gt;; | The field is parsed but never used. Use it to mask sensitive attributes, as get_outputs already does for outputs.
+
+docs/plans/2026-04-14-terraform-drift.md:25 | 7 | low | "values": { "id": "i-xxx", "instance_type": "t3.micro", "tags": {...} }, | The drift report reads unredacted tf_resource values from .swamp/data. Note that it depends on the terraform model redacting sensitive attributes.
+```
+
+Files read with no findings:
+- devops-measurement/README.md
+- discourse/README.md (it shows `${{ vault.get("discourse", "API_KEY") }}` correctly)
+- docs/plans/2026-04-12-aws-cost-audit-design.md (credentials come only from the ambient AWS setup)
+- docs/plans/2026-04-13-model-foundations.md
+
+Notes:
+- **Shipped code may share the defect.** The terraform findings are against plan text, but the shipped `terraform/` model may copy the `values: r.values` pattern. I did not open that code because it is outside this batch; someone should check whether it redacts `sensitive_values`.
+- **Test fixtures were not flagged.** Values like `apiKey: "test-key"` in the redmine plan and `db_password: { value: "secret" }` in the terraform plan are mock data inside tests, not a way to supply real credentials.</result>
+<usage><subagent_tokens>180197</subagent_tokens><tool_uses>12</tool_uses><duration_ms>56741</duration_ms></usage>
+</task-notification>
