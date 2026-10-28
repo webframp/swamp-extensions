@@ -1,0 +1,9 @@
+<task-notification>
+<task-id>b5475h44v</task-id>
+<tool-use-id>toolu_018U94CXrc9i51WYZraFzduN</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/b5475h44v.output</output-file>
+<status>completed</status>
+<summary>Monitor "Wait for PR 508 CI checks" stream ended</summary>
+<event>DONE</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
