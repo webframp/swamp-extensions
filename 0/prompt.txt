@@ -1,0 +1,154 @@
+<task-notification>
+<task-id>a68fea6e748e4560a</task-id>
+<tool-use-id>toolu_01UAK9BxrSJnTC6wauxLYU6p</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/a68fea6e748e4560a.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review: presentation extension" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I ran the gates and probed every protocol boundary with real Emacs 31.1, pandoc 3.7.0.2, Chromium and a scratch swamp repo (`/tmp/claude-1000/review-ext/repo`). The verdict is FAIL: one CRITICAL and four HIGH findings, all reproduced with real inputs. `check`, `lint`, unit tests (54 pass), integration tests (2 pass), `swamp extension quality` (passed, 100%) and `swamp extension fmt --check` are all clean; `fmt:check` is not.
+
+### [CRITICAL] Building an Org deck you did not write runs arbitrary Lisp (Org `eval` macros)
+**File:** `presentation/extensions/models/presentation/_lib/engines.ts` **Line(s):** 38-71 (BUILD_EL); README.md 130-131; manifest.yaml 349-350
+**Issue:** BUILD_EL turns off Babel, BIND and file-local variables, but Org evaluates macro templates that start with `(eval …)` at export time. Nothing blocks them.
+**Breaking input:**
+```org
+#+MACRO: pwn (eval (progn (with-temp-file "/tmp/claude-1000/review-ext/PWNED" (insert "yes")) "ok"))
+* Slide
+{{{pwn}}}
+```
+Rendering it through `renderOrg` created `PWNED` containing `yes`.
+**Impact:** Any shell command runs as the swamp user. This directly contradicts the README ("Building a deck you did not write is safe") and the manifest ("building a deck never runs its code blocks").
+**Fix:** In BUILD_EL, wrap `org-macro-expand` (or `org-macro--set-templates`) with advice that signals an error for any template whose trimmed text starts with `(eval`. Add a unit test on BUILD_EL and an integration test with this source.
+
+### [HIGH] Untrusted decks can copy arbitrary local files into the stored HTML
+**File:** `engines.ts` 38-71; `html.ts` 188-226 (stylesheet inlining), 122-130 (`localPath`)
+**Issue:** There are three routes. None is confined to the source directory or repository, and the CSS route has no extension, `isFile` or size check:
+1. `#+INCLUDE:` reads any file Emacs can open.
+2. `inlineLocalFiles` inlines any `&lt;link rel=stylesheet href=…&gt;` with `Deno.readTextFile`.
+3. Image paths with `..` or absolute paths, and symlinks named `*.png`, are base64-inlined.
+
+**Breaking input (all verified):**
+- `#+INCLUDE: "/etc/hostname" src text` put the hostname into the deck.
+- `#+REVEAL_EXTRA_CSS: /etc/hostname` and raw Markdown `&lt;link rel="stylesheet" href="/etc/hostname"&gt;` each produced `&lt;style&gt;\ngalvatron-wsl\n&lt;/style&gt;`.
+- Not run (reasoned): `#+INCLUDE: "~/.aws/credentials"`, and `href="/dev/zero"` should read forever and run out of memory.
+
+**Impact:** Secrets end up in an HTML artifact the user shares. The deck reports no warnings.
+**Fix:**
+- Resolve each reference with `realPath` and refuse it unless it falls under the source directory or repository.
+- For stylesheets, require `.css`, `isFile` and a size cap.
+- In BUILD_EL, refuse `#+INCLUDE`/`#+SETUPFILE` targets outside the source directory, for example with advice on `org-export--prepare-file-contents` or a pre-scan.
+
+### [HIGH] Data names collide across decks: `x-html` and `x-pdf` overwrite deck `x`'s files
+**File:** `deck.ts` 240-248; `source.ts` 17 (`DECK_NAME_PATTERN`)
+**Issue:** `deckResourceName("talk-html") === deckHtmlName("talk")`, and the same holds for `-pdf`. Swamp data names are unique per model regardless of spec.
+**Breaking input (real swamp):**
+- Build `talk.org`, then `talk-html.org`: `Error: Failed to parse stored data for instance 'deck-talk-html': content is not valid JSON`.
+- Build `rep-pdf.org`, then `rep.org`, then `export_pdf name=rep`: "PDF version 2". The PDF overwrote deck `rep-pdf`'s build record.
+
+**Impact:** Ordinary file names like `intro-pdf.org` silently corrupt another deck's data. Later builds of the overwritten deck fail.
+**Fix:** Use prefixes that cannot collide (for example `html-&lt;name&gt;`, `pdffile-&lt;name&gt;`), or reject names ending in `-html`/`-pdf` in `DECK_NAME_PATTERN`. Add a collision test.
+
+### [HIGH] `export_pdf` ignores `timeoutSeconds` and can hang forever
+**File:** `_lib/pdf.ts` 405-442, 555-565
+**Issue:** The deadline is only checked between polls, and `cdp.send` has no timeout. Neither do the `/json/list` fetch or the WebSocket open. If the page's main thread is busy, `Runtime.evaluate` never returns.
+**Breaking input:** `&lt;div class="pdf-page"&gt;&lt;/div&gt;&lt;script&gt;setTimeout(()=&gt;{while(true){}},100)&lt;/script&gt;` with `timeoutMs: 10000` was still running when killed at 60 s (exit 124). Deck authors can inject such script through `#+REVEAL_EXTRA_SCRIPTS` or raw HTML.
+**Impact:** The method and its workflow hang indefinitely; the documented 10–600 s bound is false.
+**Fix:** Race every `send`, the fetch and the WebSocket open against the overall deadline (an AbortSignal or timer that rejects and closes the socket). Add a test with a never-resolving `Cdp` fake.
+
+### [HIGH] Committed README fails `deno task fmt:check`, so CI will fail
+**File:** `presentation/README.md` **Line(s):** 118-120
+**Issue:** `deno fmt --check` reports "Found 1 not formatted file". CI pins Deno 2.9.7, the same version used here.
+**Breaking input:** run `deno task fmt:check` on the committed tree.
+**Fix:** Run `deno task fmt`.
+
+### [MEDIUM] `external: []` and no warning while a selfContained deck still loads local files
+**File:** `engines.ts` 283-306; `html.ts` 179, 194, 346; `deck.ts` 448-479
+**Issue:** There are two gaps:
+- Every attribute regex uses `([^"']*)`, so a double-quoted value containing an apostrophe is neither inlined nor reported.
+- The reveal-markdown engine inlines only `![..](..)`. Raw `&lt;img src&gt;`, reference-style images and `&lt;!-- .slide: data-background="…" --&gt;` live inside the opaque `&lt;textarea&gt;`.
+
+Inline `style="…url(x.png)"` and `url()` inside inlined local CSS are also missed.
+**Breaking input (verified):**
+- Org `[[file:it's.png]]` gave `&lt;img src="it's.png"&gt;` with `external: []`.
+- reveal-markdown `selfContained:true` with `&lt;img src="a.png"&gt;`, `![ref][r]` plus `[r]: a.png`, and a slide background `a.png` gave `external: []`, `warnings: []`.
+
+**Impact:** This breaks the README promise that "local images … are always inlined" and the "external lists anything the deck still loads" contract. It is the same honesty rule the project sets for `truncated`.
+**Fix:** Parse attributes with a regex that handles each quote style separately, `"([^"]*)"|'([^']*)'`, in all four places. For reveal-markdown, also inline `&lt;img src&gt;`, reference definitions and slide-attribute comments. Report any remaining local reference as a warning.
+
+### [MEDIUM] `export_pdf --source` and the workflow fail for symlinked sources
+**File:** `deck.ts` 339 versus 665
+**Issue:** `build` derives the name from `realPath`; `export_pdf` derives it from the raw path.
+**Breaking input (real swamp):** `cur.org -&gt; v3.org`. `build source=cur.org` gives "Built deck v3"; `export_pdf source=cur.org` gives `No build of deck "cur"`. The workflow's pdf step fails the same way.
+**Fix:** Derive the name from the path as given in both methods, or `realPath` in both.
+
+### [MEDIUM] The source-ownership check stores absolute paths, so it breaks when a repo moves or a datastore is shared
+**File:** `deck.ts` 354-368, 568
+**Issue:** `source.path` is an absolute realpath. If the checkout is cloned elsewhere, or a shared or remote datastore is used from another machine, every rebuild throws `Deck name "x" already belongs to /old/path`. `outline` does no ownership check at all, so two sources can overwrite each other's `outline-&lt;name&gt;`.
+**Fix:** Store the path relative to the repository (absolute only when outside it), compare on that, and apply the same check in `outline`.
+
+### [MEDIUM] Emacs and pandoc have no timeout, and output is unbounded
+**File:** `engines.ts` 80-108
+**Issue:** `run()` relies only on `context.signal`, and `.output()` buffers everything. There is also no cap on the total size of data URIs: each file may be up to 32 MB, with no limit on their sum.
+**Breaking input:** `#+MACRO: m (eval (while t))`, or a large `#+INCLUDE`.
+**Fix:** Combine `context.signal` with `AbortSignal.timeout(...)`, cap stdout, and cap total inlined bytes.
+
+### [MEDIUM] Engine warnings are discarded for org-re-reveal and pandoc
+**File:** `deck.ts` 413-447
+**Issue:** `renderOrg` and `renderPandoc` return `log`, but `render()` drops it and sets `warnings: []`. reveal-markdown does report its warnings, so the three engines behave inconsistently.
+**Impact:** pandoc `[WARNING]` lines (missing resources, duplicate identifiers) and Org messages such as unresolved links never reach `warnings` or the logs.
+**Fix:** Surface warning lines from stderr as deck warnings.
+
+### [LOW] The reveal-markdown textarea decodes character references
+**File:** `engines.ts` 238-239
+**Issue:** A textarea is escapable raw text, so `&amp;lt;`, `&amp;amp;` and the like are decoded before the markdown plugin reads `textContent`.
+**Breaking input:** `` `&amp;lt;b&amp;gt;` `` renders as `&lt;b&gt;`.
+**Fix:** Escape `&amp;` and then `&lt;` in the whole body, not only `&lt;/textarea`.
+
+### [LOW] The `theme` field can disagree with what the deck loads
+**File:** `deck.ts` 484-493
+**Breaking input:** `#+REVEAL_THEME: https://evil.example/x.css` records `theme: "black"`.
+**Fix:** Record the theme as null or as the raw href when it is not a pinned theme.
+
+### [LOW] Outline and build number slides differently
+**File:** `source.ts` 78-83; `html.ts` 391
+**Issue:** The outline claims reveal.js numbering but excludes the title and ToC slides. Build counts them. Outline slide "1" is build slide "3" for a default Org deck. The pandoc outline also ignores `---` rules, which pandoc treats as slide breaks (pandoc rendered an extra "2.2" slide).
+**Fix:** Either document the offset or align the two numberings.
+
+### [LOW] Other small issues
+- The PDF page URL is built as `file://${file}?print-pdf`; a `#` or `%` in TMPDIR breaks it. Use `toFileUrl`.
+- `/json/list` can race page creation.
+- A relative `XDG_CACHE_HOME` is accepted.
+- The README's "about 1.8 MB" for selfContained decks is off: measured 1.26 MB (reveal-markdown) and 302 KB (pandoc).
+
+**Checked and safe:**
+- Emacs argv: the source and temp paths are absolute, the theme is an enum, and BUILD_EL clears `command-line-args-left`.
+- `#.` read syntax does not exist in Emacs Lisp. A remote `#+SETUPFILE` is refused in batch mode.
+- Babel, `#+BIND` and `src_` inline blocks did not execute.
+- The `&lt;/textarea` and `&lt;/script` escaping holds.
+- Inlined JavaScript prints correctly in Chromium.
+- SRI attributes are correct.
+- The workflow guard and boolean passthrough work in real swamp.
+- The README `model("talks")` query works.
+- A partial write (file written, then the record write fails) is harmless: the next build simply writes again.
+
+| id | verdict | note |
+|---|---|---|
+| credentials-secrets | issue | No credentials used, but untrusted decks can pull local secrets into the HTML (HIGH) |
+| logging-quality | issue | org-re-reveal and pandoc stderr warnings are discarded |
+| error-handling | issue | PDF timeout not honoured; the CSS inline path throws on directories |
+| testing-completeness | issue | No tests for eval macros, name collisions, apostrophe paths, raw `&lt;img&gt;` in reveal-markdown, or a hung CDP call |
+| idempotency-resilience | issue | Absolute-path ownership breaks after a move; the `unchanged` dedupe itself is fine |
+| api-contracts | issue | `timeoutSeconds`, "external", "always inlined" and "safe" claims are violated |
+| resource-management | issue | No Emacs/pandoc timeouts, unbounded stdout and inline totals; Chromium is cleaned up on normal paths |
+| published-surface-hygiene | issue | README fails fmt; README and manifest make false safety and size claims |
+| schema-strictness | pass | All schema fields written exactly; Zod constraints are adequate |
+| lifetime-gc | pass | Infinite lifetime; GC 20 for records, 10 for files, consistent with reuse of the latest version |
+| crud-completeness | pass | build, outline and export_pdf cover the domain; no delete is needed |
+| preflight-checks | pass | Missing tools give clear errors; the source rule is enforced by refine |
+| instance-names | issue | `deck-&lt;n&gt;-html`/`-pdf` collide with `deck-&lt;n'&gt;` (verified data corruption) |
+| data-access | issue | Symlinked source gives a build/export_pdf name mismatch; `outline` lacks the ownership check |
+| version-upgrades | pass | manifest and model version are both 2026.10.21.1; new model, no upgrades needed |
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>168258</subagent_tokens><tool_uses>60</tool_uses><duration_ms>660086</duration_ms></usage>
+</task-notification>
