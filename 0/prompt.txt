@@ -1,0 +1,46 @@
+<task-notification>
+<task-id>a320dc7955e1ff2fb</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a320dc7955e1ff2fb.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix docs-only findings" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Every audit item in my scope is fixed. All 23 extensions I changed pass `check`, `lint`, `fmt`, `fmt:check`, `test` and `swamp extension quality manifest.yaml` (`passed` / 100%). No extension's `deno.lock` changed.
+
+**Bumped extensions** (all to `2026.10.21.1`; each got a new `RELEASE_NOTES.md`, and each model with an `upgrades:` array got an identity entry and the new model version). Exact-literal version assertions: none exist in these extensions (all use regex), so no test changes.
+- From `2026.10.14.1`: cloudflare-audit, redmine-kanban, reddit, twitch, gitlab-review, swamp-club, claude-cost-reconciliation, vault/hashicorp-vault, vault/gopass, vault/macos-keychain, anthropic/compliance, and the eight AWS extensions (alarm-investigation, alarms, inventory, pricing, securityhub-findings, support, traces, bedrock-usage).
+- From `2026.10.20.2`: redmine.
+- From `2026.10.14.2`: gitlab.
+- From `2026.10.20.1`: vault/pass, anthropic/admin. anthropic/admin had an empty `upgrades: []`, so it now has a single entry.
+
+**Files changed** (README, manifest and RELEASE_NOTES in each bumped extension, plus):
+- `README.md` (root): cloudflare, redmine and falai examples now use `vault put` + `vault.get`; the `FAL_KEY` fallback is described as discouraged; hashicorp says to run `vault login` first; the gitlab datastore example is now a `.swamp.yaml` config with `"${{ vault.get(gitlab, TOKEN) }}"`. The old command, `swamp datastore create`, does not exist. The root README has no `*-datastore-bootstrap` mentions.
+- **Model source, for describe text and version/upgrades:**
+  - redmine `redmine.ts`, reddit `moderation.ts`, twitch `mod.ts`, swamp-club `lab.ts`: the secret global-arg descriptions now say to supply the value through `vault.get`.
+  - swamp-club `apiKey` had no description at all before.
+  - anthropic `admin.ts` and `compliance.ts`: the `sk-ant-api01-...` literal is gone from the JSDoc and the descriptions.
+  - gitlab `projects.ts`, gitlab-review `review.ts` and the eight AWS model files: version and upgrades only.
+- `vault/hashicorp-vault/extensions/vaults/hashicorp.ts`: the `token` description and the "No Vault token found" error now lead with `vault login`. They warn against a literal config token and call `VAULT_TOKEN` a discouraged fallback. The resolution order is unchanged.
+  - This is the one user-visible behavior change: the error wording differs, and the release notes say so. The existing test still passes because it only matches "No Vault token found".
+- `vault/hashicorp-vault/docs/otel_verification.md` (not shipped): added a shell-history caveat to the inline canary command.
+- `docs/plans/`: fixed the examples in place in `2026-04-14-cloudflare-audit-design.md`, `2026-04-14-cloudflare-audit-plan.md`, `2026-04-14-redmine-extension.md`, `2026-04-22-twitch-extension.md` and `2026-04-22-twitch-moderation-design.md`. No bump.
+
+**Decisions you might question:**
+- **`source: vault` (vault/pass):** swamp does not support this form; the swamp skill only documents `${{ vault.get(...) }}`. Both examples, including the `smtp/example#login` field selection, now use `vault.get`.
+- **twitch:**
+  - The model requires `clientId`, `clientSecret`, `accessToken` and `refreshToken`. The manifest Quick Start passed none of them, so it could not work; it now passes all four.
+  - I renamed the example vault from `twitch-creds` with keys like `twitch-client-id` to vault `twitch` with UPPER_SNAKE keys, per the spec. Existing instances are unaffected.
+  - The token-exchange `curl` now gets the client secret on stdin (`--data @-`) and the bearer header on stdin (`-H @-`). The returned tokens are piped into `swamp vault put` without being printed.
+- **reddit:** `clientId` and `username` are now passed as plain values; only the client secret and password go through `vault.get`. The README notes they can be vaulted too.
+- **AWS wording:** each now recommends SSO, a named profile (`--global-arg profile=`) or an attached IAM role. Saying the SDK default chain is used is kept where it was.
+
+**Process slip:** I once ran `deno fmt` on the root README and the five plan docs, and it reformatted those whole files. I restored them from `git show HEAD:&lt;file&gt;` and re-applied only my edits. Those six files are not re-formatted; they were not fmt-clean before either.
+
+**Not fixed — outside my scope or not secret-related:**
+- The root README's pass and gopass examples use `--config '{"store":"default"}'`. pass has no `store` option (its option is `storeDir`).
+- The vault READMEs configure vaults with a `.swamp.yaml` `vaults:` block. The swamp vault reference stores vault config under `vaults/`, created with `swamp vault create`. I left this alone because I could not confirm which is right.
+- The test fixtures in `anthropic/compliance/.../compliance_test.ts` use `sk-ant-api01-test` values. Tests are not shipped and the spec's rule targets docs, so I left them.
+- The twitch README scopes table still lists the deprecated `moderation:read` scope. This is a pre-existing inconsistency unrelated to secrets.
+
+The helper scripts and gate logs are in `/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/7dd5017b-f4c8-4b11-b47c-7dd8f7bf10c7/scratchpad/docs-agent/`. Nothing is committed.</result>
+<usage><subagent_tokens>204095</subagent_tokens><tool_uses>95</tool_uses><duration_ms>763105</duration_ms></usage>
+</task-notification>
