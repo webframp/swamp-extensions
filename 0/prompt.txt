@@ -1,0 +1,98 @@
+<task-notification>
+<task-id>a7cb47c3414c2b3d5</task-id>
+<tool-use-id>toolu_01VBwVHU6gEQWbsVpvJCT2e2</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/a7cb47c3414c2b3d5.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial re-review iteration 3" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Adversarial review: @webframp/redmine 2026.10.20.1 (iteration 3)
+
+Gates: `deno task check`, `lint`, `fmt:check` and `test` (78 passed) all pass. `swamp extension quality` returns `passed` at 100%.
+
+Consumer breakage from the rename: none.
+- The devops-measurement workflow's `data.latest("redmine", "issue-7")` now matches the new `get_issue` name. Before this PR it read `7`, so the reference was broken and this PR fixes it.
+- redmine-kanban reports and the operator-briefing normalizer find data by `handle.name`, so a renamed name is picked up automatically.
+- No skill, workflow or doc refers to an old name.
+
+Data names never collide across specs. Every spec prefix is distinct: `issue-&lt;int&gt;` vs `issues-`, `version-&lt;int&gt;` vs `versions-`, `attachment-` vs `attachments-`, and `issue-categories-` vs `issue-&lt;digits&gt;` all separate. swamp's docs list no reserved names. The README table matches all 19 `writeResource`/`createFileWriter` calls, and the method count of 28 matches.
+
+Mutation testing: I made one change at a time in a scratch copy and reran the suite.
+- Three changes left every test passing: `redmineDownload` using `reject`, removing the http→https upgrade branch, and reverting `upload_file` to plain `fetch`.
+- Two changes failed tests, as they should: removing the POST policy and keeping `Content-Type` after a method rewrite.
+
+### HIGH: PUTs that add data are still retried on 502/504, which duplicates journal notes
+**File:** `redmine/extensions/models/redmine/_lib/api.ts` (lines 13-20); `redmine/extensions/models/redmine/redmine.ts` (`update_issue`'s PUT around line 1540; `upload_file`'s attach PUT around line 2527)
+**Issue:** The PR limits POST retries to 429 because "a 502 or 504 can arrive after Redmine already created the record". That reasoning applies just as much to `PUT /issues/:id.json` with `notes`: every successful PUT creates a new journal entry. `isRetryableStatus` still retries PUT on 502/503/504, and both RELEASE_NOTES.md and the README now present this as correct ("GET, PUT and DELETE still retry 429/502/503/504").
+**Breaking input:** Run `update_issue` with `notes: "deployed"`. Redmine saves the journal, then a proxy returns 504. The retry posts the note again, up to 4 duplicate comments in total.
+**Impact:** Duplicate comments on real tickets. This is the same root cause the PR fixes for POST, so it falls under the user's in-scope rule.
+**Fix:** Retry only on 429 for any method other than GET or HEAD. Alternatively, pass a per-call `idempotent` flag, so `update_journal` and `update_version` can keep 5xx retries while `update_issue` with notes and the upload attach step cannot. Correct the release notes and README to match, and add a test.
+
+### MEDIUM: Retrying a DELETE after a 502/504 reports failure for a delete that succeeded
+**File:** `_lib/api.ts` line 19
+**Issue:** If Redmine deletes the issue, relation, version or watcher and a proxy then returns 502, the retry gets a 404 and `redmineApi` throws.
+**Breaking input:** `delete_issue` when the gateway times out after the delete has committed.
+**Impact:** The workflow step fails although the record is gone. A re-run fails again with 404.
+**Fix:** Either stop retrying DELETE on 5xx, or treat a 404 on a DELETE retry as success.
+
+### MEDIUM: Distinct inputs to the same method still overwrite each other's data
+**File:** `redmine.ts` line 2068 (`search`) and lines 1884-1890 (`list_time_entries`)
+**Issue:** CLAUDE.md requires instance names to be collision-resistant (hash variable inputs). The PR fixes overwrites across methods and claims every name is now safe, but overwrites within a method remain:
+- `search` replaces every non-alphanumeric character and truncates to 50 characters, so `foo bar`, `foo-bar` and `foo_bar` all write `search-foo_bar`. Any two queries sharing their first 50 characters also collide.
+- `list_time_entries` ignores `userId`, `from` and `to`, so different users and date ranges all write `time-entries-all` or `time-entries-&lt;project&gt;`.
+- `issueId: 5` and `project: "5"` (a numeric project ID) both write `time-entries-5`.
+**Impact:** A later run silently replaces data from different inputs. This is the overwrite defect the PR fixes, inside one method.
+**Fix:** Append a short SHA-1 of the normalized arguments, for example `search-&lt;sanitized&gt;-&lt;hash8&gt;`, and include every filter in the time-entries name.
+
+### MEDIUM: `upload_file`'s move to `redmineFetch` is untested
+**File:** `redmine/extensions/models/redmine/redmine_test.ts`
+**Issue:** Reverting the upload to plain `fetch(...)` (mutation M3) passes all 78 tests. Nothing checks that the upload rejects a cross-origin redirect instead of sending `X-Redmine-API-Key`, that it skips 502 retries, or that it gets a timeout signal.
+**Impact:** The credential-leak and duplicate-upload fixes for this call path can regress unnoticed.
+**Fix:** Add `upload_file` tests for a cross-origin 307 (rejected, the other server gets no request), a 502 (exactly one request), and a 429 (retried).
+
+### MEDIUM: Downloads following S3/CDN redirects are untested at the download level
+**File:** `_lib/api_test.ts`, `redmine_test.ts`
+**Issue:** Changing `redmineDownload` to `crossOrigin: "reject"` (mutation M1) passes every test. Strip mode is only tested by calling `redmineFetch` directly.
+**Impact:** A regression would quietly break `download_attachments` on any Redmine whose storage redirects to S3 or a CDN.
+**Fix:** Add a `redmineDownload` or `download_attachments` test where the origin returns 302 to a second server. Assert that the bytes come back and the second server sees no credential headers.
+
+### LOW: The http→https upgrade branch inside the redirect loop is untested
+**File:** `_lib/api.ts` lines 98-100
+**Issue:** Replacing `if (isHttpsUpgrade(...))` with `if (false)` (mutation M2) passes. Only the predicate has a unit test. A fetch-mock test (stub `globalThis.fetch` to answer an `http://` URL with 301 to `https://` on the same host) would cover the loop without TLS.
+
+### LOW: Two tests are named for behavior they don't check
+**File:** `_lib/api_test.ts`
+**Issue:**
+- "gives each attempt a signal" makes a single attempt (`seen.length === 1`). Building one signal outside the retry loop would still pass.
+- "also after a hop back" begins on `other`, so it never returns to the origin it left. Removing `leftOrigin` entirely (mutation M7) passes, and that mutation is equivalent, because `headers.delete` already persists across hops. So `leftOrigin` is effectively dead code.
+**Fix:** Make the first test do a 429 then a 200 and assert two distinct signals. Fix the second scenario, or drop `leftOrigin`.
+
+### LOW: The release notes and README undercount the old name collisions and leave out `listed`
+**File:** `redmine/RELEASE_NOTES.md`, `redmine/README.md` "Data names" section
+**Issue:**
+- Besides the four lookup methods, `list_issues` and `list_time_entries` with no filters also wrote `all`.
+- `list_time_entries` with `issueId` also wrote the bare issue ID, and `get_version`/`create_version` wrote bare version IDs that could collide with issue IDs.
+- The upgrade note's `all →` bullet leaves out `issues-all` and `time-entries-all`.
+- The status lists in both files omit `listed`, which is what `list_attachments` writes.
+- Length is 3234 characters, under the 5000 limit, and the format is fine.
+**Fix:** Complete both lists.
+
+### LOW: The root README's method count is stale
+**File:** `README.md` lines 111 and 383
+**Issue:** It says "26 methods"; the extension now has 28.
+
+### LOW: `_lib/api.ts` has no SPDX header
+**File:** `redmine/extensions/models/redmine/_lib/api.ts`
+**Issue:** This file is shipped, but it carries no license header, while `redmine.ts` and both test files now say Apache-2.0. The release-note line "The source files' SPDX header said AGPL" only applied to `redmine.ts`.
+
+Nothing else turned up:
+- The schema matches what both methods write (`filter: null` from `list_attachments`, `maxBytes` from `download_attachments`).
+- Method names are uppercased before the retry check, and `redmineApiPaginated` defaults to GET.
+- A 429 from a redirect target retries from the original URL with fresh headers.
+- Each caller wraps its errors.
+- No timer leaks: every path clears the idle timer.
+- The 20ms vs 500ms timing in the signal test is not flaky.
+- There are no TODOs in the diff.
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>122768</subagent_tokens><tool_uses>31</tool_uses><duration_ms>314957</duration_ms></usage>
+</task-notification>
