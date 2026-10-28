@@ -1,0 +1,60 @@
+<task-notification>
+<task-id>aac4e7dc2b9e04029</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/aac4e7dc2b9e04029.output</output-file>
+<status>completed</status>
+<summary>Agent "Datadog codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The regeneration of `teams` and `dora` is done and committed. I did not push or open a PR.
+
+- **Branch:** `fix/datadog-codegen-regen-2026-10-07` (one commit, `a8495d40`)
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-aac4e7dc2b9e04029`
+
+## Changes
+- **teams:** adds an optional `servicenow` notification target (with `templates`) to the team notification rule schemas and to `create_team_notification_rule` / `update_team_notification_rule`. Email settings gain an optional `recipient_email`.
+- **dora:** adds `patch_dora_deployment_by_version` and its resource (`PATCH /api/v2/dora/deployments`). The description of `patch_dora_deployment` now reads "Mark a deployment as failed by ID"; its behaviour is unchanged.
+- **Versioning:** both extensions move to 2026.10.07.1 with a no-op upgrade entry appended and real `RELEASE_NOTES.md` text. Nothing was removed and no schema change is breaking. The generator wrote no `deno.lock` changes.
+- **Notes:** `--notes` applies to one service per run, so I ran `teams` and `dora` separately.
+
+## Harness fixes
+The first review found a HIGH bug in the generated code. The shared `ddApi` helper threw on an empty body. The new by-version PATCH returns an empty 202, so it would have failed after Datadog applied the change. I fixed the harness and regenerated rather than editing generated files.
+- **`extension_generator.ts`:** `ddApi` now reads the body as text and returns `{}` when it is empty.
+- **`test_generator.ts`, test coverage:** execution tests are now keyed by method type plus whether the path has a parameter. Before, the new by-version PATCH test displaced the by-ID `patch_dora_deployment` test. Regenerating also added three `teams` tests (`delete_team_connections`, `get_team_links`, `create_team_link`).
+- **`test_generator.ts`, mock:** write methods whose operation declares no response content now get a bodyless mock response.
+- **`hardening_test.ts`:** one new test covers an empty 202 and a plain JSON 200.
+
+## Gate results
+- **Harness:** check, lint, fmt:check and test (20 tests) all pass.
+- **teams and dora:** check, lint, fmt:check and test (15 and 12 tests) pass. `swamp extension quality` reports passed at 100% for both; `repository-verified` is provisional because the server confirms it on publish.
+
+## Reviewer verdict
+The first review iteration returned FAIL (the HIGH above plus the MEDIUM test-coverage loss). After the harness fixes, the second iteration returned **PASS** (separate adversarial subagent each time). Its remaining notes, none fixed here:
+- **MEDIUM, needs your call:** the empty-body fix only reaches `teams` and `dora`. `computeModelVersion` only looks at the model source, so a dry run reports the other 12 datadog extensions as unchanged and they keep the old `ddApi`. I left this out of scope. Options are to make the version check cover `api.ts` and the generated tests, or to run a `--version` sweep later.
+- **LOW:** the paginated GET helpers still call `response.json()`, and an empty body there is unlikely.
+- **LOW:** a malformed JSON body gives a bare SyntaxError with no status or path.
+- **LOW:** the new harness test does not cover a malformed body, a JSON:API response or a 204.
+
+## Drafted PR
+
+**Title:** `chore(datadog): regenerate teams and dora; handle empty 2xx bodies`
+
+**Body:**
+```
+Regenerates the datadog `teams` and `dora` extensions with scripts/datadog-codegen. Both move to 2026.10.07.1.
+
+**teams.** Team notification rules accept a `servicenow` target (with `templates`) on `create_team_notification_rule` and `update_team_notification_rule`. Email settings gain an optional `recipient_email`.
+
+**dora.** New `patch_dora_deployment_by_version` marks a deployment as failed by service, env, and version. The description of `patch_dora_deployment` now reads "Mark a deployment as failed by ID"; behavior is unchanged.
+
+All schema changes are additive. Each extension gets a no-op upgrade entry and release notes.
+
+**Harness changes.** Datadog answers the new by-version patch with an empty 202. The generated `ddApi` helper called `response.json()` on every success, so it threw after Datadog had already applied the change. It now returns `{}` for an empty body. The test generator also keyed execution tests by method type alone, so the new PATCH displaced the existing by-ID PATCH test. Tests are now keyed by type and path-parameter shape, and operations with no response content get a bodyless mock. A harness test covers the empty-body path.
+
+**Follow-up.** The version check compares only the model source, so the other 12 datadog extensions still carry the old `ddApi` and report "unchanged". They need a `--version` sweep or a wider change check.
+
+Checks: harness and both extensions pass check, lint, fmt:check, and test; `swamp extension quality` is 100% for both.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>82787</subagent_tokens><tool_uses>31</tool_uses><duration_ms>250273</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-aac4e7dc2b9e04029</worktreePath><worktreeBranch>worktree-agent-aac4e7dc2b9e04029</worktreeBranch></worktree>
+</task-notification>
