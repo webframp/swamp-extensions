@@ -1,0 +1,1 @@
+Read docs/plans/2026-10-13-reserved-data-name-latest-sweep.md and then come up with a plan for fixing all extensions in this repo that violate the use of "latest" as currently implemented in swamp, check the data generators as well. This is going to be one big PR that is a sweeping change and that is fine
