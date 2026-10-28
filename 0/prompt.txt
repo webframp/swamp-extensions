@@ -1,0 +1,66 @@
+<task-notification>
+<task-id>ac0e4e5e343da2608</task-id>
+<tool-use-id>toolu_013V5g2VtJb7RtPWTgZKWHUg</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ac0e4e5e343da2608.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review post_discussion" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings. The change is correct and the gates all pass: `check`, `lint`, `fmt:check`, `test` (37 passed) and `swamp extension quality` (passed, 100%). Below are three LOW findings, then what I ruled out for each probe.
+
+### [LOW] Dedup key is the literal project string, so aliases of the same MR slip past it
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 1114-1118
+**Issue:** The key is `encodeURIComponent(args.project)` plus iid plus body hash. GitLab treats path case loosely and also accepts a numeric project ID, but the key does not normalise either. Every other per-MR resource uses the same `instanceName`, so this is an inherited pattern. It only matters for the new dedup claim.
+**Breaking input:** Run `get_mr_diff` and `post_discussion` with `project=MyOrg/MyApp`, then repeat both with `project=myorg/myapp` or `project=123` and the same body.
+**Impact:** Two identical threads on one MR. It needs a separate `get_mr_diff` under the second spelling first, because `assertMrOpen` is keyed the same way.
+**Fix:** Say in the README that dedup is keyed on the exact `project` string. Or normalise to `project_id` from the `mrDiff` record.
+
+### [LOW] Hash covers raw bytes, so whitespace-only differences repost
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 172-181, 1116
+**Issue:** The hash runs over the exact body bytes. An agent retry that adds a trailing newline or switches CRLF/LF produces a new key.
+**Breaking input:** `body="point"`, then `body="point\n"`.
+**Impact:** A duplicate thread on the retry case the README calls "safe".
+**Fix:** Hash `body.trim()` with line endings normalised. Or soften the README to "a byte-identical retry".
+
+### [LOW] POST accepted but response bad or record write fails: a retry double-posts
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 1131-1186
+**Issue:** The method throws before `writeResource` in three cases:
+- The body is not JSON.
+- `notes` is empty or missing.
+- `writeResource` itself fails.
+
+In each case GitLab has already opened the thread. The next call finds no record and posts again. This matches `post_line_comment` and triage `post_inline_review`, which write only after a successful parse. No fetch has a timeout, so a client-side hang followed by a retry fails the same way.
+**Breaking input:** The server returns 201 `{ "id": "abc", "notes": [] }` (the shape the "unexpected discussion response" test mocks). Retry with the same body.
+**Impact:** A duplicate thread in a narrow failure window. "Retries are safe" in the README is slightly overstated.
+**Fix:** Word the README as "retries after a recorded post are safe". Optionally, when `discussion.id` is present, write the record before checking `notes`.
+
+### Ruled out, by probe
+1. **Sibling consistency.**
+   - **`post_line_comment`:** same `assertMrOpen`-first order, `contextFetch` prefix style (`post_discussion &lt;project&gt;!&lt;iid&gt;`), JSON try/catch with `cause`, `!discussion?.id || !note?.id` check, `String(discussion.id)`, and the `fetchedAt`/`durationMs`/`collectedBy` fields, plus a single info log. The only difference is that `post_discussion` adds the dedup read; `post_line_comment` has none.
+   - **`post_review`:** same ordering, provenance fields and logging. It goes through GraphQL and returns a parsed numeric note ID.
+   - **Triage `post_inline_review`:** it checks open state inline, has no context prefix, no JSON try/catch and no provenance fields, and writes a record after each post. In error context and provenance, `post_discussion` is stricter than this sibling, not weaker.
+   - No inconsistencies found.
+2. **Interpolation.** I found no instance-name collision. The name is `prefix-P-I-H`, where `H` is always 16 hex characters with no dash and `I` is a positive integer, so reading from the right splits it one way only. Project `a-1` with iid 2 gives `a-1-2-H`, which no other project/iid pair can produce. `encodeURIComponent` is one-to-one, the URL path uses the same encoding, and the body goes through `JSON.stringify`, so neither can break framing.
+3. **Dedup.** A 64-bit hash prefix is more than enough for the handful of threads one MR carries.
+   - **Deliberate re-raise:** skipping an identical body for the 30-day `lifetime` is the intended design and the README says so. That includes a thread someone deleted on GitLab, or a point deliberately raised again in a later round.
+   - **Skip return:** a skip returns `dataHandles: []` with an info log, which the docs also state.
+4. **Truthiness.** `discussionId` is always a non-empty string, and GitLab note IDs are never 0. No valid value is rejected.
+5. **Timeouts.** No fetch has an abort signal, which matches every sibling. The README already says there is no retry or rate-limit handling.
+6. **Versions.** The manifest and `model.version` are both `2026.10.21.1`. The appended identity upgrade's `toVersion` matches, and no test asserts an exact version string. The new resource is additive and its schema is consistent.
+7. **Docs.**
+   - **"Resolvable":** a position-less discussion on an MR is resolvable in GitLab. The code does not check `note.resolvable`, but the claim holds.
+   - **"30 days":** this matches `lifetime: "30d"`.
+   - The README tables, release notes and manifest description all match the code.
+8. **Deferred work.** No TODOs and no silently excluded fixes.
+9. **Tests.**
+   - Deep-equal on `{ body }` proves no `position` is sent.
+   - The repeat test proves the skip: 2 POSTs for 3 calls and an empty handle.
+   - A separate test proves keys differ per MR.
+   - A merged MR is refused with no POST call. The mock only counts POSTs to discussions, but `assertMrOpen` makes no fetch, so the test is still sound.
+   - Not tested: the invalid-JSON branch.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>70436</subagent_tokens><tool_uses>6</tool_uses><duration_ms>68511</duration_ms></usage>
+</task-notification>
