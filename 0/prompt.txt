@@ -1,0 +1,92 @@
+<task-notification>
+<task-id>a5c7c5284468096b0</task-id>
+<tool-use-id>toolu_017oXnW2RW5AXGTpLXRuBh9D</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a5c7c5284468096b0.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review gitlab work items" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH defects. There are four MEDIUM and three LOW findings, and the MEDIUMs are worth fixing before merge.
+
+**Gates I ran (no files modified):** `deno task check` and `fmt:check` are clean. The 10 work-item tests pass. `swamp extension quality manifest.yaml` reports `passed` / 100%. The model version (`2026.10.21.1`) matches the manifest, and the last upgrade entry's `toVersion` matches it. The new upgrade entry is an append with an identity migration, and no exact-version test assertion needs updating. I did not run `deno task lint` or the full test suite.
+
+**Probe results with no finding:**
+- **Schema (probe 1):** These parts of the GitLab GraphQL schema are used correctly:
+  - `Project.workItems(iid: String)`
+  - `Project.workItemTypes { nodes { id name } }`
+  - `WorkItemWidgetHierarchy.parent` and `WorkItem.reference(full: Boolean)`
+  - `workItemConvert(input: { id: WorkItemID!, workItemTypeId: WorkItemsTypeID! })`
+  - `WorkItemWidgetHierarchyUpdateInput.parentId`, which is nullable; the docs say `null` removes the association.
+
+  I could not confirm `Project.workItemTypes` deprecation status on GitLab 18.x from memory.
+- **Injection:** Every user value goes in as a GraphQL variable. The only literal in a query is `null`, which is static. No user value is string-interpolated into a query.
+- **Supply chain (probe 10):** No new imports or env access. The only network destination is the existing `https://${host}/api/graphql`.
+- **Null payloads, `errors[]`, `durationMs` / `collectedBy` / `fetchedAt` and logger style (probe 2):** These match the siblings (`set_issue_assignees`, `resolve_mr_discussion`).
+- **`workItemType`:** It is `WorkItemType!` in the schema, so the unguarded read of `workItem.workItemType.name` is safe.
+
+### [MEDIUM] Both new resources write under the same data name
+**File:** gitlab/extensions/models/gitlab/projects.ts
+**Line(s):** ~4386 (`workItemParent`), ~4471 (`workItemType`)
+**Issue:** Both methods write `${sanitizeName(project)}-work-item-${iid}`. Swamp keys data by data name per model: `data.latest(model, name)` takes only the name, and the spec is just a tag. The two specs therefore share one version history.
+**Breaking input:** Run `remove_work_item_parent` on `group/proj` iid 7, then `convert_work_item_type` on the same item.
+**Impact:** `swamp data get gitlab group~proj-work-item-7` and `data.latest(...)` return whichever spec was written last, and the version history mixes the two schemas. CEL that expects `previousParent` can get a `workItemType` record. The siblings `issueAssignees`, `issueDiscussions` and `notes` already share `-issue-&lt;iid&gt;`, but this branch adds a new collision.
+**Fix:** Use `-work-item-${iid}-parent` and `-work-item-${iid}-type`.
+
+### [MEDIUM] A parent the caller cannot read is reported as "no parent"
+**File:** gitlab/extensions/models/gitlab/projects.ts
+**Line(s):** WORK_ITEM_QUERY (~1877), `workItemParentRef` (~1920), `if (previousParent)` (~4357)
+**Issue:** GitLab authorizes `WorkItem` objects per field. If the parent is confidential or sits in a project the token cannot read, `hierarchy.parent` comes back `null` even though the link exists. The code treats `null` as "no parent", skips the mutation and records `previousParent: null`. `WorkItemWidgetHierarchy.hasParent: Boolean!` exists to tell these cases apart.
+**Breaking input:** The lookup returns `widgets: [{ parent: null, hasParent: true }]`.
+**Impact:** The method logs "Work item #7 has no parent", writes a resource saying so, and returns success while the item is still attached. The release note's "no-op when already in the requested state" claim is false here.
+**Fix:** Select `hasParent` in the lookup and in the mutation response. Mutate when `hasParent` is true. If the parent reference is null but `hasParent` is true, record a placeholder or throw.
+
+### [MEDIUM] `remove_work_item_parent` treats an empty mutation response as success
+**File:** gitlab/extensions/models/gitlab/projects.ts
+**Line(s):** ~4375–4381
+**Issue:** `parent = workItemParentRef(result.workItem)` returns `null` when `result.workItem` is null or when the hierarchy widget is missing. The check `if (parent) throw` passes in both cases, so the method writes `parent: null` as confirmed. `convert_work_item_type` throws on the equivalent case ("returned no work item type"), so the two new methods are inconsistent. The "GitLab kept parent" check only catches a widget that is present and non-null; it cannot detect a missing confirmation.
+**Breaking input:** `{ data: { workItemUpdate: { workItem: null, errors: [] } } }`, or `workItem: { widgets: [] }`.
+**Impact:** A detach that did not happen is recorded as done.
+**Fix:** Throw when `result.workItem` is missing or has no hierarchy widget. Better, check `hasParent === false` in the response (see the previous finding). Add a test for each case.
+
+### [MEDIUM] The tests cannot tell the lookup apart from the mutation
+**File:** gitlab/extensions/models/gitlab/projects_test.ts
+**Line(s):** 7593–7863; `mockGraphqlCapture` at 5320
+**Issue:** One merged body answers every call, and `m.vars()` keeps only the last call's variables. As a result:
+- Code that read `workItemUpdate` from the lookup response, or `project.workItems` from the mutation response, would still pass.
+- The lookup variables (`fullPath: "group/proj"`, `iid: "7"` as a string) are never asserted.
+- The query text is never asserted, so sending the wrong mutation, or dropping `parentId: null`, would not fail any test.
+- No test covers a `workItemUpdate: null` or `workItemConvert: null` payload, even though the code has explicit guards for both.
+- No test covers the `workItem: null` case from the previous finding.
+
+**Breaking input:** Change `REMOVE_WORK_ITEM_PARENT_MUTATION` to `hierarchyWidget: {}`. All tests still pass.
+**Impact:** Most of the new behaviour is unverified.
+**Fix:**
+- Use a mock that dispatches on `body.query`, such as `/workItemUpdate/` or `/workItemConvert/`, and returns a separate response for each.
+- Assert `bodies()[0].variables` equals `{ fullPath, iid: "7" }`.
+- Assert `bodies()[1].query` contains `parentId: null`.
+- Add tests for the null-payload guards.
+
+### [LOW] An empty type list gives an unhelpful error
+**File:** gitlab/extensions/models/gitlab/projects.ts
+**Line(s):** ~4425–4431
+**Issue:** If `workItemTypes` is null or empty (feature disabled, or the field is not resolved), the error reads `unknown type "Issue" (available: )`. That points the user at their input rather than at GitLab.
+**Breaking input:** `workItemTypes: null`.
+**Fix:** When `types.length === 0`, throw `"no work item types returned for &lt;project&gt;"`. Optionally `trim()` the `type` argument.
+
+### [LOW] `iid` accepts non-integers
+**File:** gitlab/extensions/models/gitlab/projects.ts
+**Line(s):** ~4341, ~4413
+**Issue:** `z.number()` accepts `1.5` and `-3`, which become `iid: "1.5"` and end in a confusing "not found". The siblings use the same schema, so fixing only these two would be inconsistent.
+**Fix:** Use `z.number().int().positive()` here, and ideally in the siblings in the same sweep.
+
+### [LOW] `workItemConvert` is an Experiment-status mutation, and the docs don't say so
+**File:** gitlab/RELEASE_NOTES.md, gitlab/README.md
+**Issue:**
+- GitLab introduced `workItemConvert` as an Experiment, which can change without notice.
+- Converting a Task that still has an Issue parent into an Issue is rejected by GitLab, because hierarchy rules apply. The error reaches the user through `errors[]`, but the docs don't suggest running `remove_work_item_parent` first.
+- In CE, `workItemTypes` may list licensed types (Epic, Objective, Key Result, Requirement, Test Case). Converting a project item to Epic fails server-side; that error also reaches the user, but it is undocumented.
+
+**Fix:** Add a one-line caveat to the README. The "case-insensitive" claim in the release notes matches the code. "No-op" is accurate only for the mutation, since a resource is still written; the hidden-parent case above can make it inaccurate.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>75459</subagent_tokens><tool_uses>14</tool_uses><duration_ms>189790</duration_ms></usage>
+</task-notification>
