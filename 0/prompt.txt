@@ -1,0 +1,53 @@
+<task-notification>
+<task-id>aa080a88aed4d97e9</task-id>
+<tool-use-id>toolu_01XNVha2QwKt75HgHdbRHsQn</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aa080a88aed4d97e9.output</output-file>
+<status>completed</status>
+<summary>Agent "Third review gitlab work items" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL, HIGH or MEDIUM issues. All four iteration-2 fixes are correct, nothing regressed, and three LOW findings remain.
+
+**How I checked:**
+- `deno task check`, `lint` and `fmt:check` all pass. The 18 tests matching `work_item` pass, and the iid-validation test is the one outside that filter.
+- I read GitLab's source: `HierarchyType`, `Widgets::Hierarchy#has_parent?`, `Callbacks::Hierarchy`, `ParentLinks::DestroyService`, `Mutations::WorkItems::Convert` and `ProjectType`.
+- I confirmed `has_parent` is absent in v17.1.0-ee and present in v17.2.0-ee.
+
+**The fixes:**
+- **(a) remove order:** missing widget, then unreadable parent, then the no-parent no-op, then the mutation and its confirmation. That order is right.
+  - `parent` is `null: true` on `Types::WorkItemType`, so an unauthorized parent comes back null while `has_parent?` (that is, `parent.present?`) is still true. The unreadable-parent check therefore fires exactly when GitLab would refuse the removal.
+  - `workItemHierarchy` treats a non-null `parent` as having a parent, so a response with inconsistent fields still fails the confirmation.
+  - The callback reloads the parent before responding (`reload_work_item_parent`), so the confirmation reads the state after the change.
+- **(b) convert verification:** correct. The no-op uses a case-sensitive compare and the post-mutation check is case-insensitive, but both names come from GitLab's own type records, so nothing can slip through.
+- **(c) query split:** correct. The type lookup has no hierarchy widget, and a test asserts `hasParent` is absent from it. `project.workItemTypes` still exists on master.
+- **(d) null type guard:** correct, and it runs before any mutation.
+
+**Other probes:**
+- **`hadParent`:** no references remain in source, tests, schema, README or release notes.
+- **Operation names:** `query workItemParent` and `query workItemType` are legal. GraphQL keeps operation names in their own namespace, apart from type and field names, and each request carries one operation.
+- **Sibling consistency:** the two new methods match each other's error prefixes, logging style and data-name pattern. The `workItemUpdate failed:` and `workItemConvert failed:` prefixes follow the existing `issueSetAssignees failed:` and `labelCreate failed:` convention.
+- **Tests:** none pass vacuously. The mock routes by operation name and returns a 500 for any request it did not expect, every fail-before-mutation test checks that only one request was sent, and the happy-path tests check the operation name, the variables and the resource name.
+- **Docs:** they match the code, apart from the data-name wording below. Trimming and case-insensitive matching, "no mutation when already in state", 17.2+ for remove only, and "Experiment" for `workItemConvert` are all accurate.
+
+### [LOW] A readable parent the token cannot administer still gets GitLab's misleading error
+**File:** gitlab/extensions/models/gitlab/projects.ts **Line(s):** ~4405–4414
+**Issue:** The early check only catches a parent the token cannot read. A token that can read the parent but lacks `admin_parent_link` on it (for example, Reporter on the parent's project) reaches `DestroyService#permission_to_remove_relation?`, which returns `not_found_message`. The method then throws `workItemUpdate failed: No Work Item Link found`.
+**Breaking input:** A child in project A (Developer) with its parent in project B (Reporter).
+**Impact:** The method still fails correctly, but the error points at a missing link rather than missing permission. This is the same confusion fix (a) addressed for unreadable parents. The README states the requirement for both ends, so this only affects diagnosis.
+**Fix:** Optionally, when `errors` contains "No Work Item Link found" and `previousParent` is set, add a hint that the token needs to be able to administer both the work item and its parent.
+
+### [LOW] Release notes give the data name as `&lt;project&gt;-…`, but the code writes the sanitized project
+**File:** gitlab/RELEASE_NOTES.md **Line(s):** 20–21
+**Issue:** The code writes `${sanitizeName(project)}-work-item-&lt;iid&gt;-parent`, so `group/proj` becomes `group~proj-work-item-7-parent`, as the test asserts. The notes say `&lt;project&gt;-work-item-&lt;iid&gt;-parent`.
+**Breaking input:** Someone runs `swamp data get gitlab group/proj-work-item-7-parent`.
+**Impact:** The lookup misses. It is a small overclaim in the docs only.
+**Fix:** Write `&lt;sanitized-project&gt;-work-item-&lt;iid&gt;-parent` (for example `group~proj-…`), or match whatever other release notes in this extension use.
+
+### [LOW] The two new README table rows are wider than the column padding
+**File:** gitlab/README.md **Line(s):** 123–124, 162–163
+**Issue:** `remove_work_item_parent`, `convert_work_item_type` and `workItemParent` are longer than the existing column widths, so the raw-Markdown tables are misaligned. `README.md` was already unformatted on main, and `fmt:check` only covers `extensions/`, so CI is not affected.
+**Impact:** Cosmetic only; the tables still render correctly.
+**Fix:** Optionally run `deno fmt README.md`, which also reformats unrelated rows.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>77815</subagent_tokens><tool_uses>11</tool_uses><duration_ms>114600</duration_ms></usage>
+</task-notification>
