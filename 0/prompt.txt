@@ -1,0 +1,54 @@
+<task-notification>
+<task-id>aa3365cfa475dcb0c</task-id>
+<tool-use-id>toolu_019jAGRfeCk2XFHgfG5ihgG2</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aa3365cfa475dcb0c.output</output-file>
+<status>completed</status>
+<summary>Agent "Round-2 generator fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All seven findings are fixed in all five generators, and every generated extension in scope was regenerated. Every gate passes, and every version is still `2026.10.21.1`. One result differs from what you expected: `cloudflare/pages` still needs a vault, because a second field there is a real secret.
+
+**How I checked the vault claims:** I ran swamp's own functions (`modelRequiresVault`, `inferMethodKind`/`isMutatingKind`, `extractSensitiveFields` at `79e0800b`) against all 79 generated models. Every README that says swamp refuses to run methods now matches swamp's answer, including which methods are exempt. That is 15 models: cloudflare access, logpush, magic-transit, pages, r2, stream, tunnel, turnstile, workers-ai, workers-scripts; snyk apps and service-accounts; griptape data-connectors; falai keys; datadog synthetics.
+
+**Findings**
+1. **Vault requirement.** I confirmed the gate at `method_execution_service.ts:885`. READMEs (in Credentials and in Secrets) and release notes now say swamp refuses to run any method until a vault exists. A few cloudflare models have methods literally named `list` or `get`, which swamp treats as reads: access and magic-transit (`list`, `get`), turnstile (`list`). The README names them as the only exceptions. No `kind:` overrides were added.
+   - `web_analytics_token` is no longer marked. The Cloudflare spec itself flags it `x-sensitive`, so a name rule wasn't enough; I added `clearPublicFieldFlags()`, which removes that flag right after the spec loads.
+   - **Pages still needs a vault** because of `upload_token.jwt`, the Pages direct-upload credential, which is a real secret. I left it marked.
+   - I also changed datadog's README wording to "reads included" so all five read the same.
+2. **Cloudflare create instance names.** Creates are now named by the response's `id`, then a declared `sitekey`/`uuid`/`uid`/`tag`, then the call's own path parameter(s), and finally a 16-hex SHA-1 of the request with secret arguments left out. A turnstile widget is named by its sitekey and a tunnel management token by its `tunnel_id`. `"created"` no longer appears in any generated model. There are 5 new classifier tests, and the generated tests now assert the instance name.
+3. **Cloudflare release notes.** All 26 are now different. A scratch script derived each one from that extension's secret plan. The resource-name fix note appears in exactly 13 extensions. The tunnel `{ value }` note appears only in tunnel. I also added a note for creates that used to land on `created` (for example, "Results earlier versions wrote to the `created` instance stay there").
+   - **Snyk's 20 notes were byte-identical too**, so I split them the same way: secrets text only for apps and service-accounts, "Documentation only" for the rest.
+   - I also corrected the falai keys and griptape data-connectors notes, which said only some methods needed a vault.
+4. **Test helpers.** All five now unwrap only optional, nullable and default, and keep walking into a field they have marked, exactly as swamp does. Datadog and griptape had the bug; falai only checked top-level fields; snyk didn't replace nested paths. Each generator has a new `lib/swamp_sensitive_walk_test.ts` with expected paths taken from swamp's real output for the same schema.
+5. **Falai zod comment** is corrected. A test now confirms that pinned zod keeps the metadata in either order.
+6. **Bare-string fixtures.** The cloudflare secret tests now pass only path parameters, and `buildFinalTestArgs` ignores fixtures that aren't objects. This also removed a spec-example JWT that had been passed as a stream argument. No token-shaped literals remain in any generated test.
+7. **Consistency.** The cloudflare name rule now never flags boolean or numeric fields. All five READMEs use a "Secrets" heading; griptape has "### Secret-valued arguments" and "### Credentials in responses" under it.
+   - **Griptape** now overwrites `RELEASE_NOTES.md` instead of prepending older sections, and its generator tests were updated to match.
+
+**Regeneration**
+- Rerunning the generators on top of `.1` would have bumped to `.2` (it did once, for tunnel). Before each run I wrote that model file's HEAD content back into place. The generator then produced `.1` again with exactly one `2026.10.21.1` upgrade entry. Every `RELEASE_NOTES.md` has exactly one `## 2026.10.21.1` section.
+- Datadog `dora` was generated from commit `96258a2`. The `b51c6bd9` spec was restored afterwards, then byte-compared and touched. Griptape's `config.ts` `SPEC_SHA256` was left alone.
+- I compared snyk, griptape and falai against snapshots taken just before regenerating: only the intended README, notes and test lines changed. I didn't take snapshots for cloudflare and datadog. For those, the evidence is the plan comparisons, the notes checks, and swamp's own logic agreeing with every README.
+
+**Gates**
+- **Generators:** cloudflare, datadog, snyk, griptape and falai all pass check, lint, fmt:check and test.
+- **Extensions:** all 79 pass check, lint, fmt:check, test, and `swamp extension quality` at passed / 100%. That is cloudflare (26), datadog (14), snyk (20), griptape (10) and falai (9).
+- No `deno.lock` changed.
+
+**Files changed**
+- **Generators**, all under `/home/sme/src/webframp/swamp-extensions/scripts/`:
+  - cloudflare-codegen: `main.ts`, `lib/sensitivity.ts`, `lib/sensitivity_test.ts`, `lib/method_classifier.ts`, `lib/method_classifier_test.ts`, `lib/extension_generator.ts`, `lib/extension_generator_test.ts`, `lib/test_generator.ts`
+  - datadog-codegen: `lib/extension_generator.ts`, `lib/test_generator.ts`, `lib/sensitive_test.ts`
+  - snyk-codegen: `lib/extension_generator.ts`, `lib/test_generator.ts`, `lib/secrets_test.ts`
+  - griptape-codegen: `main.ts`, `lib/extension_generator.ts`, `lib/extension_generator_test.ts`, `lib/test_generator.ts`
+  - falai-codegen: `lib/extension_generator.ts`, `lib/extension_generator_test.ts`, `lib/test_generator.ts`, `lib/type_mapper.ts`, `lib/type_mapper_test.ts`
+  - New in each of the five, and untracked, so they need adding: `lib/swamp_sensitive_walk_test.ts`
+- **Generated extensions** (README, `RELEASE_NOTES.md`, model, test, `_lib/api.ts`, manifest), regenerated in place:
+  - all 26 `cloudflare/&lt;service&gt;/`; the hand-written root cloudflare files were not touched
+  - all 14 `datadog/*`
+  - all 20 `snyk/*`
+  - all 10 `griptape/*`
+  - all 9 `falai/*`
+
+Nothing in scope was left undone.</result>
+<usage><subagent_tokens>307704</subagent_tokens><tool_uses>179</tool_uses><duration_ms>1982725</duration_ms></usage>
+</task-notification>
