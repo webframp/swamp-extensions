@@ -1,0 +1,69 @@
+<task-notification>
+<task-id>aac4e7dc2b9e04029</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/aac4e7dc2b9e04029.output</output-file>
+<status>completed</status>
+<summary>Agent "Datadog codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All 14 datadog extensions are regenerated on the existing branch and committed. I did not push or open a PR.
+
+- **Branch:** `fix/datadog-codegen-regen-2026-10-07`
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-aac4e7dc2b9e04029`
+- **Commit:** `2ba68ed6`, a single commit amended in place. The tree is clean.
+
+## What changed
+- **Staleness check:** the version check in `scripts/datadog-codegen/main.ts` and `lib/upgrades.ts` now also compares the generated `_lib/api.ts` and the generated test file. A harness change to either now marks every extension stale and bumps it. Before this, a dry run showed all 14 as unchanged.
+- **Regeneration:** all 14 extensions moved to 2026.10.07.1, each with an appended identity upgrade entry and `RELEASE_NOTES.md`. A repeat dry run reports all 14 unchanged.
+- **LOW findings fixed (item 2):**
+  - **Paginated GET and POST:** they now tolerate an empty body.
+  - **Malformed JSON:** the error names the HTTP method, path and status, with a snippet of the body.
+  - **New harness tests:** they cover 204, a JSON:API response, a malformed body, and empty bodies on paginated GET and POST.
+- **Bug found along the way (not in your list):** `synthetics` has two methods whose generated model wrote results under resource names it never declared. They are `get_test_file_download_url` and `get_test_file_multipart_presigned_urls`. A new generated test exposed it. I fixed the generator in `lib/method_classifier.ts` and added `lib/resource_names_test.ts`, which fails without the fix.
+- **Release notes:**
+  - **Eleven extensions** only changed the shared helper. Their notes say so and state that no methods, schemas or resources changed. Those are monitors, events, incidents, logs, metrics, on-call, security-rules, security-signals, security-suppressions, downtimes and slos.
+  - **slos** also mentions the `Retry-After` guard it picked up from the newer helper.
+  - **teams and dora** keep their feature notes plus the hardening note.
+  - **synthetics** documents the corrected resource names. Anyone reading those two results by resource name needs to switch to the new names.
+
+## Gates
+- **Harness:** check, lint, fmt:check and test pass (29 tests).
+- **Extensions:** all 14 pass check, lint, fmt:check and test. `swamp extension quality` reports passed at 100% for all 14. `repository-verified` shows as provisional because the server confirms it on publish.
+
+## Reviewer verdict
+A separate adversarial subagent reviewed three times. The third review returned PASS with no CRITICAL or HIGH findings. It covered the harness changes, the model diffs for all 14 extensions, and the release notes against the real diffs. It raised three LOW items:
+- **slos notes:** omitted the `Retry-After` change. Fixed by regenerating with a corrected note.
+- **synthetics notes:** overstated that old data stays under the old names. I reworded that line.
+- **dora:** the path-less PATCH writes to a fixed instance name `updated`, so repeated calls overwrite the previous result. That matches existing generator convention and I left it.
+
+## Drafted PR
+
+**Title:** `chore(datadog): harden codegen helper and regenerate all extensions`
+
+**Body:**
+```
+Regenerates all 14 datadog extensions with scripts/datadog-codegen and hardens the generator. Every extension moves to 2026.10.07.1 with a no-op upgrade entry and release notes.
+
+**Features.**
+- teams: team notification rules accept a `servicenow` target (with `templates`); email settings gain an optional `recipient_email`.
+- dora: new `patch_dora_deployment_by_version`; `patch_dora_deployment` is described as "Mark a deployment as failed by ID", with no behavior change.
+- All schema changes are additive.
+
+**Shared helper.**
+- The generated API helper threw on successful responses with an empty body. Datadog answers the new by-version patch with an empty 202, so the call failed after the change was applied. It now returns an empty result, including on paginated requests.
+- A body that is not valid JSON now fails with an error naming the HTTP method, path, and status, with a snippet of the body.
+- slos also picks up the `Retry-After` guard, so a non-numeric header waits 5 seconds instead of breaking the retry.
+
+**synthetics fix.** `get_test_file_download_url` and `get_test_file_multipart_presigned_urls` wrote under resource names the model never declared. They now write to `test_file_download_url` and `test_file_multipart_presigned_urls`. Callers reading these results by resource name need the new names.
+
+**Harness.**
+- The staleness check also compares the generated `_lib/api.ts` and test file, so a template-only change now marks every extension stale. Before, it only looked at the model source, which is why 12 extensions kept the old helper.
+- Execution tests are keyed by method type and path-parameter shape; before, the new PATCH test displaced the existing by-ID PATCH test.
+- Operations with no response content get a bodyless mock.
+- New tests cover empty, malformed, JSON:API and 204 bodies, the staleness check, and resource-name consistency.
+
+Checks: the harness and all 14 extensions pass check, lint, fmt:check, and test. `swamp extension quality` reports passed at 100% for each.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>134488</subagent_tokens><tool_uses>49</tool_uses><duration_ms>370161</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-aac4e7dc2b9e04029</worktreePath><worktreeBranch>worktree-agent-aac4e7dc2b9e04029</worktreeBranch></worktree>
+</task-notification>
