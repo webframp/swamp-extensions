@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bycm6s0pf</task-id>
+<tool-use-id>toolu_01AnCUtFw8FT7GPpKrow7jpG</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/bycm6s0pf.output</output-file>
+<status>completed</status>
+<summary>Background command "Watch PR #516 CI and reviews" completed (exit code 0)</summary>
+</task-notification>
