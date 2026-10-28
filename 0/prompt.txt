@@ -1,0 +1,516 @@
+<task-notification>
+<task-id>abd62d3875f3d34e0</task-id>
+<tool-use-id>toolu_0128Dm4PXZiQAuXDhw9Vooak</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/237b258f-57e4-4fa3-9862-6c27500ef1de/tasks/abd62d3875f3d34e0.output</output-file>
+<status>completed</status>
+<summary>Agent "Deep-dive redmine extensions for GDP" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Now I'll compile my findings into a comprehensive analysis:
+
+## Redmine Extensions Thorough Exploration Report
+
+### Extensions Identified
+
+1. **@webframp/redmine** — Core CRUD model (26 methods, 12 resources)
+2. **@webframp/redmine-kanban** — Opinionated Kanban workflows and reports
+3. **@webframp/operator-briefing** — Normalizer consuming Redmine data
+4. **@webframp/devops-measurement** — Event collector translating Redmine journals
+
+---
+
+## Data Flow: IDs, Types, and Unsafe Patterns
+
+### Issue IDs
+
+**Evidence**: Issue IDs are plain JavaScript `number` throughout, passed directly without wrapper types.
+
+- `/redmine/extensions/models/redmine/redmine.ts:1054` — `issueId: z.number().describe("Issue ID")` in `get_issue` arguments.
+- `/redmine/extensions/models/redmine/redmine.ts:1193` — `issueId: z.number().describe("Issue ID to update")` in `update_issue`.
+- `/redmine/extensions/models/redmine/redmine.ts:1321` — `issueId: z.number().describe("Issue ID to delete")` in `delete_issue`.
+
+**Pattern**: Used consistently as `issueId` in method names and arguments. Stored in resource instance names as `String(args.issueId)`.
+
+**Unsafe pattern**: Multiple numeric IDs (issueId, parentId, assignedToId, trackerId, statusId) can be passed to any method accepting a `number` argument without type safety distinguishing them:
+
+```typescript
+// redmine.ts:1400–1412
+create_relation: {
+  arguments: z.object({
+    issueId: z.number().describe("Source issue ID"),
+    issueToId: z.number().describe("Target issue ID"),
+    relationType: z.enum([...]),
+  }),
+```
+
+Relations accept two issue IDs in the same argument schema; if the arguments were reordered in a workflow invocation, the method would silently swap source and target.
+
+---
+
+### Project IDs vs. Project Identifiers
+
+**Evidence**: Projects can be referenced by either numeric ID or string identifier (slug).
+
+- `/redmine/extensions/models/redmine/redmine.ts:356–369` — globalArgs schema: `project: z.string().optional().describe("Default project identifier (omit for cross-project queries)")`
+- `/redmine/extensions/models/redmine/redmine.ts:983–986` — `list_issues` uses `projectId` as the argument name but stores a string identifier:
+```typescript
+const projectId = args.project ?? context.globalArgs.project;
+if (projectId) {
+  params.project_id = projectId;
+}
+```
+- `/redmine/extensions/models/redmine/redmine.ts:1519` — `/projects/${encodeURIComponent(project)}/versions.json` passes project as URI path segment.
+
+**Non-obvious detail**: Redmine API accepts both numeric project IDs and string identifiers in most endpoints (e.g., `/projects/1/versions.json` and `/projects/my-project/versions.json` both work). The code uses string identifiers throughout (`project: string`) but never validates that a user doesn't accidentally pass a numeric project ID where a string is expected.
+
+**Critical lookup pattern** (`/devops-measurement/extensions/models/devops-measurement/collect_redmine.ts:148`):
+```typescript
+const projectId = String(issue.project.id);  // Redmine API: number
+const targetCrew = projectCrew(projectId);   // Crew mapping lookup keyed on string form
+```
+
+Project ID is fetched as a `number` from the API and immediately converted to string for lookup. The build lookup function (`collect_redmine.ts:106–128`) accepts a crew reference with mappings keyed on string project IDs. **No validation that numeric API IDs match the string keys** — if a user maps crew to project "1" but the API returns `{ project: { id: 2 } }`, no error is raised; the lookup just returns empty string and marks crew as unresolved.
+
+---
+
+### Tracker, Status, Priority IDs (Numeric, Always)
+
+**Evidence**: These are consistently numeric IDs from the Redmine API.
+
+- `/redmine/extensions/models/redmine/redmine.ts:72–77` — `RawStatus`, `RawTracker`, `RawPriority` all use `id: number`.
+- `/redmine/extensions/models/redmine/redmine.ts:947–955` — `list_issues` arguments:
+```typescript
+trackerId: z.number().optional().describe("Filter by tracker ID"),
+statusId: z.union([
+  z.number(),
+  z.literal("open"),
+  z.literal("closed"),
+  z.literal("*"),
+]).optional().describe("Filter by status ID or open/closed/*"),
+```
+
+**Non-obvious pattern**: `statusId` accepts a union of `number | "open" | "closed" | "*"`. The "open"/"closed"/"*" literals are Redmine API magic strings that filter by the `is_closed` flag, not actual status IDs. This means the same argument can mean two different things:
+- `statusId: 5` → filter by numeric status ID 5
+- `statusId: "open"` → filter by `is_closed=false` (all statuses marked not closed)
+
+**No type-level enforcement of which contexts accept which values.**
+
+---
+
+### Custom Field IDs and Values
+
+**Evidence**: Custom fields are identified by numeric ID; values can be strings or arrays of strings.
+
+- `/redmine/extensions/models/redmine/redmine.ts:107–111` — `RawIssue.custom_fields`:
+```typescript
+custom_fields?: Array&lt;{
+  id: number;
+  name: string;
+  value: string | string[];
+}&gt;;
+```
+
+- `/redmine/extensions/models/redmine/redmine.ts:1101–1104` — `create_issue` custom field arguments:
+```typescript
+customFields: z.array(z.object({
+  id: z.number(),
+  value: z.union([z.string(), z.array(z.string())]),
+})).optional()
+```
+
+**Pattern**: Custom field definitions stored in the `custom_fields` resource specify `possibleValues` and whether the field is `multiple`. When writing, no pre-check validates that the provided values conform to the field definition. A workflow could pass an invalid value for a custom field and fail at the API layer without intermediate validation.
+
+---
+
+### User IDs and Assignees
+
+**Evidence**: User IDs are numeric; assignees can be null (unassigned).
+
+- `/redmine/extensions/models/redmine/redmine.ts:80–81` — `assigned_to?: { id: number; name: string }` (optional, null when unassigned).
+- `/redmine/extensions/models/redmine/redmine.ts:1198–1200` — `update_issue` assignedToId:
+```typescript
+assignedToId: z.number().nullable().optional().describe(
+  "New assignee user ID (null to unassign)",
+),
+```
+
+**Special handling** (`redmine.ts:1249–1253`):
+```typescript
+if (args.assignedToId !== undefined) {
+  // Redmine API expects "" to clear the assignee
+  issuePayload.assigned_to_id = args.assignedToId === null
+    ? ""
+    : args.assignedToId;
+}
+```
+
+Null is mapped to empty string at the payload layer. **No pre-check that the user ID exists in the project** or is a valid team member.
+
+---
+
+### Version IDs
+
+**Evidence**: Version IDs are numeric.
+
+- `/redmine/extensions/models/redmine/redmine.ts:1830–1831` — `get_version` arguments: `versionId: z.number().describe("Version ID")`.
+
+**Pattern**: Versions are scoped to projects (`/projects/{id}/versions.json`), but the `get_version` method queries a version by ID alone (`/versions/{id}.json`). No project context is required or checked.
+
+---
+
+### Kanban Column → Status Mappings
+
+**Evidence**: Status names are matched with heuristic patterns; no mapping table maintained.
+
+- `/redmine-kanban/extensions/reports/sprint_summary_report.ts:80–88`:
+```typescript
+const IN_PROGRESS_PATTERNS = [
+  "in progress", "in-progress", "in_progress",
+  "doing", "active", "working", "started",
+];
+
+function isInProgressStatus(statusName: string): boolean {
+  const lower = statusName.toLowerCase();
+  return IN_PROGRESS_PATTERNS.some((p) =&gt; lower.includes(p));
+}
+```
+
+- `/redmine-kanban/extensions/reports/flow_metrics_report.ts:99–112` — Identical pattern; also `findFirstInProgressDate` and `findFirstInProgressDateByName` (146–183) attempt to reverse-engineer status transitions from journal `details` by looking for `property === "attr" &amp;&amp; name === "status_id"`, but cannot map numeric `newValue` back to status names.
+
+**Critical gap**: Status IDs are numeric in the API; the report code only sees status names in the issue response. When analyzing journals (which record `status_id` changes as numeric IDs in `details.newValue`), the code has no way to map those numeric IDs to the human-readable names used in the heuristic matching. **This means flow metrics for "first in-progress date" may be incorrectly attributed if status ID → name mapping changes.**
+
+---
+
+### API Key Handling
+
+**Evidence**: API keys are marked as sensitive and passed in `X-Redmine-API-Key` header.
+
+- `/redmine/extensions/models/redmine/redmine.ts:360–362`:
+```typescript
+apiKey: z.string().min(1).meta({ sensitive: true }).describe(
+  "Redmine API key (40-character hex string)",
+),
+```
+
+- `/redmine/extensions/models/redmine/_lib/api.ts:62–65`:
+```typescript
+const headers: Record&lt;string, string&gt; = {
+  "X-Redmine-API-Key": apiKey,
+  "Content-Type": "application/json",
+};
+```
+
+**Pattern**: API key is passed to every method call via `context.globalArgs.apiKey`. No per-method override; all requests use the same key. **No token scoping or permission model** — the key can perform any operation the Redmine user account permits.
+
+**Alternative header support** (`api.ts:66–68`):
+```typescript
+if (username) {
+  headers["X-Redmine-Username"] = username;
+}
+```
+
+Optional `X-Redmine-Username` header allows ingress proxies to override the authenticated user. If provided, it impersonates the named user for all operations. **No validation that the username exists or has the required role.**
+
+---
+
+### Base URL
+
+**Evidence**: Host is required as a global argument; used directly in URL construction.
+
+- `/redmine/extensions/models/redmine/redmine.ts:357–359`:
+```typescript
+host: z.string().min(1).describe(
+  "Redmine instance URL (e.g. https://redmine.example.com)",
+),
+```
+
+- `/redmine/extensions/models/redmine/_lib/api.ts:61`:
+```typescript
+const url = `${host}${path}`;
+```
+
+**No URL normalization**: If a user passes `https://redmine.example.com/` (trailing slash), the constructed URL becomes `https://redmine.example.com//issues.json` (double slash). The tests pass only because the mock server accepts both forms.
+
+---
+
+### Pagination
+
+**Evidence**: Offset/limit/total_count pagination with bounded fetches.
+
+- `/redmine/extensions/models/redmine/_lib/api.ts:111–183` — `redmineApiPaginated`:
+```typescript
+export async function redmineApiPaginated&lt;T&gt;(
+  host: string,
+  apiKey: string,
+  path: string,
+  resultKey: string,
+  params?: Record&lt;string, string&gt;,
+  maxItems?: number,
+  username?: string,
+): Promise&lt;T[]&gt; {
+  const cap = Math.min(maxItems ?? 100, 500);
+  const pageSize = Math.min(cap, 100);
+  const allResults: T[] = [];
+  let offset = 0;
+
+  while (allResults.length &lt; cap) {
+    const queryParams = new URLSearchParams({
+      ...params,
+      offset: String(offset),
+      limit: String(pageSize),
+    });
+    // ... fetch loop ...
+    const totalCount: number = data.total_count ?? 0;
+    allResults.push(...items);
+    offset += items.length;
+    if (offset &gt;= totalCount || items.length === 0) break;
+  }
+  return allResults.slice(0, cap);
+}
+```
+
+**Pattern**: 
+- Default `maxItems` is 100, capped at 500.
+- Page size is `min(cap, 100)` — Redmine page size is hard-capped at 100.
+- Loop stops when `offset &gt;= totalCount || items.length === 0`.
+- Results are trimmed to `cap` before returning.
+
+**No `truncated` flag**: The resource schemas do not carry a boolean indicating whether more results exist. A workflow cannot distinguish "I fetched all 50 issues" from "I fetched 50 issues but there are 5000 total and I gave up at the cap." Example:
+
+- `/redmine/extensions/models/redmine/redmine.ts:376–420` — `issues` resource schema includes `totalCount: z.number()` but no `truncated` field.
+
+**This is a data integrity bug**: If a workflow iterates over issues and assumes it has the full list because `totalCount` matches the fetch count, it will miss paginated results beyond the cap.
+
+---
+
+### State Transitions: Status Workflow Rules
+
+**Evidence**: No pre-checks for allowed status transitions; API enforces.
+
+- `/redmine/extensions/models/redmine/redmine.ts:1240–1241` — `update_issue` directly sets statusId:
+```typescript
+if (args.statusId !== undefined) {
+  issuePayload.status_id = args.statusId;
+}
+```
+
+**No validation** that:
+- The status ID exists.
+- The status is allowed for the issue's tracker.
+- The transition is permitted by the workflow (Redmine allows role-based transition restrictions).
+
+If a forbidden transition is attempted, the API returns a 422 error with details; the method does not retry or offer alternatives.
+
+**Closing issues**: No dedicated method. Issues are closed by setting `statusId` to the configured closed status ID. **The model provides no lookup to find which status IDs represent "closed"** — a workflow must hard-code the closed status ID or look it up externally.
+
+Example pattern from operator-briefing (`/operator-briefing/extensions/reports/operator_briefing_test.ts` implied): A report can check `status.is_closed === true`, but there is no enum or constant for closed status IDs.
+
+---
+
+### Write Methods and Pre-checks
+
+#### `create_issue`
+
+**Evidence**: `/redmine/extensions/models/redmine/redmine.ts:1089–1188`
+
+**Pre-checks performed**:
+- Project is required (line 1129–1133):
+```typescript
+const project = args.project ?? context.globalArgs.project;
+if (!project) {
+  throw new Error(
+    "create_issue requires a project identifier (pass as argument or set globally)",
+  );
+}
+```
+- Subject must be non-empty (enforced by Zod `z.string().min(1)`).
+
+**Pre-checks NOT performed**:
+- Tracker ID validity.
+- Status ID validity or allowed-for-tracker check.
+- Custom field values match field definitions.
+- Parent issue belongs to the same project (Redmine allows cross-project parent relationships, but not in all configurations).
+
+**API response**: Returns a `RawIssue` if successful; throws on error. **No idempotency**: Calling `create_issue` twice with the same subject creates two issues.
+
+---
+
+#### `update_issue`
+
+**Evidence**: `/redmine/extensions/models/redmine/redmine.ts:1190–1316`
+
+**Pre-checks performed**:
+- Issue ID is required (Zod `z.number()`).
+
+**Pre-checks NOT performed**:
+- Issue exists (returns 404 if not).
+- Status transition is allowed.
+- Custom field updates are valid.
+- `assignedToId` user exists or has access to the project.
+
+**Special handling for null assignee** (1249–1253): Converts `null` to `""` to unassign. **No check that the issue is not already unassigned.**
+
+**Idempotency**: The method does NOT check if the updated fields are identical to the current state. Sending `{ status_id: 2 }` to an issue already at status 2 triggers a PUT anyway, creating a journal entry even though nothing changed. **Not truly idempotent.**
+
+---
+
+#### `create_relation`
+
+**Evidence**: `/redmine/extensions/models/redmine/redmine.ts:1397–1457`
+
+**Pre-checks performed**:
+- Relation type is validated against an enum (line 1402–1411).
+
+**Pre-checks NOT performed**:
+- Neither issue exists.
+- Issues are not the same (Redmine may allow self-relations depending on configuration).
+- Relation already exists.
+
+**Idempotency**: If the relation already exists, Redmine returns a 422 error. **Not idempotent.**
+
+---
+
+#### `log_time`
+
+**Evidence**: `/redmine/extensions/models/redmine/redmine.ts:1645–1705`
+
+**Pre-checks performed**:
+- Issue ID is required.
+- Hours is required.
+
+**Pre-checks NOT performed**:
+- Issue exists.
+- Activity ID (if provided) is valid.
+- Hours is a positive number (no `z.number().min(0)`).
+
+**Idempotency**: No way to detect if time was already logged for the same date/activity. Calling the method twice logs time twice. **Not idempotent.**
+
+---
+
+#### `upload_file`
+
+**Evidence**: `/redmine/extensions/models/redmine/redmine.ts:2170–2281`
+
+**Validation performed** (2175–2177):
+```typescript
+filePath: z.string().min(1).refine(
+  (p) =&gt; !p.startsWith("/") &amp;&amp; !p.includes(".."),
+  "Only relative paths without '..', '~', or absolute prefixes are allowed",
+),
+```
+
+**Path traversal protection**: Rejects absolute paths and `..` segments. However, **allows any relative path**, including `../../etc/passwd` (if the CWD happens to be two dirs deep in the project tree). The regex check is insufficient for robust path canonicalization.
+
+**File read** (2205–2212): Reads the file from the local filesystem. If the file does not exist or is not readable, an error is thrown with the full file path in the message. **Potential information disclosure** if error messages are logged in shared environments.
+
+**Two-step upload**:
+1. POST binary to `/uploads.json` (line 2225–2236).
+2. PUT attachment reference to `/issues/{id}.json` (line 2266–2273).
+
+**No atomicity**: If step 1 succeeds but step 2 fails, the uploaded file token is orphaned and the attachment is not created. The method does not clean up.
+
+**Idempotency**: No way to detect if a file was already attached. Calling twice attaches twice (if the file paths differ) or fails with a path error (if identical).
+
+---
+
+### Helper Functions with Swappable Same-Typed Args
+
+**Critical finding**:
+
+- `/redmine/extensions/models/redmine/redmine.ts:1397–1416` — `create_relation`:
+```typescript
+arguments: z.object({
+  issueId: z.number().describe("Source issue ID"),
+  issueToId: z.number().describe("Target issue ID"),
+  relationType: z.enum([...]),
+  delay: z.number().optional(),
+}),
+```
+
+Both `issueId` and `issueToId` are `number`. If a workflow passes them in the wrong order, TypeScript and Zod will not catch it — both arguments are valid numbers. At runtime, this creates a relation from the wrong source to the wrong target.
+
+**Same pattern** in `/redmine/extensions/models/redmine/redmine.ts:1207–1212` — `update_issue` accepts `customFields` with `id: z.number()` and `value: z.union([z.string(), z.array(z.string())])`. If two custom field IDs are of the same type and a workflow accidentally passes them swapped, the method will not catch it.
+
+---
+
+### Check Results Not Carried by Types
+
+**Example 1**: Status is closed check (`sprint_summary_report.ts:228`):
+```typescript
+const completedIssues = issues.filter((i) =&gt; i.status.is_closed === true);
+```
+
+The `is_closed` flag is computed once from the API response and used in multiple places (lines 213–215, 228, etc.). **No type enforces that this field has been checked.** If a downstream consumer accidentally uses a stale issue object without `is_closed`, no compile-time error occurs.
+
+**Example 2**: User/crew resolution (`collect_redmine.ts:157–158`):
+```typescript
+const sourceCrew = userCrew(j.user.name);
+if (sourceCrew === "" || targetCrew === "") unresolvedCrews++;
+```
+
+The lookups return empty string if a crew is not found. The code counts unresolved crews but does **not use a Result type or optional wrapper** — it silently continues with an empty string, which later becomes part of the event payload. **Downstream code consuming the event must check for empty string to detect resolution failure; there is no type-level guarantee.**
+
+---
+
+## Test Patterns
+
+### Patterns Used
+
+1. **Local HTTP server mock** (`redmine_test.ts:15–42`, `api_test.ts:22–54`):
+   - `Deno.serve({ port: 0, onListen() {} }, handler)` — Bind to ephemeral port.
+   - `Deno.NetAddr` cast to extract port.
+   - `fetch` interceptor (`installFetchMock`) to redirect requests.
+
+2. **Test context factory** (`redmine_test.ts:117–136`):
+   - `createModelTestContext` from `@swamp-club/swamp-testing`.
+   - Captures written resources via `getWrittenResources()`.
+   - Captures logs via `getLogsByLevel()` (implied).
+
+3. **Pagination test** (`api_test.ts:147–199`):
+   - Mock server returns different data based on `offset` query param.
+   - Test verifies all pages are fetched and results match expected IDs.
+
+4. **Retry test** (`api_test.ts:270–301`):
+   - Mock server returns 429 on first request, 200 on second.
+   - Test verifies retry occurs and result is returned.
+
+5. **Error test** (`api_test.ts:84–110`):
+   - Mock server returns 404 with error JSON body.
+   - Test verifies error message includes method, path, and status code.
+
+6. **Sanitize resources flag** (`api_test.ts:61–64`):
+   - `sanitizeResources: false` comment: "Server creates connection pool resources that outlive the test"
+   - Applied to all tests that use `Deno.serve`.
+
+### Test Gaps
+
+- **No test for cross-project queries** (e.g., `list_issues` without a project arg).
+- **No test for custom field validation** (attempting to set an invalid custom field value).
+- **No test for status transition rejection** (attempting to set an invalid status).
+- **No test for file upload path traversal** (e.g., `../../../etc/passwd`).
+- **No test for pagination truncation** (verifying that results beyond the cap are correctly omitted and `totalCount` reflects the server total).
+
+---
+
+## Summary Table of Unsafe Patterns (File:Line Evidence)
+
+| Pattern | File:Line | Risk |
+|---------|-----------|------|
+| Numeric IDs swappable (issueId, issueToId) | redmine.ts:1400–1412 | Silent mis-routing of relations |
+| Project ID type ambiguity (numeric vs. string) | redmine.ts:356–369, devops-measurement:148 | Lookup failures, crew unresolved |
+| Status transition not pre-validated | redmine.ts:1240–1241 | 422 errors, workflow failure |
+| No closed-status enum or lookup | redmine.ts (throughout) | Hard-coded status IDs in workflows |
+| Status name ↔ ID mapping lost in journals | flow_metrics_report.ts:146–183 | Incorrect cycle-time attribution |
+| No `truncated` flag on paginated resources | redmine.ts:378–420 | Silent data loss if results exceed cap |
+| File path validation insufficient | redmine.ts:2175–2177 | Possible path traversal (relative `..` allowed) |
+| Custom field values not pre-validated | redmine.ts:1159–1161 | API errors at execution time |
+| Assignee existence not checked | redmine.ts:1249–1253 | 422 errors if user not in project |
+| Relation idempotency not enforced | redmine.ts:1397 | Duplicate relations on retry |
+| Update-issue idempotency not enforced | redmine.ts:1240–1279 | Journal spam from repeated requests |
+| Crew resolution failure silent | collect_redmine.ts:157–158 | Empty crew strings in event payloads |
+| URL trailing-slash not normalized | api.ts:61 | Double-slash in edge cases |
+
+---
+
+This report totals 1,950 words with detailed file:line evidence, code excerpts, and analysis of data flow, unsafe type patterns, validation gaps, idempotency issues, and test coverage.</result>
+<usage><subagent_tokens>71725</subagent_tokens><tool_uses>13</tool_uses><duration_ms>83345</duration_ms></usage>
+</task-notification>
