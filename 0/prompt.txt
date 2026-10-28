@@ -1,0 +1,54 @@
+<task-notification>
+<task-id>a6dc606cc96a1a3e7</task-id>
+<tool-use-id>toolu_01D5DMYDYvpUD68G8LHPmDJr</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/9ace0770-f8a3-41bc-9678-83e43e9d650d/tasks/a6dc606cc96a1a3e7.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review round 4" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The branch passes. The round-3 fixes hold, and I found three LOW issues and nothing CRITICAL or HIGH.
+
+**Branch gates**
+- **Generators:** all five pass `check`, `lint`, `fmt:check` and `test`.
+- **Dry run:** `deno task generate:dry-run` ran for all five generators and left `git status` empty. The `.cache/` spec files kept their 16:20 timestamps, so the dry run did not rewrite them.
+- **Bumped extensions:** I ran every one of the 26 (every directory whose `manifest.yaml` version differs from origin/main), not a sample. All 26, including twitch, cloudflare/d1, griptape/buckets and vault/pass, pass `check`, `lint`, `fmt:check`, `test`, and `swamp extension quality` with `passed` and 100.
+
+**Fix 1 (re-pin rollback):** both bump scripts take the snapshot before any write: `scripts/cloudflare-codegen/bump.ts:203` and `scripts/falai-codegen/lib/bump.ts:215-218`, which also covers the vendored spec. A dry run exits before writing, and an unmoved pin falls through to a normal run. The child's exit code is passed on unchanged. The rollback has one gap, described in the first finding below.
+
+**Fix 2 (notes), tested on a temp copy of griptape:**
+- An empty file, a whitespace-only file and `--notes ""` each exit 1 with "--notes is empty".
+- I deleted `tools` and changed `buckets`:
+  - The dry run warned "would refuse: buckets already has RELEASE_NOTES.md".
+  - The real run refused naming buckets only and wrote nothing.
+  - With `--notes`, buckets got the body and the new `tools` kept its initial-release note.
+- `hasNotes` is checked before that extension's `RELEASE_NOTES.md` is written, and the dry-run warning and the real refusal use the same check.
+- The same code is in all five `main.ts`.
+
+**Fix 3 (BOM):** `parseSpec` strips the BOM on both the cache path and the fetch path. I checked that `Deno.readTextFile` keeps the BOM, so the cache hash still matches the raw bytes.
+
+**Fix 4 (CLAUDE.md):** the diff against origin/main is exactly the two additions, with no reflow. Their claims match the code: the pins and vendored specs, `--update-spec` and `--update-sha`, re-pin requiring `--notes`, and the restore on failure.
+
+### [LOW] The pin is restored even when `main.ts` already rewrote some extensions from the new spec
+**File:** `scripts/cloudflare-codegen/bump.ts`, `scripts/falai-codegen/lib/bump.ts`
+**Line(s):** cloudflare 221-224; falai 237-241
+**Issue:** The restore runs on any non-zero exit from the child. `main.ts` can fail partway through its write pass, after some extensions are already written. A write error throws; a `deno fmt` failure only warns.
+**Breaking input:** Any later extension has a read-only file, or the disk fills. I reproduced it with `chmod 444 models/README.md` plus changes in `threads` and `models`. The run exited 1 with "Permission denied" on `models/README.md`, after `threads` had already been rewritten with a new version and new notes. Under `bump --update-sha` or `--update-spec`, `config.ts` and the vendored spec would then go back to the old pin.
+**Impact:** The tree is left inconsistent: some extensions are generated from the new spec and bumped, but the pin points at the old spec. The message "restored the previous pin" suggests nothing changed. Those files are also left unformatted. Git can recover it, and the trigger is rare. Ctrl-C has a related gap: it kills the parent process without restoring anything.
+**Fix:** Restore only when the child failed before it wrote anything. For example, `main.ts` could exit with a distinct code for refusals before the write pass, and the parent restores only on that code. Otherwise, print the list of directories that were already written so the user can revert them.
+
+### [LOW] No test for the BOM strip
+**File:** `scripts/cloudflare-codegen/lib/schema_fetcher.ts`
+**Line(s):** 160-162
+**Issue:** No `_test.ts` under `scripts/cloudflare-codegen` covers a BOM-prefixed spec on either the cache or the fetch path.
+**Breaking input:** A later edit that drops the `replace(/^\uFEFF/, "")` would pass CI.
+**Impact:** The fix could regress silently.
+**Fix:** Add a test that writes a cache file with a BOM, pins its byte hash, and asserts that `fetchSchema` parses it.
+
+### [LOW] No test for the pin restore
+**File:** both bump scripts
+**Issue:** No test exercises snapshot and restore, for example a child failing on an empty `--notes-file`.
+**Impact:** The rollback could regress without CI noticing.
+**Fix:** Pull the snapshot, re-exec and restore into a helper that takes an injectable runner, and test that the bytes are restored when the runner exits non-zero.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>100696</subagent_tokens><tool_uses>17</tool_uses><duration_ms>221029</duration_ms></usage>
+</task-notification>
