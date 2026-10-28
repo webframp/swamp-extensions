@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>b8bkqi2xe</task-id>
+<tool-use-id>toolu_01JQ4a49muvxCpqcSia2nRDn</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/b8bkqi2xe.output</output-file>
+<status>completed</status>
+<summary>Background command "/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/7dd5017b-f4c8-4b11-b47c-7dd8f7bf10c7/scratchpad/gates2.sh" completed (exit code 0)</summary>
+</task-notification>
