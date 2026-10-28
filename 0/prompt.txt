@@ -1,0 +1,86 @@
+<task-notification>
+<task-id>ab4cf26b6382441a5</task-id>
+<tool-use-id>toolu_01JJ9NvZr4v7mWFFbyShGqcA</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/ab4cf26b6382441a5.output</output-file>
+<status>completed</status>
+<summary>Agent "Round-2 adversarial review: emacs-swamp" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found one HIGH defect, so the verdict is FAIL. All seven round-1 fixes I checked hold. Six of them are confirmed end to end against a real scratch swamp repo; for item 1 I checked the README recipe by reading it, without a straight.el install.
+
+**Gates:** both test suites pass (29/29 and 19/19). Both files byte-compile cleanly with `byte-compile-error-on-warn t`. checkdoc reports nothing for `swamp-present.el`; its four warnings in `swamp.el` are on lines this branch does not touch.
+
+**End to end:** against a scratch repo with the real extension, preview wrote and opened `swamp-present-talks-talk.html`, the PDF printed (`%PDF-1.4`, 3 pages), a second PDF reported "unchanged", and the outline table rendered. `data query` returns only the latest version. Source paths containing `,` `=` `[` `{` or a space go through `--input` intact. `name=123` and `name=1e5` are not coerced to numbers. Reloading the file three times leaves exactly one "p" in `swamp-dispatch`.
+
+## Round-1 verification
+1. **use-package `:straight nil`:** fixed. `:after swamp` with no `:commands` loads it as soon as swamp loads, so "p" appears.
+2. **C-u on `swamp-present-pdf`:** fixed. The test confirms `selfContained=true` is passed and the export is by name.
+3. **Revert instead of prompting:** fixed, though it has a side effect (see the LOW finding on reverting).
+4. **JSON errors on stderr:** fixed. In 20 runs with 200 KB of stderr, all of it was captured before the sentinel ran, with no "Process ... finished" text appended.
+5. **Validation and safe-local predicates:** fixed. `..` is rejected because the first character must be alphanumeric.
+6. **Private preview dir:** fixed, but the file names can collide (see the MEDIUM finding).
+7. **Timeout, cancel, async fetch:** fixed. The `#'ignore` sentinel cannot swallow the exit, because sentinels only run while Emacs waits for input, and nothing waits between `make-process` and `set-process-sentinel`. `delete-process` still triggers the real sentinel ("cancelled"). The timer is cancelled whenever the sentinel runs. Cancel counts 1 per command even though a "swamp-present stderr" process also exists.
+8. **Tests and README:** present, but nothing covers the chain running in a different buffer, which is the HIGH finding below.
+
+## New findings
+
+### [HIGH] Chained swamp calls run in whichever buffer is current when the previous step ends, so they can target the wrong repository
+**File/Line(s):** `swamp-present.el` 167–206 (`--start`), 235–249 (`--fetch`), 304–323 (`--print`), 342–362 (preview, pdf callbacks)
+
+**Issue:** `make-process` runs in the current buffer's `default-directory`, and `swamp--command-args` reads `swamp-repo-dir` at call time. The fetch and `export_pdf` steps start inside a process sentinel. A sentinel runs with whatever buffer happens to be current then, not the source buffer. So with the default `swamp-repo-dir nil` (where swamp uses the current directory), or a buffer-local or dir-locals `swamp-repo-dir`, every step after the build picks up a different buffer's directory and value. A relative `swamp-present-output-directory` resolves against that buffer too.
+
+**Breaking input (reproduced):** I built from `A/talk.org`, then made a dired buffer of `B/` current while waiting. A fake swamp logged the working directory of each call:
+```
+/tmp/claude-1000/review-el2/A :: model method run talks build --input source=.../A/talk.org --json
+/tmp/claude-1000/review-el2/B :: data query model("talks") &amp;&amp; name == "html-talk" --select content
+```
+
+**Impact:** Users naturally switch buffers during a PDF export, which can take up to about 120 s. If they do, preview or PDF either fails ("Behavior not found: talks"), or silently fetches or prints another repository's `talks/talk` deck, which shows the wrong content with no error.
+
+**Fix:** In `swamp-present--start`, capture `(dir default-directory)` and `(repo swamp-repo-dir)` when the command starts. In the sentinel, wrap the call as `(let ((default-directory dir) (swamp-repo-dir repo)) (funcall on-exit ...))` so every chained `--start` inherits them. Also expand `swamp-present-output-directory` at command start. Add a test that switches buffers in the middle of the chain and checks the recorded working directory and `--repo-dir`.
+
+### [MEDIUM] Preview file names collide across deck instances
+**File/Line(s):** `swamp-present.el` 258
+
+**Issue:** The file name is `swamp-present-&lt;instance&gt;-&lt;name&gt;.&lt;ext&gt;`, and both instance names and deck names may contain `-`. This brings back the kind of collision the extension removed by switching to prefixed data names.
+
+**Breaking input:** Instance `a-b` with deck `c`, and instance `a` with deck `b-c`, both write `swamp-present-a-b-c.html` (or `.pdf`).
+
+**Impact:** One deck's preview overwrites the other's. A reloaded browser tab, or a reverted PDF buffer, then shows the wrong deck.
+
+**Fix:** Use a separator that neither pattern allows, such as a subdirectory per instance (`&lt;dir&gt;/&lt;instance&gt;/&lt;name&gt;.html`). Alternatively, use `_`, which the instance pattern allows but the deck-name pattern does not; that is unambiguous only if `_` never appears in the deck-name part.
+
+### [LOW] Rewriting a preview silently discards edits in a buffer visiting it
+**File/Line(s):** `swamp-present.el` 269–271
+
+**Issue:** `(revert-buffer t t t)` runs even when the buffer is modified.
+
+**Breaking input (reproduced):** I opened the preview HTML, inserted " MY EDITS", and rebuilt. The buffer became "new" with modified=nil, and the edits were gone without a prompt.
+
+**Fix:** Revert without asking only when `(not (buffer-modified-p buf))`. Otherwise leave the buffer alone and say so in a message, or ask.
+
+### [LOW] A missing `swamp-executable` leaks two hidden buffers per attempt
+**File/Line(s):** `swamp-present.el` 172–184
+
+**Issue:** `make-process` signals `file-missing` synchronously, after the `out` and `err` buffers already exist.
+
+**Breaking input (reproduced):** With `swamp-executable "/nonexistent/swamp"`, the `*swamp-present-out*` and `*swamp-present-err*` buffers remain after the error.
+
+**Fix:** Wrap the `make-process` call in `condition-case` (or an `unwind-protect` keyed on a success flag) that kills both buffers and re-signals.
+
+### [LOW] An existing output directory keeps whatever permissions it already has
+**File/Line(s):** `swamp-present.el` 256–257
+
+**Issue:** The directory gets mode 700 only when this code creates it. If the default directory already exists as 755, or `swamp-present-output-directory` is set to a shared directory such as `/tmp`, the predictable file names are written with `write-region`, which follows symlinks.
+
+**Fix:** For the default directory, tighten an existing one with `set-file-modes` to 700. Document that a custom directory should be private.
+
+## Checked and found sound
+- `--coding` is utf-8 for JSON and binary for fetches; stderr in binary mode still decodes UTF-8 (the test message "déjà" came through intact).
+- Every resource field the code reads is non-nullable in the extension's schemas (`warnings`, `slides`, `title`, `notesWords`, `images`, `missingImages`, `slidesWithoutNotes`, `pdf.pages`), and booleans are compared with `(eq … t)`, so neither `:null` nor `:false` can cause trouble.
+- The CEL query uses `%S`, which is safe because both name patterns allow only ASCII.
+- Source paths are passed absolute, so none can start with `-`.
+- The `"d"` anchor exists in `swamp-dispatch`, and the autoload cookie for `swamp-present-dispatch` is correct.
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>93051</subagent_tokens><tool_uses>19</tool_uses><duration_ms>258983</duration_ms></usage>
+</task-notification>
