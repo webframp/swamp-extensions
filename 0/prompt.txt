@@ -1,0 +1,61 @@
+<task-notification>
+<task-id>afc337a00f288d916</task-id>
+<tool-use-id>toolu_0125C5HqKxnSTZvmjENWu5Fe</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/d7dc3a2c-1801-4c8f-be91-72ec1cd84d14/tasks/afc337a00f288d916.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review datadog on-call" finished</summary>
+<note>This agent stopped with background work of its own still running. It may resume on its own when that work completes or reports, and the same task-id notifies again if it does; the result below may be interim.</note>
+<result>**Verdict: FAIL.** One high-severity bug plus several medium and low ones. I read the diff, the shared helper in `_lib/api.ts` and the generator code, and ran `deno task test` in `datadog/on-call` (14 passed). I did not call the real API. My claims about the Datadog spec (the request body and that overrides are not paginated) come from the generated code's own behaviour. I did not check the OpenAPI spec itself.
+
+**1. HIGH: `create_schedule_overrides` can never create an override, and can create duplicates.**
+- Location: `datadog/on-call/extensions/models/datadog/on_call.ts`, `create_schedule_overrides` (about lines 1034-1085, inside the +270-line hunk).
+- Cause: the generator classified a POST create as a POST-search "list" method. Two things follow:
+  - The request body is just `{include?}`. `generateRequestBodyFields` in `scripts/datadog-codegen/lib/method_classifier.ts` skips the `data` property, so `start`, `end` and `user_id` are never accepted. Datadog will reject the call (4xx), or accept it with no usable override.
+  - `include` is a query parameter in the spec but is sent in the JSON body, so it is silently ignored.
+- Duplicate risk: the call goes through `ddApiPostPaginated` (`_lib/api.ts:585`), which re-POSTs for up to 20 pages whenever the response carries a `meta.page.after` cursor. For a create endpoint, that could create the same override many times.
+- Output shape: it writes the response as `{items, truncated, fetchedAt}` under a resource named `create_schedule_overrides`. A create should return the single created object, and the "Found N create_schedule_overrides" log line is wrong for a create.
+- Release notes: the "Known limitation" paragraph admits the missing arguments. It does not mention the duplicate-POST risk or that `include` goes to the wrong place.
+- Verdict on origin: a generator bug (`method_classifier.ts` classification and `generateListBody`), not a one-off. It will recur for any POST-on-collection endpoint whose body is only `data`.
+- Ship decision: this method should not ship from generator output as it stands. Either fix the generator to emit a JSON:API `data` body and use `ddApi` for creates, or exclude the operation.
+
+**2. MEDIUM: the `list_user_notification_channels` execution test was overwritten, so that method lost coverage.**
+- Location: `datadog/on-call/extensions/models/datadog/on_call_test.ts`, about lines 509-580 in the diff.
+- The generator emits one execution test per method "kind" (`test_generator.ts:125-140`). The new `list_schedule_overrides` appears earlier in the list, so it displaced the notification-channels test. The file goes from 13 to 14 tests, but two were added and one lost.
+- The `has expected methods` test still checks that `list_user_notification_channels` exists. Nothing exercises its request or path any more.
+- Verdict on origin: a generator design flaw (test selection by kind and first match). It does not break anything on its own, but it causes silent coverage loss on every regeneration that adds methods.
+
+**3. MEDIUM: `list_schedule_overrides` sends page parameters to an endpoint that probably does not paginate.**
+- Location: `on_call.ts`, `list_schedule_overrides`, the `page_number` config with `page[size]=50` and `page[number]=0`.
+- The method's own arguments contain no page parameters, only `filter[start]`, `filter[end]` and `include`. The generator chose `page_number` anyway, probably by default. If the endpoint returns everything in one response, the loop keeps going while `items.length &gt;= 50`. If the endpoint ignores the paging parameters and returns more than 50 items, it re-fetches the same page 20 times, producing duplicates and `truncated: true`.
+- The test fixture returns one item, so it cannot catch this. The test also asserts only that `truncated` is a boolean.
+- Verdict on origin: a generator bug in pagination inference (`pagination.ts`).
+
+**4. LOW: `delete_schedule_override` never uses `writeResource`.**
+- It logs "Deleted resource {id}" and returns `dataHandles: []`.
+- This matches the other delete methods in the file, so it is consistent.
+- It has no execution test, but the existing delete tests are similarly sparse. This is not a regression.
+
+**5. LOW: truncated argument descriptions.**
+- The `filter_start`, `filter_end` and `include` descriptions end in "exa...", "examp..." and "Allowed...". The generator truncates at a fixed length (`truncateStr`).
+- The result is unhelpful for the user. The `RFC3339` hint is kept, but the list of allowed `include` values is lost. This is a generator issue.
+
+**6. LOW: the schema contract is loose.**
+- The "create" response schema duplicates `ScheduleOverridesItemSchema` verbatim (`CreateScheduleOverridesItemSchema`). It is passthrough, with id required and every other field optional.
+- The `type` field uses `.optional().default()`. That is fine, but it shows that the create item and list item are not distinct.
+- Verdict on origin: a generator artifact. Minor.
+
+**7. Checked and fine.**
+- Version: bumped from `2026.10.14.1` to `.2` in both `manifest.yaml` and `model.version`.
+- Upgrade chain: an identity upgrade entry was appended (not relabelled) with `toVersion` `2026.10.14.2`.
+- Test assertion: the test only checks a version pattern, so there is no stale literal.
+- Release notes: the old entries were replaced, which matches the "overwrite per version" rule. The "Upgrade note: additive only" claim holds for existing methods.
+- README: it lists all three new methods.
+- Bare imports: none; all use `npm:zod@4.6.5`.
+- Request building: the path parameters are `encodeURIComponent`-encoded.
+- Query building: the `filter[start]` and `filter[end]` renaming works, and `include` is correctly sent as a query parameter for the list method.
+- Tests: pass locally (14 passed).
+- Not run: `deno check`, `deno lint`, `deno fmt --check` and `swamp extension quality`. Run them before pushing.
+
+**Summary of origins.** Findings 1, 2, 3 and 5 are generator bugs, with 1 the blocker. No finding is a one-off that could be fixed in this commit alone. Fix the generator (create-versus-list classification and body construction, pagination inference, test selection), regenerate, and re-review.</result>
+<usage><subagent_tokens>64219</subagent_tokens><tool_uses>8</tool_uses><duration_ms>159170</duration_ms></usage>
+</task-notification>
