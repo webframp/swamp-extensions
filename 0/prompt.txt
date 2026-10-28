@@ -1,0 +1,44 @@
+<task-notification>
+<task-id>a12c246f5f3044b04</task-id>
+<tool-use-id>toolu_01GmXjUasN4Fzu8Jcn4VH7xe</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/d7dc3a2c-1801-4c8f-be91-72ec1cd84d14/tasks/a12c246f5f3044b04.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of scaffold license" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### [HIGH] Whitespace other than a single space passes validation and corrupts the generated manifest, `mod.ts` and `LICENSE.md`
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod.ts`
+**Line(s):** 238 (tokenizer `/\(|\)|[^\s()]+/g`), 818, 867, 888, 942-949
+**Issue:** The tokenizer splits on `\s`, so newlines, tabs, NBSP, U+2028/2029 and U+FEFF are all accepted as token separators. The raw string is then interpolated unchanged into `license: ${license}` and `// SPDX-License-Identifier: ${license}`. `.trim()` removes only leading and trailing whitespace, so interior whitespace survives. The validator never normalises or re-joins the tokens.
+**Breaking input:** `license: "MIT\nOR\nApache-2.0"`. I probed `arguments.safeParse` and it returns `success: true`. Running `execute` produced:
+- manifest lines `license: MIT`, then `OR`, then `Apache-2.0`, then `version: ...`. A bare `OR` at column 0 is not valid YAML, so the scaffolded manifest does not parse.
+- `mod.ts` with line 2 `// SPDX-License-Identifier: MIT` followed by bare `OR` and `Apache-2.0` lines. That is a TypeScript syntax error, so the "passes deno check" claim in the method description is false.
+
+The same happens with `MIT\u2028OR\u2029Apache-2.0` and with NBSP/BOM separators. A tab-separated value gives `license: MIT\tOR Apache-2.0`, which is parseable but non-canonical.
+**Impact:** Both `manifest.yaml` and `mod.ts` come out broken, and the cause is hard to trace. The newlines also let an argument inject arbitrary lines into generated files, though other newline forms such as `"MIT\nfoo: bar"` are rejected because they fail token validation. `LICENSE.md` is also affected: multi-line values break its `# License:` heading and the `SPDX-License-Identifier:` line. The tests never try interior whitespace, so none of this is caught.
+**Fix:** Emit a canonical string instead of the raw input, for example `tokens.join(" ")` with parentheses re-spaced. Or reject any whitespace other than a literal space with `/^[A-Za-z0-9.+\- ()]+$/`, plus a single-space check, before parsing. Use the same normalised value in all three outputs. Add tests for `\n`, `\t`, `\u2028` and `\u00a0`.
+
+### [LOW] Whitespace-only license is rejected by the schema but treated as omitted by `execute`
+**File:** `mod.ts`
+**Line(s):** 818
+**Issue:** `args.license?.trim() || undefined` turns `"  "` into undefined, so `execute` logs the "no license" warning and succeeds. `arguments.safeParse({license:"  "})` fails with "license must not be empty". `""` behaves the same way: the schema rejects it, and `execute` silently treats it as omitted. I confirmed the `"   "` case by running `execute`.
+**Breaking input:** `license: "   "` or `""` passed directly to `execute`.
+**Impact:** A user who explicitly asked for a license gets none, with only a warning. The schema and execute paths disagree.
+**Fix:** Test `args.license !== undefined` and validate the trimmed value, so `""` is an error on both paths.
+
+### [LOW] Test coverage gaps
+**File:** `mod_test.ts`
+**Issue:** There are no cases for interior non-space whitespace, `"  "` or `""` through `execute`, or the `stdout` output path with a license. The parenthesised and WITH cases are fine, and I confirmed they work: `(MIT)` and `MIT WITH Classpath-exception-2.0` both pass. The invalid-input test, `MIT OR WITH`, `mit`, and the length cap all behave as the tests claim.
+**Fix:** Add tests for the cases above.
+
+### Checked and found fine
+- **Parser:** There are no infinite loops, because `i` always advances. Recursion depth is bounded by the 200-character cap on `tokens.join(" ").length`. A bare `WITH` token is rejected as an unknown id, and exceptions are accepted only after `WITH`. Lowercase `and`/`or` are rejected as trailing tokens. `LicenseRef`/`DocumentRef` are rejected case-insensitively.
+- **YAML special characters:** `:`, `#`, quotes, `{`, `[` and the like are all rejected by the allow-list, so the only injection path is the whitespace one above.
+- **Version coupling:** The manifest version, model version and RELEASE_NOTES heading are all `2026.10.14.2`. The identity upgrade entry is appended with a matching `toVersion`. No exact-literal version assertion is stale.
+- **Logger type:** The `warn` addition to `MethodContext` is sound. The test helper logs at level "warning" and the test asserts it.
+- **Stdout path:** It still works with the extended `files` array.
+- **Hard-coded Apache:** The only remaining hard-coded `Apache-2.0` is the extension's own header at line 8 and manifest, which is correct.
+- **Gates:** `deno task check`, `lint`, `fmt:check` and `test` all pass (58 tests).
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>55826</subagent_tokens><tool_uses>4</tool_uses><duration_ms>30955</duration_ms></usage>
+</task-notification>
