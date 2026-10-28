@@ -1,0 +1,1 @@
+"Does org-re-reveal 3.39 work with reveal.js 6.x?" I don't know, why would you ask me that? figure it out with our own local sandboxed, safe tests. Same for the other questions, don't ask me things you can learn yourself if you actually did a modicum of work
