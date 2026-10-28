@@ -1,0 +1,131 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Summary:
+1. Primary Request and Intent:
+
+   **Original request.** Explore the user's Nix dotfiles (`/home/sme/src/webframp/dotfiles`, Doom Emacs config) with no changes, and design a pattern for using swamp to build presentations.
+   - Sources are Org mode or Markdown.
+   - Output is an org-reveal or straight reveal.js deck, stored as a swamp data artifact.
+
+   **Later instructions:**
+   - Figure things out with local sandboxed tests instead of asking the user.
+   - File the swamp validation issue.
+   - Build it: extension `@webframp/presentation`; reveal.js from a JS CDN pinned to a version; a pinned fetched copy of org-re-reveal (not coupled to the user's Emacs setup, but complementary); the Emacs side in emacs-swamp; all 3 methods plus the workflow and report.
+   - Commit, push and open PRs.
+   - Rebase the swamp-extensions branch on origin/main.
+   - Watch CI in a loop and fix all critical and high bugs, updating the PR branch as needed.
+   - Once all CI passes with no critical/high issues, comment `/lgtm` so the merge happens automatically, then refresh the local branch and clean up related worktrees.
+   - Make the extension actually publish ("it's still not published").
+
+2. Key Technical Concepts:
+   - **swamp extension model:** `export const model`, resources and files specs, `createFileWriter`, `writeResource`/`readResource`, `dataRepository.getContent`, reports, workflows with `guard` and `${{ inputs.x }}` in `modelIdOrName`.
+   - **Extension quality and release rules:** `swamp extension quality` must score 100%; CalVer versions; `RELEASE_NOTES.md`; Apache-2.0 license; inline `npm:zod@4.6.5`.
+   - **org-re-reveal batch export:** `emacs --batch -Q` with BUILD_EL, built with a deny-by-default approach:
+     - advice that blocks processes, network and writes;
+     - a read confinement guard on `insert-file-contents`;
+     - refusal of `(eval …)` macro templates, except Org's own form for a timestamp `#+DATE`;
+     - a src-language major-mode allowlist;
+     - Tramp and vc off; `webframp-presentation--done` set in an `unwind-protect`.
+   - **pandoc:** `--sandbox`, its template adapted to reveal.js 6 paths, `--slide-level=2`.
+   - **reveal.js 6.0.1:** pinned SHA-256 table, SRI attributes, self-contained inlining, and a confined local-file inliner.
+   - **Chromium PDF export over CDP:** the deck is served from a loopback HTTP server, a `Fetch.requestPaused` filter decides what loads, deadlines bound every step, and SIGKILL is the fallback.
+   - **GitHub Actions:** a run that `GITHUB_TOKEN` started (including through a re-run) never fires `workflow_run`. `workflow_dispatch` raised via `GITHUB_TOKEN` is allowed.
+
+3. Files and Code Sections:
+
+   **Extension: `presentation/` in swamp-extensions** (merged as #514, `88df3b17`)
+   - `manifest.yaml`, `README.md`, `RELEASE_NOTES.md`, `deno.json`, `LICENSE.md`, `.swamp.yaml`, `.gitignore`.
+   - `extensions/models/presentation/deck.ts`: model type `@webframp/presentation/deck`, version 2026.10.21.1.
+     - Methods: `build`, `outline`, `export_pdf`.
+     - Data names: `deck-<n>`, `html-<n>`, `pdf-<n>`, `outline-<n>`, `print-<n>`.
+   - `_lib/pins.ts`, `_lib/cache.ts`, `_lib/source.ts`, `_lib/engines.ts` (BUILD_EL), `_lib/html.ts`, `_lib/pdf.ts`, plus tests.
+   - `extensions/reports/deck_summary_report.ts`.
+   - `extensions/workflows/presentation-build.yaml`.
+   - The root `README.md` gained an entry for the extension.
+
+   **emacs-swamp: PR #1** (branch `feat/swamp-present`, open)
+   - `swamp-present.el`, `test-swamp-present.el`, `README.md`.
+   - `swamp.el`: `swamp--command-args` puts `--repo-dir` after the subcommand.
+
+   **`.github/workflows/ci.yml`** (PR #515, merged as `c7ad6c17`)
+   - Added a `dispatch-publish` job:
+     - It `needs` extension-check, scripts-check, reserved-data-names, quality-gate and manifest-validate.
+     - It runs only when `if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'`, with `permissions: actions: write`.
+     - Its step runs `gh workflow run publish.yml --repo "$REPO" --ref main -f sha="$SHA"`, with REPO and SHA passed through `env`.
+   - Added a comment that CI runs on main must never be cancelled.
+
+   **`.github/workflows/publish.yml`**
+   - PR #515 added:
+     - a `workflow_dispatch` trigger with a `sha` input;
+     - fallbacks `head_sha || inputs.sha`, `head_branch || 'main'` and `head_repository.full_name || github.repository`;
+     - a "Check a dispatched commit" step that requires a 40-character hex SHA and `STOP=1` when `SHA != GITHUB_SHA`, and fails closed on the CI-success `gh api` check;
+     - a STOP check in the changes step, which emits `extensions=[]`.
+   - PR #516 (merged as `a8d01258`) replaced the run-history diff base with a fixed window:
+     ```
+     BASE="HEAD~1"
+     if [ "$CHANNEL" = "stable" ]; then
+       BASE=$(git rev-parse "$HEAD_SHA~30" 2>/dev/null || git rev-list --max-parents=0 "$HEAD_SHA" | tail -1)
+     fi
+     ```
+     The existing registry "Already stable" check skips versions already published.
+
+4. Errors and fixes:
+   - **Review findings across rounds:** eval macros through `#+TITLE`/`#+DATE`/`#+AUTHOR`/`#+EMAIL`, TTS writes, git fsmonitor, Tramp ssh, `file://` PDF leaks, name collisions, timeouts. Each was fixed with the guards described above.
+   - **User feedback on looping:** the user said to stop the endless review loops and avoid re-running checks ("stahp", "you've wasted 90 minutes").
+   - **Rebase:** I removed `feee7b7a` from the branch. The user said the unrelated changes were already merged into main.
+   - **Publish never triggered:** the cause was the `GITHUB_TOKEN`-dispatched CI run. A re-run didn't help, which I had wrongly claimed it would; fixed by PR #515.
+   - **#515 security review:** reported CHANGES_REQUESTED despite a PASS verdict. I pushed a commit (SHA format check), which dismissed the stale review and re-ran it.
+   - **#515 adversarial review (HIGH):** a failing `gh api` call left `OK` empty or `"null"` and bypassed the CI check. Fixed to fail closed.
+   - **Publish ran but skipped presentation:** the diff base was `88df3b17`, recorded by a publish run that PR CI had triggered. Fixed by PR #516.
+
+5. Problem Solving:
+   - The org-re-reveal, pandoc and reveal-markdown engines and PDF export were all verified working with real tools: 71 tests and quality at 100%.
+   - #516 merged as `a8d01258`. I'm waiting to see whether its dispatched publish actually publishes `@webframp/presentation`.
+
+6. All user messages:
+   - "I use org mode and revealjs, local config is defined as nix in /home/sme/src/webframp/dotfiles and you can discover the rest of my doom emacs config from there. don't make any changes but explore the space and design a pattern for using swamp to build presentations that can be written in emacs org mode and result in an org reveal or a straight reveal.js presentation. It should take either org format or plain markdown and output a presentation for reveal.js as an artifact stored in the swamp data"
+   - "\"Does org-re-reveal 3.39 work with reveal.js 6.x?\" I don't know, why would you ask me that? figure it out with our own local sandboxed, safe tests. Same for the other questions, don't ask me things you can learn yourself if you actually did a modicum of work"
+   - "you should file the swamp validation issue, then come back to me and lets discuss how to make this a re-usable package"
+   - "I like it, can this live as a swamp extension in webframp/swamp-extensions or does it need to live as it's own thing?"
+   - "ok build it. Call the extension webframp/presentation. For reveal.js source it should use an upstream from a js cdn but pinned to a specific version. 3. fetch a pinned copy, not sure how it would fetch from the users emacs, plus I don't want to tightly couple the swamp extension work to the the emacs setup but they should stay complementary. 4. yes, emacs-swamp 5. all 3 methods, workflow and report"
+   - "keep going"
+   - "we are 700k tokens into a loop of you solving something that should already be done, stop it. perfect is the enemy of good, just make it work and stop the endless loop"
+   - "stahp, you'd already ran this these damn checks many times"
+   - "commit push and open the PR, we'll let the branch run checks and fix later. YOu have wasted an 90 minutes of time by your loops"
+   - "the branch in swamp-extensions needs to be rebased on origin/main there's a bunch of unrelated changes that aren't related to this extension"
+   - "well that was dumb, you had unfocused changes included in the MR that were already merged in main. Now watch CI, in a loop, fix all critical and high bugs reported and update the PR branch as needed"
+   - "once all CI passes and there are no critical or high issues comment with /lgtm so the merge can happen automatically then refresh the local branch and clean up related worktrees"
+   - "did the publish workflow complete? it seems like it never worked"
+   - "it's still not published"
+   - "it failed"
+
+   Standing constraints from project and global instructions:
+   - AWS profiles use the `ReadOnlyPlus` role suffix.
+   - No `Claude-Session` URL in commits.
+   - Don't push extensions locally; CI publishes.
+   - No unilateral deferral.
+   - Commit or push only when asked.
+
+7. Pending Tasks:
+   - Confirm that `@webframp/presentation` is published, via the publish run from #516's merge (`a8d01258`); check the registry and the GitHub release `@webframp/presentation@2026.10.21.1`.
+   - Refresh local main and delete the merged branches `fix/publish-after-lgtm-merge` and `fix/publish-diff-window`. Earlier cleanup is done: `feat/presentation` was deleted and the scratch dirs removed; the other worktrees are unrelated and were left alone.
+   - Report the outcome to the user concisely.
+   - Known and not done, mention only: emacs-swamp PR #1 is unmerged; the medium/low findings from the #514 review; the Doom `packages.el` `:files` needs `swamp-present.el`; Chromium's DevTools port is exposed locally during a print.
+
+8. Current Work:
+   - #516 merged as `a8d012586a86b1cff3b1d46950ae34542ba6e3a6`.
+   - Background task b04iuncw7 is waiting for:
+     - the `workflow_dispatch` CI run on main for `a8d01258`;
+     - the publish run that CI dispatches;
+     - that run's jobs, plus the log lines "Extensions to publish", "Extension changed" and "Already stable".
+   - Its output file: `/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/b04iuncw7.output`.
+   - Last statement to the user (about #516): "If it passes with no critical or high findings, I'll comment `/lgtm`. Its merge should then publish `@webframp/presentation`, and I'll check the registry to confirm it's actually there."
+
+9. Optional Next Step:
+   - When b04iuncw7 completes, read its output and confirm `presentation` was in "Extensions to publish" and its Publish job succeeded.
+   - Then check the registry with `swamp extension search @webframp/presentation` and the GitHub release `@webframp/presentation@2026.10.21.1`.
+   - If it published: run `git switch main && git pull --ff-only`, delete the local branches `fix/publish-after-lgtm-merge` and `fix/publish-diff-window`, and report briefly.
+   - If it failed again: diagnose from the publish logs only, with no repeated broad checks.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/sme/.claude/projects/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
