@@ -1,0 +1,201 @@
+<task-notification>
+<task-id>af47b8ffe27070806</task-id>
+<tool-use-id>toolu_01MKpvsHxgzQEe41qkobP7r8</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/237b258f-57e4-4fa3-9862-6c27500ef1de/tasks/af47b8ffe27070806.output</output-file>
+<status>completed</status>
+<summary>Agent "Survey repo for GDP-fit patterns" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Based on my thorough exploration of the swamp-extensions codebase, here is a structured evidence-heavy report of GDP (Ghosts of Departed Proofs) pattern opportunities:
+
+## GDP Patterns in swamp-extensions
+
+**Repository Scale:** 41 extensions, 753 model files, 90 datastore files, 126 report files, 24 vault files, 30 workflows.
+
+### 1. VALIDATION DONE ONCE, RE-CHECKED/ASSUMED LATER
+
+**github/repos.ts:28-36** — Repo slug validated via regex once, then interpolated into gh CLI args without type protection:
+```typescript
+const REPO_SLUG_RE = /^[\w.-]+\/[\w.-]+$/;
+const repoArg = () =&gt; z.string().regex(REPO_SLUG_RE, 'Must be in "owner/name" format...')
+// Later at line 213-214: passed directly to Deno.Command args array
+const cmd = new Deno.Command("gh", { args, ... })
+```
+**Pattern:** Regex-validated owner/repo slug flows through method args → gh CLI without branded type.
+
+**aws/pricing/pricing.ts:33-38** — Region enum validated at global args:
+```typescript
+region: z.enum(["us-east-1", "ap-south-1"]).default("us-east-1")
+```
+Later used in SDK client config without re-checking that it's still one of those two values.
+
+### 2. SHELL/CLI INTERPOLATION WITH USER ARGS
+
+**container-image/container_image.ts:148,266** — User-supplied container CLI name (docker/podman/buildah) passed directly to Deno.Command:
+```typescript
+const command = new Deno.Command(cmd, { args, ... })  // line 148
+const cmd = new Deno.Command(cli, { args: [..., args.registry, ...], ... })  // line 266, 272
+```
+Registry URL (line 272) not validated before shell interpolation.
+
+**github-issue-lifecycle/lifecycle.ts:242** — gh CLI with interpolated args:
+```typescript
+const cmd = new Deno.Command("gh", { args, ... })
+```
+
+**hermes-journal-writer/hermes_jrnl_writer.ts:71** — First element of cmd array used directly:
+```typescript
+const command = new Deno.Command(cmd[0], { args: cmd.slice(1), ... })
+```
+
+### 3. PAGINATION/TRUNCATION WITH LIMITS AND CAPS
+
+**microsoft/teams/teams.ts:834** — Limit multiplied without bounds checking:
+```typescript
+const pageSize = Math.min(args.limit * 5, 50).toString();  // line 834
+```
+**Pattern:** `args.limit * 5` with cap, but derived limit passed to API; no GDP protection on `limit` itself.
+
+**microsoft/teams/teams.ts:733,777,881** — Truncation flags set based on limit comparison:
+```typescript
+const wasTruncated = roots.length &gt;= args.limit || ...  // line 777
+const truncated = allChats.length &gt;= args.limit || pages &lt; MAX_CHAT_PAGES  // line 881
+```
+
+**reddit/_lib/api.ts:6,175** — MAX_PAGES constant with bounded loop:
+```typescript
+const MAX_PAGES = 10;  // line 6
+while (pages &lt; MAX_PAGES &amp;&amp; items.length &lt; limit) { ... }  // line 175
+```
+
+**griptape-codegen/extension_generator.ts:333-395** — Pagination with MAX_PAGES cap and explicit truncation:
+```typescript
+while (page &lt;= MAX_PAGES) { ... }  // line 333
+if (page &gt; MAX_PAGES) truncated = true;  // line 392
+```
+
+**aws/pricing/pricing.ts:26** — MAX_PAGES = 10 defined but never revalidated after API calls.
+
+### 4. LOCK/STATE-MACHINE/ORDERING INVARIANTS
+
+**datastore/postgres/postgres_datastore/mod.ts:127-241** — Distributed lock with nonce verification:
+- Line 139: `const candidateNonce = crypto.randomUUID();` — nonce assigned
+- Line 175: `if (rows.length &gt; 0 &amp;&amp; rows[0].nonce === candidateNonce)` — nonce verified after DB insert
+- Line 176-186: Heartbeat loop started only after nonce matches
+- **Pattern:** Lock acquisition order: generateNonce → INSERT with nonce → verify returned nonce equals candidate. If verified, proceed; else retry. No branded type protecting nonce lifecycle.
+
+**datastore/postgres/postgres_datastore/mod.ts:65-85** — SQL schema identifier validation:
+```typescript
+schema: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_]*$/, { message: "Schema must be a valid SQL identifier..." })
+```
+
+**datastore/postgres/postgres_datastore/mod.ts:81** — Path segment validation:
+```typescript
+(data) =&gt; !data.sslCaPath || !data.sslCaPath.split(/[/\\]/).includes("..")
+```
+Prevents `..` in SSL cert paths.
+
+### 5. MONEY/UNITS/TIME
+
+**aws/pricing/pricing.ts** — No currency validation; price data stored as raw API JSON (line 96-100):
+```typescript
+const PriceItemSchema = z.object({
+  serviceCode: z.string(),
+  product: z.record(z.string(), z.unknown()),  // ← no USD/currency brand
+  terms: z.record(z.string(), z.unknown()),
+});
+```
+**Gap:** Cost values parsed and stored without currency normalization or branded USD type.
+
+**hermes-journal-writer/hermes_jrnl_writer.ts:96-113** — Date formatting with manual normalization:
+```typescript
+function formatAsOrgDate(date: Date): string { ... }  // line 96
+function formatTimestamp(date: Date): string { return date.toISOString().replace("T", " ").slice(0, 19) + "Z"; }  // line 111
+```
+Date received as Date object, converted to multiple string formats. No branded "OrgDate" type.
+
+**operator-briefing/metrics/dashboard.ts** — CalVer version strings (YYYY.MM.DD.N) not validated; only used in manifest.yaml and display strings.
+
+### 6. SECRET/REDACTION
+
+**artifactory/artifactory.ts:24** — Token marked sensitive in schema:
+```typescript
+token: z.string().min(1).meta({ sensitive: true })
+```
+Later at line 196: `"Authorization": \`Bearer ${opts.token}\`` — passed to fetch headers. **No branded "Token" type preventing accidental logging.**
+
+**container-image/container_image.ts:280** — Password passed via stdin (safer than args):
+```typescript
+await writer.write(new TextEncoder().encode(args.password));
+```
+
+**operator-briefing/normalizers/aws_quotas.ts:72** — Redaction logic for embedded numbers:
+```typescript
+// Redact ANY embedded 6+ digit number to "****"
+```
+But redaction is done in rendering, not at data level.
+
+**github/triage.ts:20** — Redaction flags for specific CLI args:
+```typescript
+const REDACTED_FLAGS = new Set(["--body", "--title"]);
+```
+
+### 7. EXISTING BRANDED/OPAQUE/REFINED TYPES
+
+**No `.brand()` usage found across all 753 model files** — this is a major GDP opportunity.
+
+**Uses of `.refine()`:**
+- postgres_datastore/mod.ts:77,80 — SSL config refinement (path validation, schema validation)
+- aurora-datastore-bootstrap/provisioner.ts:60,99 — max_acu ≥ min_acu ordering invariant
+- Various `.refine()` for cross-field constraints (dates, enum subsets)
+
+### 8. PATH-SAFETY &amp; IDENTIFIERS
+
+**falai-codegen/method_classifier.ts:987-999** — Path parameter encoding requirement:
+```typescript
+// Line 989: "Left bare, a value like 'abc/../../admin' changes which path segment fetch() actually requests."
+// Solution: encodeURIComponent keeps every path param confined to its own segment.
+function buildApiPath(path: string): string {
+  return path.replace(/\{([^}]+)\}/g, (_, name) =&gt;
+    `\${encodeURIComponent(String(args.${sanitizeFieldName(name)}))}`,
+  );
+}
+```
+
+**griptape-codegen/extension_generator.ts:224-229** — Instance name sanitization:
+```typescript
+export function sanitizeInstanceName(name: string): string {
+  return name.replace(/[/\\\\]/g, "_").replace(/\\.\\./g, "_").replace(/\\0/g, "");
+}
+```
+**Pattern:** All API-returned IDs routed through this function before writeResource, but no type-level guarantee.
+
+**container-image/container_image.ts:27-28** — Resource name sanitization:
+```typescript
+function sanitizeResourceName(tag: string): string { return tag.replace(/[/\\:@]/g, "_"); }
+```
+
+### 9. DUPLICATE VALIDATORS (REGEX/CHECKS)
+
+Multiple extensions repeat the same validation:
+- **Region enums:** aws/pricing, aws/cost-explorer, others all hardcode `enum(["us-east-1", "ap-south-1"])` separately
+- **Path ".." checks:** postgres_datastore/mod.ts:81 and falai-codegen/method_classifier.ts both check for `..`
+- **Sanitization functions:** `sanitizeInstanceName` duplicated in griptape-codegen and falai-codegen
+
+## Summary
+
+**High-priority GDP candidates:**
+1. **Shell args (github, container-image, hermes)** — Validated once (regex), passed to Deno.Command without type-level protection. Brand as `ValidatedRepoSlug`, `ValidatedRegistry`, `ValidatedCliCommand`.
+2. **Pagination limit*N** — Cap enforced at each callsite; no invariant that limit ≤ MAX_PAGES. Brand as `BoundedLimit(max)`.
+3. **Nonce/lock lifecycle** — Verified after DB op but no type encoding the "verified" state.
+4. **Path parameters** — Encoded at codegen time but no branded `EncodedPathParam` type.
+5. **Instance names** — Sanitized before writeResource but consumers assume safety; brand as `SafeInstanceName`.
+6. **Cost currency** — Raw JSON with no USD branding.
+7. **Region &amp; account ID enums** — Duplicated across AWS extensions; centralize as branded types.
+
+**Recommended starting points:**
+- Create `ValidatedShellArg` and `ValidatedRepositorySlug` for github, container-image
+- Create `BoundedPaginationLimit` for teams, reddit, griptape
+- Unify AWS region/account validators into shared branded types in `@webframp/aws/*` base
+- Add `EncodedPathSegment` to falai-codegen, griptape-codegen generated code</result>
+<usage><subagent_tokens>64326</subagent_tokens><tool_uses>32</tool_uses><duration_ms>94157</duration_ms></usage>
+</task-notification>
