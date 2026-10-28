@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bx0qn3ix6</task-id>
+<tool-use-id>toolu_01MMo7q3Q4CxvHu1BfBotQ1v</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/tasks/bx0qn3ix6.output</output-file>
+<status>completed</status>
+<summary>Background command "bash /tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad/gates.sh 2&gt;&amp;1 | tail -30" completed (exit code 0)</summary>
+</task-notification>
