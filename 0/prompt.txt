@@ -1,0 +1,1 @@
+the repo I'm actually talking about is on exe.dev and accessible from 'ssh violet-island.exe.xyz ls loadgen-repo' how does that change the prompt?
