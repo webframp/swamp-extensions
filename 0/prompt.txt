@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bo7nb1bzc</task-id>
+<tool-use-id>toolu_01LW25zqLDZ1uCanYajMA7D3</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/bo7nb1bzc.output</output-file>
+<status>completed</status>
+<summary>Background command "sleep 30; head=$(git rev-parse HEAD); for i in $(seq 1 55); do p=$(gh pr checks 504 2&gt;/dev/null | awk -F'\t' '$2=="pending"' | wc -l); [ "$p" = "0" ] &amp;&amp; break; sleep 10; done; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1}'; gh pr view 504 --json reviews -q '.reviews[-1] | .submittedAt + "\n" + .body'" completed (exit code 0)</summary>
+</task-notification>
