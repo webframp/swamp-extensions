@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>br2pv2a2r</task-id>
+<tool-use-id>toolu_01YHZhN1cNZEGe4CSfcpJqzV</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/br2pv2a2r.output</output-file>
+<status>completed</status>
+<summary>Background command "h=$(git rev-parse --short=8 HEAD); for i in $(seq 1 30); do p=$(gh api repos/webframp/swamp-extensions/pulls/505 -q .head.sha | cut -c1-8); [ "$p" = "$h" ] &amp;&amp; break; sleep 10; done; echo "pr-head=$p local=$h"; sleep 30; for i in $(seq 1 55); do n=$(gh pr checks 505 2&gt;/dev/null | awk -F'\t' '$2=="pending"' | wc -l); [ "$n" = "0" ] &amp;&amp; break; sleep 10; done; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1}'; gh pr view 505 --json reviews -q '.reviews[-1] | .submittedAt + "\n" + .body'; gh pr view 505 --json state -q .state" completed (exit code 0)</summary>
+</task-notification>
