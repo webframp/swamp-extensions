@@ -1,0 +1,64 @@
+<task-notification>
+<task-id>ae53d623f4c2f4f37</task-id>
+<tool-use-id>toolu_01DDWGm2V5AzFBVK4WwfSc14</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ae53d623f4c2f4f37.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of #509 fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found one HIGH and three LOW findings.
+
+The numeric ID constraints themselves are correct and complete. The HIGH is in the `milestone` change: it removes the only way this extension had to clear an issue's milestone, and nothing in the change or its release notes says so.
+
+**What I checked**
+- **Sibling consistency:** I listed every `z.number` method argument in `projects.ts`. Each one is now either `int().positive()` or deliberately bounded: `perPage` and `limit` use `min(1).max(...)`, `first` uses `positive().max(100)`, `maxTodos` is positive, and `weight` is `nonnegative`, which is correct because GitLab allows weight 0. There are no `z.coerce` arguments. The test's fixed list of 14 method/argument pairs matches the code. `extensions/reports/review_dashboard.ts` has no numeric arguments.
+- **Tests fail against the old code:** I copied the extension, swapped in `origin/main`'s `projects.ts`, and ran the new tests. All 3 fail, and each failure is for the argument under test (for example "create_issue accepted milestone 0"). Their valid controls (`5`, `"5"`, `"v1.0"`, `"1.5"`, `tailLines` 1 and 10000) pass on the branch.
+- **Gates on the branch:** check, lint and `fmt:check` are clean; tests are 244 passed, 0 failed; `swamp extension quality` reports `passed` / 100%.
+- **Versions:** the manifest and model both say `2026.10.21.2`. The upgrade entry is appended, not relabeled, and is an identity migration. The `upgrade chain tail matches model version` test passes. No test asserts the exact version string. `2026.10.21.1` is already published, so the bump is required.
+- **Zod union:** `"5"` passes through the string branch and resolves to id 5. `"1.5"`, `"-3"` and `"v1.0"` are treated as titles. `1.5`, `0` and `-3` are rejected with a `milestone`-path issue.
+
+### HIGH `update_issue` can no longer clear a milestone
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-gitlab-positive-int-ids/gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** 2057-2067 (`milestoneArg`), 3979-3981 (`update_issue` arguments), 4022-4029 (the `milestone_id` body)
+**Issue:** `update_issue` sends the milestone as a REST `PUT /issues/:iid` with `milestone_id`. GitLab's Edit-issue API says of that field: "Set to 0 or provide an empty value to unassign a milestone." On the old code, `milestone: 0` or `"0"` went through `resolveMilestoneId` unchanged and became `milestone_id: 0`, which unassigned the milestone. That was the only way to do it with this extension, since `update_issue` has no null or clear option. The new union rejects both 0 and every all-zero string, so the feature is gone with no replacement. The code comment ("rejected like the number 0") treats 0 as meaningless, which is wrong for this endpoint.
+
+This was neither documented in the README nor tested, but it was real behavior on a documented GitLab endpoint. `create_issue` is different: it sends `gid://gitlab/Milestone/0` to GraphQL, which means nothing, so rejecting 0 there is correct.
+**Breaking input:** `update_issue { project: "g/p", iid: 7, milestone: 0 }`. Before, the milestone was cleared. Now it fails validation, and there is no other way to clear it.
+**Impact:** A capability is silently removed. The release notes say `"0"` "used to be sent as milestone ID 0" but not that this meant "unassign", so a user can't tell they lost anything. Under your no-deferral rule, removing scope like this needs your decision.
+**Fix:** This needs your call. Options:
+- (a) For `update_issue` only, accept 0 and `"0"` and describe them as "0 clears the milestone". Keep `create_issue` positive-only.
+- (b) Add an explicit `milestone: null` (or `clearMilestone: true`) that sends `milestone_id: 0`, and keep 0 rejected.
+
+Either option needs a test asserting that the PUT body carries `milestone_id: 0`, plus an accurate release note. I recommend (a): it keeps the old behavior and is the smallest change.
+
+### LOW Release notes skip the `""` milestone rejection, and the `/jobs/1.5` claim is unverified
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-gitlab-positive-int-ids/gitlab/RELEASE_NOTES.md`
+**Line(s):** 4-7, 21-24
+**Issue:**
+- An empty `milestone` string is now rejected at validation. Before, it searched milestones and then threw "no milestone titled". The notes mention only all-zero strings.
+- The notes say GitLab "could read a fractional ID as a different object". Issue #509 itself says this "has not been checked against a live GitLab". The wording is hedged, but it reads as a known hazard.
+**Breaking input:** `milestone: ""`
+**Impact:** Small; the notes are incomplete rather than wrong.
+**Fix:** Add `""` to the milestone note. Either drop the format-suffix claim or say it is a possibility that hasn't been confirmed.
+
+### LOW `get_job_log` no longer guards `tailLines` when execute is called directly
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-gitlab-positive-int-ids/gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** 5362
+**Issue:** Without `Math.max(1, ...)`, calling `execute` directly with `tailLines: 0` (skipping the schema) now returns an empty tail instead of one line. Only direct calls hit this path; no test or caller in the repo does that. An `undefined` value behaves as before (the full log).
+**Breaking input:** `execute({ project, jobId: 1, tailLines: 0 })` called directly.
+**Impact:** Negligible, because the schema covers the real path.
+**Fix:** None required.
+
+### LOW The 10000-line cap removes "fetch the whole log"
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-gitlab-positive-int-ids/gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** 29-30, 5343
+**Issue:** Before, any large `tailLines` returned the full trace. Now anything over 10000 fails. The full trace is still downloaded either way, so the cap limits only what is stored, which matches its comment. The release notes disclose the change ("any size was accepted"), and no caller in the repo passes `tailLines`.
+**Impact:** A caller that wanted a full trace longer than 10000 lines now gets a validation error.
+**Fix:** None required beyond what the notes already say.
+
+**Not covered by this change**
+- `mark_todo_done.todoId` and `mark_todos_done.todoIds` are strings that accept a bare number, so `"0"` becomes `gid://gitlab/Todo/0`. They go to GraphQL rather than a REST path, so the fractional-path concern doesn't apply, and the issue left them out. I'm noting them so leaving them alone is a choice you make.
+- The README lists none of the pipeline, job or snippet methods. That gap is older than this change and wasn't touched by it.
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>83190</subagent_tokens><tool_uses>21</tool_uses><duration_ms>144478</duration_ms></usage>
+</task-notification>
