@@ -1,0 +1,50 @@
+<task-notification>
+<task-id>a38ada18507828c92</task-id>
+<tool-use-id>toolu_01TcxNS59bF3MgVEx38M97W1</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/a38ada18507828c92.output</output-file>
+<status>completed</status>
+<summary>Agent "Hostile analysis of contributor patch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no malicious code in the contributor's patch, and nothing from it was slipped into the branch unreviewed. One real defect does need a decision before merge: the API key can leak through a cross-origin redirect, and I reproduced that. I edited no files and posted nothing.
+
+**Scope:** commit `a58dc9e4`, 7 files, all under `redmine/`. Nothing touches `.github/`, `deno.json`, `deno.lock` or `LICENSE.md`. I followed the checklist in `/home/sme/.claude/skills/hostile-code-analysis/SKILL.md` and skipped its PR-comment step.
+
+**Patch vs. branch:** I applied `503.patch` to a clean copy of `origin/main` (it applied cleanly) and compared that tree with the worktree. Everything the patch adds is in the branch unchanged. The only differences are the maintainer's changes:
+- the `RedmineDownloadTooLargeError` class
+- streaming reads with a byte cap, replacing `arrayBuffer()`
+- clearer errors when a download fails
+- 4 new tests
+- the README section, the manifest description and wrapped release notes
+
+## Findings
+
+**MEDIUM: the API key and `X-Redmine-Username` go to whatever host a redirect points at**
+- **Where:** `redmine/extensions/models/redmine/_lib/api.ts:37`, called by `redmineDownload` at about line 215, with the path built at `redmine.ts:2542`.
+- **Evidence:** `fetch` follows redirects by default and only strips `Authorization` when the redirect changes origin, not custom headers. I tested this with Deno 2.9.7: a request to server A carrying `X-Redmine-API-Key: SECRET` got a 302 to `localhost:&lt;B&gt;`, and server B received `SECRET`.
+- **Hostile intent: none.** The code reuses the existing `fetchWithRetry`, which `redmineApi` and `redmineApiPaginated` already use, so the same leak is on `main` today.
+- **Why it's worse here:** attachment downloads are the endpoint where redirects actually happen in practice, such as storage plugins that redirect to S3 or a CDN, or proxies.
+- **Fix:** set `redirect: "manual"` (or `"error"`) in `fetchWithRetry`, or follow redirects only when they stay on the same origin as `host`.
+- **Decision needed:** the defect shares a root cause with the new code. Should it be fixed in this PR for all three helpers, or for the download path only?
+
+**LOW: attachment fields from Redmine are not validated before files are written**
+- **Where:** `redmine.ts:253-265` (`mapAttachments`), `redmine.ts:2558` (`createFileWriter`).
+- **Evidence:** `a.id` from the response goes unchecked into the data name `attachment-&lt;issueId&gt;-&lt;id&gt;` and into the download path. The Zod resource schema only runs at the final `writeResource`, after the files are already stored.
+- **Mitigations:** swamp's `DataMetadataSchema` rejects `..`, `/`, `\` and NUL in data names (`/home/sme/src/swamp-club/swamp/src/domain/data/data_metadata.ts:207-215`). The URL is always `${host}/attachments/...`, so a bad ID cannot change the host. The Redmine filename is never used as a path; it only appears in error messages.
+- **Hardening option:** check that `a.id` is a positive integer in `mapAttachments`.
+
+**INFO (no issues found):**
+- **No `content_url` use.** Downloads go to `/attachments/download/&lt;id&gt;` on the configured host, not to the URL in the API response.
+- **No hidden network calls.** I found no new `fetch`, `eval`, `Function`, dynamic import, `Deno.env`, `Deno.Command`, `Deno.*File`, timers, encoded strings, URLs or `__proto__` in added lines. All file output goes through `context.createFileWriter`.
+- **No dependency changes.** No new or changed `npm:`/`jsr:` imports; `npm:zod@4.6.5` and `jsr:@std/assert@1.0.19` are unchanged.
+- **Unicode:** the bidi and zero-width scan found nothing in either the patch or the branch. The only non-ASCII characters are em dashes.
+- **Manifest:** only the version bump (`2026.10.14.1` → `2026.10.20.1`) and the description changed. No changes to `additionalFiles`, `include`, `platforms`, `dependencies` or `license`.
+- **Upgrade chain:** an identity `upgrades` entry was added with `toVersion` `2026.10.20.1`.
+- **Tests weaken nothing.** The only changed assertions are the resource count (12 → 13) and the method count (26 → 28), which match the new `attachments` resource and the two new methods. New tests check the headers sent, the size cap on a chunked body that never ends, the 404 path and the filters.
+- **Validation:** `maxBytes` is an integer with a minimum of 1 and a maximum of 500 MiB, default 20 MiB. `attachmentIds` is capped at 100. The download is read-only on Redmine.
+- **Licensing, not from this patch:** `redmine.ts:10` says `SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception`. That header is already on `origin/main`, which contradicts the repo's Apache-2.0-only rule. `api_test.ts` says Apache-2.0. Tell me if you want it corrected in this PR.
+
+The worst thing I could find is a credential leak the contributor inherited from existing code, not one they introduced. It still needs your decision before merge.
+
+VERDICT: CONCERNS</result>
+<usage><subagent_tokens>82040</subagent_tokens><tool_uses>17</tool_uses><duration_ms>102111</duration_ms></usage>
+</task-notification>
