@@ -1,0 +1,12 @@
+CI jobs are failing on https://github.com/webframp/swamp-extensions/pull/467 
+
+<pasted_content id="aa96">
+  Failing, and not because of this change:
+  - quality gcp/vertex-usage, quality ai-usage and Validate manifests all fail with "swamp requires a swamp-club.com account to run".
+  - The workflow installs swamp's stable channel, which now needs SWAMP_API_KEY and SWAMP_SIGNIN_TOKEN in CI. promote.yml and publish.yml pass the key to setup-swamp, but ci.yml doesn't pass it
+    in quality-gate or manifest-validate.
+  - Runs through Sep 30 passed, so every PR hits this now. The merge workflow needs CI to pass, so /lgtm will refuse until it's fixed.
+  - I left ci.yml and the secrets alone. That's a separate CI PR and your call. It probably means adding the api-key input and the signin token to those two jobs.
+</pasted_content id="aa96">
+
+ we should do the work on a separate CI PR using a worktree
