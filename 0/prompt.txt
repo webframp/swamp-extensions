@@ -1,0 +1,1 @@
+swamp dry run quality checks should never skip over readme recommendations that suggest using plaintext secrets instead of using swamp vault, this is a bug. Describe the problem deeply from work we just did in https://github.com/webframp/swamp-extensions/pull/513 and file a swamp issue
