@@ -1,0 +1,47 @@
+<task-notification>
+<task-id>ac0e4e5e343da2608</task-id>
+<tool-use-id>toolu_01DHWU7n6ku2jBSkZztLXXKr</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ac0e4e5e343da2608.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review post_discussion" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Re-review of 086ba759: still PASS. The three original fixes are in and correct, and they introduced no new inconsistency; I found three new LOW issues. Your message cited commit 3bf1cf5f, which does not exist in this worktree. The fix is HEAD 086ba759, and the branch now sits on be4631ff (#508). I re-read the full `post_discussion` method, the README section, `RELEASE_NOTES.md` and the new tests. `check`, `lint`, `fmt:check` and `test` (39 passed) pass, and `swamp extension quality` reports passed at 100%.
+
+**Stored `body` vs hashed body:** no inconsistency. The key is the normalised body; the POST and the stored `body` field use the raw `args.body`. The record stores exactly what GitLab received. When a retry differs only in whitespace, it skips and keeps the first post's text, which is the intended result.
+
+### [LOW] Whitespace-only body passes validation and fails late at GitLab
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 1102, 1117-1119
+**Issue:** `body: z.string().min(1)` checks the raw string, but the key is computed after `.trim()`. A body of only whitespace passes Zod, gets hashed as the empty string, and is POSTed. GitLab rejects a blank note with a 400, so nothing is recorded and nothing is lost. The method just fails at the network step instead of at validation, unlike the "rejects an empty body" test path.
+**Breaking input:** `body="   "` or `body="\r\n"`.
+**Impact:** One wasted API call and a less clear error. No duplicate and no false skip.
+**Fix:** `z.string().trim().min(1)` would also change the posted text. The alternative is `.refine((s) =&gt; s.trim().length &gt; 0, "body must not be blank")`. Add a test for whitespace-only input.
+
+### [LOW] README's list of unrecorded-post cases leaves out a parseable but malformed response
+**File:** gitlab-review/README.md
+**Line(s):** 70-72
+**Issue:** The README names "an unparseable response, or a client-side failure after the request was sent". The code also throws before writing the record when the response is valid JSON without `id` or `notes[0].id` (review.ts 1160-1165). In that case GitLab may already have opened the thread.
+**Breaking input:** A 201 response of `{ "id": "abc", "notes": [] }`, then a retry.
+**Impact:** The docs understate when a duplicate can happen.
+**Fix:** Replace "an unparseable response" with "an unparseable or unexpected response".
+
+### [LOW] Trimming leading whitespace can merge two bodies that render differently
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 1117-1119
+**Issue:** `.trim()` drops leading whitespace, and in Markdown that whitespace can matter. Four leading spaces make an indented code block. So a code-block body and its plain-text twin get the same key, and the second is skipped. The README's "surrounding whitespace trimmed" describes this accurately; the case is unlikely.
+**Breaking input:** `body="    x = 1"`, then `body="x = 1"`.
+**Impact:** A false skip, which loses that review point. It is unlikely in practice.
+**Fix:** Trim only trailing whitespace (`.trimEnd()`), which still covers the trailing-newline retry the change was aimed at. Or accept the behaviour as documented.
+
+### Re-checked probes (no new findings)
+- **Sibling consistency:** unchanged from the first pass.
+- **Instance names:** still collision-free, since the hash is always 16 hex characters and the iid is digits only.
+- **Truthiness checks:** unchanged.
+- **Timeouts:** none on any fetch, consistent with the siblings.
+- **Version and upgrade chain:** consistent at 2026.10.21.1. The fix commit changed no version, which is correct within the same PR.
+- **Release notes:** the new sentence about line-ending and whitespace normalisation matches the code.
+- **New tests:** both are meaningful. The whitespace retry test (CRLF plus a trailing newline) asserts one POST and an empty handle. The non-JSON test asserts the error and that nothing was written.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>79127</subagent_tokens><tool_uses>3</tool_uses><duration_ms>34405</duration_ms></usage>
+</task-notification>
