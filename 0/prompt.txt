@@ -1,0 +1,48 @@
+<task-notification>
+<task-id>a1d3ebbe60a7fb8cc</task-id>
+<tool-use-id>toolu_01TNSr2jT1b9yFDfKqEooZPG</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a1d3ebbe60a7fb8cc.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix griptape codegen + regen" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All three griptape audit items are fixed in the generator. The 10 extensions were regenerated from the new spec and each went from 2026.10.14.1 to 2026.10.21.1. Every gate passes and every extension scores `passed` / 100% on the quality check. `SPEC_SHA256` is untouched, and no test pins it.
+
+**What changed for users**
+- **Item 1, credentials docs:** each README now opens with a Credentials section: `swamp vault put griptape API_KEY`, then `--global-arg 'apiKey=REDACTED vault.get("griptape", "API_KEY") }}'`. The `apiKey` describe text and the missing-key error now point to the vault. `GT_CLOUD_API_KEY` is still read in code but described only as a fallback that is not redacted and not recommended.
+- **Item 2, `api_key`:** the audit's diagnosis was slightly off. `isSensitiveFieldName` already matched `api_key`; the real gap was that query parameters were never checked at all. Both structures webhook methods now mark `api_key` sensitive. I also made the predicate handle camelCase names and `secret_access_key`/`auth_code`, while ids like `api_key_secret_id` stay unmarked.
+- **Same root cause, also fixed:** credentials nested inside object arguments were never marked. These arguments are now sensitive:
+  - data-connectors `config` (S3 secret key, Confluence token, Google Drive auth code)
+  - knowledge-bases `config` (pgvector password)
+  - structures and tools deployment `code_source` (GitHub token)
+- **Item 3, README notes:** a generated "Secret-valued arguments" section lists these arguments. It says inputs are recorded with the run and to pass them as `vault.get` expressions. Secrets `create_secret`/`update_secret` `value` is covered.
+- **Item 3, returned secrets:** I checked every response in the 10 services. The only one that returns a secret is data-connectors, in `config.google_drive.access_token`.
+  - **Single records** (create, get, update): the field is now marked sensitive, so swamp stores it in a vault and the record holds a reference. These methods now fail if a token comes back and no vault exists.
+  - **`list_data_connectors`:** this method now drops the token from each item. Swamp's vault redaction does not reach fields inside lists, and the token was previously stored in cleartext there. This is the one case where the field is removed rather than vaulted.
+  - **Generator guard:** generation now fails loudly if a future response puts a credential inside a list.
+
+**Decisions for you**
+1. **`create_auth_config` takes no secret.** It takes `api_key_secret_id`, an id pointing to a Griptape secret, so the models README gets no secret-argument note. Do you want a note there anyway?
+2. **Environment variable values on structures and tools are not marked sensitive.** Griptape returns these `env_vars[].value` fields in plain text in every response, and offers a `secret_ref` source for real secrets. I could mark the input argument sensitive cheaply. Stripping them from responses would remove real data from every structure and tool record. I recommend leaving responses alone and optionally marking only the input. Do you want either?
+3. **`RELEASE_NOTES.md` adds entries instead of overwriting.** The generator puts each new entry above the old ones, while the shared spec says to overwrite. I left the generator's existing behavior alone.
+4. **Upgrade-entry wording changed in the generator.** I changed the standard description from "schema changes only loosen" to "global arguments keep their shape, no migration required". The old text was false for data-connectors, whose `config` now validates as an object. The identity migration itself is correct.
+5. **Data from earlier versions.** Stored data-connector data written before this release may still hold the token in cleartext. The data-connectors release notes tell users to remove it with `swamp data delete`.
+
+**Process notes**
+- Permission settings block reading `griptape/secrets`, so I checked the Secrets API in the cached spec instead. The generator wrote that directory normally.
+- My first generation run used outdated upgrade wording. I restored the 10 generated extension directories to HEAD with `git show HEAD:&lt;file&gt; &gt; &lt;file&gt;`, using no checkout, stash or reset, then regenerated once.
+- I reverted a `scripts/griptape-codegen/deno.lock` change (an added `npm:zod`) caused by my own test import. It is now unchanged.
+
+**Gates**
+- Generator: check, lint and fmt:check clean; 121 tests passed.
+- Per extension: check, lint, fmt and fmt:check clean; all tests pass (assistants 23, buckets 23, data-connectors 24, knowledge-bases 28, models 23, rulesets 23, secrets 18, structures 30, threads 20, tools 25). Data-connectors has two new tests: the record's token field is marked sensitive, and the list snapshot never contains it.
+- Quality: `passed` / 100% for all 10.
+
+**Files changed** (all under `/home/sme/src/webframp/swamp-extensions/`)
+- New: `scripts/griptape-codegen/lib/sensitive.ts` and `lib/sensitive_test.ts`.
+- Modified generator files in `scripts/griptape-codegen/lib/`: `extension_generator.ts`, `method_classifier.ts`, `service_grouper.ts`, `test_generator.ts`, `type_mapper.ts`, `schema_fetcher.ts`, `upgrades.ts`, plus the tests `api_lib_test.ts`, `extension_generator_test.ts`, `method_classifier_test.ts`.
+- Regenerated in each of `griptape/{assistants,buckets,data-connectors,knowledge-bases,models,rulesets,secrets,structures,threads,tools}`: `README.md`, `RELEASE_NOTES.md`, `manifest.yaml`, `extensions/models/griptape/_lib/api.ts` and the model `.ts`. data-connectors also has a regenerated `data_connectors_test.ts`.
+- Untouched and still uncommitted: `config.ts`, whose `SPEC_SHA256` you set, and `griptape/.cache/`.
+
+Nothing in scope was left unfixed.</result>
+<usage><subagent_tokens>229652</subagent_tokens><tool_uses>96</tool_uses><duration_ms>839047</duration_ms></usage>
+</task-notification>
