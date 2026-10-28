@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bg60y1du3</task-id>
+<tool-use-id>toolu_01BgewmdkZYt74LEYTtoaHsV</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/bg60y1du3.output</output-file>
+<status>completed</status>
+<summary>Background command "Follow main CI → dispatch-publish → publish" completed (exit code 0)</summary>
+</task-notification>
