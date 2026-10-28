@@ -1,0 +1,76 @@
+<task-notification>
+<task-id>ac874e520a9caec59</task-id>
+<tool-use-id>toolu_01XboJGwRfuHp6q4nqWUVMjc</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ac874e520a9caec59.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review gitlab work items" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH issues. All seven iteration-1 fixes are in place and working, and the 223 tests in `projects_test.ts` pass. There are two MEDIUM findings: the docs claim a removal that GitLab refuses, and `convert_work_item_type` never checks that the type actually changed. I checked the GraphQL fields against GitLab's reference docs at several release tags, and the permission logic against GitLab's source on master.
+
+### [MEDIUM] Removing a parent the token cannot read: GitLab refuses it, but the README, release notes and a test say it works
+**File:** `gitlab/README.md` (work item caveats section), `gitlab/RELEASE_NOTES.md`, `gitlab/extensions/models/gitlab/projects.ts` (`WorkItemParentSchema.previousParent` description), `gitlab/extensions/models/gitlab/projects_test.ts` (test "detaches a parent the token cannot read")
+**Line(s):** README ~238-241; RELEASE_NOTES lines 8-11; projects.ts ~438-440
+**Issue:** All three claim that a parent the token cannot read is found through `hasParent` "and removed". GitLab's code does not allow that. Sending `parentId: null` ends up in `WorkItems::ParentLinks::DestroyService#permission_to_remove_relation?`, which requires both:
+- `can?(current_user, :admin_parent_link, child)`
+- `can?(current_user, :admin_parent_link, parent)`
+
+A token that cannot read the parent cannot administer it either. GitLab returns the error `"No Work Item Link found"`, which the method throws as `workItemUpdate failed: No Work Item Link found`.
+
+So the iteration-1 `hasParent` fix only half-works. It now detects the hidden parent, which is good: the method no longer reports "no parent", and the failure is loud. But the success path the docs describe, a resource with `hadParent: true` and `previousParent: null`, can't happen in real use. The test asserts that path with a mocked success that GitLab never returns.
+**Breaking input:** Child in project A; parent is a confidential issue, or sits in project B, which the token cannot see.
+**Impact:** Users are promised a capability that doesn't exist. The error they get ("No Work Item Link found") is misleading, because a link does exist.
+**Fix:**
+- Rewrite the README and release-note bullets: a hidden parent is detected, and the method fails because GitLab requires access to the parent.
+- When `before.hasParent &amp;&amp; before.parent === null`, either throw before the mutation with a clear message ("work item has a parent this token cannot read or administer"), or add that hint to the error GitLab returns.
+- Change the test to match.
+
+### [MEDIUM] `convert_work_item_type` reports success without checking the type changed, despite the README's "Both check the mutation response"
+**File:** `gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** ~4494-4500
+**Issue:** `remove_work_item_parent` now confirms the result (`after.hasParent` must be false). `convert_work_item_type` only checks that `result.workItem.workItemType.name` is non-empty. It never compares that name with `target.name`. The README says both methods "check the mutation response and throw if GitLab did not apply the change", which overstates what convert does. This is the same class of bug as iteration-1 finding (3), fixed for one method but not the other.
+**Breaking input:** `workItemConvert` returns `{ workItem: { workItemType: { name: "Task" } }, errors: [] }` when "Issue" was requested. Plausible if this Experiment-status mutation no-ops.
+**Impact:** The resource records `type: "Task"` and the method reports success, so a conversion that didn't happen looks applied.
+**Fix:** Throw when `converted.toLowerCase() !== target.name.toLowerCase()`, matching the "GitLab kept parent" message, and add a test for it.
+
+### [LOW] `hasParent` needs GitLab 17.2 or later; older instances reject the whole query
+**File:** `gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** `WORK_ITEM_QUERY` and `REMOVE_WORK_ITEM_PARENT_MUTATION` (~1880-1900)
+**Issue:** I grepped GitLab's GraphQL reference at each release tag:
+- `WorkItemWidgetHierarchy.hasParent` is absent at v16.0, v16.5, v17.0 and v17.1.
+- It first appears at v17.2 and is present through v18.6 and master.
+- The docs carry no "Introduced in" note for it, so the reference page alone hides the minimum version.
+
+Every other field the queries use is much older: `Project.workItems` (15.1), `workItemConvert` (15.11), `workItemTypes`, and the `hierarchyWidget.parentId: null` input. Because `WORK_ITEM_QUERY` is shared, `convert_work_item_type` also fails on 17.1 and earlier, even though it never reads `hasParent`. That's the same failure mode as issue #476 (an unknown-field error).
+**Breaking input:** Any self-managed GitLab at 17.1 or older.
+**Impact:** Both methods fail with `Field 'hasParent' doesn't exist on type 'WorkItemWidgetHierarchy'`. In practice the exposure is small, since 17.x left security support long before October 2026.
+**Fix:** State "requires GitLab 17.2+" in the README. Optionally, give convert its own query without the hierarchy fragment, so it works on older instances.
+
+### [LOW] Stricter `iid` validation applies only to the two new methods
+**File:** `gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** The 49 sibling `iid: z.number()` declarations, e.g. `set_issue_assignees` ~4272
+**Issue:** Only the new methods use `.int().positive()`. On a sibling method, `iid: 1.5` becomes the string `"1.5"`, GitLab returns not-found or null, and the existing guards throw. So the gap means a vaguer error, not wrong data.
+**Impact:** Inconsistent, but it doesn't cause bad writes. The new methods aren't defective for being stricter.
+**Fix:** Either tighten all of them in one sweep or accept the difference. Changing the siblings goes beyond this PR's scope, so that's your decision.
+
+### [LOW] `previousType` assumes `workItemType` is never null
+**File:** `gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** ~4475 (`workItem.workItemType.name`)
+**Issue:** A null `workItemType` would raise a TypeError rather than a `convert_work_item_type:` error. The field is non-null in the schema, so this is unlikely in practice.
+**Fix:** `workItem.workItemType?.name ?? throw` with the method prefix.
+
+### Probes that came back clean
+- **Widget detection:** `"hasParent" in w` is robust. The inline fragment returns `{}` for other widgets, and `hasParent` is `Boolean!`.
+- **Parent state:** `hasParent === true || parent !== null` is correct.
+- **Fresh response:** The mutation response reflects the removal. GitLab's `Callbacks::Hierarchy#handle_service_response!` calls `reload_work_item_parent` before returning.
+- **After a confirmed removal:** `parent = after.parent` is always null.
+- **Logging:** Accurate.
+- **Data names and upgrades:** The split data names are correct, and the upgrade entry `2026.10.21.1` matches the manifest.
+- **Error messages:** Formats match the sibling methods.
+- **Test mock dispatch:** The mock tells requests apart by operation name. `"query workItem("` does not match `mutation removeWorkItemParent(` or `mutation convertWorkItem(`, and any unexpected query gets a 500.
+- **Tests:** Each test runs the path it claims, the unreadable-parent test excepted (first finding). None can pass vacuously: the reject tests check specific messages, and the request-count assertions prove which calls were made.
+- **TODOs:** The diff has no TODOs or deferred work.
+
+## VERDICT: PASS
+No CRITICAL or HIGH findings. Both MEDIUM findings are fixes I'd make before merging: correct the unreadable-parent claim in the README, release notes, test and error message, and add the `converted !== target.name` check.</result>
+<usage><subagent_tokens>81266</subagent_tokens><tool_uses>16</tool_uses><duration_ms>128272</duration_ms></usage>
+</task-notification>
