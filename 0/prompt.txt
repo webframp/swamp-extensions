@@ -1,0 +1,69 @@
+<task-notification>
+<task-id>a617f8d5744c413fb</task-id>
+<tool-use-id>toolu_01TQbmd4MVgDQGGrTXM7k8NC</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/d7dc3a2c-1801-4c8f-be91-72ec1cd84d14/tasks/a617f8d5744c413fb.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review falai keys" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS (non-blocking findings only).** I found no merge blockers. The upgrade chain, version bump, README and release-notes structure are consistent. I read the diff, `_lib/api.ts` and the generator, and did not run the tests.
+
+**Findings, ranked**
+
+1. **MEDIUM — `revoke_api_key` resource is an empty `z.object({})` with a fixed instance name.** `keys.ts:181-186` (schema) and `keys.ts:356-360` (`revoke_api_key-current`).
+   - Swamp's behavior here is unverified. If `writeResource` runs `schema.parse`, Zod's default strips unknown keys and the stored data becomes `{}`, whatever the API returns. If it is not stripped, the stored data is unvalidated. I could not confirm either from the repo.
+   - The instance name is not keyed by `key_id`. Every revoke overwrites the last, so there is no record of which key was revoked. That matters for a security-sensitive action. The sibling `create_api_key` keys its instance by `key_id`.
+   - `result ?? {}` hides an empty 2xx body. That is fine, since `falApi` accepts an empty body for action methods.
+   - Origin: **generator bug**. When the spec gives no response schema for an action, the generator emits an empty strict object and a constant `-current` instance. It should emit `.passthrough()` and ideally key the instance by the path param.
+
+2. **MEDIUM — Test gaps.** `keys_test.ts:46-69` and `keys_test.ts:178-212`.
+   - The mock server routes on `path.includes(pattern)` only. It ignores the HTTP method and the request body, and the `requests` array is never asserted. The revoke test would still pass if the code used `DELETE` or `GET`, as long as the path matches.
+   - The `create_api_key` test sends `preset` and `permissions` together, which the API description says are mutually exclusive. It never checks that those fields reach the request body.
+   - Nothing covers the revoke path encoding (`encodeURIComponent` of `key_id`).
+   - The revoke test asserts only the handle count and resource count, not the resource's name, spec or content.
+   - There is no test that `key_secret` and `key` are still stripped after the new args were added. This is old behavior, but the test was modified around it.
+   - The `listed keys` fixture adds the new fields but nothing asserts on them. The `.nullable()` handling of `expires_at: null` is untested.
+   - Origin: **generator bug**. The test template builds method-agnostic mocks and has no method or body assertions.
+
+3. **LOW-MEDIUM — Truncated `.describe()` strings shipped to users.** `keys.ts:36`, `keys.ts:46`, `keys.ts:284`, `keys.ts:287`. (`keys.ts:84` and `keys.ts:87` are the same truncation but were already in the repo, not added by this commit.)
+   - Strings are cut mid-sentence with `...`, for example `"... Defaults to "API" when neither preset nor p..."` and `"... Mutually exclusive..."`.
+   - The cut-off text carries the key semantics: the default preset and the preset/permissions exclusivity. It is visible in the CLI help.
+   - Origin: **generator bug**. `lib/type_mapper.ts:275` does `oneLine.slice(0, 97) + "..."`. It should truncate at a sentence boundary or not truncate.
+
+4. **LOW — The preset/permissions exclusivity is not enforced.** `keys.ts:284-290`.
+   - The mutual exclusion is only prose. Zod accepts both, and the API will presumably return a 4xx (unverified).
+   - `expires_at` is a bare `z.string()`, not a datetime check. The description says ISO8601.
+   - The Zod constraints-as-contract rule in CLAUDE.md suggests failing fast here.
+   - Origin: **generator bug or limitation**. It cannot express `oneOf`/`not` from the spec. A hand-written refine is not an option.
+
+5. **LOW — Release notes overstate or omit details.** `RELEASE_NOTES.md`.
+   - "The fal.ai API now revokes keys with POST /keys/{key_id}/revoke" is not verified against the spec in this review.
+   - The notes do not say that revoke is a different operation from delete (the key may stay listed in a revoked state). They do not say that no `delete_api_key` shim remains.
+   - The notes omit the `preset` default of `API` and the `preset`/`permissions` exclusivity.
+   - The `scope` description dropped "Only API scope keys can be managed" and now allows `ADMIN`, which the notes only mention in passing.
+   - The earlier 2026.10.07.1 notes were replaced. That matches the overwrite-per-version rule and is fine.
+   - Origin: **one-off**, because the notes are hand-written.
+
+6. **INFO — Upgrade chain, version and docs are OK.**
+   - A new identity upgrade to `2026.10.14.2` was appended, so the final `toVersion` matches `model.version` (`keys.ts:107-165`).
+   - `manifest.yaml` and `keys.ts` both read `2026.10.14.2`.
+   - The test uses only the regex version check (`keys_test.ts:17-19`), so no stale literal remains.
+   - A grep for `delete_api_key` in the repo, apart from `RELEASE_NOTES.md`, found no stale references. The README is updated.
+   - Removing a method is a breaking change that an upgrade chain cannot migrate. The chain correctly only covers stored data, and the notes flag the breakage under "Changed (breaking)".
+   - The commit uses `feat!` and the unreleased CalVer is same-day `.2`, which is acceptable.
+
+7. **INFO — Request building.**
+   - `revoke_api_key` uses `falApi` (empty body allowed) with `POST` and no body. It sends `Content-Type: application/json` with no body, which is fine.
+   - `create_api_key` posts `args` straight through. Undefined optionals drop out of the JSON.
+   - The one-time-secret stripping (`key_secret`, `key`) is retained.
+   - `expires_at` is `.nullable().optional()` in the list schema and `.optional()` in the create args, which is consistent.
+
+**Files**
+- `/home/sme/src/webframp/swamp-extensions/.worktrees/falai-regen/falai/keys/extensions/models/falai/keys.ts`
+- `/home/sme/src/webframp/swamp-extensions/.worktrees/falai-regen/falai/keys/extensions/models/falai/keys_test.ts`
+- `/home/sme/src/webframp/swamp-extensions/.worktrees/falai-regen/falai/keys/RELEASE_NOTES.md`
+- `/home/sme/src/webframp/swamp-extensions/.worktrees/falai-regen/scripts/falai-codegen/lib/type_mapper.ts` (truncation at `:275`)
+- `/home/sme/src/webframp/swamp-extensions/.worktrees/falai-regen/scripts/falai-codegen/lib/method_classifier.ts` (action and delete templates)
+
+**Recommendation:** Push as-is. File generator follow-ups for findings 1, 2 and 3: passthrough or keyed instances for action responses, method and body assertions in the test template, and sentence-aware description truncation. Optionally tighten the release notes for finding 5 first.</result>
+<usage><subagent_tokens>55954</subagent_tokens><tool_uses>5</tool_uses><duration_ms>42773</duration_ms></usage>
+</task-notification>
