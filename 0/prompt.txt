@@ -1,0 +1,2 @@
+Stop hook feedback:
+Your final message contains deferral language (e.g. follow-up, deferred, out of scope, pre-existing, until X supports it). Scope reduction is the user's decision. For each item you deferred: if the work is in scope and feasible, do it now. If you believe it should be deferred, do not conclude that yourself: state what the full fix involves, its cost, and your recommendation, and ASK the user. If the user already approved the deferral earlier in this conversation, say so explicitly and finish.
