@@ -1,0 +1,1 @@
+Those are wrong assumptions then and not what I asked for, read the post: https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/
