@@ -1,0 +1,63 @@
+<task-notification>
+<task-id>a24f3c7948a421f0e</task-id>
+<tool-use-id>toolu_01M9zESvN7umpJ9YberVtq9D</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/a24f3c7948a421f0e.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of follow-up fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH issues. Two MEDIUM findings: the streamed-body fix covers redirects but not retries, and one test placement of the new stream check is unguarded. Two LOW findings cover small inaccuracies in the release notes and README. `deno task check`, `lint`, `fmt:check` and `test` (109 passed) all pass in the worktree.
+
+**Probe results**
+
+- **Skipper's Retry-After (checked against the local clone at `/home/sme/src/zalando/skipper`, commit fc90e1a, from 2023):**
+  - The Redis cluster limiter's `RetryAfterContext` in `ratelimit/redis.go` returns `int(delta/1s) + 1`, where delta is the time until the oldest request in the window expires, with a minimum of 1.
+  - So `clusterClientRatelimit(100, "2m")` sends at most **121**, not 120. `clusterRatelimit(5, "1s")` sends 1 or 2. Both fit under 300 s.
+  - A rejected request is not added to the window: `allow()` returns before `ZAdd`. Waiting and retrying does not extend the limit.
+  - That is a 2023 clone; the production Skipper version is unverified.
+- **Worst-case wait and the timers:**
+  - Each attempt's 120 s timeout is created in `makeSignal` just before its fetch, so the backoff sleep is never inside that deadline.
+  - In `redmineDownload`, the 60 s idle timer left over from the 429 (set through `onResponse`) fires during a 300 s backoff. It aborts the previous attempt's controller, whose body is already cancelled, so nothing live is affected. The next `makeSignal` clears it and arms a new one.
+  - The worst case is 20 minutes blocked per request (4 × 300 s); about 8 minutes against Skipper's real values. I could not find whether swamp has a method timeout that this could hit.
+- **Default-port-only upgrade:** WHATWG URL parsing strips explicit default ports, so an ALB-style `Location: https://api-host:443/...` still counts as an upgrade. A probe confirmed `isHttpsUpgrade("http://api-r.corp:80", "https://api-r.corp:443")` is `true`, and a test at line 724 covers the `:443` form. The `api-&lt;host&gt;` RouteGroup sits behind kube-alb on the default ports, so nothing in the deployment template is newly rejected.
+- **Stream check placement:** it runs after the 303 and 301/302-on-POST rewrite. A probe of POST with a stream body getting a 303 returned 200 and no error. PUT getting a 301/302 keeps its body, so it correctly throws.
+- **Version chain:** `manifest.yaml` and `model.version` are both 2026.10.20.2, and the last `upgrades` entry's `toVersion` matches with an identity upgrade. The only test assertion on the version is a regex, so it needed no change. A search finds no stale "any port" or 60-second-cap text; the remaining "60 seconds" in the README is the download idle timeout, which is correct.
+
+**Mutation testing** (on a scratch copy of `api.ts`, running `api_test.ts`)
+
+- **Killed:** cap set back to 60 s, cap set to 301 s, `&gt;` changed to `&gt;=`, `from.port` check removed, `to.port` check removed, hostname check removed, stream check disabled.
+- **Survived:** stream check moved before the 303 rewrite (see the second MEDIUM finding).
+- **Survived, harmless:** stream check moved before the redirect-count cap. A streamed body throws on the first redirect either way, so behaviour is the same.
+
+### [MEDIUM] A retry still resends a used-up streamed body, after the full Retry-After wait
+**File:** `redmine/extensions/models/redmine/_lib/api.ts`
+**Line(s):** 181-205 (`redmineFetch` retry loop)
+**Issue:** This has the same cause as fix 3, a single-use body sent twice, but on the retry path instead of the redirect path. A retry restarts from `init`, whose stream the first attempt already read. The new check covers only redirects.
+**Breaking input:** `redmineFetch(url, { method: "PUT", body: &lt;ReadableStream&gt; })`, where the server answers `429 Retry-After: 1` first. The probe threw `ReadableStream is locked or disturbed` after 1 request. With a real Skipper value, it sleeps up to 300 s first and then fails with that unclear message.
+**Impact:** `redmineFetch` is exported. No built-in method sends a stream (`upload_file` sends a `Uint8Array` from `Deno.readFile`), so this is latent. Still, the release note says streamed bodies now fail clearly, and on this path they don't.
+**Fix:** In the loop, when `init.body instanceof ReadableStream`, return the retryable response (or throw the same clear error) before sleeping. Add a test for a 429 followed by a stream body.
+
+### [MEDIUM] No test guards the placement of the stream check
+**File:** `redmine/extensions/models/redmine/_lib/api_test.ts`
+**Line(s):** after 1306 (the new 307 test)
+**Issue:** Moving the check above the 303/301/302 rewrite passes all tests. That mutation would break POST with a stream getting a 303, which works today (probe returned 200).
+**Breaking input:** the mutation `streamFirst` above.
+**Impact:** A later refactor could silently break POST-then-303 for streamed bodies.
+**Fix:** Add a test: POST with a `ReadableStream` body gets a 303, expect 200 and a GET to the new location.
+
+### [LOW] The release note says Skipper sends "up to 120 seconds"; it sends up to 121
+**File:** `redmine/RELEASE_NOTES.md`
+**Line(s):** 3-8
+**Issue:** Skipper adds 1 to the whole seconds remaining. The 300 s cap still covers it, so behaviour is unaffected.
+**Fix:** Say "about two minutes", or drop the exact figure. The JSDoc for `MAX_RETRY_DELAY_MS` is already worded loosely enough.
+
+### [LOW] "All errors throw after retries run out" doesn't mention the cap
+**File:** `redmine/README.md`
+**Line(s):** 136-141
+**Issue:** The section says retries honor `Retry-After`, but not that a value over 300 s returns at once with no retry. It does link to the section that says so, and the gap predates this change.
+**Fix:** Add one clause: "a `Retry-After` over 300 seconds fails at once".
+
+Everything else checked out: the 300 s cap, the default-port rule against the ALB/Skipper deployment, stream-check placement, the version chain and the remaining README text. Both MEDIUM findings remain open; whether to fix them in this PR is the user's decision.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>79337</subagent_tokens><tool_uses>14</tool_uses><duration_ms>198633</duration_ms></usage>
+</task-notification>
