@@ -1,0 +1,1 @@
+check all my generated swamp extensions from scripts: cloudflare datadog falai griptape and snyk. See if they need a regen, for each batch we should use a new worktree/feature branch and PR
