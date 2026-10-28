@@ -1,0 +1,34 @@
+<pasted_content id="1228">
+Fix the swamp-adoption scaffold so extensions it generates earn the registry's license points.
+
+Context: swamp 20261014.121640.0 (swamp-club#3324, commit 8dd0e86e in ~/src/swamp-club/swamp)
+split the quality rubric's license check in two. `has-license` now needs a valid SPDX
+`license:` in manifest.yaml. `license-file` needs a non-empty LICENSE/LICENSE.md in the
+archive, listed as a bare basename under `additionalFiles:`. PR #491 in
+webframp/swamp-extensions added `license: Apache-2.0` to every manifest in the repo and to
+the five scripts/*-codegen generators. The swamp-adoption scaffold was deliberately left out
+because it is published for other users, so hard-coding Apache-2.0 is wrong.
+
+Today the scaffold (swamp-adoption/extensions/models/swamp-adoption/mod.ts, near the
+`manifestVersion: 1` array around line 730) emits a manifest with no `license:` and, check
+whether it emits a LICENSE file at all. Scaffolded extensions therefore score 92% (or lower)
+and fail `swamp extension quality`.
+
+Do:
+1. Read CLAUDE.md (Licensing, Versioning, Release Notes, version-bump coupling rules) and
+   load the swamp skill. Branch off origin/main in a worktree; PR #491 may or may not have
+   merged yet, so check.
+2. Add an optional `license` argument to the scaffold method (SPDX expression, validated
+   with a small allow-list or format check; reject LicenseRef-*, since the rubric gives
+   those no credit). Decide and document the default: either no default plus a clear
+   warning in the output, or a documented placeholder. Do not silently default to
+   Apache-2.0 for other users.
+3. When a license is given, emit `license: <spdx>` right after `name:` in the manifest, and
+   emit a LICENSE.md stub listed in additionalFiles (or say plainly why not).
+4. Tests: manifest includes/omits the field correctly, an invalid SPDX value is rejected,
+   the written resource uses the `scaffold-current` data name (never `latest`).
+5. Version bump per CLAUDE.md: manifest + model version, append an identity upgrades entry,
+   RELEASE_NOTES.md, update any exact-literal version assertion. Run deno task check, lint,
+   fmt:check, test, then `swamp extension quality manifest.yaml` (must be passed/100%) using
+   a swamp binary >= 20261014.121640.0. Run the pre-push-review skill before pushing and
+</pasted_content id="1228">
