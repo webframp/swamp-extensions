@@ -1,0 +1,1 @@
+then we have to do that to all extensions and change the CLAUDE.md guidance if upstream requirements changed. look in ~/src/swamp-club/swamp at the actual source code to validate if this changed in the recent git history and commits
