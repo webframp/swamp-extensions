@@ -1,0 +1,47 @@
+<task-notification>
+<task-id>a495dbe766663330b</task-id>
+<tool-use-id>toolu_018U7i4qY9vsuthun7eEzygs</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/63e33f01-f2c8-4986-9848-9629f8afde1a/tasks/a495dbe766663330b.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of vertex-usage fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review of `gcp/vertex-usage` in `/home/sme/src/webframp/swamp-ext-vertex-usage`. I found no CRITICAL or HIGH issues. I did not modify the worktree. I ran one experiment in a scratch copy under the scratchpad.
+
+**Version chain: OK.**
+- `origin/main` has `manifest.yaml` at `2026.09.18.1`.
+- The branch has `2026.10.01.1` in the manifest and in the model `version`. The `upgrades` array ends with a `toVersion: "2026.10.01.1"` entry (`vertex_usage.ts` line ~1995).
+- `2026.10.01.1` has not been published, so no further bump is needed.
+
+**Finding 1: `billing_summary.complete` (lines 2492-2493): correct.**
+- No other test asserts the old behavior. The only `complete` assertions in the billing path are test lines 1287, 1322 and 1349-1353, and the last is the updated one.
+- The schema description and the README `get_billing_costs` section (line 154) already say `complete` is false when no rows match. The code was behind the docs.
+- The README troubleshooting bullet (line 214) still lists only export lag as the reason `complete` is false. See the LOW item below.
+- Rows non-empty but the freshness query empty is impossible when the filters are the same. If it happened anyway, the rows would still be reported with `complete=false` and the "no rows matched" warning, which is misleading but harmless.
+- The Gemini summary has no billing counterpart.
+
+**Finding 2: limiter skipped on retries (line 552): works, but the trade-off is weaker than the comment and release note claim.**
+- MEDIUM, `vertex_usage.ts:549-552` and `RELEASE_NOTES.md`: retries are invisible to the limiter, and Google counts them against quota. The comment says a second slot "would spend quota meant for projects not yet scanned". In fact the retry spends Google's quota in either case, and the fix only stops the limiter from counting it. The release note ("does not make the scan spend its per-minute budget twice") is accurate only about the local limiter.
+  - The burst is bounded. At most `concurrency` requests are in flight, and `concurrency` is capped at 16. During a 5xx outage each worker sends up to 6 unlimited retries over about 31.5 seconds (backoffs of 0.5, 1, 2, 4, 8 and 16 seconds). With 16 workers that is up to about 96 extra requests in roughly 30 seconds. This is smaller than a continuous burst but similar in size to the 60-request headroom between the default limit of 120 and Google's 180.
+  - A 429 retry waits at least 5 seconds, so that case is milder.
+  - Users who set `maxRequestsPerMinute` between 180 and 6000 have no headroom at all.
+  - Fix: record the retry in the window without waiting. For example, add a `record()` that pushes `nowFn()` onto `stamps` and call it on `attempt &gt; 0`. Later first attempts then see retries in the window, and retries are never blocked mid-backoff. Failing that, reword the comment and release note to say the limiter counts first attempts only.
+- Alternative design: calling `limit()` on every attempt was the earlier behavior. It is conservative and correct for quota, and the cost is only extra waiting. The "record without waiting" option is better than either.
+- Test (line ~2088): it fails without the fix. In my scratch copy with the `attempt === 0` guard removed, it failed with `assertEquals` at test line 2126 (`-2 +3`, `withRetry.monitoring` vs `baseline + 1`).
+  - It is not flaky. `nowFn` is frozen at 0, the 429 backoff is 5000 ms against a 60000 ms threshold, and there is no Retry-After header, so there is no collision.
+  - It restores state. It touches no env vars, and `sleeps` and `monitoring` are local to each call.
+  - LOW: the test calls `execute` directly, which bypasses the zod `min(10)` on `maxRequestsPerMinute`. It passes `limit = 2`, which is fine today but would break if `execute` ever validated its arguments.
+
+**Finding 3: missing `jobId` (lines 1638-1644): works, but a sibling check misreports the same way.**
+- A valid first poll with a `jobId` works. `polls=0`, and the `jobId` check comes before the `MAX_POLLS` check.
+- Location handling is unchanged: `ref` is captured once from the first response, and the code ignores any `jobReference` in later poll responses.
+- MEDIUM/LOW, `vertex_usage.ts:1670-1672`: the pagination loop has the same trap. `pages &gt;= MAX_RESULT_PAGES || !ref?.jobId` throws "BigQuery result exceeded the page cap; narrow the window or filters" when `pageToken` is set but `jobId` is missing. That misreports a protocol error as a page-cap problem, which is exactly what the fix was meant to prevent. Fix: split the check, as in the poll loop. This is an inconsistency between sibling checks.
+- LOW: `jobComplete` undefined with no `jobId` skips the loop, so the function returns `[]`. In `get_billing_costs` that now surfaces as `complete=false` with the "no rows" warning, but it is still a silent empty result. Pre-existing and unlikely, since `jobs.query` always returns `jobComplete`. Consider throwing when `jobComplete !== true` and there is no `schema`.
+- The new test matches the message "no jobReference.jobId" and covers the POST path. There is no poll-timeout test with a valid `jobId` that checks "did not complete in time" is still reachable. Test line 1357, "BigQuery polls incomplete jobs...", covers the success path only.
+
+**Other issues**
+- LOW, `vertex_usage.ts:2178` and `2274`: `scan_summary.complete` is true when every project is `no_data`. That is arguably valid, because `no_data` is normal, but a wrong explicit project list gives the same silent empty result that fix 1 closed for billing. Consider a warning or an `anyOk` field; this is optional.
+- LOW, `README.md:214`: the troubleshooting bullet for `billing_summary.complete` false says only "The export lags usage by hours". Add "or no rows matched the filters (check the service name)". The release note's `Fixed:` paragraph also adds the new sentences with no break from the previous prose, which hurts readability slightly.
+
+VERDICT: PASS</result>
+<usage><subagent_tokens>84555</subagent_tokens><tool_uses>6</tool_uses><duration_ms>71015</duration_ms></usage>
+</task-notification>
