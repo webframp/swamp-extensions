@@ -1,0 +1,60 @@
+<task-notification>
+<task-id>a472b9451e3d13704</task-id>
+<tool-use-id>toolu_017NckhvYJbmPQ8rNVw88gnW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/63e33f01-f2c8-4986-9848-9629f8afde1a/tasks/a472b9451e3d13704.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of gitlab fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### [MEDIUM] The new partial-failure paths have no tests, and two old tests now pass for the wrong reason
+File: `gitlab/extensions/models/gitlab/projects_test.ts`
+Lines: 1083-1185 (existing "did not assign ghost" and "assignee-mismatch error" tests); no test for the new code at projects.ts 3652-3658.
+Issue: `mockGraphqlFetch` returns the same body for every POST. In those two tests the second call (`issueSetAssignees`) gets the `createIssue` payload, so `assigned.issueSetAssignees` is undefined. The code falls through `setResult?.…` to `{ nodes: [] }`, and the "did not assign" error fires. The tests are still green, but they exercise a mock artifact instead of the real flow. Nothing covers these cases:
+- `issueSetAssignees` returns `errors: ["..."]`, which should produce "issue was already created as #N ... but assigning failed".
+- `issueSetAssignees` returns `null`.
+- Assignee case-insensitivity.
+- A multi-field combination, such as `confidential: false` or `weight: 0` being sent and declared.
+Breaking input: a mutation response of `{issueSetAssignees:{errors:["x"]}}`. If someone changes that branch, nothing fails.
+Impact: the fix's central behaviour, an error that names the created issue, is unprotected.
+Fix: add a sequential-response mock (or use `cap.bodies()` with per-call responses) and add tests for the cases above.
+
+### [LOW] A null `issueSetAssignees` payload is reported as an unknown user
+File: `gitlab/extensions/models/gitlab/projects.ts`
+Lines: 3652-3678
+Issue: `set_issue_assignees` and `update_issue` check `!result` and throw "returned null (permission denied or issue not found)". `create_issue` uses `setResult?.…` and falls back to `{nodes: []}`. A permission failure then surfaces as "unknown user, or GitLab CE's single-assignee limit". The error does include the issue iid and URL, so nothing is lost silently.
+Breaking input: `assignees: ["alice"]` where the token can create issues but not assign them. GitLab returns `issueSetAssignees: null`, and the message blames the username.
+Impact: misleading diagnosis only.
+Fix: add `if (!setResult) throw new Error("create_issue: issue was already created as #… but issueSetAssignees returned null (permission denied)")`, matching the siblings.
+
+### [LOW] Thrown GraphQL errors from the assignment call do not name the created issue
+File: `gitlab/extensions/models/gitlab/projects.ts`
+Lines: 3638-3649
+Issue: the `graphqlRequest` call for `issueSetAssignees` is not wrapped. An HTTP 5xx, a network error, or a top-level `GraphQL errors:` rejection propagates as a bare error with no iid or URL. Only the payload `errors` path references the created issue. The caller cannot tell that an issue now exists.
+Breaking input: a timeout, or a 502, on the second request.
+Impact: a retry creates a duplicate issue.
+Fix: wrap the follow-up call in try/catch and rethrow with "issue already created as #N (url)".
+
+### [LOW] An empty `dueDate` string is sent and declared
+File: `gitlab/extensions/models/gitlab/projects.ts`
+Lines: 3598-3620
+Issue: `dueDate: ""` satisfies `!== undefined`, so `$dueDate: ISO8601Date` is declared and `""` is sent. GitLab rejects it. The old code did the same, so this is not a regression. `description` is normalised with `||`, so the handling is inconsistent.
+Breaking input: `dueDate: ""`.
+Impact: a failed call with a confusing error. Only when the caller passes an empty string.
+Fix: `args.dueDate || undefined`, or `.min(1)` in the Zod schema.
+
+### [LOW] Unrelated reformatting in RELEASE_NOTES.md, and `deno fmt --check` fails on README.md
+File: `gitlab/RELEASE_NOTES.md` lines 1-71 (diff noise); `gitlab/README.md` (no changes in this diff).
+Issue: older entries were rewrapped, which inflates the diff. Separately, `deno fmt --check` fails on `README.md` tables. That file is not part of this diff, so the failure comes from `main`. I did not check whether CI covers it.
+Impact: cosmetic; review noise only.
+
+### Verified clean
+- **Declared and used variables:** `add()` declares and uses every optional variable together, so there are no mismatches for any combination. `vars` is filled from the same `!== undefined` predicates as the flags, so declarations and variables stay in sync.
+- **Falsy values:** `confidential:false` and `weight:0` are declared and sent. The Zod schema allows `weight` ≥ 0. `description: ""` and `labels: []` are omitted, as before.
+- **iid type:** `String(issue.iid)` matches `$iid: String!`, and the tests assert `"99"`.
+- **Assignee check:** `issue.assignees` is now taken from the `issueSetAssignees` result. The case-insensitive check and the missing-user error reference `#iid` and the URL.
+- **Version consistency:** the version bump is consistent across the manifest, the model, the upgrades-array tail (identity upgrade) and the release notes. The existing "upgrade chain tail" test passes.
+- **Gates:** `deno check`, `lint` and the 209 tests pass.
+- **Old-code check (by reading, not by running):** both new tests would fail on the old code. The first destructures a second body that wouldn't exist. The second would find `weight` and `assigneeUsernames` in the query.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>60816</subagent_tokens><tool_uses>5</tool_uses><duration_ms>32076</duration_ms></usage>
+</task-notification>
