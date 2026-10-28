@@ -1,0 +1,1 @@
+load swamp skill, gather context for this repo, then explore all possible value for using a library like https://github.com/rauchg/gdp-ts/tree/main and where it would benefit existing use patterns. Suggest a list of which extensions, if any, would benefit from this concept of Ghosts of Departed Proofs
