@@ -1,0 +1,228 @@
+<task-notification>
+<task-id>aa67c9a26c27aa3c0</task-id>
+<tool-use-id>toolu_01HGmNQ3KBrA4TYSdwrYz7GP</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aa67c9a26c27aa3c0.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit in-code secret guidance" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I audited the shipped non-markdown files and found plaintext-secret guidance in three places: generator templates, bootstrap workflows and setup hints. Two patterns matter most. The five codegen generators emit README examples that put a literal token in `--global-arg`. Three of the four datastore bootstraps tell users to pass the secret as a `--input` value and then store it in unredacted data. Nothing was modified.
+
+The search used greps across all 395 shipped `.ts` files, 36 workflow YAMLs, 166 manifests, 8 skill files, the shell scripts and tracked `.swamp.yaml`/`deno.json`, and I read the context around every hit. I read the manifests, workflows, skills, generator templates, provisioners and the hand-written credential code in full. The ~25k lines of generated API method bodies (cloudflare, snyk, datadog, griptape, falai) I checked only by grep and spot reads, not line by line. The permission layer denied Bash commands that named the `griptape/secrets` path, so I saw that file only through grep output (its secret value fields are marked `sensitive`).
+
+## Findings
+
+**scripts/cloudflare-codegen/lib/extension_generator.ts**
+```
+scripts/cloudflare-codegen/lib/extension_generator.ts:96 | 1 | high | README template: `--global-arg apiToken=REDACTED \\` | Emit `--global-arg 'apiToken=REDACTED vault.get("cloudflare", "API_TOKEN") }}'`; regenerate 26 cloudflare/* READMEs.
+scripts/cloudflare-codegen/lib/extension_generator.ts:188-194 | 2 | medium | `apiToken || Deno.env.get("CLOUDFLARE_API_TOKEN")` + "...or set the CLOUDFLARE_API_TOKEN environment variable." | Drop env fallback, or keep it but have the error recommend vault.get only.
+scripts/cloudflare-codegen/lib/method_classifier.ts:298 | 2 | medium | describe: "Cloudflare API token; overrides the CLOUDFLARE_API_TOKEN environment variable. Wire with a vault.get(...)" | Lead with vault.get; drop or demote the env-var mention.
+scripts/cloudflare-codegen/lib/extension_generator.ts | 7 | medium | create methods `writeResource(..., result)` with no response redaction (falai-codegen has SENSITIVE_RESPONSE_FIELDS) | Port falai's per-operation response redaction to cloudflare-codegen.
+```
+
+**scripts/falai-codegen/lib/extension_generator.ts**
+```
+scripts/falai-codegen/lib/extension_generator.ts:92 | 1 | high | README template: `--global-arg apiToken=REDACTED | Emit vault.get expression; regenerate 9 falai/* READMEs.
+scripts/falai-codegen/lib/extension_generator.ts:95-96 | 2 | medium | "If `apiToken` is omitted, the model falls back to the `FAL_KEY` environment variable" | Remove from README or reframe as discouraged; show vault.get as the path.
+scripts/falai-codegen/lib/extension_generator.ts:179-185 | 2 | medium | `apiToken ?? Deno.env.get("FAL_KEY")` + "...or set the FAL_KEY environment variable." | Error text should point to vault.get only.
+scripts/falai-codegen/lib/method_classifier.ts:311 | 2 | medium | describe: "fal.ai API key; overrides the FAL_KEY environment variable. Wire with a vault.get(...)" | Lead with vault.get.
+```
+
+**scripts/griptape-codegen/lib/extension_generator.ts**
+```
+scripts/griptape-codegen/lib/extension_generator.ts:98 | 1 | high | README template: `--global-arg apiKey=REDACTED | Emit vault.get expression; regenerate 10 griptape/* READMEs.
+scripts/griptape-codegen/lib/extension_generator.ts:101-102 | 2 | medium | "The `apiKey` global argument overrides the `GT_CLOUD_API_KEY` environment variable" | Show vault.get usage; drop env alternative.
+scripts/griptape-codegen/lib/extension_generator.ts:206-213 | 2 | medium | `apiKey || Deno.env.get("GT_CLOUD_API_KEY")` + "...or set the GT_CLOUD_API_KEY environment variable." | Error text should point to vault.get only.
+scripts/griptape-codegen/lib/method_classifier.ts:375 | 2 | medium | describe: "Griptape Cloud API key; overrides the GT_CLOUD_API_KEY environment variable..." | Lead with vault.get.
+```
+
+**scripts/datadog-codegen / scripts/snyk-codegen**
+```
+scripts/datadog-codegen/lib/extension_generator.ts:92-93 | 1 | high | README template: `--global-arg apiKey=REDACTED \\ --global-arg appKey=DD_APP_KEY` | Emit vault.get for both keys; regenerate 14 datadog/* READMEs.
+scripts/datadog-codegen/lib/method_classifier.ts:290-291 | 10 | low | describe: "Datadog API key (DD-API-KEY)" / "Datadog application key (DD-APPLICATION-KEY)" | Append "(use a vault.get(...) reference)".
+scripts/snyk-codegen/lib/extension_generator.ts:87-89 | 1 | high | README template: `--global-arg apiToken=REDACTED | Emit vault.get; regenerate 20 snyk/* READMEs.
+scripts/snyk-codegen/lib/method_classifier.ts:303 | 10 | low | describe: "Snyk API token" | Append vault.get guidance.
+scripts/snyk-codegen + scripts/datadog-codegen extension_generator.ts | 7 | medium | create results written verbatim via writeResource (no redaction) | Add falai-style SENSITIVE_RESPONSE_FIELDS.
+```
+
+**Generated output of those templates (the fix is regeneration)**
+```
+cloudflare/{access,api-shield,d1,durable-objects,email-routing,gateway,hyperdrive,images,kv,load-balancing,logpush,magic-transit,pages,queues,r2,registrar,rulesets,spectrum,ssl-certificates,stream,tunnel,turnstile,vectorize,waiting-room,workers-ai,workers-scripts}/extensions/models/cloudflare/_lib/api.ts:14-20 | 2 | medium | `apiToken || Deno.env.get("CLOUDFLARE_API_TOKEN")` + "or set the CLOUDFLARE_API_TOKEN environment variable." | Regenerate after template fix.
+cloudflare/*/extensions/models/cloudflare/&lt;model&gt;.ts:21 (images/rulesets:19, kv/workers-ai:26, r2:25) | 2 | medium | describe "...overrides the CLOUDFLARE_API_TOKEN environment variable..." | Regenerate.
+falai/{account,assets,compute,keys,models,organization,serverless,storage,workflows}/extensions/models/falai/_lib/api.ts:14-20 | 2 | medium | `apiToken ?? Deno.env.get("FAL_KEY")` + "or set the FAL_KEY environment variable." | Regenerate.
+falai/*/extensions/models/falai/&lt;model&gt;.ts:21 (assets/serverless:27, compute/keys/workflows:26) | 2 | medium | describe "...overrides the FAL_KEY environment variable..." | Regenerate.
+griptape/{assistants,buckets,data-connectors,knowledge-bases,models,rulesets,secrets,structures,threads,tools}/extensions/models/griptape/_lib/api.ts:22-29 | 2 | medium | `apiKey || Deno.env.get("GT_CLOUD_API_KEY")` + "or set the GT_CLOUD_API_KEY environment variable." | Regenerate.
+griptape/*/extensions/models/griptape/&lt;model&gt;.ts:25 | 2 | medium | describe "...overrides the GT_CLOUD_API_KEY environment variable..." | Regenerate.
+datadog/*/extensions/models/datadog/&lt;model&gt;.ts:21 (events/logs/security-signals/security-suppressions:26, slos:19) | 10 | low | describe "Datadog API key (DD-API-KEY)" | Regenerate.
+snyk/*/extensions/models/snyk/&lt;model&gt;.ts:26 (issues/memberships/inventory/groups/tenants/projects:27, self:25, sbom/settings:18, sso:20) | 10 | low | describe "Snyk API token" | Regenerate.
+```
+
+**Generated method arguments that take secret values directly (no `sensitive` meta, no vault guidance)**
+```
+cloudflare/r2/extensions/models/cloudflare/r2.ts:2150-2185 | 5 | medium | put_bucket_sippy_config args: `secretAccessKey: z.string().optional()`, `privateKey: z.string().optional()` | Generator: mark credential-named fields sensitive (griptape-codegen isSensitiveFieldName) and describe vault wiring.
+cloudflare/r2/extensions/models/cloudflare/r2.ts:700 | 5 | medium | create_store_credentials `token: z.string().describe("Provides the Cloudflare API token for accessing R2.")` | Same.
+cloudflare/workers-ai/extensions/models/cloudflare/workers_ai.ts:10321,10398 | 5 | medium | create_tokens `cf_api_key: z.string()` | Same.
+cloudflare/workers-ai/extensions/models/cloudflare/workers_ai.ts:6549,6594 | 5 | medium | `secret: z.string()` | Same.
+cloudflare/workers-scripts/extensions/models/cloudflare/workers_scripts.ts:1203 | 5 | medium | `secrets: ... .describe("Map of secret names to secret values...")` | Same.
+cloudflare/images/extensions/models/cloudflare/images.ts:1263,1313 | 5 | medium | `secret: z.object({}).describe("Storage credentials for accessing the bucket...")` | Same.
+cloudflare/tunnel/extensions/models/cloudflare/tunnel.ts:374,453 | 5 | medium | `tunnel_secret: z.unknown().optional()` | Same.
+cloudflare/ssl-certificates/extensions/models/cloudflare/ssl_certificates.ts:755,888 | 5 | medium | `private_key: z.unknown().optional()` | Same.
+cloudflare/access/extensions/models/cloudflare/access.ts:4457,4557 | 5 | low | `auth_credentials: z.string().optional()` | Same.
+griptape/structures/extensions/models/griptape/structures.ts:1303,1363 | 5 | low | webhook method arg `api_key: z.string().optional()` (not caught by the sensitive-field rule) | Extend isSensitiveFieldName to snake_case api_key.
+snyk/apps/extensions/models/snyk/apps.ts:619,902,1109; snyk/service-accounts/extensions/models/snyk/service_accounts.ts:800,1108 | 5 | low | `secret: z.string().optional()` | Generator: mark sensitive.
+```
+
+**Generated create methods that store API-returned secrets verbatim**
+```
+cloudflare/access/extensions/models/cloudflare/access.ts:8091-8096,~8300 | 7 | medium | `writeResource("a_service_token", id, result)` (response carries client_secret) | Redact client_secret before persisting.
+cloudflare/r2/extensions/models/cloudflare/r2.ts:~2344 | 7 | medium | temp_access_credentials result persisted | Redact secretAccessKey/sessionToken.
+cloudflare/workers-ai/extensions/models/cloudflare/workers_ai.ts:~10354 | 7 | medium | create_tokens result persisted | Redact token value.
+cloudflare/tunnel/extensions/models/cloudflare/tunnel.ts:~797; cloudflare/turnstile/extensions/models/cloudflare/turnstile.ts:~528; cloudflare/stream/extensions/models/cloudflare/stream.ts:~2902 | 7 | medium | management token / rotated secret / signed-URL token persisted | Redact.
+snyk/service-accounts/extensions/models/snyk/service_accounts.ts:842-847,~1153; snyk/apps/extensions/models/snyk/apps.ts:~664,~947,~1154; snyk/tenants/extensions/models/snyk/tenants.ts:~2662 | 7 | medium | service-account/app secrets and deployment credential persisted | Redact.
+```
+
+**ai-usage/extensions/models/ai_usage.ts** (setup hints shown to users by the `status` method)
+```
+ai-usage/extensions/models/ai_usage.ts:164 | 1 | high | `--global-arg 'clientSecret=&lt;secret-value&gt;'` | Use `'clientSecret=REDACTED vault.get("azure", "SP_SECRET") }}'`.
+ai-usage/extensions/models/ai_usage.ts:128 | 1 | high | `--global-arg 'serviceAccountJson=&lt;contents of service-account.json&gt;'` | Use vault.get; store the key with `swamp vault put` from stdin.
+ai-usage/extensions/models/ai_usage.ts:134-135 | 7 | medium | "Pass the JSON key contents... or set GOOGLE_APPLICATION_CREDENTIALS to the key file path" | Recommend vault-held key only.
+ai-usage/extensions/models/ai_usage.ts:198 | 11 | low | `--global-arg 'analyticsKey=&lt;vault-reference&gt;'` (no concrete syntax) | Show the literal `${{ vault.get(...) }}` form.
+ai-usage/extensions/models/ai_usage.ts:101 | 9 | low | "Uses the AWS credential chain (profiles, SSO, environment variables)" | Say profiles/SSO; don't suggest static keys in env.
+```
+
+**ai-usage/manifest.yaml**
+```
+ai-usage/manifest.yaml:22-23 | 10 | low | azure-ai-usage create shows only `subscriptions=`, omits the required clientSecret | Add vault.get-wired tenantId/clientId/clientSecret.
+ai-usage/manifest.yaml:26 | 11 | low | `'analyticsKey=&lt;vault-reference&gt;'` | Show the concrete vault.get expression.
+```
+
+**gcp/vertex-usage**
+```
+gcp/vertex-usage/extensions/models/gcp/vertex_usage.ts:54-56 | 2 | medium | describe "Falls back to the GCP_ACCESS_TOKEN env var, then to the file named by GOOGLE_APPLICATION_CREDENTIALS" | Describe vault.get as the path; demote fallbacks.
+gcp/vertex-usage/extensions/models/gcp/vertex_usage.ts:812-819 | 2/7 | medium | `Deno.env.get("GCP_ACCESS_TOKEN")`, then reads the key file; error "Provide one of them." | Error should recommend vault.get-wired serviceAccountJson.
+gcp/vertex-usage/manifest.yaml:11-13 | 2/7 | medium | "Service account JSON key (`serviceAccountJson` arg), a `GCP_ACCESS_TOKEN` env var, or the file named by `GOOGLE_APPLICATION_CREDENTIALS`" | Lead with vault; mark env/file as discouraged.
+gcp/vertex-usage/manifest.yaml:26 | 11 | low | `'serviceAccountJson=&lt;vault:gcp/sa-key&gt;'` (not real syntax) | Use `${{ vault.get("gcp", "SA_KEY") }}`.
+```
+
+**typesafe-batch**
+```
+typesafe-batch/extensions/models/triage_batch.ts:169-176 | 2 | medium | `Deno.env.get("TYPESAFE_API_KEY")`; "Set the apiKey global argument or TYPESAFE_API_KEY." | Error should say wire apiKey via vault.get.
+typesafe-batch/manifest.yaml:16-17 | 2 | medium | "`apiKey` (prefer a vault reference), falling back to the `TYPESAFE_API_KEY` environment variable." | Drop the env fallback from the docs; show vault.get.
+typesafe-batch/manifest.yaml:23 | 10 | low | `swamp model create @swamp/typesafe-ai jev` with no apiKey wiring | Add `--global-arg 'apiKey=REDACTED vault.get(...) }}'`.
+```
+
+**cloudflare-audit/manifest.yaml**
+```
+cloudflare-audit/manifest.yaml:13,15,17,19,21 | 1/2 | high | `--global-arg apiToken=REDACTED (passes the literal string; implies env var or literal token) | Use `'apiToken=REDACTED vault.get("cloudflare", "API_TOKEN") }}'`.
+```
+
+**cloudflare/extensions/models/cloudflare/** (hand-written root extension)
+```
+cloudflare/extensions/models/cloudflare/{worker.ts:22,waf.ts:23,zone.ts:22,dns.ts:23,cache.ts:24} | 10 | low | describe "Cloudflare API token with DNS read/write permissions" (no vault guidance) | Append vault.get guidance.
+```
+
+**gitlab-datastore-bootstrap**
+```
+gitlab-datastore-bootstrap/manifest.yaml:29 | 1/5 | high | `--input token=glpat-xxxxxxxxxxxxxxxxxxxx` | Pass vault name+key as inputs; resolve with vault.get in globalArguments.
+gitlab-datastore-bootstrap/extensions/workflows/bootstrap-gitlab-datastore.yaml:20-22,40 | 5 | high | required workflow input `token: ... GitLab personal access token with api scope.` | Replace with vaultName/vaultKey inputs.
+gitlab-datastore-bootstrap/extensions/workflows/bootstrap-gitlab-datastore.yaml:69-73 | 7 | high | `DATASTORE_CONFIG: ${{ data.latest(...).datastoreConfig }}` then `--config "$DATASTORE_CONFIG"` (token on argv, written to .swamp.yaml) | Emit a config that references the vault, not the token value.
+gitlab-datastore-bootstrap/extensions/models/provisioner.ts:300-321 | 7 | high | `config = { ..., token: activeToken }` stored as unredacted `datastoreConfig` resource (newly minted PAT too) | Store the minted token in a vault; persist only a reference.
+gitlab-datastore-bootstrap/extensions/models/provisioner.ts:30-35 | 10 | medium | `token: z.string().min(1).describe("GitLab personal access token...")` (no sensitive meta, no vault) | Add `.meta({sensitive:true})`; describe vault.get wiring.
+```
+
+**aurora-datastore-bootstrap**
+```
+aurora-datastore-bootstrap/manifest.yaml:36 | 1/5 | high | `--input master_password=&lt;your-password&gt;` | Take vault name+key; resolve via vault.get.
+aurora-datastore-bootstrap/extensions/workflows/bootstrap-aurora-datastore.yaml:30-32,59 | 5 | high | required input `master_password: ... Master database password (8+ chars).` | Replace with vault reference inputs.
+aurora-datastore-bootstrap/extensions/workflows/bootstrap-aurora-datastore.yaml:87-91 | 7 | high | passes `datastoreConfig` (connection string with password) via env, then `--config` | Use IAM auth or a vault-referenced connection string.
+aurora-datastore-bootstrap/extensions/models/provisioner.ts:620-648 | 7 | high | `postgresql://${master_username}:${encodeURIComponent(master_password)}@...` persisted as connectionString + datastoreConfig | Don't persist the password; mark sensitive or use IAM tokens.
+aurora-datastore-bootstrap/extensions/models/provisioner.ts:155,369-370 | 8 | high | `--master-user-password masterPassword` on argv; on failure `AWS CLI failed: aws ${args.join(" ")}` echoes the password | Redact the arg in errors (as elasticache's redactSensitiveArgs does); avoid argv.
+aurora-datastore-bootstrap/extensions/models/provisioner.ts:41-44 | 10 | medium | `master_password: z.string().min(8).describe("Master database password (8+ chars)")` (no sensitive meta) | Add sensitive meta and vault guidance.
+```
+
+**azure-blob-datastore-bootstrap**
+```
+azure-blob-datastore-bootstrap/extensions/models/provisioner.ts:312-341 | 7 | high | fetches the storage connection string (AccountKey) and persists it as unredacted `connectionString` + `datastoreConfig` | Put the key in a vault; persist a reference.
+azure-blob-datastore-bootstrap/extensions/workflows/bootstrap-azure-blob-datastore.yaml:61-65 | 7 | high | `DATASTORE_CONFIG` env then `--config "$DATASTORE_CONFIG"` (account key on argv, written to .swamp.yaml) | Same.
+```
+
+**Datastore config schemas** (the values live in `.swamp.yaml`)
+```
+datastore/azure-blob/extensions/datastores/azure_blob_datastore/mod.ts:47-49 | 7/10 | medium | `connectionString: z.string().min(1).describe("Azure Storage connection string (AccountName=...;AccountKey=...)")` (no sensitive, no vault) | Add sensitive meta; document vault.get in datastore config.
+datastore/azure-blob/extensions/datastores/azure_blob_datastore/mod.ts:124-130 | 7 | medium | JSDoc `# .swamp.yaml ... connectionString: "AccountName=...;AccountKey=...;"` | Show a vault-referenced value.
+datastore/gitlab-datastore/extensions/datastores/gitlab_datastore/mod.ts:1881-1883 | 7/10 | medium | `token: z.string().min(1).describe("GitLab personal access token or CI job token with api scope")` | Add sensitive meta and vault guidance.
+datastore/postgres/extensions/datastores/postgres_datastore/mod.ts:62-64 | 7/10 | medium | `connectionString ... describe("PostgreSQL connection URI ...")` (password embedded, no guidance) | Add sensitive meta; recommend vault/IAM.
+datastore/valkey/extensions/datastores/valkey_datastore/mod.ts:1540-1542 | 11 | low | "Auth password (prefer vault expression for production use)" (implies plaintext is fine elsewhere) | Say "use a vault expression"; add sensitive meta.
+```
+
+**bench/switch-datastore.sh**
+```
+bench/switch-datastore.sh:15,36-38 | 2/4/7 | high | `GITLAB_TOKEN — GitLab token (or vault ref)`; `: "${GITLAB_TOKEN:?Set GITLAB_TOKEN}"` then `--config "{...\"token\":\"${GITLAB_TOKEN}\"}"` | Pass a vault.get expression in config; don't take the token from env.
+bench/switch-datastore.sh:19,49-51 | 2/7 | high | `PG_CONN — PostgreSQL connection string` → `--config "{\"connectionString\":\"${PG_CONN}\"}"` | Same.
+```
+
+**twitch/manifest.yaml**
+```
+twitch/manifest.yaml:38-41 | 6 | high | `swamp vault set twitch-client-secret YOUR_CLIENT_SECRET` (inline values; `vault set` isn't the documented verb, and no vault name is given) | `swamp vault put &lt;vault&gt; TWITCH_CLIENT_SECRET` with an interactive prompt or stdin.
+twitch/manifest.yaml:54,57 | 11 | medium | `curl ... -d 'client_id=...&amp;client_secret=YOUR_CLIENT_SECRET&amp;code=...'`; `-H 'Authorization: Bearer YOUR_ACCESS_TOKEN'` | Read from the vault/stdin; avoid secrets on the command line.
+twitch/manifest.yaml:19-27 | 10 | medium | Quick Start model create omits clientId/clientSecret/accessToken/refreshToken wiring | Add `--global-arg 'clientSecret=REDACTED vault.get(...) }}'` etc.
+```
+
+**redmine/manifest.yaml, redmine-kanban/manifest.yaml**
+```
+redmine/manifest.yaml:19 | 1 | high | `--global-arg apiKey=REDACTED | Use `'apiKey=REDACTED vault.get("redmine", "API_KEY") }}'`.
+redmine-kanban/manifest.yaml:16 | 1 | high | `--global-arg apiKey=REDACTED | Same.
+```
+
+**azure/openai-usage/manifest.yaml, artifactory/manifest.yaml, reddit/manifest.yaml** (non-standard vault reference syntax)
+```
+azure/openai-usage/manifest.yaml:25 | 11 | low | `--global-arg 'clientSecret=&lt;vault:azure/sp-secret&gt;'` | Use `${{ vault.get("azure", "SP_SECRET") }}`.
+artifactory/manifest.yaml:16 | 11 | low | `--global-arg 'token=vault://my-vault/artifactory-token'` | Use the vault.get expression (vault:// probably passes as a literal).
+artifactory/extensions/models/jfrog/artifactory.ts:25 | 11 | low | describe "vault:// reference to JFrog Identity Token or Access Token" | Say "vault.get(...) expression".
+reddit/manifest.yaml:16-19 | 11 | low | `--global-arg clientSecret=REDACTED / `password=vault://reddit/password` | Use vault.get expressions.
+```
+
+**Omissions in other manifests (low)**
+```
+discourse/manifest.yaml:9,14-15 | 10 | low | "provide an API key via the `apiKey` global argument (store in a swamp vault)"; no vault.get example | Add a vault.get example.
+discourse/extensions/models/discourse/discourse.ts:19-21 | 10 | low | `apiKey: z.string().optional().describe("API key for authenticated access...")` (no sensitive) | Add sensitive meta and vault guidance.
+aws/adopt/manifest.yaml:24-25 | 10 | low | "Judgement needs a `@swamp/typesafe-ai` model with a TypeSafe API key" | Show vault.get wiring.
+aws/alarm-investigation/manifest.yaml:10 | 9 | low | "default AWS credential chain (environment variables, shared config, ...)" | Recommend profiles/SSO; omit "environment variables".
+```
+
+**Other code paths**
+```
+microsoft/teams/extensions/models/microsoft/teams.ts:557-561 | 8 | low | bootstrap persists refreshToken to data; "Store the refreshToken in your vault." means the user has to read it back out with `swamp data get` | Write it straight to the vault (as exe-dev setup does, via stdin).
+exe-dev/vm/extensions/models/exe-dev/vm.ts:811-815 | 8 | low | "Could not parse token from ssh output. Raw output:\n" + sshStdout | Don't echo raw output that may contain the token.
+exe-dev/vm/extensions/models/exe-dev/vm.ts:929-930 | 5 | low | VM create `env: ... "Environment variables as KEY=VALUE pairs"` (likely carries secrets as method input) | Note vault.get wiring for secret env values.
+container-image/extensions/models/container_image.ts:63-64 | 5 | low | login arg `password ... describe("Registry password or token")` as a method input | Describe vault.get wiring in the definition.
+aws/inventory/extensions/models/aws/inventory.ts:1053-1056 | 7 | low | `includeEnvironment` "Include environment variable values. WARNING: may contain secrets." (opt-in plaintext storage) | Consider redacting secret-looking values.
+```
+
+**Bootstrap (for your decision, not counted as violations)**
+```
+vault/hashicorp-vault/extensions/vaults/hashicorp.ts:33-34,56-73 | bootstrap | - | "If omitted, resolves from VAULT_TOKEN env var or ~/.vault-token file"; error lists config token, VAULT_TOKEN, ~/.vault-token ("run 'vault login'") | Reasonable (token helper). Consider listing `vault login` first and warning against a literal `token` in config.
+```
+
+## Env-fallback code paths per extension (secret-bearing)
+- **cloudflare/\***: 26 extensions, 1 path each (`CLOUDFLARE_API_TOKEN`), all from scripts/cloudflare-codegen (1 template path).
+- **falai/\***: 9 extensions, 1 each (`FAL_KEY`), from scripts/falai-codegen (1).
+- **griptape/\***: 10 extensions, 1 each (`GT_CLOUD_API_KEY`), from scripts/griptape-codegen (1). `GT_CLOUD_BASE_URL` and `GT_CLOUD_TIMEOUT_MS` are also read but are not secrets.
+- **gcp/vertex-usage**: 2 (`GCP_ACCESS_TOKEN`, plus the key file named by `GOOGLE_APPLICATION_CREDENTIALS`).
+- **typesafe-batch**: 1 (`TYPESAFE_API_KEY`).
+- **vault/hashicorp-vault**: 2, bootstrap (`VAULT_TOKEN`, `~/.vault-token`).
+- **bench/switch-datastore.sh**: 2 (`GITLAB_TOKEN`, `PG_CONN`).
+- **Total**: 51 shipped secret env-fallback paths (48 generated plus gcp 2 and typesafe 1), 3 generator template sources, 2 bootstrap paths, and 2 in the bench script.
+- The other `Deno.env` reads are not secrets: `USER` in the datastores, `SWAMP_PG_SYNC_TRACE`, `SWAMP_GITLAB_REBASE_POLL_MS`, `HOME`, `GITHUB_OUTPUT`, and the vault/pass env allowlist passthrough.
+
+## Files checked with no findings
+- The 166 manifests, except those listed above. Notable clean ones: anthropic/{admin,analytics,compliance}, gitlab, gitlab-review and exe-dev/vm, which correctly show `vault.get`. Also every aws/\* manifest except adopt and alarm-investigation, vault/\*, datastore/\* manifests, and the one-line cloudflare/falai/griptape/snyk/datadog/microsoft-teams/swamp-club/triage manifests.
+- All 36 workflow YAMLs, except the aurora, gitlab and azure-blob bootstraps. None contain `${{ env.X }}` or a literal token. That covers ai-usage, aws/{adopt×4, cost-audit, drift-state, event-topology, ops×2, securityhub-findings, terraform-drift}, bench-datastore×2, claude-cost-reconciliation, cloudflare-audit, devops-measurement, dynamodb-datastore-bootstrap, elasticache-datastore-bootstrap, extension-maintenance, github-issue-lifecycle, operator-briefing, redmine-kanban, sre, triage×6, triage/factory/triage-factory.yaml, factory/pr-lifecycle.yaml and twitch.
+- Skills: triage/skills/triage/SKILL.md, skills/{pr-workflow,update-stale-deps,bump-npm-deps}.md, redmine-kanban/skills/{create-story,create-task,design-session-checklist,hypothesis-task}.md.
+- Tracked `.swamp.yaml` files, all `deno.json`, bench/bench.sh, bench/summarize.sh.
+- Credential code without wording issues: anthropic/\* models, artifactory.ts (other than the describe), azure/openai_usage.ts, gitlab/projects.ts, gitlab-review/review.ts, redmine.ts, reddit/moderation.ts, swamp-club/lab.ts, twitch/mod.ts and \_lib/api.ts, the elasticache and dynamodb bootstrap provisioners (no secrets in their config), vault/{pass,gopass,macos-keychain}.
+
+Some secret globalArgs and config fields also lack `.meta({ sensitive: true })`. That isn't a rubric category, but it decides whether swamp redacts the value: aurora `master_password`, gitlab-datastore-bootstrap `token`, exe-dev `token`, discourse `apiKey`, and the gitlab-datastore, postgres, valkey and azure-blob `connectionString` fields.
+
+I made no edits, so every finding above is still open for you to decide on.</result>
+<usage><subagent_tokens>239691</subagent_tokens><tool_uses>75</tool_uses><duration_ms>442624</duration_ms></usage>
+</task-notification>
