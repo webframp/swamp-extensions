@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/php2shell-hunt"
 license: Apache-2.0
-version: "2026.10.22.1"
+version: "2026.10.28.1"
 description: |
   Head-hunt exposure and indicators of compromise for the PHP2Shell remote code
   execution vulnerabilities CVE-2026-109618 and CVE-2026-109619 across AWS,
