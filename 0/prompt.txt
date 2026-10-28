@@ -1,0 +1,19 @@
+<pasted_content id="52be">
+PR #513 (fix/vault-only-secret-guidance, session 7dd5017b-f4c8-4b11-b47c-7dd8f7bf10c7) merged with six questions unanswered. Take on all six. Work from a fresh worktree off origin/main.
+
+1. Vaults now required: 15 generated models (cloudflare access/logpush/magic-transit/pages/r2/stream/tunnel/turnstile/workers-ai/workers-scripts, snyk apps/service-accounts, griptape data-connectors, falai keys, datadog synthetics) won't run any method until a vault exists. Should read methods be exempt?
+2. Secrets inside lists are deleted before storing because "swamp can't vault fields inside arrays." Keep it that way, or store them?
+3. Possible secrets left unmarked: falai `signed_url`, snyk broker `secrets` (ciphertext), griptape `env_vars[].value`.
+4. An unrequested cancellation-race fix in anthropic/admin `set_member_roles` shipped in #513.
+5. The datadog dora generator config no longer matches upstream (its tag was renamed).
+6. Doc errors: the root README's pass/gopass examples use a `store` option, the vault READMEs show a `.swamp.yaml` `vaults:` block, and the twitch README lists a "deprecated" scope.
+
+How to work:
+- Treat every claim above as unverified, including the reasons. Confirm swamp behavior against the swamp source (/home/sme/src/swamp-club/swamp, origin/main) and by running a minimal probe model in a scratch repo, not from docs or memory. Check the installed swamp version first.
+- Confirm third-party API facts (Twitch, Datadog, Snyk, Griptape, fal.ai) against the vendor's current reference or spec.
+- Fix root causes in the generators (scripts/*-codegen) and regenerate. Never hand-edit generated files. Before changing a generator, prove you can regenerate main's current output with zero diff from the same spec it was built from, and find out how each generator pins (or fails to pin) its spec.
+- Look for defects with the same root cause beyond the named items, including in hand-written models.
+- When the root cause is a swamp core bug rather than an extension bug, draft a swamp-club issue with a minimal repro, the exact swamp version and pointers into the source. Ask me whether to file it as a security report or a public bug before filing.
+- Removing or renaming a method, or changing a resource schema non-additively, is my decision. Present the options with costs and ask.
+- Follow the CLAUDE.md rules on version bumps, upgrade chains, release notes, and the quality gate at 100%. Run the pre-push-review loop before pushing, then open one PR.
+</pasted_content id="52be">
