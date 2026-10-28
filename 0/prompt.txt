@@ -1,0 +1,61 @@
+<task-notification>
+<task-id>a3ef4aafb64bef47c</task-id>
+<tool-use-id>toolu_01HMX4KJoQF4zKfDDqpQBkBE</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/9ace0770-f8a3-41bc-9678-83e43e9d650d/tasks/a3ef4aafb64bef47c.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review round 5" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Round 5 review of e414189f: no blocking defects
+
+I checked every probe in your brief. Each one holds up, so the verdict is a pass with three LOW findings below.
+
+**`Deno.exit` inside or after pass 2.** None of the five `main.ts` files has one. In cloudflare (line 323), datadog (356), falai (334), griptape (302) and snyk (327), the only exit after `writing = !opts.dryRun` is the `main().catch` handler. No `scripts/*-codegen/lib/*.ts` calls `Deno.exit` either. A failed `deno fmt` after the write pass only logs a warning and exits 0, which is correct because the files are already written. Nothing writes before the flag is set: no `writeFile`, `ensureDir` or `remove` appears in pass 1 of any generator.
+
+**Other callers confused by exit code 3.** None found. CI (`.github/workflows/ci.yml`) runs only check, lint, fmt:check and test on the generators. No script or deno task branches on the exit code. The only document that describes the restore behaviour is `CLAUDE.md:447`, and it now matches the code.
+
+**Does code 3 pass through the whole chain?** Yes. I reproduced it in temp copies of cloudflare-codegen and falai-codegen. In each copy, `main.ts` was a stub that writes a file and exits, and the re-pin step was patched to skip the network call and append a marker to `config.ts`:
+
+| main.ts exits | Parent bump exits | Pin |
+|---|---|---|
+| 3 | 3 | kept, with the warning |
+| 1 | 1 | restored, with the "restored the previous pin" message |
+
+Both generators behave the same way. Temp directories were removed.
+
+**Snapshot timing.**
+- In cloudflare `bump.ts`, the snapshot is read at lines 233-235, before `updatePinnedSha` writes `config.ts` at line 148. When the pin did not move, or on `--dry-run` (which exits 0 at line 132), the snapshot is never used.
+- In falai `lib/bump.ts`, both `config.ts` and the vendored spec are snapshotted at lines 245-248, before `updateSpec` writes them at lines 156-157. The unchanged-pin and dry-run cases behave the same way as cloudflare.
+
+**Tests.**
+- The `rerunWithRollback` test fails if the `EXIT_AFTER_WRITES` branch is removed or the code-1 restore is dropped.
+- The BOM test fails if `parseSpec`'s `replace(/^\uFEFF/, "")` is removed.
+- What is not covered is listed below.
+
+**Gates.** All five generators pass check, lint, fmt:check and test. `deno task generate:dry-run` exits 0 in all five, and `git status --porcelain` was empty before and after.
+
+### [LOW] Nothing tests that main.ts exits 3 once the write pass has begun
+**File:** `scripts/*-codegen/main.ts`
+**Line(s):** the `writing = !opts.dryRun` line in each (cloudflare 323, datadog 356, falai 334, griptape 302, snyk 327)
+**Issue:** The new tests use a stubbed runner, so they never run `main.ts`. Deleting the flag assignment, or moving it below the loop, passes every test.
+**Breaking input:** A later refactor that drops or moves that line.
+**Impact:** A re-pin that fails partway through writing would restore the old pin while some extensions were already rewritten from the new one.
+**Fix:** Optional. Add one test per generator that makes a pass-2 write fail (for example, a read-only output directory) and checks that the exit code is 3.
+
+### [LOW] A child killed by a signal during the write pass restores the pin
+**File:** `scripts/cloudflare-codegen/bump.ts:208`, `scripts/falai-codegen/lib/bump.ts:216`
+**Issue:** The rollback treats any non-zero code other than 3 as "failed before writing". A `main.ts` killed by the OOM killer reports 137, so the pin is restored over partly written extensions.
+**Breaking input:** SIGKILL to the `main.ts` process during pass 2. Ctrl-C does not trigger this, because the parent dies at the same time and restores nothing.
+**Impact:** The pin and the generated output disagree. It is visible in git status and unlikely to happen.
+**Fix:** Optional. Restore only on exit code 1, or keep the pin whenever the child was killed by a signal.
+
+### [LOW] A failure before the first file write keeps the new pin
+**File:** all five `main.ts`
+**Issue:** The flag is set before the loop starts, so an `ensureDir` failure on the first extension exits 3 and the new pin stays.
+**Impact:** None in practice. Keeping the pin is the safe side, and the `CLAUDE.md` wording ("fails before writing anything") still holds.
+**Fix:** None needed.
+
+None of the three needs a change for this round to pass. Each is optional, and whether to fix them is your call.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>84317</subagent_tokens><tool_uses>14</tool_uses><duration_ms>127697</duration_ms></usage>
+</task-notification>
