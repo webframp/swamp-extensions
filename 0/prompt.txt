@@ -1,0 +1,67 @@
+<task-notification>
+<task-id>ae0cf842eb579b6b8</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/ae0cf842eb579b6b8.output</output-file>
+<status>completed</status>
+<summary>Agent "Snyk codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The `snyk/tenants` regeneration is committed locally and the independent reviewer returned PASS. Nothing is pushed and no PR is open.
+
+- **Branch:** `fix/snyk-codegen-regen-2026-10-07`, with one commit, `f27d1c3c`.
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-ae0cf842eb579b6b8`
+
+## Changes
+I ran `deno task generate -- --service tenants` from `scripts/snyk-codegen`. The version moved from 2026.09.25.1 to 2026.10.07.1. The change is purely additive:
+
+- **New methods:** `list_models` and `get_model` read the Snyk Risk Database model catalogue at `/tenants/{tenant_id}/risk_db/models`. Both are Early Access.
+- **Nothing removed:** no existing method or schema changed.
+- **Upgrade chain:** an identity upgrade entry was appended, and its `toVersion` matches `version`.
+- **Files touched:** `tenants.ts`, its test, `README.md`, `manifest.yaml` and `RELEASE_NOTES.md`. `deno.lock` did not change.
+- **Release notes:** written from the actual diff and passed with `--notes-file`.
+
+No harness changes were needed, so I made none.
+
+## Gates
+- **`snyk/tenants`:** `check`, `lint`, `fmt:check` and `test` pass (12 tests).
+- **`swamp extension quality`:** 12/12 (100%) on the server's 12-point total. The `repository-verified` factor (2 points) is pending server confirmation on publish.
+- **`scripts/snyk-codegen`:** `check`, `lint`, `fmt:check` and `test` pass (19 tests).
+
+## Reviewer verdict
+The separate adversarial subagent returned PASS, with no critical or high findings. Path interpolation, pagination bounds, the `truncated` flag, the version chain and the release-note accuracy all came back clean. It left five open findings, and I have not fixed them. I did not change the harness, because fixing them would regenerate every snyk extension, not just `tenants`, and that is your call.
+
+1. **MEDIUM, strict response schemas:** `pipeline_tag`, `tasks`, `inputs`, `outputs` and `license_type` are closed enums. `risk_assessment` and `capability_assessment` are required. One unexpected value from the API would fail all of `list_models`. The reviewer inferred, but could not confirm, that `risk_assessment` may be absent for tenants without the entitlement. The fix goes in `scripts/snyk-codegen/lib/method_classifier.ts`: relax response-side enums and required fields.
+2. **MEDIUM, tests:** the new methods have only `assertExists` checks, with no execute or request-shape tests. The cause is a generator gap in `lib/test_generator.ts`.
+3. **LOW, `provider` filter:** the argument is a single string, though the spec text suggests it may accept several values. The spec needs checking.
+4. **LOW, schema bloat and truncated descriptions:** the item and get schemas are near-duplicates, and descriptions are cut mid-word at 80 characters.
+5. **LOW, release notes:** the "Changed" paragraph is slightly padded.
+
+Say whether to land this PR as is and open a follow-up for the harness hardening, or fix findings 1 and 2 in the harness first.
+
+## Drafted PR
+
+**Title:** `fix(snyk/tenants): regenerate from Snyk API spec to add list_models and get_model`
+
+**Body:**
+
+```
+Regenerates `snyk/tenants` from the current Snyk OpenAPI spec using `scripts/snyk-codegen`. No generated file was edited by hand.
+
+The Snyk spec added two Early Access endpoints for the Risk Database model catalogue. The extension now exposes them:
+
+- `list_models` lists models for a tenant. It filters by provider, risk-assessment status, last-updated date, and model name.
+- `get_model` fetches one model by ID.
+
+The change is additive. No existing method, resource, or schema changed, so no migration is needed. The version moves from 2026.09.25.1 to 2026.10.07.1, with an appended identity upgrade entry and matching release notes.
+
+Gates:
+- `snyk/tenants`: check, lint, fmt:check, and test pass. `swamp extension quality` scores 100%.
+- `scripts/snyk-codegen`: check, lint, fmt:check, and test pass.
+
+Known limitations, both inherited from the generator and out of scope here:
+- Response schemas use closed enums and required fields, so an unexpected value from the API would fail `list_models` for the whole page.
+- The new methods have existence tests only, not execute tests.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>65398</subagent_tokens><tool_uses>18</tool_uses><duration_ms>94129</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-ae0cf842eb579b6b8</worktreePath><worktreeBranch>worktree-agent-ae0cf842eb579b6b8</worktreeBranch></worktree>
+</task-notification>
