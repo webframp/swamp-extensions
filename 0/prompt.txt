@@ -1,0 +1,6 @@
+<task-notification>
+<task-id>b8enp1owq</task-id>
+<summary>Monitor event: "Wait for PR 508 CI after fixes"</summary>
+<event>39 pass</event>
+If this event is something the user would act on now, send a PushNotification. Routine or benign output doesn't need one.
+</task-notification>
