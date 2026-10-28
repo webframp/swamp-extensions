@@ -1,0 +1,70 @@
+<task-notification>
+<task-id>a9105838d67ddb450</task-id>
+<tool-use-id>toolu_011PehGCifyUSyBq3KuXr5jL</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a9105838d67ddb450.output</output-file>
+<status>completed</status>
+<summary>Agent "Round-2 hand-written fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All seven findings are fixed. Every extension I changed passes check, lint, fmt:check, test and `swamp extension quality` (passed, 100%). The only new bump is aws/terraform-drift (2026.10.14.1 → 2026.10.21.1); the others were already at 2026.10.21.1, and I edited their notes in place.
+
+**1. False drift from masked Terraform values (MEDIUM)**
+- `drift_report.ts`: a value of `***SENSITIVE***`, or a block that is not a plain object, is now recorded as unverifiable instead of drift. All the comparators are covered:
+  - **Tags:** a wholly masked `tags_all`/`tags` map no longer produces per-character drifts or the `TypeError`. A masked `tags_all` no longer falls back to `tags`, which leaves out `default_tags`, so default tags no longer show up as extra tags. A single masked tag value is skipped while the other tags are still compared.
+  - **Single values:** `instance_type`, `subnet_id`, `name` and `public_ip` go through one shared check that skips masked values. The `aws_lb` `internal` flag is handled the same way.
+  - **Identifiers:** a masked `id`, `arn` or `allocation_id` skips the resource instead of reporting it `missing_in_aws`.
+  - **Whole resource:** a resource whose entire `values` block is masked is marked unverifiable.
+- **New output (additive):** JSON gains an `unverifiable[]` array and `summary.unverifiableFields`. The Markdown report gains an "Unverifiable Fields" section and a row in the summary table.
+- **Tests:** 7 new cases, including the `merge()` sensitive-tags case (20/20 pass).
+- **Release:** README section and release notes written, manifest bumped. It is a report-only extension with no `upgrades:` array.
+- terraform release notes now say a wholly sensitive block becomes the mask string and that consumers must check its type.
+
+**2. terraform redaction claim (LOW)**
+- README now says masking depends on `sensitive_values`, which exists from Terraform 0.15 and in OpenTofu, and that older state is written unmasked.
+- `read_state` logs one warning naming every resource address that lacks `sensitive_values`. I added `warn` to the logger type; two tests check that it fires only when expected.
+
+**3. microsoft/teams (LOW)**
+- `setup.md` step 6 and the README Authentication section now say the stored token is not rotated (Graph's new refresh token is discarded) and to re-run `bootstrap` on `invalid_grant`.
+- The README YAML has a comment, plus prose above it, telling users to use the vault named in the bootstrap data reference.
+- Release notes updated, including this documentation-only fix.
+
+**4. exe-dev/vm (LOW)**
+- The defaults are unchanged (`gitlab` / `exe-dev-api-token`).
+- The `requireToken` error, the `setup` description and the `vaultName`/`secretKey` descriptions now state those defaults and recommend passing `--input vaultName=… --input secretKey=REDACTED
+- README explains the defaults and shows the `vault.get("gitlab", "exe-dev-api-token")` form for users who ran `setup` without inputs.
+- The manual pipe is now `grep -m1 -oE '^[[:space:]]*exe[0-9]\.[^[:space:]]+' | tr -d '[:space:]' | swamp vault put exe-dev API_TOKEN --yes`. This differs from the pattern you gave in two ways:
+  - `[[:space:]]` replaces `\s`, because BSD/macOS `grep -E` may not support `\s`.
+  - `tr` strips the leading whitespace that `-o` would otherwise store as part of the token.
+
+  I tested it: it outputs exactly one clean token.
+
+**5. Missing `swamp vault create` before `vault put` (LOW)**
+- Added `swamp vault create local_encryption &lt;name&gt;   # once, if you have no vault yet` before the first `vault put` for each vault in:
+  - ai-usage README and manifest (gcp, azure, anthropic)
+  - the artifactory, azure/openai-usage, typesafe-batch, gcp/vertex-usage and discourse manifests
+  - aws/adopt (see item 6)
+- Those `vault put` lines were added earlier in this same unpublished PR, so the release notes record this under **Changed** rather than as a **Fixed** regression.
+
+**6. TypeSafe vault naming (MEDIUM)**
+- aws/adopt's manifest and README now use `typesafe` / `API_KEY` and show `swamp vault create` plus `swamp vault put typesafe API_KEY`.
+- typesafe-batch already used `typesafe` / `API_KEY`, and no code text in either extension referenced the old name.
+- aws/adopt release notes updated.
+
+**7. gitlab-datastore smoke test (LOW)**
+- The usage comment now reads the token from a secret store (`pass show …` / `op read …`) with no token-shaped literal.
+- I also fixed a related leak in the same file: it logged the first 10 characters of the token. It now logs only `set (N characters)`. This is a test file that isn't shipped, so there's no new bump.
+
+**One decision for you:** aws/terraform-drift still declares `@webframp/terraform@2026.09.18.1`. The new report works with either version, and pinning 2026.10.21.1 could fail if terraform-drift publishes before terraform does. I left it and say "pull together" in the release notes; tell me if you want it pinned.
+
+No `deno.lock` files changed.
+
+Files changed (all under `/home/sme/src/webframp/swamp-extensions/`):
+- **aws/terraform-drift/:** `extensions/reports/drift_report.ts`, `extensions/reports/drift_report_test.ts`, `README.md`, `manifest.yaml`, `RELEASE_NOTES.md`
+- **terraform/:** `extensions/models/terraform/terraform.ts`, `extensions/models/terraform/terraform_test.ts`, `README.md`, `RELEASE_NOTES.md`
+- **microsoft/teams/:** `README.md`, `setup.md`, `RELEASE_NOTES.md`
+- **exe-dev/vm/:** `extensions/models/exe-dev/vm.ts`, `README.md`, `RELEASE_NOTES.md`
+- **ai-usage/:** `README.md`, `manifest.yaml`, `RELEASE_NOTES.md`
+- **aws/adopt/:** `README.md`, `manifest.yaml`, `RELEASE_NOTES.md`
+- **manifest.yaml and RELEASE_NOTES.md in each of:** `artifactory/`, `azure/openai-usage/`, `typesafe-batch/`, `gcp/vertex-usage/`, `discourse/`
+- **datastore/gitlab-datastore/:** `smoke_test.ts`</result>
+<usage><subagent_tokens>133542</subagent_tokens><tool_uses>43</tool_uses><duration_ms>412693</duration_ms></usage>
+</task-notification>
