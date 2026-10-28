@@ -1,0 +1,1 @@
+where did this "test" https://github.com/webframp/swamp-extensions/pull/491#pullrequestreview-5519846734 bot comment come from? That's very suspicious, as if someone compromised a token or github actions on my repo
