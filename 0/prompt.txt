@@ -1,0 +1,1 @@
+for the PR, commit, push the changes and update the PR description and title. For the global guidance: yes implement it and the hook. I also like the idea to review prompts
