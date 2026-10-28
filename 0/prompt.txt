@@ -1,0 +1,1 @@
+great, let's fix each of those using a worktree for each, one feature branch and PR for each service: datadog, falai, snyk and griptape. Each one needs pre-push review loop as usually done to ensure fixes are caught locally. The difference is that fixes need to be fed back into the codegen harness so the generated code is not modified.
