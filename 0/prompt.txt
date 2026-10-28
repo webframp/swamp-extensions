@@ -1,0 +1,87 @@
+<task-notification>
+<task-id>aff45cbb63aafe446</task-id>
+<tool-use-id>toolu_014ZXEjpXCpaKYUyWpWqnnwc</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aff45cbb63aafe446.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix hand-written code findings" finished</summary>
+<note>This agent stopped with background work of its own still running. It may resume on its own when that work completes or reports, and the same task-id notifies again if it does; the result below may be interim.</note>
+<result>All audit items in my scope are fixed. Every shipped extension I changed now passes `check`, `lint`, `fmt`, `fmt:check`, `test` and `swamp extension quality` (passed, 100%), with no failures. Each was bumped from `2026.10.14.1` to `2026.10.21.1`, and `RELEASE_NOTES.md` was rewritten for each. No `deno.lock` changed. I did not touch any `*-datastore-bootstrap`, and I ran no git index operations.
+
+## Versions bumped and gate results
+
+| Extension | Tests | Upgrade entry added |
+|---|---|---|
+| `terraform` | 21 | yes |
+| `microsoft/teams` | 24 | yes |
+| `exe-dev/vm` | 69 | no `upgrades:` array; model version bumped |
+| `artifactory` | 12 | yes |
+| `gcp/vertex-usage` | 79 | yes |
+| `typesafe-batch` | 6 | no array |
+| `ai-usage` | 27 | yes |
+| `azure/openai-usage` | 33 | yes |
+| `discourse` | 20 | yes |
+| `container-image` | 15 | yes |
+| `datastore/azure-blob` | 53 | no array |
+| `datastore/gitlab-datastore` | 57 | no array |
+| `datastore/postgres` | 81 | no array |
+| `datastore/valkey` | 42 | no array |
+| `datastore/dynamodb` | 48 | no array |
+| `aws/adopt` | 149 | yes |
+
+`bench/` has no manifest, so it gets no bump. `switch-datastore.sh` passes `shellcheck`.
+
+## Behaviour changes worth knowing
+
+- **terraform:** `read_state` now masks every attribute marked in `sensitive_values` as `***SENSITIVE***`. This covers nested objects, lists and whole sensitive blocks. Tests cover it, and the README states the redaction. Existing stored data still holds plaintext until `read_state` runs again.
+- **microsoft/teams:**
+  - The bootstrap output field was already marked sensitive, so the token was already being stored in the vault, but under a generated key nobody could find. It now uses the fixed key `TEAMS_REFRESH_TOKEN` in the default vault.
+  - `refreshToken` is now optional. Swamp resolves `vault.get` arguments before every run, so a missing secret blocks even `bootstrap`; I confirmed this in a scratch repo.
+  - New flow: create the model with `tenantId` and `clientId` from the vault, run `bootstrap`, then add `refreshToken` with `swamp model edit`. Other methods fail with `missing_refresh_token` until it is set.
+  - Two teams models in one repo would share the `TEAMS_REFRESH_TOKEN` key. The README says so.
+- **exe-dev/vm:** I found an extra bug: `setup` passed a `--stdin` flag that current `swamp vault put` rejects, so storing the token always failed. The flag is removed and the token is still piped on stdin.
+  - Error messages no longer echo ssh output and mask anything token-shaped.
+  - `token` is now marked sensitive, so a literal token fails validation.
+  - Tests cover the setup path.
+- **discourse:** `apiKey` is now marked sensitive, so a literal key fails validation. A test covers it.
+- **Datastores:** every example uses `"${{ vault.get(...) }}"`, including the `SWAMP_DATASTORE` forms; swamp's source shows it resolves expressions there.
+  - The `connectionString` (azure-blob, postgres), `token` (gitlab) and `password` (valkey) fields are now marked sensitive. Swamp ignores this marker on datastore configs, so it is harmless.
+  - The valkey `password` description now says "always" use a vault, not "prefer".
+- **container-image:** the ECR password comes from a vault with a refresh hook (`--refresh-from 'aws ecr get-login-password …'`). The README offers the ECR credential helper as a password-free alternative, and GHCR/DockerHub use an interactive `vault put`.
+
+The rest are documentation, description and error-text changes as specified (artifactory, vertex-usage, typesafe-batch, ai-usage, azure/openai-usage, dynamodb, adopt). Artifactory's false claim about automatic token rotation is gone. Vertex-usage stores credentials by piping the key file into `swamp vault put`, then deleting it, or by vaulting your ADC file.
+
+## Decisions you should check
+
+1. **bench needs yq and skips data migration.** `swamp datastore setup extension --config` does not resolve vault expressions; I confirmed it hands the literal expression to the provider. So `switch-datastore.sh` writes the target repo's `.swamp.yaml` datastore block with `yq` instead. The script now requires yq, and existing local data is not migrated; both are documented in the script and README. This looks like a gap in swamp worth filing upstream.
+2. **bench gitlab config was broken.** The script sent `host`/`project` keys, which the gitlab-datastore config does not accept. It now sends `baseUrl`/`projectId`.
+3. **bench README left unformatted.** It was not `deno fmt`-clean before my edits, so I skipped formatting it to avoid an unrelated reformat of the whole file.
+4. **exe-dev default vault left alone.** The `setup` default `vaultName` is still `"gitlab"`; changing it could break users who rerun `setup` to rotate. The docs pass `--input vaultName=exe-dev --input secretKey=REDACTED explicitly. Say if you want the default changed.
+5. **aws/adopt vault names kept.** Its manifest uses `vault.get("secrets", "TYPESAFE_API_KEY")` to match its own README, which was out of scope. typesafe-batch now uses `typesafe`/`API_KEY`, so the two differ.
+
+## Files changed
+
+Each of the 16 extensions above changed `manifest.yaml` and `RELEASE_NOTES.md`; the other files are:
+
+- `terraform`: `README.md`, `extensions/models/terraform/terraform.ts`, `terraform_test.ts`
+- `microsoft/teams`: `README.md`, `setup.md` (not shipped), `extensions/models/microsoft/teams.ts`, `teams_test.ts`
+- `exe-dev/vm`: `README.md`, `extensions/models/exe-dev/vm.ts`, `vm_test.ts`
+- `artifactory`: `README.md`, `extensions/models/jfrog/artifactory.ts`
+- `gcp/vertex-usage`: `README.md`, `extensions/models/gcp/vertex_usage.ts`, `vertex_usage_test.ts`
+- `typesafe-batch`: `README.md`, `extensions/models/triage_batch.ts`
+- `ai-usage`: `README.md`, `extensions/models/ai_usage.ts`
+- `azure/openai-usage`: `README.md`, `extensions/models/azure/openai_usage.ts`
+- `discourse`: `README.md`, `extensions/models/discourse/discourse.ts`, `discourse_test.ts`
+- `container-image`: `README.md`, `extensions/models/container_image.ts`
+- `datastore/azure-blob`: `README.md`, `extensions/datastores/azure_blob_datastore/mod.ts`
+- `datastore/gitlab-datastore`: `README.md`, `extensions/datastores/gitlab_datastore/mod.ts`
+- `datastore/postgres`: `README.md`, `extensions/datastores/postgres_datastore/mod.ts`
+- `datastore/valkey`: `README.md`, `extensions/datastores/valkey_datastore/mod.ts`
+- `datastore/dynamodb`: `README.md`
+- `aws/adopt`: `extensions/models/aws/adopt.ts`
+- `bench`: `README.md`, `switch-datastore.sh`
+
+All paths are under `/home/sme/src/webframp/swamp-extensions/`.
+
+Nothing in my scope was left unfixed.</result>
+<usage><subagent_tokens>257802</subagent_tokens><tool_uses>149</tool_uses><duration_ms>1519277</duration_ms></usage>
+</task-notification>
