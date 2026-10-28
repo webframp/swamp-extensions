@@ -1,0 +1,63 @@
+<task-notification>
+<task-id>a9de6a00f5488a7df</task-id>
+<tool-use-id>toolu_01ThATCdhmyXiUx4BsurRaUe</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a9de6a00f5488a7df.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review #509 fix iteration 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings, so this iteration passes. The milestone fix from iteration 1 holds: `update_issue` again treats `0` and `"0"` exactly as `origin/main` did.
+
+I re-read `projects.ts` (the method arguments, `create_issue`, `update_issue`, `resolveMilestoneId` and the upgrades array), the new tests, `manifest.yaml`, `RELEASE_NOTES.md` and the root `CLAUDE.md`. In the worktree, `deno task check`, `lint`, `fmt:check` and `test` all pass (245 tests). `swamp extension quality manifest.yaml` returns `passed` at 100%.
+
+**Probe 1: milestone behavior per input.** `update_issue` still sends `milestone_id: resolveMilestoneId(...)` over REST PUT, and that function is unchanged.
+
+| Input | `create_issue` on main | `create_issue` now | `update_issue` on main | `update_issue` now |
+|---|---|---|---|---|
+| `0` | sent `gid://gitlab/Milestone/0` | rejected | `milestone_id: 0` (clear) | same as main |
+| `"0"`, `"000"` | parsed to 0, sent as gid `/0` | rejected | `milestone_id: 0` (clear) | same as main |
+| `""` | title lookup, then "no milestone titled" | rejected | same as create | rejected |
+| `-3`, `1.5` (numbers) | sent as-is | rejected | sent as-is | rejected |
+| `"1.5"` | treated as a title | same as main | treated as a title | same as main |
+| `"5"`, `5` | id 5 | same as main | id 5 | same as main |
+
+Every changed row is disclosed in the release notes. String inputs such as `"-3"` or `"007"` fail the `^\d+$` test or parse the same way as before, so their behavior is unchanged.
+
+**Probe 2: release notes.** Each claim checks out. Every listed method uses the stated argument. `tailLines` used to be raised to at least 1 and had no upper limit. The empty-string behavior on main matches the description.
+
+**Probe 3: sibling consistency.** Every numeric method argument in `projects.ts` now has `.int()` plus a lower bound:
+- `iid`, `iids`, `id`, `noteId`, `pipelineId`, `jobId`, `scheduleId` and `maxTodos` are positive.
+- `first`, `perPage` and `limit` have both bounds.
+- `weight` is nonnegative.
+
+Nothing else in the repo calls `get_job_log` with a `tailLines` value. The only inconsistency is the intended one: `create_issue` and `update_issue` have different milestone schemas, and the code comment explains why.
+
+**Probe 4: do the tests catch regressions?** I checked by breaking the code in a scratch copy:
+- Changing `updateMilestoneArg` to `.positive()` fails 2 tests, including the fetch-level test that checks `milestone_id === 0` with no title lookup.
+- Changing `resolveMilestoneId` so it stops sending 0 fails the fetch-level test.
+- Removing the all-zeros check on `create_issue` fails the schema test.
+
+The iteration-1 bug would be caught.
+
+**Probe 5: version and upgrade chain.** `manifest.yaml` and `model.version` are both `2026.10.21.2`. A new identity upgrade entry was appended without relabelling the previous one. The only version test checks that the chain's last `toVersion` equals `model.version`, and it passes.
+
+**Probe 6: deferred work.** The diff adds no TODOs, FIXMEs or follow-ups.
+
+### [LOW] Release-notes example implies every listed ID went into a REST path
+**File:** `gitlab/RELEASE_NOTES.md`
+**Line(s):** 5-6
+**Issue:** The notes say previous values were "sent to GitLab as-is, in REST paths such as `/jobs/1.5`". The four `noteId` methods are GraphQL, and they send `gid://gitlab/Note/${noteId}`, not a REST path. "Such as" softens the claim, but it describes only some of the listed arguments.
+**Breaking input:** `update_issue_note` with `noteId: 1.5`, which used to send `gid://gitlab/Note/1.5`.
+**Impact:** None on behavior; the wording is slightly imprecise.
+**Fix:** Optionally reword to "in REST paths such as `/jobs/1.5` or GraphQL ids such as `gid://gitlab/Note/1.5`."
+
+### [LOW] Upgrade-entry description leaves out the `update_issue` milestone changes
+**File:** `gitlab/extensions/models/gitlab/projects.ts`
+**Line(s):** about 2933-2940
+**Issue:** The upgrade entry's description says only "create_issue milestone ids must be positive". It does not mention that `update_issue` now rejects negative and non-integer milestones, or that both methods reject an empty string. The release notes do cover all of this.
+**Breaking input:** None.
+**Impact:** Only the upgrade metadata text is incomplete.
+**Fix:** Optionally append "; update_issue milestone must be a nonnegative integer or non-empty string."
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>65745</subagent_tokens><tool_uses>13</tool_uses><duration_ms>81556</duration_ms></usage>
+</task-notification>
