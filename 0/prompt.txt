@@ -1,0 +1,92 @@
+<task-notification>
+<task-id>afe426d81e9657861</task-id>
+<tool-use-id>toolu_01FnK3prJi1eHKDiVysRT3kL</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/tasks/afe426d81e9657861.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of branch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## VERDICT: FAIL
+
+There are three HIGH findings and no CRITICAL. I modified no files. Everything I ran used scratch copies under `/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad/rev/`.
+
+**What holds up:**
+- **Idempotence:** dry-runs of all five generators against copies of the committed output report every service "unchanged". None would bump falsely.
+- **Gates:** check, lint, fmt:check and test pass for twitch, the five codegens, cloudflare/d1, falai/storage, snyk/service-accounts and gitlab. `swamp extension quality` is passed/100 for twitch, d1, gopass and snyk/service-accounts.
+- **Vendored specs:** the gunzipped hashes of falai, griptape and snyk equal their `SPEC_SHA256`. A mismatch throws, and nothing in `generate` falls back to the network.
+- **Sensitive marks:** I imported every generated model and walked each resource schema the way `extractFieldsWithMetadata` does. There are 0 marks swamp would ignore, so the audit claim is true.
+- **Versions:** all 25 bumps have manifest version = model version = last `toVersion` = 2026.10.25.1, with notes under 5000 characters. Every changed shipped file sits under a bumped manifest.
+- **Twitch:** the workflow YAML and report section removal are clean. Scope claims match between README and manifest.
+- **Vault docs:** the README `--config` keys match each ConfigSchema (hashicorp `kvVersion` is the string `"2"`). The gopass rename to `gopass` is applied throughout. The swamp version 20261011.222452.0 is the first release with the default vault.
+
+### HIGH Cloudflare test-only refresh writes an unformatted test file
+**File:** `scripts/cloudflare-codegen/main.ts` **Line(s):** about 268-283, 345-352
+**Issue:** The new path for an unchanged model writes the raw `generateTestSource` output. It then `continue`s before `writtenDirs.push(extDir)`, so the final `deno fmt writtenDirs` never formats that file.
+**Breaking input:** I appended one line to the kv test file in a copy and ran `deno task generate -- --service kv --output &lt;copy&gt;`. The run printed "refreshing generated tests only", and `deno fmt --check extensions/models/` then failed with "Found 1 not formatted file".
+**Impact:** Any change to the test template alone breaks CI `fmt:check` for every affected extension.
+**Fix:** Format the file before writing it, or push `extDir` (or the test path) into the list the final fmt runs on.
+
+### HIGH Cloudflare `bump --update-sha` generates from the old spec; the cache is not keyed by SHA and has a 24-hour TTL
+**File:** `scripts/cloudflare-codegen/lib/schema_fetcher.ts` L11-12 and L103-114; `scripts/cloudflare-codegen/bump.ts` L196-202
+**Issue:**
+- `updatePinnedSha` rewrites `config.ts`, but `SCHEMA_URL` was already evaluated when the module loaded. `fetchSchemaFresh` therefore downloads the **old** SHA and caches it as `.cache/openapi.json` with a fresh mtime.
+- Change detection then runs on the old spec. Any later `generate` within 24 hours reads that cache even though config names the new SHA.
+- After 24 hours the same command fetches the new SHA, so the output depends on time.
+- falai's bump re-execs after re-pinning for exactly this reason. datadog was fixed by keying its cache name on the SHA. Cloudflare got neither fix, yet the new CLAUDE.md text documents `--update-sha` as the cloudflare re-pin route.
+**Breaking input:** `deno task bump -- --update-sha` when upstream has a newer commit, followed by `deno task generate` the same day.
+**Impact:** It silently generates from a spec other than the pinned one.
+**Fix:** Key the cache file on `SCHEMA_SHA`, as datadog does, and drop the TTL. Also re-exec after the config rewrite, as falai does.
+
+### HIGH Presigned upload URLs are still stored in plaintext, against the rule this branch states
+**File:** `cloudflare/d1/extensions/models/cloudflare/d1.ts` L113; `cloudflare/stream/extensions/models/cloudflare/stream.ts` L172; `griptape/buckets/extensions/models/griptape/buckets.ts` L62-65; generators `scripts/cloudflare-codegen/lib/sensitivity.ts` L104-107 and griptape `lib/sensitive.ts`
+**Issue:** The new `SENSITIVE_NAMES` comment says "A pre-signed URL is a bearer credential", but three such URLs are left unmarked:
+- **d1, `D1ImportDatabaseSchema.upload_url`:** described as "The R2 presigned URL to use for uploading". It is in the same model whose `signed_url` this branch fixes.
+- **stream, `uploadURL`:** "The URL an unauthenticated upload can use".
+- **griptape buckets, `create_asset_url` → `url`:** the spec calls it a "presigned URL".
+
+datadog already vaults its presigned upload URLs (`multipart_presigned_urls_params`), so the generators disagree with each other.
+**Breaking input:** Running d1 `import_database` with action `init`, `create_stream_videos_upload_videos_via_direct_upload_ur_ls`, or griptape `create_asset_url`.
+**Impact:** A bearer write URL sits in the datastore, readable by anyone with datastore read access.
+**Fix:** Add `upload_url` and `uploadURL` to the cloudflare names. Add a per-operation override for griptape `CreateAssetUrl.url`, like falai's `SENSITIVE_RESPONSE_FIELDS`. Then regenerate, bump and write notes.
+
+### MEDIUM A change to generated tests alone bumps datadog, snyk and griptape
+**File:** `scripts/datadog-codegen/main.ts` L235-245; `scripts/snyk-codegen/main.ts` L215-218; `scripts/griptape-codegen/main.ts` about L199
+**Issue:** The test file is treated as a companion, so test drift forces a version bump and release notes. That breaks the house rule that test-only changes need no bump. cloudflare (new on this branch) and falai refresh tests without bumping, so the generators are inconsistent.
+**Breaking input:** A change to `test_generator.ts` alone.
+**Impact:** The extension republishes byte-identical bytes, and the generator demands release notes for them.
+**Fix:** Remove the test from the companion and stale lists, and use the falai/cloudflare refresh path, formatted as in the first finding.
+
+### MEDIUM Auto-regeneration in the bump flow cannot complete (falai, cloudflare)
+**File:** `scripts/falai-codegen/lib/bump.ts` L281-296; `scripts/cloudflare-codegen/bump.ts` L250-262
+**Issue:** Neither bump forwards `--notes`, so `main.ts` exits with "already has RELEASE_NOTES.md" for every existing extension.
+- In falai this happens after `--update-spec` has already re-vendored the spec and re-pinned the hash.
+- cloudflare also omits `--allow-run`, which `formatCode`'s `deno fmt` subprocess needs.
+**Breaking input:** `deno task bump -- --update-spec` (falai) or `deno task bump` (cloudflare) when a change exists.
+**Impact:** The documented re-pin flow fails partway through. It fails loudly, but leaves the pin moved and nothing regenerated.
+**Fix:** Accept `--notes` / `--notes-file` in both bump scripts and forward them. Add `--allow-run` to the cloudflare subprocess.
+
+### LOW The datadog cache is trusted without an integrity check
+**File:** `scripts/datadog-codegen/lib/schema_fetcher.ts` L107-112, 127-128
+**Issue:** The cache is written with a non-atomic `writeTextFile`, and a cache hit is parsed with no hash check. The three vendored generators verify SHA-256; datadog does not.
+**Breaking input:** An interrupt partway through writing the roughly 5 MB YAML. A truncation at a line boundary can still parse.
+**Fix:** Write to a temp file and rename, or store and verify a SHA-256.
+
+### LOW The falai/storage README says the wrong thing about `signed_url`
+**File:** `scripts/falai-codegen/lib/extension_generator.ts` L231 → `falai/storage/README.md` L41
+**Issue:** It says "These methods return a secret that fal.ai shows only once". That is true for `createApiKey`, but `sign_storage_file_url` can be called again at any time. The vault-requirement paragraph also appears twice in a row.
+**Fix:** Make the intro text depend on the operation, and emit the vault paragraph once.
+
+### LOW Stale "mod events" text in twitch
+**File:** root `README.md` L130 ("gathers chatters, bans, and mod events"); `twitch/extensions/models/twitch/mod.ts` L4 (shipped docstring); `twitch/extensions/reports/mod_report.ts` docstring ("summarizes ban/timeout/message-delete events by moderator")
+**Fix:** Remove the mod-events wording.
+
+### LOW Inaccurate doc claims
+**File:** `CLAUDE.md` (new generator paragraph); `scripts/griptape-codegen/main.ts` L123
+**Issue:**
+- CLAUDE.md says regeneration "is reproducible without the network". cloudflare and datadog still fetch from GitHub on a cache miss, and a fresh worktree has no cache.
+- It says snyk vendors "the exact bytes". Snyk's own `config.ts` says they are a reconstruction, not a download.
+- The griptape comment about the cache location is stale; there is no cache any more.
+**Fix:** Correct the wording.
+
+**Not done:** I did not verify Twitch's live scope requirements; I had no access to Twitch's docs from here. I did not check the claim that a read/list method's writes are not pushed to a remote datastore (swamp-club#3934) beyond reading the lock path in `model_method_run.ts`.</result>
+<usage><subagent_tokens>202660</subagent_tokens><tool_uses>68</tool_uses><duration_ms>547668</duration_ms></usage>
+</task-notification>
