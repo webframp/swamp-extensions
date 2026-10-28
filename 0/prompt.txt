@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>borriz81y</task-id>
+<tool-use-id>toolu_01TnM4AVis9wa7nVx7ME2bkb</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/borriz81y.output</output-file>
+<status>failed</status>
+<summary>Background command "Wait for CI re-run, then the publish run it triggers" failed with exit code 1</summary>
+</task-notification>
