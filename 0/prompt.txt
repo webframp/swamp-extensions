@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bk7m5uo2p</task-id>
+<tool-use-id>toolu_01Hhi4PiLBwiNFF1B8GfCnrJ</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/bk7m5uo2p.output</output-file>
+<status>completed</status>
+<summary>Background command "Locate doom install dir" completed (exit code 0)</summary>
+</task-notification>
