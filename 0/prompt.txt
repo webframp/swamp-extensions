@@ -1,0 +1,93 @@
+<task-notification>
+<task-id>afd3f51c4fc708eb1</task-id>
+<tool-use-id>toolu_01JB5tjqi8zQdhVoFhn8sXNe</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/afd3f51c4fc708eb1.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review pass vault" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The change doesn't leak secrets. I traced every path the content takes: the password line and field values never reach argv, error messages or span attributes. What argv, errors and spans do carry is the entry path, field name, prefix and pass's stderr, none of which this branch adds secret content to. The 47 existing tests pass. I also ran probe scripts against the real `createProvider` with a mocked `Deno.Command` (scratch only, removed afterwards); the probe outputs quoted below come from those runs. I found no CRITICAL or HIGH issues, but three MEDIUM ones are worth fixing before merge.
+
+### [MEDIUM] Keys from `list()` that contain the separator in a directory name cannot be read back with `get()` or written with `put()`
+**File:** vault/pass/extensions/vaults/pass.ts
+**Line(s):** `splitFieldSelector` / `assertSafeField` (about 222-247); `put` check (about 360-370)
+**Issue:** The split happens at the last separator, and a field containing `/` is then rejected instead of being treated as part of the path. So an entry whose directory contains the separator is only reachable with a field selector; the entry itself can never be read. The code comment says a separator inside a directory name "still leaves the field at the end", which implies that case is supported, but only the field form works. `list()` still returns these keys, and they fail.
+**Breaking input:** `fieldSeparator: "#"`, entry `swamp/team#a/entry`. `list()` returns `team#a/entry`. `get("team#a/entry")` throws `selects an invalid field: ... no '/' or ':'`, and `put("team#a/entry", v)` throws `cannot write a single field`. Also `list()` returns `a#` (entry `swamp/a#`), and `get("a#")` throws.
+**Impact:** Keys from `swamp vault list-keys` fail in `read-secret` or in a vault expression. Existing entries become unreadable and unwritable as soon as `fieldSeparator` is turned on, and nothing warns about it.
+**Fix:** When the text after the last separator contains `/`, treat the key as having no field. That makes the directory case round-trip and matches the code comment. Then decide about a trailing separator (`a#`): either fall back to the literal key or keep rejecting it, but say which in the README. A round-trip test is also missing.
+
+### [MEDIUM] A separator that appears in an entry name silently returns another entry's value
+**File:** vault/pass/extensions/vaults/pass.ts
+**Line(s):** ConfigSchema `fieldSeparator` (about 204-206); `splitFieldSelector`
+**Issue:** The schema blocks only `""` and anything containing `/`. Whitespace and other characters common in entry names are accepted. A key naming a real entry is then re-read as `&lt;other entry&gt;#&lt;field&gt;` and returns that other entry's field value, with no error.
+**Breaking input:** `fieldSeparator: " "`, entries `swamp/my entry` and `swamp/my` (the latter containing `entry: wrong`). `get("my entry")` returns `"wrong"` from `swamp/my` (argv `["show","swamp/my"]`).
+**Impact:** A consumer gets a different secret than the one it named, with nothing to show the read went wrong. The README tells users to choose a safe separator, but nothing enforces it.
+**Fix:** At minimum, reject whitespace-only and whitespace-containing separators in the schema (a `\s` test in the refine) and add that config to `invalidConfigs`. Better, also fall back as in the first finding.
+
+### [MEDIUM] `INSTRUMENTATION_VERSION` is stale in a file this branch edits
+**File:** vault/pass/extensions/vaults/_lib/tracing.ts
+**Line(s):** 34-35
+**Issue:** The comment says `/** Kept in step with version in manifest.yaml. */`, but the value is `"2026.08.20.1"` while the manifest moves to `2026.10.20.1`. It was already stale on main (`2026.10.14.1`), but this branch edits `tracing.ts` and bumps the version without updating it. CLAUDE.md requires a single source of truth for version strings.
+**Breaking input:** None needed; the tracer scope reports the wrong version on every span.
+**Impact:** The instrumentation-scope version on traces is wrong.
+**Fix:** Set it to `"2026.10.20.1"`, or better, derive it so the two can't drift.
+
+### [LOW] `#otpauth` and bare-URL lines are parsed as fields and return mangled values
+**File:** vault/pass/extensions/vaults/pass.ts
+**Line(s):** `extractField` (about 172-182)
+**Issue:** Any line with a colon counts as a field, split at the first colon.
+**Breaking input:** An entry line `otpauth://totp/a?secret=ABC`. `get("e#otpauth")` returns `"//totp/a?secret=ABC"`. A bare `https://x` line likewise answers `#https`.
+**Impact:** pass-otp users who try `#otpauth` get a broken URI back with no error.
+**Fix:** Require the field name to match `^[^\s:/]+$` and skip lines whose colon is followed by `//`, or say in the README that URI lines are not fields.
+
+### [LOW] `put` and `get` record `vault.secret_key` differently when a selector is present
+**File:** vault/pass/extensions/vaults/pass.ts
+**Line(s):** `put` (`spanAttributes("put", key)`) vs `get` (`spanAttributes("get", path)` plus `vault.secret_field`)
+**Issue:** A rejected `put("example#login")` records `vault.secret_key = "REDACTED"`, while `get` records `"example"` plus the field. The release notes say `vault.secret_key` "carries the entry path without the selector", which is true for get only.
+**Breaking input:** `put("example#login", "x")` with `fieldSeparator: "#"`.
+**Impact:** Spans are inconsistent between the two methods, and the release note overstates the change.
+**Fix:** Split in `put` too and record path plus field, or limit the release-note claim to `get`.
+
+### [LOW] `put` rejects an empty selector with a misleading message
+**File:** vault/pass/extensions/vaults/pass.ts
+**Line(s):** `put` (about 362-369)
+**Issue:** `put("a#", v)` says "cannot write a single field", but `a#` selects no valid field; `get` calls the same key "an invalid field".
+**Breaking input:** `put("a#", "x")`.
+**Impact:** The error points the user at the wrong problem.
+**Fix:** Run `assertSafeField` (or the fallback from the first finding) before the put rejection.
+
+### [LOW] Docs no longer match the code in three places
+**File:** vault/pass/manifest.yaml (description); vault/pass/README.md (Troubleshooting, config block)
+**Issue:**
+- The manifest description still says spans carry "the vault name, key name, and backend only". They now also carry `vault.secret_field`.
+- The README section "A key is rejected before `pass` runs" doesn't mention field-selector rejection (blank field, field containing `/` or `:`).
+- In the README config block, the new `passwordOnly`/`fieldSeparator` lines continue an existing comment style at column 0 under `config:`. Uncommenting them as written gives YAML that drops them out of `config:`. The pattern predates this branch.
+**Breaking input:** None needed; these are doc-accuracy problems.
+**Impact:** Users get incomplete or misleading guidance.
+**Fix:** Change the manifest to "vault name, key and field names, and backend". Add the selector rules to Troubleshooting. Indent the commented keys under `config:`.
+
+### [LOW] Test gaps for behavior the README claims
+**File:** vault/pass/extensions/vaults/pass_test.ts
+**Issue:** These claims have no test:
+- field extraction from CRLF entries (only `passwordOnly` CRLF is tested)
+- an empty field value (`login:` returns `""`, confirmed by probe)
+- field lines with leading whitespace or whitespace around the name (`  User : x ` matches `#user` and returns `"x "`)
+- trailing whitespace being kept in field values
+- put span attributes when a selector is present
+- the `list()` round-trip under `fieldSeparator`
+
+The existing tests do test what they claim. The last-occurrence test does tell the two split strategies apart: under a first-occurrence split, `team#a/entry#login` would be rejected and the test would fail.
+**Impact:** The documented parsing behavior is unprotected against regressions.
+**Fix:** Add the cases listed.
+
+**Probes that came out clean:**
+- **Zod 4:** `z.string().min(1).refine(...).optional().describe(...)` produces JSON Schema `{type:"string", minLength:1, description}`, so config introspection keeps the field and description. `""`, `"/"`, `"a/b"` and `passwordOnly:"yes"` all fail `safeParse`.
+- **Truthiness:** the new code uses `!== undefined` throughout, and an empty separator is blocked by `min(1)`.
+- **Path validation:** `get` still runs `assertSafeKey` on the path through `prefixKey`, so `#login` fails with "must not be empty" and `x/..#f` is rejected.
+- **Overlapping separator:** `"##"` with `a###b` reads entry `a#`, field `b`. That is consistent with the documented last-occurrence rule.
+- **Field and `passwordOnly` together:** a field selection wins over `passwordOnly`, matching the README table.
+- **Release:** the manifest is bumped to `2026.10.20.1`, `RELEASE_NOTES.md` follows the CLAUDE.md format, and vaults have no upgrades array.
+- **Deferral:** the branch has no TODOs or skips.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>78837</subagent_tokens><tool_uses>8</tool_uses><duration_ms>132040</duration_ms></usage>
+</task-notification>
