@@ -1,0 +1,92 @@
+<task-notification>
+<task-id>af3a55e9c5d96d52d</task-id>
+<tool-use-id>toolu_016FK6xDp1GXQr1QQWbcdLM6</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/af3a55e9c5d96d52d.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review redmine attachments" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Adversarial review: `feat/redmine-attachments` (@webframp/redmine 2026.10.20.1)
+
+All gates pass in the worktree: `deno task test` (58 passed), `check`, `lint`, `fmt:check`, and `swamp extension quality manifest.yaml` (passed, 100%). The upgrade chain ends at `2026.10.20.1`, and the version is the same in `manifest.yaml` and `model.version`. One finding is HIGH (a data-integrity problem), so the verdict is FAIL.
+
+### [HIGH] A filtered `download_attachments` run replaces the full listing with a subset, and nothing marks it as filtered
+**File:** `redmine/extensions/models/redmine/redmine.ts`
+**Line(s):** about 2520–2580 (the `results` loop and the `writeResource("attachments", attachmentsResourceName(...))` call)
+**Issue:** `list_attachments` and `download_attachments` write the same resource name, `attachments-&lt;issueId&gt;`. `download_attachments` only puts the *selected* attachments in `results`. A run with `attachmentIds` or `contentTypePrefix` therefore overwrites the complete listing with a partial one. The schema has no `truncated`, `filtered` or selection field, so a reader cannot tell. The resource description says "Attachments of one issue", which is no longer true. This breaks the repo rule that filtered or capped results must be reported honestly ("`truncated` must be honest").
+**Breaking input:** `list_attachments issueId=42` writes ids [7, 8, 9]. Then `download_attachments issueId=42 contentTypePrefix=image/` makes `attachments-42.attachments` equal `[7]`. A downstream CEL reader of `model.tracker.resource.attachments.attachments-42` now thinks the issue has one attachment.
+**Impact:** Downstream workflow steps lose data silently.
+**Fix:** Write every attachment from `all` into the resource. Unselected ones keep `status: "listed"` (or a new `"not-selected"` value; adding an enum value is additive). Optionally also record `filter: {attachmentIds, contentTypePrefix}`. Add a test that runs `list_attachments` and then a filtered download, and asserts the full list survives.
+
+### [MEDIUM] Peak memory is twice `maxBytes` per file, and the cap allows 500 MiB
+**File:** `redmine/extensions/models/redmine/_lib/api.ts`
+**Line(s):** the chunk loop and final copy at the end of `redmineDownload`
+**Issue:** The function keeps every chunk in `chunks[]` and then copies them all into a new `Uint8Array(total)`. For a short time both copies are alive. `maxBytes` is allowed up to `524_288_000`.
+**Breaking input:** `maxBytes=524288000` with a 499 MiB attachment uses about 1 GiB of heap. It may run out of memory on a small worker.
+**Impact:** The "bounded buffering" claim holds only up to a 2x factor.
+**Fix:** Stream through a byte-counting `TransformStream` into `writer.writeStream(...)`, which `DataWriter` supports, and abort when the count passes the cap. Alternatively, release each chunk as it is copied, or lower the maximum allowed `maxBytes`.
+
+### [MEDIUM] Redirects are followed with the API key attached, and a redirect target can be stored as "downloaded"
+**File:** `redmine/extensions/models/redmine/_lib/api.ts`
+**Line(s):** `redmineDownload`, the `fetchWithRetry(\`${host}${path}\`, { headers })` call
+**Issue:** `fetch` follows redirects by default. The fetch spec drops only `Authorization` on a cross-origin redirect, so the custom `X-Redmine-API-Key` header goes to whatever host the redirect names. Separately, the response `Content-Type` is read but never checked. A redirect that ends at an HTML page (for example a login page or a storage-proxy error) returns 200 and is stored under the attachment's name with `status: "downloaded"`.
+**Breaking input:** A Redmine instance whose storage plugin (S3- or CDN-backed) answers `/attachments/download/&lt;id&gt;` with a 302 to an external host. The API key goes to that host.
+**Impact:** The API key leaks to a third party, and wrong bytes can be stored as the attachment.
+**Fix:** Use `redirect: "manual"`. Follow a same-origin redirect yourself; for a cross-origin one, follow it without the Redmine headers. Optionally, reject a `text/html` response when the recorded content type is something else.
+
+### [MEDIUM] An empty `attachmentIds` array downloads every attachment
+**File:** `redmine/extensions/models/redmine/redmine.ts`
+**Line(s):** `selectAttachments` (`attachmentIds?.length` / `!attachmentIds?.length`)
+**Issue:** The check tests truthiness, not presence, so `[]` is treated the same as "not given".
+**Breaking input:** A workflow passes `attachmentIds: ${{ &lt;CEL filter&gt; }}`, and the filter matches nothing. The method downloads all attachments, up to `maxBytes` each, with no limit on how many.
+**Impact:** The filter fails open: an empty selection becomes "everything".
+**Fix:** Use `attachmentIds !== undefined`, so an empty array selects nothing, or add `.min(1)` to the zod schema so `[]` is rejected.
+
+### [MEDIUM] A failure midway leaves files stored, against swamp's "throw before writing" guidance
+**File:** `redmine/extensions/models/redmine/redmine.ts`, the download loop
+**Issue:** Each file is written with `writeAll` as soon as it downloads. If attachment N fails, files 1..N-1 are already stored, and the run then throws. The README says so, but `RELEASE_NOTES.md` does not, and no test covers it: the failure test has a single attachment. The previous `attachments-&lt;id&gt;` resource (if any) also stays, and its statuses no longer match the new file versions.
+**Breaking input:** Attachments [7 → 200, 8 → 403]. The file `attachment-42-7` gets a new version, the run fails, and the old `attachments-42` keeps its old statuses.
+**Fix:** Either download everything first and write after all downloads succeed (this makes the memory finding above worse), or keep the current behaviour and add it to RELEASE_NOTES with a two-attachment test that asserts it. The second option is effectively a design decision to put to the user.
+
+### [LOW] Fetches have no timeout
+**File:** `_lib/api.ts`, `redmineDownload`
+**Issue:** There is no `AbortSignal`. If the server stalls after sending headers, `reader.read()` waits forever. The sibling helpers have no timeout either, but a body of up to 500 MiB makes a stall far more likely here.
+**Fix:** Pass `AbortSignal.timeout(...)`, or reset an idle timer on each chunk.
+
+### [LOW] `issueId` and `attachmentIds` accept non-integers and negatives
+**File:** `redmine.ts`, the `list_attachments` and `download_attachments` arguments
+**Issue:** They are typed `z.number()`, like the siblings.
+**Breaking input:** `issueId=1e21` requests the path `/issues/1e+21.json` and the data name `attachments-1e+21`. `issueId=-1` gives `attachments--1`.
+**Fix:** Use `.int().positive()` on both new methods.
+
+### [LOW] Data names can collide with project-keyed names
+**File:** `redmine.ts`, the `writeResource` calls for `users`, `time_entries` and `issue_categories`, which use the project identifier as the name
+**Issue:** Swamp stores data by name regardless of spec. `attachments-42` is a valid Redmine project identifier.
+**Breaking input:** `list_users project=attachments-42` overwrites the attachments resource of issue 42.
+**Note:** The names that already exist collide among themselves and do so far more readily. `issue_detail`, `relations`, `time_entries` and `versions` all use bare `String(id)`, so `get_issue 42` and `list_relations issueId=42` write the same name. That is outside this diff but has the same root cause.
+**Fix:** Prefix the project-keyed names. The existing numeric-name collisions are not in this diff; ask the user whether to fix them in this PR.
+
+### [LOW] `contentTypePrefix` matching is case-sensitive and also matches the fallback type
+**Issue:** MIME types are case-insensitive, but `startsWith` is not, so `Image/PNG` does not match `image/`. A prefix of `application/` also matches attachments with no content type, because those fall back to `application/octet-stream`.
+**Fix:** Lower-case both sides before comparing.
+
+### [LOW] The default `maxBytes` is written in two places
+**Issue:** `20_971_520` appears in both `.default(...)` and `args.maxBytes ?? 20_971_520`. Changing one without the other would drift silently.
+**Fix:** Use a single `const DEFAULT_MAX_DOWNLOAD_BYTES`.
+
+### [LOW] Gaps in the tests
+- At the model level, "skips a body larger than its recorded filesize" uses `new Response(new Uint8Array(50))`. That response has a Content-Length header, so it tests the declared-size check, not the streaming check. (`api_test.ts` does cover streaming.)
+- No test asserts the `contentType` override passed to `createFileWriter`, that `model.files.attachment` exists, or that the zod schema rejects bad arguments (`maxBytes` over the maximum, more than 100 ids).
+- The test names "has all 7 resources" and "has all 9 methods" were stale before this change and still are, while the counts were updated to 13 and 28.
+
+### Checked and found correct
+- Parsing `Content-Length`: a missing header gives NaN, an empty one gives 0, and both are handled safely.
+- `||` is deliberate for an empty `content_type`; `??` is used for `description` and `author`.
+- The written data matches the resource schema.
+- Retries, the `X-Redmine-Username` header, and the wording of the error wrapping all match the sibling helpers.
+- `durationMs`, `collectedBy` and `fetchedAt` match the sibling methods.
+- The claims in the manifest (28 methods), README and RELEASE_NOTES match the code, except that RELEASE_NOTES leaves out the partial-failure behaviour.
+- There are no TODOs or deferral notes.
+
+## VERDICT: FAIL</result>
+<usage><subagent_tokens>78518</subagent_tokens><tool_uses>9</tool_uses><duration_ms>137356</duration_ms></usage>
+</task-notification>
