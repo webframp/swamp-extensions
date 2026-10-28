@@ -1,0 +1,76 @@
+<task-notification>
+<task-id>a7a23eea7c23dcf00</task-id>
+<tool-use-id>toolu_01JxZYwbSstguXnF7Ep47Ts6</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/1df9034a-e1a0-490b-b9e5-25ab123f0e39/tasks/a7a23eea7c23dcf00.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review vertex-usage fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH issues; all six findings below are LOW. All three #469 items are fixed correctly, and the five new regression tests fail on main and pass on the branch for the intended reasons.
+
+**What I ran in the worktree:**
+- `deno task check`, `lint`, `fmt:check` and `test` all pass (76/76).
+- `swamp extension quality manifest.yaml` reports `status: passed` at 100%. Its one warning (`credentials-sensitive-field` on `tokenRows`) was already on main.
+- I copied the extension to the scratchpad, swapped in main's `vertex_usage.ts` and kept the new tests. All 5 new tests fail there:
+  - **403 test:** `denied` comes back as `no_data` instead of `error`.
+  - **BigQuery tests:** zero rows come back, and no error is thrown when `jobComplete` is missing.
+  - **Legacy test:** `otherTokens` and `totalTokens` don't match the expected values.
+  - **Body-cancel test:** fails with "Every project failed to scan (1). First error: cancel failed". So the `Object.defineProperty` override does reach the cancel path.
+
+**Probes that came back clean:**
+- **`resp?.body?.cancel().catch(...)`:** optional chaining short-circuits the whole chain, so a null body or an undefined `resp` yields `undefined` and `.catch` is never called on `undefined`. `ReadableStream.cancel()` reports a locked stream as a rejected promise, which the `.catch` absorbs.
+- **`makeRateLimiter` splice:** it counts the leading entries at least 60s old and removes them in one `splice`. That gives the same result as the old `shift` loop, including stopping at the first entry that hasn't expired.
+- **`aggregateModels`:** every `totalTokens` and sort in `scan_projects` and `get_token_usage` now includes other tokens. A missing `type` label goes to "unknown" and then to other, the same as `buildUsageRows` does for `undefined` in `scan_usage`. `?? 0` handles the optional field, and `||` was changed to `??` for the map default. The per-minute rates are input-only and output-only, as before.
+- **Schema:** the new `otherTokens` fields are optional on all three legacy schemas, so stored resources still validate. The change is additive.
+- **Version:** the manifest and `model.version` are both `2026.10.12.1`, a new upgrade entry was appended (the previous one was not relabelled), and the version test checks a pattern, not a literal.
+- **Shared Monitoring call:** `listTimeSeries` is the only place that checks for "Cannot find metric", so the Vertex token, Vertex invocation, Gemini token, Gemini request and legacy paths all get the fix. Discovery and BigQuery don't do substring checks.
+- **BigQuery bounds:** polling is capped (`MAX_POLLS` 20 with a 30s server timeout) and so are result pages (`MAX_RESULT_PAGES` 200). `resolveBillingColumns` (`tables.get`) doesn't read `jobComplete`.
+
+### [LOW] Accepting 400 has no test, and is slightly broader than needed
+**File:** gcp/vertex-usage/extensions/models/gcp/vertex_usage.ts
+**Line(s):** 1077-1080
+**Issue:** Cloud Monitoring returns 404 NOT_FOUND "Cannot find metric(s) that match type ..." for a missing metric. Accepting 400 as well is defensive, but no test covers the 400 branch. A malformed-filter 400 that echoes the filter is not a real risk: the metric types and the Gemini filter are constants and never contain the phrase.
+**Breaking input:** None realistic. A 400 whose body contains "Cannot find metric" for some reason other than an absent metric would be read as no data.
+**Impact:** Negligible. If the 400 branch were removed later, no test would notice.
+**Fix:** Add a test for a 400 response containing "Cannot find metric", or limit the check to 404 if 400 isn't known to happen.
+
+### [LOW] Release notes overstate the 403 outcome for request-count metrics and the legacy methods
+**File:** gcp/vertex-usage/RELEASE_NOTES.md
+**Line(s):** 3-7
+**Issue:** The note says a non-404/400 response "marks the project `error` and `scan_summary.complete` false". That is only true for the token metric in `scan_usage` and `scan_gemini_api_usage`. The invocation and Gemini request-count calls are wrapped in try/catch, so a 403 there sets `requestsAvailable: false` and adds a warning instead (lines 1300-1311 and 1365-1379). In `scan_projects`, a 403 sets `truncated: true`, and there is no `scan_summary`.
+**Breaking input:** A 403 on `aiplatform.googleapis.com/.../model_invocation_count` only. The project still shows `ok`, with `requestsAvailable: false`.
+**Impact:** Users get a slightly wrong picture of what changed. The behaviour itself is correct, and `complete` still becomes false through `requestsAvailable`.
+**Fix:** Add one clause: for request-count metrics the project keeps its token data with `requestsAvailable: false`, and the legacy scans set `truncated: true`.
+
+### [LOW] Downstream `@webframp/ai-usage` describes `totalTokens` as input plus output
+**File:** ai-usage/extensions/models/ai_usage.ts
+**Line(s):** 300, 106-116, 139-149 (it reads `scan_results.totals.totalTokens` from `scan_projects`)
+**Issue:** `ai-usage` reads the legacy `scan_results` and documents `totalTokens` as "Combined input and output tokens". Its report shows input, output and total side by side. After this change, Vertex's total can be larger than input plus output, and `ai-usage` neither reads nor explains `otherTokens`. The release note's "no co-upgrades" is true in the narrow sense (nothing breaks), but it doesn't mention this consumer.
+**Breaking input:** Any Vertex project that reports a token `type` other than input or output.
+**Impact:** The cross-provider report will show Vertex totals that don't add up. That is cosmetic, but it will confuse readers.
+**Fix:** In the Upgrade note, mention that `ai-usage` totals for Vertex now include other tokens. Optionally, follow up by changing the `ai-usage` description to "total tokens as reported by the provider".
+
+### [LOW] A poll response missing `jobComplete` now runs all 20 polls and reports a timeout
+**File:** gcp/vertex-usage/extensions/models/gcp/vertex_usage.ts
+**Line(s):** 1682-1700
+**Issue:** If a `getQueryResults` poll ever omits `jobComplete` but carries rows, the loop keeps polling until `MAX_POLLS` and then throws "BigQuery job did not complete in time", which misdescribes a protocol problem. The pageToken loop (1721-1746) doesn't look at `jobComplete`. That is fine, because those pages belong to a job already reported complete.
+**Breaking input:** A poll response such as `{jobReference:{jobId:"j"}, schema:{...}, rows:[...]}` with no `jobComplete`, returned 20 times.
+**Impact:** Only the error message is wrong. It still fails rather than returning partial data, and the loop is bounded.
+**Fix:** Optional. Give the cap error a distinct message when the last response had no `jobComplete` field at all.
+
+### [LOW] No test for a 403 on the request-count metric
+**File:** gcp/vertex-usage/extensions/models/gcp/vertex_usage_test.ts
+**Line(s):** 2414-2448
+**Issue:** The 403 test only covers the token metric. Before this change, a 403 "Cannot find metric" on the invocation metric would have left `requestsAvailable: true` with zero requests. That path has no test.
+**Breaking input:** The token metric returns 200 and the invocation metric returns 403 "Cannot find metric ...".
+**Impact:** That path could regress without any test failing.
+**Fix:** Add a test asserting `requestsAvailable === false` and `complete === false`.
+
+### [LOW] Old release notes were replaced (per the repo rule)
+**File:** gcp/vertex-usage/RELEASE_NOTES.md
+**Issue:** The 2026.10.01.1 notes were overwritten. The repo rule is to overwrite per version and keep history in git and GitHub releases, so this follows the rule.
+**Impact:** None.
+**Fix:** None.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>90227</subagent_tokens><tool_uses>15</tool_uses><duration_ms>129998</duration_ms></usage>
+</task-notification>
