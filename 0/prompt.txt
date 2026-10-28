@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>b04iuncw7</task-id>
+<tool-use-id>toolu_01KCeQiPddTcjZcwbv56SqBz</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/b04iuncw7.output</output-file>
+<status>completed</status>
+<summary>Background command "Follow #516 merge through CI and publish" completed (exit code 0)</summary>
+</task-notification>
