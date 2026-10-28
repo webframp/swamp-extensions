@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>bqlmz005y</task-id>
+<tool-use-id>toolu_01AYyRhhd6Bb75FsJHZWcY6f</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/bqlmz005y.output</output-file>
+<status>completed</status>
+<summary>Background command "for i in $(seq 1 30); do h=$(gh api repos/webframp/swamp-extensions/pulls/504 -q .head.sha | cut -c1-8); [ "$h" = "dd4fd582" ] &amp;&amp; break; sleep 10; done; echo head=$h; sleep 30; for i in $(seq 1 55); do p=$(gh pr checks 504 2&gt;/dev/null | awk -F'\t' '$2=="pending"' | wc -l); [ "$p" = "0" ] &amp;&amp; break; sleep 10; done; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1}'; gh pr view 504 --json reviews -q '.reviews[-1] | .submittedAt + "\n" + .body'" completed (exit code 0)</summary>
+</task-notification>
