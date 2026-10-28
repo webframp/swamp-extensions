@@ -1,0 +1,45 @@
+<task-notification>
+<task-id>af9feb6722e6a5e05</task-id>
+<tool-use-id>toolu_01JGpbLhwBrrjbLRtmvAr5eq</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/af9feb6722e6a5e05.output</output-file>
+<status>completed</status>
+<summary>Agent "Review iid tightening sweep" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH problems, so the commit passes. The one thing to fix before merge is a release-notes sentence that is false for the three batch methods. I ran the new test (it passes) and `deno lint` on the test file (clean). I modified no files.
+
+**1. Completeness: nothing missed.**
+- All 24 `iid` arguments and all 3 `iids` arrays are tightened. That is 22 converted in this commit plus the 2 work item methods that already had the constraint, matching the 27 in the commit message.
+- No method argument carries an iid under another name. There is no `mrIid`, `issueIid`, `pipelineIid`, optional iid, nested iid or `z.coerce` variant.
+- Every `arguments:` is an inline `z.object({...})`, so no shared schema hides an iid.
+- `noteableIid` appears in methods only as a value assigned from `args.iid`, and in the resource schema at line 244. It is never an input.
+- Numeric ids that are not iids are correctly left alone: `noteId`, `pipelineId`, `jobId`, `scheduleId`, snippet `id` (lines 7395, 7507, 7588), and `milestone: z.union([z.number(), z.string()])`.
+- `noteId`, `pipelineId`, `jobId`, `scheduleId` and snippet `id` are the same kind of input (global positive integers) and are still plain `z.number()`. That is outside this commit's iid scope; I mention it only because you asked about inputs of the same kind.
+
+**2. Correctness: no resource schema was touched.**
+Every changed line is at the 8-space indentation of method `arguments`. All resource and output `iid` fields (lines 107–1193, including the `.nullable().optional()` at 719 and `PipelineByIidSchema` at 985) are still plain `z.number()`.
+
+**3. Behaviour: no shipped caller is affected.**
+The extension has no `workflows/` directory and the manifest lists none. `review_dashboard.ts` only reads stored data and never calls a method with an iid. Methods that call GitLab internally (the `noteableIid: args.iid` lines) pass an iid that has already been validated.
+
+**4. The test: sound, not vacuous.**
+- It walks `model.methods` and filters parse errors to the `iid`/`iids` path, with 5 as the control value.
+- Loosening any one schema back to `z.number()` lets 0 through. Loosening it to `.positive()` only lets 1.5 through. Either way the test fails.
+- If a schema stopped exposing `.shape` (for example, wrapped in a pipe), that method would be skipped, and `checked.length === 27` would then fail. The 27 is correct.
+
+### [MEDIUM] Release note says "no call that used to succeed is affected", which is false for the batch methods
+**File:** `gitlab/RELEASE_NOTES.md`, the new **Changed** paragraph.
+**Line(s):** The batch methods are at `projects.ts` 4553–4660 (`unassign_from_issues`), around 6110 (MR unassign) and around 6223 (reviewer removal).
+**Issue:** These methods catch failures per item, add them to `failed[]`, and still write a result resource. The method's own description says "Per-issue failures are recorded and never abort the batch."
+**Breaking input:** `iids: [12, 0]` used to succeed. Item 12 was processed, `{iid: 0, error: ...}` was recorded, and the resource was written. Now the whole call is rejected at validation and nothing is processed or written. The same applies to any batch containing `-3` or `1.5`.
+**Impact:** The note tells users nothing that used to work is affected. A caller who feeds a computed list (for example from CEL) containing a stray 0 now gets a hard failure instead of a partial result.
+**Fix:** Reword the note to say what actually changes. For example: "For `unassign_from_issues` and the two MR batch methods, an invalid entry in `iids` now rejects the whole call instead of being recorded under `failed`." Remove "so no call that used to succeed is affected."
+
+### [LOW] "Failed later with a vaguer error" is unverified for fractional iids
+**File/Line(s):** Same paragraph in `gitlab/RELEASE_NOTES.md`.
+**Issue:** iids are sent to GraphQL as `String(iid)`. GitLab's ActiveRecord integer cast may turn `"1.5"` into 1, and on REST paths `/…/1.5` may be read as iid 1 with format `.5`. If so, `1.5` used to act silently on item #1 rather than fail.
+**Impact:** If that is what GitLab does, this change fixes a silent wrong-target write, and the note understates it. The note would also be wrong in a second way.
+**Fix:** Drop the claim about earlier behaviour, or confirm it against GitLab first. The schema change itself is correct either way.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>60318</subagent_tokens><tool_uses>8</tool_uses><duration_ms>66680</duration_ms></usage>
+</task-notification>
