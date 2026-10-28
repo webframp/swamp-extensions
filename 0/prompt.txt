@@ -1,0 +1,124 @@
+<task-notification>
+<task-id>a2b5f718eb9ac2ec2</task-id>
+<tool-use-id>toolu_01TsSus8GSiPwe9JqVW9quMF</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a2b5f718eb9ac2ec2.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit docs batch 5" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Batch 5 audit (53 files): 41 findings in 34 files, and 19 files with none. The biggest problem is that all 20 `snyk/*` READMEs show the API token as a plaintext `--global-arg` placeholder and never mention a vault. They are all output of `scripts/snyk-codegen`, so fixing the generator's README template and regenerating fixes all 20. `redmine`, `redmine-kanban`, `reddit`, `twitch` and the `hashicorp-vault` config example also show secrets in plaintext as the main path.
+
+The Snyk secret-returning method rows (low severity) assume those endpoints return the minted secret. I inferred that from the method descriptions and did not check the model code.
+
+```
+reddit/README.md:35 | 10 | low | --global-arg clientSecret=REDACTED | Use the documented `'clientSecret=REDACTED vault.get("reddit", "clientSecret") }}'` expression form instead of `vault://` URIs (lines 35-38).
+reddit/README.md:102 | 10 | low | should be stored in your swamp vault and referenced with `vault://` URIs | Document the `${{ vault.get(&lt;vault&gt;, &lt;KEY&gt;) }}` expression as the reference pattern.
+reddit/README.md:106 | 6 | high | swamp vault set reddit/clientId "your-client-id" | Replace with `swamp vault put &lt;vault&gt; clientSecret` (interactive) or piped stdin; `vault set` with inline values leaves secrets in shell history (lines 106-109).
+
+redmine-kanban/README.md:29 | 1 | high | --global-arg apiKey=YOUR_API_KEY | Use `'apiKey=REDACTED vault.get("redmine", "REDMINE_API_KEY") }}'` and show `swamp vault put redmine REDMINE_API_KEY`.
+redmine-kanban/README.md:29 | 10 | medium | (no vault guidance anywhere in README; API key required by @webframp/redmine dependency) | Add a short vault setup section: `swamp vault put` plus the vault.get global-arg.
+
+redmine/README.md:30 | 1 | high | --global-arg apiKey=YOUR_API_KEY | Use `'apiKey=REDACTED vault.get("redmine", "REDMINE_API_KEY") }}'`.
+redmine/README.md:14 | 10 | medium | A Redmine API key (found under My Account in Redmine) | Follow with instructions to store it via `swamp vault put` and reference it via vault.get; README never shows the pattern.
+
+snyk/apps/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use `'apiToken=REDACTED vault.get("snyk", "SNYK_API_TOKEN") }}'`; fix in scripts/snyk-codegen README template.
+snyk/apps/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add a vault setup snippet (`swamp vault put snyk SNYK_API_TOKEN`) via the codegen template.
+snyk/apps/README.md:25 | 11 | low | `update_group_app_install_secret` ... Manage client secret for non-interactive Snyk App installations | Document that the returned client secret lands in swamp data; advise moving it into a vault (also lines 31, 35).
+snyk/assets/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/assets/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/cloud/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/cloud/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/collections/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/collections/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/container-images/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/container-images/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/groups/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/groups/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/inventory/README.md:15 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/inventory/README.md:15 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/issues/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/issues/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/memberships/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/memberships/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/policies/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/policies/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/projects/README.md:15 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/projects/README.md:15 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/sast/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/sast/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/sbom/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/sbom/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/self/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/self/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/service-accounts/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/service-accounts/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/service-accounts/README.md:27 | 11 | low | `update_service_account_secret` ... Manage a group service account's client secret. | Note that the returned secret is written to swamp data; advise moving it into a vault (also line 33).
+snyk/settings/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/settings/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/slack/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/slack/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/sso/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/sso/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/tenants/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/tenants/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+snyk/tenants/README.md:49 | 11 | low | `create_deployment_credential` ... Create deployment credential | Note that credential material returned is stored as swamp data; advise vaulting it (also line 51).
+snyk/tests/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; regenerate from fixed codegen template.
+snyk/tests/README.md:14 | 10 | medium | (no vault guidance; extension requires API token) | Add vault setup snippet via codegen template.
+
+swamp-club/README.md:8 | 10 | medium | swamp model create @webframp/swamp-club lab --global-arg host=swamp-club.com | Add the API key arg, e.g. `'apiKey=REDACTED vault.get("swamp-club", "SWAMP_CLUB_API_KEY") }}'`.
+swamp-club/README.md:12 | 10 | medium | The API key is a sensitive global argument and should be supplied from a Swamp vault. | Name the global arg and show `swamp vault put` plus the vault.get expression.
+
+terraform/README.md:62 | 7 | low | Each resource includes the complete attribute map from state. | Warn that sensitive state attributes (passwords, keys) are stored unredacted in swamp data; state the redaction scope.
+
+twitch/README.md:40 | 6 | high | swamp vault put twitch-creds twitch-client-id YOUR_CLIENT_ID | Drop the inline values; use interactive `swamp vault put twitch-creds twitch-client-secret` or piped stdin (lines 40-43).
+
+typesafe-batch/README.md:21 | 2 | medium | Without `apiKey`, the method falls back to the `TYPESAFE_API_KEY` environment variable | Remove the env fallback from the docs, or mark it discouraged and point to vault.get.
+
+vault/gopass/README.md:49 | 8 | low | swamp vault read-secret default services/api-token --force --json | Warn that this prints plaintext to the terminal/logs; prefer vault.get in models (also line 56).
+vault/gopass/README.md:70 | 10 | low | password: "{{ vault \"default\" \"database/prod-password\" }}" | Use the supported `${{ vault.get("default", "database/prod-password") }}` syntax (also line 71).
+vault/gopass/README.md:11 | bootstrap | low | A GPG key configured for gopass encryption | Bootstrap is GPG agent; safe. Optionally say: unlock with gpg-agent/pinentry, never a passphrase in env.
+
+vault/hashicorp-vault/README.md:31 | 7 / bootstrap | high | token: "hvs.CAESI..." | Remove the token from the .swamp.yaml example; recommend `vault login` (~/.vault-token) or a token helper instead.
+vault/hashicorp-vault/README.md:124 | 2 / bootstrap | medium | checks, in order, the config `token` field, the `VAULT_TOKEN` environment variable, and `~/.vault-token` | Recommend ~/.vault-token via `vault login` first; discourage config token and long-lived VAULT_TOKEN exports.
+vault/hashicorp-vault/README.md:47 | 8 | low | swamp vault read-secret hashi my-app/db-password --force --json | Warn that it prints plaintext; prefer vault.get in models.
+vault/hashicorp-vault/README.md:64 | 10 | low | password: "{{ vault('hashi', 'my-app/db-password') }}" | Use `${{ vault.get("hashi", "my-app/db-password") }}`.
+
+vault/hashicorp-vault/docs/otel_verification.md:23 | 6 | low | Command: `swamp vault put probe-vault probe/ext-span2 "&lt;secret canary&gt;"` | Fine for a canary, but note that inline values land in shell history; pipe stdin for real secrets.
+vault/hashicorp-vault/docs/otel_verification.md:56 | 6 | low | `swamp vault put &lt;vault&gt; &lt;key&gt; &lt;secret&gt;` records: | Add that span redaction does not protect shell history; recommend interactive or stdin `vault put`.
+
+vault/macos-keychain/README.md:43 | 8 | low | swamp vault read-secret keychain my-api-key --force --json | Warn that it prints plaintext; prefer vault.get in models.
+vault/macos-keychain/README.md:57 | 10 | low | default: "vault://keychain/my-api-key" | Show the `${{ vault.get("keychain", "my-api-key") }}` expression instead of a `vault://` default (also line 60).
+
+vault/pass/README.md:64 | 11 | low | s3cr3t-value | Use an obviously fake placeholder such as `&lt;password&gt;` in the example entry.
+vault/pass/README.md:112 | 10 | low | source: vault / vault: my-secrets / key: smtp/example#login | Show the standard `${{ vault.get("my-secrets", "smtp/example#login") }}` form, or note the equivalence (also lines 148-151).
+vault/pass/README.md:138 | 8 | low | swamp vault read-secret my-secrets db/password --force --json | Warn that it prints plaintext; prefer vault.get in models.
+vault/pass/README.md:11 | bootstrap | low | A GPG key configured for encryption/decryption | Bootstrap is GPG agent/pinentry; safe. The allowlisted env keeps unrelated credentials out of the subprocess.
+```
+
+**Files with no findings:**
+- redmine-kanban/skills/create-story.md
+- redmine-kanban/skills/create-task.md
+- redmine-kanban/skills/design-session-checklist.md
+- redmine-kanban/skills/hypothesis-task.md
+- research-collector/README.md
+- rice-scoring/README.md
+- SECURITY.md
+- SUPPORT.md
+- skills/bump-npm-deps.md
+- skills/pr-workflow.md
+- skills/update-stale-deps.md
+- sre/README.md
+- swamp-adoption/README.md
+- system/README.md
+- team-topology/README.md
+- threat-model/README.md
+- triage/prompts/assessment.md
+- triage/prompts/external-message.md
+- triage/prompts/review.md
+- triage/README.md
+- triage/skills/triage/SKILL.md
+
+`triage/README.md` uses `--global-arg-file triage.yaml` but does not say whether that file holds credentials. There is nothing to flag in the doc itself.
+
+All 53 files were read in full; nothing was modified.</result>
+<usage><subagent_tokens>131844</subagent_tokens><tool_uses>15</tool_uses><duration_ms>108322</duration_ms></usage>
+</task-notification>
