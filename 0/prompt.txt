@@ -1,0 +1,1 @@
+good plan, and the release notes entry should advise people that in a future version the report will be updated to use only the new format names
