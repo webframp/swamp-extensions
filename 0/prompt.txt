@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>b5rb3ba1m</task-id>
+<tool-use-id>toolu_01Rov8Zg8tzBffSTTJoXBGd4</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/b5rb3ba1m.output</output-file>
+<status>completed</status>
+<summary>Background command "for i in $(seq 1 58); do s=$(gh run list --branch fix/redmine-retry-cap-https-ports --limit 5 --json headSha,status,workflowName -q '[.[] | select(.headSha|startswith("00a2b459")) | select(.workflowName=="CI")][0].status'); [ "$s" = "completed" ] &amp;&amp; break; sleep 10; done; gh run list --branch fix/redmine-retry-cap-https-ports --limit 5 --json headSha,status,conclusion,workflowName -q '.[] | select(.headSha|startswith("00a2b459")) | .workflowName+" "+.status+" "+(.conclusion//"")'; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1}'; gh pr view 505 --json reviews -q '.reviews[-1] | .submittedAt + "\n" + .body'" completed (exit code 0)</summary>
+</task-notification>
