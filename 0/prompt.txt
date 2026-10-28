@@ -1,0 +1,89 @@
+<task-notification>
+<task-id>a331cd7e22c35d83c</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/a331cd7e22c35d83c.output</output-file>
+<status>completed</status>
+<summary>Agent "Falai codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The follow-up is done and the branch is ready to push. I have not pushed or opened a PR. A second adversarial review returned PASS with no findings. It found no CRITICAL, HIGH, MEDIUM or LOW issues.
+
+- **Branch:** `fix/falai-codegen-regen-2026-10-07`
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a331cd7e22c35d83c`
+- **Commit:** `e65e7bcf` is a single commit that replaces my earlier one. All nine falai extensions regenerated to `2026.10.07.1`: account, assets, compute, keys, models, organization, serverless, storage and workflows.
+
+## Harness fixes (all in `scripts/falai-codegen`)
+
+- **Request timeout.** The generated `api.ts` now gives every request a 60-second deadline that also covers the response body. A timeout raises an error naming the HTTP method and URL.
+- **Empty 2xx body.** Paginated lists treat it as an empty page. A new `falApiData` helper raises a clear error for methods that must return data (get, create, update and unpaginated list). Delete and action methods still accept an empty body. This also fixed the second review's LOW finding about empty bodies on non-paginated lists.
+- **Malformed JSON.** The error now names the method, path and status instead of a bare `SyntaxError`.
+- **Retry-After.** The generated helper caps each 429 back-off at 30 seconds. This was an unbounded wait I found on my own.
+- **Generated tests.** There is now one test per method. Before, the first method of each type displaced the rest, so only 2 of the 10 `models` methods were tested. Tests for enum query arguments such as `sort` assert the argument reaches the request URL under the API's own parameter name.
+- **Change detection.** A change to the generated helper, manifest, `deno.json`, README or license now counts as a change and forces a bump. Before, only the model source was compared, so those changes were skipped. A test-only change rewrites just the test file with no bump.
+- **Sibling datadog classes.** The bare-`SyntaxError` and empty-body classes applied and are fixed. The model-source-only change check applied and is fixed. The "one method displaces another" class applied as the one-test-per-type keying.
+
+## Release notes
+
+- **Models:** the note says `sort` is ignored when `endpoint_id` is given. I took that from the generated schema description in `models.ts`, which says "Ignored in endpoint_id find mode". The client forwards both parameters and the ignoring happens at fal.ai.
+- **The other eight:** the notes list only the hardening and say no methods, arguments or resource schemas changed.
+- **Upgrade entries:** each extension got one appended identity upgrade entry, and none of the changes is breaking.
+
+## Gates
+
+- **Harness:** `check`, `lint`, `fmt:check` and `test` pass (125 tests), and a regeneration dry run reports all nine unchanged.
+- **Each of the nine extensions:** `check`, `lint`, `fmt:check` and `test` pass.
+- **Quality:** `swamp extension quality manifest.yaml` scores 12/12 points (100%) for all nine. Two more points (`repository-verified`) are pending server verification on publish. CLAUDE.md says 14/14, but the current rubric v3 totals 12.
+- **Lint catch:** lint caught an unused `requests` binding in the first generated tests. I fixed that in the harness and added tests for it.
+
+## Drafted PR
+
+**Title:** `fix(falai): harden shared API helper and regenerate all extensions`
+
+**Body:**
+```
+## Summary
+
+Regenerates all nine falai extensions (2026.10.07.1) and hardens the
+codegen harness that produces them.
+
+The updated fal.ai spec adds an optional `sort` argument (`relevant` or
+`recent`) to `get_models` in `@webframp/falai/models`. It is additive and
+the default is unchanged. fal.ai ignores `sort` when `endpoint_id` is given.
+
+The harness changes are what touch the other eight extensions. Apart from
+the hardening below, their behavior is unchanged: no methods, arguments, or
+resource schemas changed.
+
+- Every request now has a 60-second deadline that covers the response body.
+  A timeout raises an error naming the HTTP method and URL.
+- An empty 2xx body is handled explicitly. Paginated lists return an empty
+  page. Methods that must return data (get, create, update, unpaginated list)
+  raise a clear error. Delete and action methods still accept no content.
+- A malformed JSON body raises an error naming the method, path, and status.
+- A 429 `Retry-After` is capped at 30 seconds per retry.
+
+## Harness changes (scripts/falai-codegen)
+
+- Generated tests now cover every method, not the first of each type, and
+  assert that enum query arguments such as `sort` reach the request URL.
+- Change detection now also compares the shared helper, manifest, README,
+  license, and `deno.json`. Before, a change confined to those files was
+  skipped as "unchanged". Test-only changes refresh the tests with no bump.
+- New behavioral tests drive the generated `api.ts` against a mocked fetch.
+
+No generated file was edited by hand. Each extension has a CalVer bump,
+`RELEASE_NOTES.md`, and an appended identity upgrade entry.
+
+## Validation
+
+- Harness: `check`, `lint`, `fmt:check`, `test` (125 tests) pass.
+- All nine extensions: `check`, `lint`, `fmt:check`, `test` pass.
+- `swamp extension quality manifest.yaml`: 12/12 points for all nine, with
+  2 more points pending server verification of the repository.
+- Regeneration is idempotent: a dry run reports all nine unchanged.
+- Local adversarial review (separate reviewer): PASS on the second pass,
+  after the first pass's LOW findings were fixed in the harness.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>187004</subagent_tokens><tool_uses>78</tool_uses><duration_ms>601752</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a331cd7e22c35d83c</worktreePath><worktreeBranch>worktree-agent-a331cd7e22c35d83c</worktreeBranch></worktree>
+</task-notification>
