@@ -1,0 +1,1 @@
+I have a failed PR here: https://github.com/webframp/swamp-extensions/pull/524 for this repo, I believe it was started using a worktree. Examing the full code change failures, use swamp guidance and fix the problem
