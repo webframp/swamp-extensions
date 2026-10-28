@@ -1,0 +1,27 @@
+<task-notification>
+<task-id>bjip78e3t</task-id>
+<tool-use-id>toolu_016SNqwnerNpJszPQKaXPoNk</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/tasks/bjip78e3t.output</output-file>
+<status>completed</status>
+<summary>Background command "cat &gt; /tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad/gates.sh &lt;&lt;'EOF'
+#!/usr/bin/env bash
+# Gate every bumped extension: check, lint, fmt:check, test, quality, push dry-run.
+W=/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions
+S=/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad
+out=$S/gates.tsv; : &gt; "$out"
+while read -r d; do
+  r=()
+  for t in check lint fmt:check test; do
+    if (cd "$W/$d" &amp;&amp; deno task "$t" &gt; "$S/gate-$(echo "$d" | tr / _)-$t.log" 2&gt;&amp;1); then r+=("$t=ok"); else r+=("$t=FAIL"); fi
+  done
+  q=$(cd "$W/$d" &amp;&amp; swamp extension quality manifest.yaml --json 2&gt;/dev/null | python3 -I -c 'import json,sys
+try:
+  j=json.load(sys.stdin); print(f"{j.get(\"status\")}/{j.get(\"percentage\")}")
+except Exception as e: print("ERR")')
+  p=$(cd "$W/$d" &amp;&amp; swamp extension push manifest.yaml --dry-run --yes &gt; "$S/gate-$(echo "$d" | tr / _)-push.log" 2&gt;&amp;1 &amp;&amp; echo ok || echo FAIL)
+  echo -e "$d\t${r[*]}\tquality=$q\tpush-dry=$p" | tee -a "$out"
+done &lt; "$S/bumped.txt"
+echo GATES-DONE
+EOF
+chmod +x /tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad/gates.sh; bash /tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/a6e3383b-f572-4c61-84aa-6f8eb5dabc4c/scratchpad/gates.sh" completed (exit code 0)</summary>
+</task-notification>
