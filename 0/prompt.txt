@@ -1,0 +1,1 @@
+I'm fine using a secret, give me the guidance or cli commands how to set them. Then also as part of this work we actually need to switch back to to using the swamp-club/setup-swamp github action and that will also close this issue: https://github.com/webframp/swamp-extensions/issues/441
