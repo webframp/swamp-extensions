@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>brexvldy2</task-id>
+<tool-use-id>toolu_018HgQqYKXDZ54ScEAKUbGHf</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/brexvldy2.output</output-file>
+<status>completed</status>
+<summary>Background command "for i in $(seq 1 55); do s=$(gh run view 39478369459 --json status -q .status); [ "$s" = "completed" ] &amp;&amp; break; sleep 10; done; gh run view 39478369459 --json status,conclusion -q '.status+" "+.conclusion'; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 504 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1"\t"$4}'" completed (exit code 0)</summary>
+</task-notification>
