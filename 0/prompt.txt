@@ -1,0 +1,60 @@
+<task-notification>
+<task-id>a6850464cc7619964</task-id>
+<tool-use-id>toolu_01WahtSV1zbF9gw5j65jkHps</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/b84d9c85-311c-4708-8e4e-14126672e2d7/tasks/a6850464cc7619964.output</output-file>
+<status>completed</status>
+<summary>Agent "Independent adversarial review of diff" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Two confirmed defects, one of them serious: the new create methods write a raw `{data:[...]}` response against a schema that requires a top-level `id`. The 36 codegen tests pass, so neither defect is caught by them.
+
+## Confirmed defects
+
+1. **High: the new create specs reject the response they were added to store.**
+   - Locations:
+     - `datadog/on-call/extensions/models/datadog/on_call.ts:122-136` (`CreateScheduleOverridesSchema`) and `:1094` (the `writeResource` call)
+     - `datadog/teams/extensions/models/datadog/teams.ts:205-217` (`CreateTeamConnectionsSchema`) and `:1160`
+   - The schema is the flattened single-item shape, with `id: z.string()` required and no `data` key.
+   - `ddApi` (`_lib/api.ts:151-160`) only flattens a *single-object* `data`. For `data: [...]` it returns the raw `{data:[...]}`, which has no top-level `id`.
+   - I ran `safeParse({data:[{id:"x",type:"overrides",attributes:{}}]})` against `model.resources["create_schedule_overrides"].schema` and got `false`. The same shape is used for `create_team_connections`.
+   - Failure scenario: a real batch create succeeds server-side, then `writeResource` throws on schema validation. The caller sees an error after the overrides or connections were already created, and retrying duplicates them.
+   - The commit message says the separate spec exists so the raw response is not validated against the list shape. In fact it is validated against the wrong single-item shape.
+   - The unit tests miss this because `createModelTestContext` does not validate against the resource schema.
+   - The generator cause is in `getResourceName` and the resource-schema emission in `method_classifier.ts`: a wrapped batch write should get a passthrough or loose schema, not the flattened item schema.
+   - The `{data: [...]}` result also falls back to the instance name `"created"` every time. Repeat creates overwrite one resource, and `garbageCollection` is irrelevant there.
+
+2. **Medium: a breaking schema change ships with a no-op upgrade and a misleading note.**
+   - Location: `datadog/teams/extensions/models/datadog/teams.ts:205` (the `create_team_connections` schema changed from `{items, truncated, fetchedAt}` to the item shape with a required `id`), plus the upgrade entry at about `:563`.
+   - `RELEASE_NOTES.md` says "Previously stored data ... is not rewritten; no migration is needed".
+   - Stored `{items,...}` resources do not satisfy the new schema, because `id` is required. The identity `upgradeAttributes` does not fix them.
+   - This breaks the repo rule that schema changes must be additive.
+   - Also unmentioned in the notes: `garbageCollection` for this resource changed from 10 to 20.
+
+3. **Low: test coverage regressed in the regenerated tests.**
+   - The generated `create_team_connections` test was removed from `teams_test.ts` and not replaced.
+   - The on-call `list_user_notification_channels` and `create_user_notification_channel` tests were replaced by the overrides tests. Those methods are now untested.
+   - The test generator appears to pick one list and one create per service.
+   - The new batch tests are not strong either. They assert `{data: [...]}` bodies only for the one batch create.
+
+4. **Low: the `resolveNested` depth cutoff drops enum typing.**
+   - Location: `service_grouper.ts:73-97`, called with depth 4.
+   - Refs below the cutoff become `z.unknown()`, for example `relationships.*.data.type: z.unknown()` in teams and on-call.
+   - Recursion is bounded by depth, so there is no infinite loop. The cost is that those fields are unvalidated.
+
+## Checked and fine
+
+- `deno task test` in `scripts/datadog-codegen`: 36 pass, 0 fail.
+- `deno task generate:dry-run`: all 13 services report "unchanged — no write needed". The committed output matches the generator, and no other service drifted. This includes the logs raw-array POST path, which is unchanged.
+- Raw-array (non-wrapped) bodies:
+  - The re-wrap only applies when `requestBodyArrayWrapper` is set, so `args.entries` is sent as before.
+  - The classifier change only fires for the wrapper case.
+  - The `getResourceName` change is gated the same way.
+- Resource declarations: every `writeResource` name in the generated code has a `resources:` entry. This holds for the on-call overrides (`schedule_overrides` and `create_schedule_overrides` are both declared), teams, and the security-signals bulk methods. I found no duplicate or stale entries. The batch test also asserts this.
+- Upgrade chains: on-call, teams and security-signals each have a new identity entry ending at `2026.10.14.2`, matching `model.version` and `manifest.yaml`. The tests only use a version regex, so there is no stale literal assertion.
+- Release-note claims that match the code:
+  - on-call: 1 to 25 entries, `include` sent as a query parameter.
+  - security-signals: `.max(199)`, formerly an empty `{data:{attributes:{}}}` body.
+  - teams: delete previously sent no body; create no longer uses `ddApiPostPaginated`, and the import was removed.
+- `config.ts`: removing the `excludePaths` entry is consistent with the generated overrides methods. The on-call README lists them.
+- Revert-sensitivity: if the fix were reverted, `batch_body_test.ts` would fail on `requestBodyArrayWrapper`, `create_thing_overrides` being declared, and the `{ data: args.entries }` count of 3.</result>
+<usage><subagent_tokens>79498</subagent_tokens><tool_uses>10</tool_uses><duration_ms>63936</duration_ms></usage>
+</task-notification>
