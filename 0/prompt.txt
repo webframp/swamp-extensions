@@ -1,0 +1,72 @@
+<task-notification>
+<task-id>a0f5e138da20fbf24</task-id>
+<tool-use-id>toolu_01G8VUpvAhDqsoC3gabecxqW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/d7dc3a2c-1801-4c8f-be91-72ec1cd84d14/tasks/a0f5e138da20fbf24.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review scaffold license fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review of `feat/swamp-adoption-scaffold-license`: I found no CRITICAL or HIGH issues, and the whitespace fix holds. I ran `deno task check`, `lint`, `fmt:check` and `test` in `swamp-adoption`; all pass (61 tests). I also ran the real `scaffold.execute` against a stub context from a throwaway script in the scratchpad. I parsed the emitted manifests with `jsr:@std/yaml` and ran `deno check` on the generated `mod.ts`.
+
+**Whitespace fix**
+- Every interpolation of `license` uses the canonical value: the manifest line, the `mod.ts` header, `licenseStub` (twice), and the `license ?` guards. The raw `args.license` is only read before canonicalization.
+- Inputs with `\n`, `\t`, U+2028/2029, NBSP or U+200B (zero-width space) are rejected on both the schema and execute paths. `""` and `"   "` are errors on both.
+- `"  MIT   OR  Apache-2.0 "` is accepted on both paths. Execute emits `license: MIT OR Apache-2.0` on manifest line 3, directly after `name:`, and the same canonical string in `mod.ts` and `LICENSE.md`.
+- The schema accepts and execute rejects nothing differently. The 200-char cap checks `tokens.join(" ")`, so `(`/`)` become separate tokens and the measured length can exceed the raw length.
+- The emitted manifest parses as YAML for `MIT`, `(MIT)`, `MIT OR Apache-2.0` and `MIT WITH Classpath-exception-2.0`, with `additionalFiles: ["LICENSE.md"]`. The generated `mod.ts` passes `deno check`.
+
+**Parser edge cases (stub-context run)**
+- Rejected correctly: `()`, `MIT ()`, `MIT WITH`, `WITH MIT`, `MIT OR`, `MIT AND AND MIT`, `(MIT) WITH LLVM-exception`, `mit`, `MIT+`, `DocumentRef-x:LicenseRef-y`. Deeply nested parentheses (150 each side) and 283-char chains hit the length cap, so there is no stack risk.
+- `((MIT))`, `(MIT)AND(ISC)` and `MIT AND(Apache-2.0)` are accepted. `spdx-expression-parse@4.0.0` also accepts the parenthesis-adjacent forms, so these are valid.
+
+**Version and release-notes coupling**
+- The model `version`, the manifest version, the appended `upgrades` entry and `RELEASE_NOTES.md` all say `2026.10.14.2`, and the upgrade is an identity migration.
+- The release-notes claim that `mod.ts` no longer hard-codes the Apache header is true: `origin/main` had it at line 752.
+- The test asserts a version pattern rather than a literal, so there is no stale assertion.
+- `README.md` is accurate.
+
+### [LOW] Placeholder LICENSE.md can satisfy the `license-file` rubric without being a license
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod.ts` / **Line(s):** 950-963
+**Issue:** The stub is a short non-license file. If it is published unedited, it scores the `license-file` row while shipping no license text. `Copyright &lt;year&gt; &lt;copyright holder&gt;` is also a literal placeholder.
+**Breaking input:** `license: MIT`, then publish the scaffold output unchanged.
+**Impact:** The registry shows a licensed extension with no real license text. Nothing fails loudly. The TODO text and docs are the only guard.
+**Fix:** Accept as is, or emit real text for the common ids. A sentinel string such as `REPLACE-ME` would also make a `grep` guard easy.
+
+### [LOW] Allow-list is narrow, and `WITH` is not tied to compatible licenses
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod.ts` / **Line(s):** 202-230, 266-272
+**Issue:** Any allow-listed id may take `WITH` any allow-listed exception. For example, `MIT WITH Classpath-exception-2.0` is accepted although the exception only makes sense for GPL. Common ids are missing: `MPL-2.0-no-copyleft-exception`, `CC-BY-4.0`, `BSD-3-Clause-Clear`, `Python-2.0`, `Artistic-2.0`, `GPL-*-with-classpath-exception`, `AGPL-*`.
+**Breaking input:** `CC-BY-4.0` is rejected as "not recognised", with no escape hatch other than editing by hand.
+**Impact:** Over-rejection is the only cost. Over-acceptance of nonsensical `WITH` pairs is harmless to the rubric.
+**Fix:** Optionally extend the list, or mention in the error message that the allow-list is closed.
+
+### [LOW] The 200-char cap is measured on the re-joined tokens
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod.ts` / **Line(s):** 245
+**Issue:** `(MIT)` measures as `( MIT )`, so the limit is not on the emitted string. The schema path also measures the normalized length rather than the raw input length.
+**Breaking input:** A 198-char expression with many parentheses is rejected although the emitted string is under 200.
+**Impact:** Cosmetic.
+**Fix:** Measure `expr.trim().replace(/ {2,}/g, " ").length`.
+
+### [LOW] The missing-license warning fires before the design check
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod.ts` / **Line(s):** 830-836, 841
+**Issue:** With no design stored, a user who omitted `license` gets the warning and then the "No extension design found" error.
+**Breaking input:** `scaffold` with no `license` and no `current-design`.
+**Impact:** Noise only.
+**Fix:** Move the warning after the design check.
+
+### [LOW] Tests do not cover several of the inputs that matter
+**File:** `swamp-adoption/extensions/models/swamp-adoption/mod_test.ts` / **Line(s):** 880-1047
+**Issue:** The tests do not check:
+- the `()` and `MIT ()` cases;
+- `WITH` placement (`WITH MIT`, `MIT WITH`);
+- the 200-char cap;
+- `U+200B`;
+- that the emitted manifest parses as YAML (they only check line 3 as a string);
+- that the `LICENSE.md` canonical form is single-spaced.
+
+The test names match what they assert, with no false claims.
+**Breaking input:** Removing the length check or the `WITH` end-of-input check would not fail any test.
+**Impact:** Regression risk only. The code is currently correct for all of these.
+**Fix:** Add those cases to the reject list, and one YAML parse assertion.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>63452</subagent_tokens><tool_uses>9</tool_uses><duration_ms>56416</duration_ms></usage>
+</task-notification>
