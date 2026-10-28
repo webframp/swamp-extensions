@@ -1,0 +1,1 @@
+I need a full audit of every swamp extensions README and instructions for any case the implies using plain text secrets, event tangetially. That is in direct opposition to swamp extension authoring guidance and we should ALWAYS encourage the use of a swamp vault (either local encryption or a supported extension)
