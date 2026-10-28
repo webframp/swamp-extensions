@@ -1,0 +1,42 @@
+<task-notification>
+<task-id>ac0e4e5e343da2608</task-id>
+<tool-use-id>toolu_0135fpucSj3JQTzob8NVGmua</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ac0e4e5e343da2608.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review post_discussion" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Re-review of HEAD 2eca3c68: PASS. All three LOWs from the last round are fixed and the code matches the docs. The only new item is one minor LOW. The worktree is clean, `check`/`lint`/`fmt:check`/`test` pass (40 tests), and `swamp extension quality` reports passed at 100%.
+
+### [LOW] Generated argument schema no longer tells callers `body` must be non-empty
+**File:** gitlab-review/extensions/models/gitlab-review/review.ts
+**Line(s):** 1102-1104
+**Issue:** Moving from `.min(1)` to `.refine(...)` dropped `minLength: 1` from the exported argument schema. Running `z.toJSONSchema` on the current arguments gives `"body":{"type":"string","description":"Thread body (markdown)"}`. The schema now shows no constraint at all, while `project` still shows `"minLength":1`. Validation is still correct: `""`, `"   "`, `"\r\n"` and a non-breaking space are all rejected with `body must not be blank`, and `"x"` passes. Only the hint that schema readers, such as an agent harness, see is lost.
+**Breaking input:** None at runtime. It shows only as the bare `body` entry in the `z.toJSONSchema(post_discussion.arguments)` output.
+**Impact:** An agent building calls from the schema gets no up-front signal that the body is required to be non-empty. It finds out only from the error.
+**Fix:** `z.string().min(1).refine((s) =&gt; s.trim().length &gt; 0, { message: "body must not be blank" })` puts `minLength: 1` back and keeps the blank check.
+
+### Does `.refine` on a method argument break anything?
+No.
+- **Precedent:** 18 shipped source files in the repo use `.refine` or `.superRefine`. Several are directly on method arguments, for example `redmine/.../redmine.ts:1853` (`from: z.string().refine(isIsoDate, ...)`) and `aws/cfn-operations/.../cfn_operations.ts:167`.
+- **Type:** in Zod 4.6.5, `.refine` keeps `body` a plain string, so the `execute` signature and `deno check` are unaffected.
+- **Schema export:** `z.toJSONSchema` works on these arguments for both output and input. The only effect is the lost `minLength` above.
+- **Quality rubric:** the quality gate still scores 100%.
+
+### Re-checked probes (no new findings)
+- **Blank check vs dedup key:** the blank check trims both ends and the dedup key trims only trailing whitespace. They don't conflict, because a blank body is rejected before any hashing. `"    x = 1"` and `"x = 1"` now post separately, and a new test covers that.
+- **Stored vs hashed body:** the raw `args.body` is both what gets POSTed and what gets stored; the normalised form is used only for the key. That is consistent.
+- **Earlier retry test:** the CRLF-plus-trailing-newline retry test still covers the original case and passes under `trimEnd`.
+- **Docs:** README ("trailing whitespace trimmed", "unparseable or unexpected response"), RELEASE_NOTES and the code comment all match the code.
+- **Unchanged since last pass:**
+  - Sibling ordering, error prefixes, JSON parse handling and provenance fields.
+  - Instance names are collision-free.
+  - No truthiness check rejects a valid value.
+  - No fetch timeouts, which matches the siblings.
+  - Version and upgrade chain at 2026.10.21.1, with the manifest version matching `model.version`.
+- **Tests:** the blank-body test loops over `""`, `"   "` and `"\r\n"` and checks each case separately. The leading-whitespace test asserts two POSTs.
+
+Nothing is outstanding apart from the optional `.min(1)` fix above.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>87184</subagent_tokens><tool_uses>3</tool_uses><duration_ms>34071</duration_ms></usage>
+</task-notification>
