@@ -1,0 +1,1 @@
+ok, let's open the PR for griptape while waiting for extended fixes the snyk agent is still working on
