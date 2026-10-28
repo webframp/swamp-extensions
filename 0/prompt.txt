@@ -1,0 +1,48 @@
+<task-notification>
+<task-id>a95815adffffba962</task-id>
+<tool-use-id>toolu_01HMMjnnK81Y8fWvPfzsFynw</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/63e33f01-f2c8-4986-9848-9629f8afde1a/tasks/a95815adffffba962.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of pointDay change" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings. I read `vertex_usage.ts`, `vertex_usage_test.ts` and `RELEASE_NOTES.md`, and I ran `deno test -A extensions` (69 passed, 0 failed).
+
+## Verified clean
+
+- **Window alignment.** `completeDaysWindow` (`vertex_usage.ts:835-839`) builds a UTC-midnight window. Monitoring aligns ALIGN_SUM buckets backwards from `endTime`, so every daily point is midnight-aligned. A normal DELTA point is [midnight, next midnight]. A GAUGE-style point has start equal to end at the bucket end. The midpoint rule and the `end-1ms` rule both give the right day for these.
+- **Call sites.** All four (scan_usage tokens and invocations, Gemini tokens and requests) use the same function and the same `if (!date) continue` guard.
+- **NaN branches.** None of them throw.
+  - Both dates NaN: `end &gt; start` is false and `!isNaN(end)` is false, so the function returns `undefined`.
+  - Start valid, end NaN: returns the start's day.
+  - Start NaN, end valid: `end &gt; NaN` is false, so it takes the end-only branch.
+  - The `RangeError` from `toISOString` needs a date beyond ±8.64e15 ms, which `Date.parse` cannot produce from real API strings.
+- **The `end % 86_400_000 === 0` check.**
+  - Pre-epoch: the remainder is `-0` or negative, and `-0 === 0` is true, so negative midnights behave correctly.
+  - Fractional milliseconds: `Date.parse` returns integers, so none can occur.
+- **Legacy paths.** `scan_projects`/`get_token_usage` use one `days*86400s` bucket (`queryTokenMetrics`) and never call `pointDay`. There is no day-logic inconsistency.
+- **`requestsAvailable`.**
+  - The only `warnings.push` in `scanProjectGemini` is the request-count failure, so `!requestsAvailable` behaves the same as the old `warnings.length &gt; 0`. The change is explicitness, not a behavior change.
+  - Sibling symmetry is fine. `scan_usage` already had the field and uses `truncated || !requestsAvailable` (line 2169); Gemini matches (line 2264).
+  - On main, `manifest.yaml` is `2026.09.18.1` and has no `gemini_usage` resource. Adding the required field is not a breaking schema change for released data.
+  - The `upgrades:` chain ends at `2026.10.01.1`, matching the manifest.
+
+## Findings
+
+**LOW: `vertex_usage_test.ts`, around lines 1979-2026 (new test).** The test only exercises Gemini tokens. The invocation and Gemini request call sites share `pointDay`, so this is a small gap.
+
+**LOW: same test.** Only the `start == end` at midnight case (`2026-09-25` becomes `09-24`) would have failed on the old code. The old code returned the start's day for that point.
+- Every other case also passes under the old logic.
+- Midpoint bucketing is therefore not distinguished from start-day bucketing. A midpoint-specific case would be `start=2026-09-21T00:00:00Z, end=2026-09-21T23:59:59Z`, which still gives the same day under both rules.
+- Fix: add a case where the old rule misassigns. An example is a point with `startTime` set to the previous day's late hours and `endTime` inside the target day, with the midpoint inside the target day.
+
+**LOW: `RELEASE_NOTES.md`, last two sentences of the Changed paragraph.**
+- It says "`gemini_usage` gains `requestsAvailable`", but `gemini_usage` is new in this unreleased version, so nothing "gains" the field. Fold the field into the Added `scan_gemini_api_usage` bullet.
+- The midpoint sentence describes a change to a method that was also introduced in this release. The release notes are otherwise accurate, within the 5000-character limit and correctly formatted.
+
+**LOW: `vertex_usage.ts:1109-1111`.** Start-only (end NaN) returns the start's day. If `start` were the midnight that closes a day (the mirror of the end-only rule), that would be off by one. Real Monitoring responses always include `endTime`, so this is unreachable in practice, and it is only worth a comment.
+
+**LOW: `vertex_usage.ts:2017`, upgrade-entry description.** It describes global-argument changes only. That is fine because the chain is a no-op, but it could mention the new `gemini_usage` resource.
+
+VERDICT: PASS</result>
+<usage><subagent_tokens>57555</subagent_tokens><tool_uses>6</tool_uses><duration_ms>42413</duration_ms></usage>
+</task-notification>
