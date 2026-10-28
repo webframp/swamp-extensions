@@ -1,0 +1,1 @@
+I have a variety of -codegen managed swamp extensions under scripts/, all for generating code. Let's run a check to see if any of them have updates or need regeneration
