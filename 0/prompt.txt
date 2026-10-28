@@ -1,0 +1,76 @@
+<task-notification>
+<task-id>ae9b7eeb9355b09a4</task-id>
+<tool-use-id>toolu_01BeGLuXkrRqpSvyDj1V6ALW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ae9b7eeb9355b09a4.output</output-file>
+<status>completed</status>
+<summary>Agent "Review hand-written code changes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings in the hand-written extension changes, so the verdict is PASS. There are 1 MEDIUM and 8 LOW findings below.
+
+**Gates:** `deno task check`, `lint`, `fmt:check` and `test` pass in all 17 extensions in this area: terraform, microsoft/teams, exe-dev/vm, artifactory, gcp/vertex-usage, typesafe-batch, ai-usage, azure/openai-usage, discourse, container-image, the five datastores, aws/adopt and vault/hashicorp-vault. `shellcheck bench/switch-datastore.sh` is clean. I did not run `swamp extension quality`.
+
+**Version chains:** every bumped extension's manifest is at 2026.10.21.1. Each model's `version` and the last `upgrades` `toVersion` match it, and every entry was appended, not relabelled. Each RELEASE_NOTES.md now holds only the 2026.10.21.1 section.
+
+**Spot-check greps:** none of the old syntax (`vault://`, `&lt;vault:`, `{{ vault(`, `swamp vault set`, `&lt;vault-reference&gt;`) remains in these directories outside release notes. Neither do token-shaped literals or `export X_TOKEN=` lines, except the one noted under LOW #8.
+
+**Claims checked against the swamp source** (`~/src/swamp-club/swamp`, 79e0800b):
+- **Teams vault key:** the `vaultKey` field option is honoured, so the fixed key works. Sensitive output goes to the field's vault, then the default vault, then the first user vault. `swamp repo init` does create a `local_encryption` vault named `default`.
+- **README commands:** `swamp data query 'behavior(...)' --select content` and `swamp model edit` both exist.
+- **`swamp vault put`:**
+  - It reads piped stdin without a flag, so removing `--stdin` from exe-dev's `setup` is correct, and it accepts `--yes`.
+  - It needs `--yes` to overwrite a key when the value is piped.
+  - It fails if the vault doesn't exist.
+  - `--refresh-from` and `--refresh-ttl` exist, and `local_encryption` supports refresh hooks.
+- **Datastore config:** the expression resolver accepts unquoted `vault.get(azure, KEY)` arguments. `SWAMP_DATASTORE` goes through the same resolver. `datastore setup` validates the literal config without resolving expressions, which is what the bench script's comment says.
+- **`.meta({sensitive:true})` on datastore config schemas** is harmless: swamp only reads sensitive metadata from resource schemas and global arguments, never from datastore config. That also means it adds no protection there, and the release notes don't claim any.
+
+### [MEDIUM] Terraform masking can turn an object attribute into a string, and the drift report breaks on it
+**File:** terraform/extensions/models/terraform/terraform.ts **Line(s):** 221-239 (`redactSensitiveValues`); consumer aws/terraform-drift/extensions/reports/drift_report.ts 476-497
+**Issue:** When `sensitive_values` marks a whole map attribute `true`, the attribute becomes the string `"***SENSITIVE***"`. `compareTags` casts `tags_all ?? tags` to a record and runs `Object.entries(tfTags)` and `key in tfTags` on it.
+**Breaking input:** `tags = merge(local.base, { Owner = var.owner })` with `variable "owner" { sensitive = true }`. `merge()` marks the whole result sensitive, so `sensitive_values.tags = true`. This hits a resource with no `tags_all`, or one whose `tags_all` is also marked.
+**Impact:** `Object.entries` on the string yields 15 per-character "drifts" (`tags.0: "*"`), and `key in "&lt;string&gt;"` throws a TypeError, so the drift report fails. The terraform release notes only say consumers "see `***SENSITIVE***`". They don't warn that a value's type can change from object to string.
+**Fix:** Make `compareTags` skip, or report as unverifiable, any value that isn't a plain object or equals `SENSITIVE_MASK`. Add a release-note line that a wholly sensitive block becomes a string.
+
+### [LOW] Terraform README claims too much for older state files
+**File:** terraform/README.md **Line(s):** 61-68
+**Issue:** "Database passwords, private keys … are never written to swamp data" is only true when the state carries `sensitive_values`, which Terraform emits from 0.15 on. For older state, `r.sensitive_values ?? {}` passes everything through.
+**Fix:** Qualify the sentence ("on Terraform ≥ 0.15 / OpenTofu"), or log a warning when a resource has no `sensitive_values`.
+
+### [LOW] Teams discards the rotated refresh token, and setup.md implies otherwise
+**File:** microsoft/teams/extensions/models/microsoft/teams.ts **Line(s):** 304-320; microsoft/teams/setup.md step 6
+**Issue:** `getAccessToken` throws away the new `refresh_token` Graph returns. The vault entry stays the token `bootstrap` minted, and it is never updated. Step 6 says "Tokens auto-rotate on each use", which suggests the stored value is kept current. This is old behaviour, and the recovery (re-run `bootstrap`, which overwrites the fixed key) is documented.
+**Fix:** Reword step 6: "Graph issues a new refresh token on each use; this model does not persist it, so re-run bootstrap when invalid_grant appears."
+
+### [LOW] Teams README YAML hardcodes the `default` vault
+**File:** microsoft/teams/README.md **Line(s):** ~50-57
+**Issue:** The README's own flow tells a user with no vault to create `microsoft`. If the repo has no `defaultVault`, swamp stores the token in the first user vault (`microsoft`), so the shown `vault.get("default", …)` fails. The prose does say to use the recorded reference, but the YAML suggests copy-paste.
+**Fix:** Add `# use the vault name from the bootstrap data` beside that line, or use a placeholder.
+
+### [LOW] exe-dev `setup` defaults don't match the documented names
+**File:** exe-dev/vm/extensions/models/exe-dev/vm.ts **Line(s):** 770-775 vs 352-358
+**Issue:** `vaultName` still defaults to `"gitlab"` and `secretKey` to `"exe-dev-api-token"`. The new `requireToken` error and the descriptions point users at `exe-dev`/`API_TOKEN`. Running `setup` with no inputs writes to a vault named `gitlab`, or fails if none exists. The `swamp vault put` inside `setup` passes `--yes`, so overwriting isn't affected.
+**Fix:** Change the defaults to `exe-dev` and `API_TOKEN`, with a release-note line. That is a behavioural change, so it's the user's call.
+
+### [LOW] exe-dev manual pipe fails when rotating the token
+**File:** exe-dev/vm/README.md **Line(s):** ~55-61
+**Issue:** `… | swamp vault put exe-dev API_TOKEN` has no `--yes`. On a second run (rotation), swamp refuses to overwrite a piped value. Also, `grep -oE` without the code's `^\s*` anchor can emit several matches, which would be stored as a multi-line value.
+**Fix:** Add `--yes`, and use `grep -m1 -oE '^\s*exe[0-9]\.[^[:space:]]+'` (or `head -1`).
+
+### [LOW] Some Quick Starts call `swamp vault put` on vaults they never create
+**File:** ai-usage/README.md and ai-usage/manifest.yaml (`gcp`, `azure`, `anthropic`); aws/adopt/manifest.yaml (`secrets`); the manifest Quick Starts of artifactory, azure/openai-usage, typesafe-batch, gcp/vertex-usage and discourse
+**Issue:** `swamp vault put` throws "Vault not found" when the vault doesn't exist, so these can't be followed literally. The READMEs of the other extensions include the `swamp vault create … # once` line.
+**Fix:** Add `swamp vault create local_encryption &lt;name&gt;   # once` before each first `vault put`.
+
+### [LOW] aws/adopt and typesafe-batch name the same key differently
+**File:** aws/adopt/manifest.yaml and README.md:77 (`vault.get("secrets", "TYPESAFE_API_KEY")`); typesafe-batch/README.md and manifest.yaml (`vault.get("typesafe", "API_KEY")`)
+**Issue:** Both configure the same `@swamp/typesafe-ai` `jev` model with different vault and key names, so following both stores the key twice.
+**Fix:** Pick one name (`typesafe`/`API_KEY` fits the house style) and use it in both.
+
+### [LOW] Token-shaped literal and env-export example remain in the gitlab-datastore smoke test
+**File:** datastore/gitlab-datastore/smoke_test.ts **Line(s):** 6-8, 43
+**Issue:** `export GITLAB_TOKEN="REDACTED"` breaks rule 9 (no token-shaped literals) and the env guidance. The file is not shipped and was not in the audit.
+**Fix:** Change the usage comment to `export GITLAB_TOKEN="REDACTED"`, or describe it in words.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>178422</subagent_tokens><tool_uses>63</tool_uses><duration_ms>404025</duration_ms></usage>
+</task-notification>
