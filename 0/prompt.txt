@@ -1,0 +1,1 @@
+fix what's failing in CI https://github.com/webframp/swamp-extensions/pull/491#pullrequestreview-5519847894
