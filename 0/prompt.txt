@@ -1,0 +1,79 @@
+<task-notification>
+<task-id>a6a3089f8363e3a3e</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/a6a3089f8363e3a3e.output</output-file>
+<status>completed</status>
+<summary>Agent "Griptape spec re-pin and regen PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The spec re-pin is committed on a local branch and the reviewer subagent returned PASS. Regenerating all 10 griptape extensions against the new spec gave byte-identical output, so only the pin changed. I have not pushed or opened a PR.
+
+**Branch and worktree**
+- Branch: `fix/griptape-codegen-respin-2026-10-07`, one commit (`d7e1b41f`).
+- Worktree: `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a6a3089f8363e3a3e`
+
+**Upstream spec diff**
+- The original pinned body (`189b319a…`) could not be recovered. The harness only caches the latest fetch. The `.cache` copy in the main checkout hashes to `74c24606…`, which does not match the pin.
+- I compared the new spec (`eb5f5f75…`) against that cached copy instead. Treat the delta below as approximate. The cached copy is not the pinned body, so a few differences may be missing or extra.
+- Added endpoints:
+  - Tag profiles: `GET`/`POST /api/tag-profiles` and `GET`/`PATCH`/`DELETE /api/tag-profiles/{tag_profile_id}`.
+  - `GET /api/tags`.
+  - `GET /api/license-info`.
+- Added schemas: the tag-profile and tag request/response types, `TagDetail`, `TagMatchedBudget`, `TagProfileDetail`, `TagValueProfile`, `TagWindow`, `Transport`, and `GetLicenseInfoResponseContent`.
+- Changed schemas:
+  - `transports` was added to the Engine schemas.
+  - `frozen` and `is_default` changed on the Budget schemas.
+  - `SpendDetail.modality` changed.
+  - Small changes also appeared in `ModelType`, `BudgetEnforcement` and `SpendStatus`.
+- Removed: no endpoints, no schemas.
+- Nothing looked suspicious. The `info` block and server URL are unchanged.
+- None of the new paths fall under a tier-1 service prefix, so they are ignored by the generator.
+
+**Changes**
+- Only `scripts/griptape-codegen/config.ts` changed, with `SPEC_SHA256` set to `eb5f5f758d39ed536f56b450da302ee49bb7a04acbb0104d7581ec2c59afc194`.
+- `deno task generate:dry-run` reported every service as unchanged at `2026.09.18.1`, so I did not run a real generate. The reviewer ran one into a scratch directory and confirmed no differences.
+- There are no removed methods, no breaking schema changes, and no extension version bumps, release notes or upgrade entries. A harness-only change does not need them under CLAUDE.md.
+- `deno.lock` did not change.
+- I made no harness fixes.
+
+**Gates**
+- Harness `deno task check`, `lint` and `fmt:check` pass, and `test` passes (57 passed).
+- `deno task bump -- --check` reports the pin matches upstream.
+- I did not run `swamp extension quality` on the griptape extensions, because their contents are unchanged.
+
+**Reviewer verdict:** PASS, from a separate adversarial subagent. It found no CRITICAL, HIGH or MEDIUM issues. The two LOW findings were that the old-spec comparison relied on a cached copy rather than the original pinned body, and that the pin goes stale whenever upstream republishes (which `bump -- --update-spec` handles). The commit message states the spec additions as fact, and the reviewer suggested softening that to "observed against a cached copy".
+
+**Drafted PR**
+
+Title: `chore(griptape-codegen): re-pin upstream spec to eb5f5f75`
+
+Body:
+```
+## Summary
+
+Griptape republished its OpenAPI spec at the same S3 URL, so `deno task generate` failed with a hash mismatch. This PR re-pins `SPEC_SHA256` from `189b319a` to `eb5f5f75` using `deno task bump -- --update-spec`.
+
+## Upstream changes
+
+The original pinned body is no longer recoverable, so I compared the new spec against the harness's cached copy. Treat this list as approximate.
+
+- Added: tag-profiles CRUD, `GET /api/tags`, `GET /api/license-info`, and the schemas behind them.
+- Changed: `transports` on the Engine schemas, `frozen` and `is_default` on the Budget schemas, and `SpendDetail.modality`.
+- Removed: nothing.
+
+None of the new paths sit under a tier-1 service prefix in `SERVICES`, so the generator ignores them.
+
+## Effect on generated output
+
+None. A dry run reported all 10 griptape extensions unchanged, and a real generate into a scratch directory matched `griptape/` byte for byte. No extension version bumps or release notes are needed.
+
+## Verification
+
+- Harness `check`, `lint`, `fmt:check` and `test` pass (57 tests).
+- `deno task bump -- --check` confirms the pin matches upstream.
+
+Follow-up: the tag, tag-profile and license-info endpoints could become a new service if wanted. That is out of scope here.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>70700</subagent_tokens><tool_uses>15</tool_uses><duration_ms>180723</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a6a3089f8363e3a3e</worktreePath><worktreeBranch>worktree-agent-a6a3089f8363e3a3e</worktreeBranch></worktree>
+</task-notification>
