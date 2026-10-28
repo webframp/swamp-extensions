@@ -1,0 +1,200 @@
+examine the full point scoring activity for the user reset and compare it against my activity as webframp: ×5.72+57
+23:20clidoctor secrets ×1×5.72+57
+23:20cliworkspace list ×1×5.72+57
+23:20cliworkflow history ×1×5.72+57
+23:20clidoctor datastores ×1×5.72+57
+23:20cliworkflow schedule ×1×5.72+57
+23:20clidoctor install ×1×5.72+57
+23:20clisource path ×1×5.72+57
+23:20clisummarize ×1×5.72+229
+23:20cliworkflow approvals ×1×5.72+57
+23:20cliserve check-config ×1×5.72+57
+23:20cliauth whoami ×1×5.72+3
+23:20clidoctor extensions ×1×5.72+57
+23:20cliconfig get ×1×5.72+57
+23:20clidoctor vaults ×1×5.72+57
+23:20cliworkflow waits ×1×5.72+57
+23:20clidatastore compact ×1×5.72+57
+23:20clihelp ×1×5.72+57
+23:20clivault read-secret ×1×5.72+57
+23:20clidoctor workflows ×1×5.72+57
+23:20clitelemetry stats ×1×5.72+57
+23:20cliquest ×1×5.72+57
+23:20cliextension trust ×1×5.72+229
+23:20cliconfig list ×1×5.72+57
+23:20cliaudit ×1×5.72+57
+23:20clidatastore lock ×1×5.72+57
+23:20clidatastore status ×1×5.72+57
+23:20clivault audit-trail ×1×5.72+57
+23:20cliextension source ×1×5.72+229
+23:20cliversion ×1×5.72+57
+23:19clivault list ×1×5.72+12
+23:19cliextension info ×1×5.72+229
+23:19clidata get ×1×5.72+11
+23:19clivault search ×1×5.72+229
+23:19clidata versions ×1×5.72+11
+23:19clivault get ×1×5.72+229
+23:19cliextension outdated ×1×5.72+229
+23:19clivault list-keys ×1×5.72+229
+23:19clirun history ×1×5.72+57
+23:19cliextension search ×1×5.72+229
+23:19cliworkflow list ×1×5.72+229
+23:19clivault describe ×1×5.72+229
+23:19clivault type ×1×5.72+229
+23:19cliextension version ×1×5.72+229
+23:19clisummarise ×1×5.72+229
+23:19clidata list ×1×5.72+12
+23:19cliextension ls ×1×5.72+229
+23:19cliextension list ×1×5.72+229
+23:19clivault inspect ×1×5.72+229
+23:19cliworkflow search ×1×5.72+229
+23:19cliextension source ×1×5.72+229
+23:19climodel create ×1×5.72+57
+23:19clivault put ×1×5.72+57
+23:19cliinit ×1×5.72+57
+23:19cliworkflow create ×1×5.72+1,145
+23:19clireport describe ×1×5.72+572
+23:19climodel type ×1×5.72+12
+23:19clireport type ×1×5.72+572
+23:19cliworkflow delete ×1×5.72+229
+23:19climodel evaluate ×1×5.72+1,145
+23:19cliworkflow schema ×1×5.72+229
+23:19climodel delete ×1×5.72+229
+23:19climodel list ×1×5.72+12
+23:19clidata query ×1×5.72+29
+23:19climodel get ×1×5.72+229
+23:19cliworkflow get ×1×5.72+229
+23:19cliworkflow validate ×1×5.72+572
+23:19cliworkspace list ×1×5.72+57
+23:19cliworkflow evaluate ×1×5.72+1,145
+23:19clidata search ×1×5.72+572
+23:19clivault write-secret ×1×5.72+1,145
+23:19clireport get ×1×5.72+572
+23:19climodel method ×2×5.72+55
+23:19climodel output ×1×5.72+572
+23:19climodel search ×1×5.72+229
+23:19clireport list ×1×5.72+572
+23:19climodel validate ×1×5.72+572
+23:19cliextension trust ×1×5.72+229
+23:19clireport search ×1×5.72+572
+23:19cliworkflow run ×1×5.72+572
+23:18clivault read-secret ×1×5.72+57
+23:18clidoctor vaults ×1×5.72+57
+23:18clisource path ×1×5.72+57
+23:18clidatastore compact ×1×5.72+57
+23:18clidoctor extensions ×1×5.72+57
+23:18cliworkflow history ×1×5.72+57
+23:18clitelemetry stats ×1×5.72+57
+23:18clidatastore status ×1×5.72+57
+23:18cliserve check-config ×1×5.72+57
+23:18clidoctor workflows ×1×5.72+57
+23:18clidoctor datastores ×1×5.72+57
+23:18clivault audit-trail ×1×5.72+57
+23:18cliworkflow schedule ×1×5.72+57
+23:18cliworkflow approvals ×1×5.72+57
+23:18clidoctor install ×1×5.72+57
+23:18cliworkflow waits ×1×5.72+57
+23:18clidoctor secrets ×1×5.72+57
+23:18clidatastore lock ×1×5.72+57
+23:18clivault inspect ×1×5.72+229
+23:18cliversion ×1×5.72+57
+23:18clidata versions ×1×5.72+229
+23:18climodel list ×1×5.72+11
+23:18cliconfig get ×1×5.72+57
+23:18cliextension version ×1×5.72+229
+23:18cliworkflow schema ×1×5.72+229
+23:18clireport type ×1×5.72+573
+23:18cliextension info ×1×5.72+229
+23:18clisummarize ×1×5.72+229
+23:18clivault list ×1×5.72+11
+23:18climodel type ×1×5.72+11
+23:18clivault describe ×1×5.72+229
+23:18clisummarise ×1×5.72+229
+23:18cliaudit ×1×5.72+57
+23:18cliextension ls ×1×5.72+229
+23:18cliextension outdated ×1×5.72+229
+23:18clivault type ×1×5.72+229
+23:18clihelp ×1×5.72+57
+23:18cliquest ×1×5.72+57
+23:18cliextension list ×1×5.72+229
+23:18clidata list ×1×5.72+11
+23:18cliauth whoami ×1×5.72+57
+23:18clidata get ×1×5.72+229
+23:18cliworkflow search ×1×5.72+229
+23:18cliworkflow get ×1×5.72+229
+23:18climodel get ×1×5.72+229
+23:18clivault search ×1×5.72+229
+23:18clirun history ×1×5.72+57
+23:18cliworkflow list ×1×5.72+229
+23:18clivault get ×1×5.72+229
+23:18cliconfig list ×1×5.72+57
+23:18clirun doctor ×1×5.72+57
+23:18climodel search ×1×5.72+229
+23:18cliextension search ×1×5.72+229
+23:18clivault list-keys ×1×5.72+229
+23:18clihelp ×1×5.72+58
+23:18clidoctor extensions ×1×5.72+58
+23:18cliserve check-config ×1×5.72+58
+23:18cliversion ×1×5.72+58
+23:18climodel output ×1×5.72+573
+23:18climodel create ×1×5.72+57
+23:18clidata list ×1×5.72+229
+23:18cliextension source ×1×5.72+229
+23:18cliinit ×1×5.72+58
+23:18clivault list ×1×5.72+229
+23:18cliconfig get ×1×5.72+58
+23:18cliworkflow delete ×1×5.72+229
+23:18cliconfig list ×1×5.72+58
+23:18cliworkflow evaluate ×1×5.72+1,145
+23:18climodel evaluate ×1×5.72+1,145
+23:18clidata get ×1×5.72+229
+23:18cliextension list ×1×5.72+229
+23:18cliworkflow run ×1×5.72+573
+23:18clidoctor datastores ×1×5.72+58
+23:18clisummarize ×1×5.72+229
+23:18cliauth whoami ×1×5.72+57
+23:18cliextension info ×1×5.72+229
+23:18cliworkflow approvals ×1×5.72+58
+23:18clidoctor secrets ×1×5.72+58
+23:18clivault put ×1×5.72+58
+23:18cliquest ×1×5.72+58
+23:18climodel delete ×1×5.72+229
+23:18cliworkflow history ×1×5.72+58
+23:18cliextension trust ×1×5.72+229
+23:18cliextension version ×1×5.72+229
+23:18clitelemetry stats ×1×5.72+58
+23:18clireport list ×1×5.72+573
+23:18clidata search ×1×5.72+573
+23:18clivault audit-trail ×1×5.72+58
+23:18clirun doctor ×1×5.72+58
+23:18clivault describe ×1×5.72+229
+23:18clireport search ×1×5.72+573
+23:18clidatastore lock ×1×5.72+58
+23:18clireport get ×1×5.72+573
+23:18cliaudit ×1×5.72+58
+23:18cliextension search ×1×5.72+229
+23:18climodel method ×2×5.72+54
+23:18cliworkflow waits ×1×5.72+58
+23:18clidatastore compact ×1×5.72+58
+23:18cliworkspace list ×1×5.72+58
+23:18clivault type ×1×5.72+229
+23:18clivault write-secret ×1×5.72+1,145
+23:18cliextension ls ×1×5.72+229
+23:18clirun history ×1×5.72+58
+23:18clidata query ×1×5.72+28
+23:18clivault read-secret ×1×5.72+58
+23:18clidata versions ×1×5.72+229
+23:18clidoctor workflows ×1×5.72+58
+23:18cliworkflow schedule ×1×5.72+58
+23:18clivault get ×1×5.72+229
+23:18cliworkflow validate ×1×5.72+573
+23:18cliextension outdated ×1×5.72+229
+23:18clidoctor vaults ×1×5.72+58
+23:18clivault inspect ×1×5.72+229
+23:18climodel validate ×1×5.72+573
+23:18clireport describe ×1×5.72+573
+23:18clisource path ×1×5.72+58
+23:18clidatastore status ×1×5.72+58
+23:18cliworkflow create ×1×5.72+1,145
+23:18clidoctor install ×1×5.72+58
+ it's viewable in the combat record here: https://swamp-club.com/u/reset and my profile is https://swamp-club.com/u/webframp what is diferent about our activity?
