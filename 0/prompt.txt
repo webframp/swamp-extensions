@@ -1,0 +1,1 @@
+once all CI passes and there are no critical or high issues comment with /lgtm so the merge can happen automatically then refresh the local branch and clean up related worktrees
