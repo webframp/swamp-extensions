@@ -1,0 +1,52 @@
+<task-notification>
+<task-id>a065e39fa188b5b11</task-id>
+<tool-use-id>toolu_01SaCgZ4NbDyMyZ8qhiypznF</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/d7dc3a2c-1801-4c8f-be91-72ec1cd84d14/tasks/a065e39fa188b5b11.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of sweep PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The change holds up. I found no CRITICAL or HIGH issues, only MEDIUM and LOW ones, and I did not run `swamp extension quality` or a live swamp run.
+
+I ran `check`, `lint`, `fmt:check` and `test` in all six codegen directories, including the new `check-reserved-names` and `falai-codegen`. All pass. `deno task test` passes in `snyk/groups`, `snyk/settings`, `datadog/synthetics`, `aws/drift-state`, `aws/config-compliance`, `swamp-adoption` and `cloudflare/kv`. The guard reports 0 findings across 392 files, and `datadog/on-call` and `falai/keys` are untouched.
+
+### [MEDIUM] Guard scans zero files and still passes when the root path has a dot-directory ancestor
+**File:** scripts/check-reserved-names/main.ts  **Line(s):** 15-18, 26-31
+**Issue:** The `SKIP_DIRS` regex `/(^|\/)\.[^/]+(\/|$)/` is matched against the absolute entry path, not the path relative to the root. If any ancestor of the scan root starts with a dot, every file is skipped, and the scan still exits 0.
+**Breaking input:** `deno task --cwd scripts/check-reserved-names scan /tmp/.hid/x`, with a file containing `writeResource("a","latest",d)` underneath, prints `scanned 0 files, 0 finding(s)`. The same file under a non-dot path is flagged.
+**Impact:** On GitHub Actions the workspace is `/home/runner/work/...`, so CI works today. The guard fails open on a self-hosted runner, a local run under `~/.cache` or `~/.worktrees`, or any root with a dotted parent.
+**Fix:** Pass `walk` a skip regex tested against the relative path, or compute the relative path first. Also exit non-zero when `scanned` is 0 or below a floor.
+
+### [MEDIUM] Guard cannot see indirect reserved names
+**File:** scripts/check-reserved-names/lib/scan.ts  **Line(s):** 29-47
+**Issue:** The regex only matches a quoted literal as the direct data-name argument. I confirmed it misses all of these, each passed as the data name:
+- `const n = "latest"; writeResource("a", n, d)`
+- `cond ? "latest" : "x"`
+- `x ?? "latest"`
+- `"lat"+"est"`
+- a spread call
+- `"Latest"` (case)
+
+It does catch backtick and `as`-cast literals. Only generator files under `scripts/` also get the any-quoted-literal fallback.
+**Impact:** A future regression written in one of these forms passes the guard, `deno task test` and the quality rubric. Today the repo has no such form. `git grep` finds no quoted `"latest"` data names outside the intended refine validators and the `typesafe-batch` `name` default, which writes `triage-batch-${name}`.
+**Fix:** Either say in the header comment that the guard is literal-only, or extend it to flag any quoted `latest` literal in a `writeResource` or `readResource` statement. Case-folding would also help.
+
+### [LOW] Regenerated upgrade entries are mislabelled
+**File:** `falai/*`, `snyk/*`, `datadog/synthetics`, `cloudflare/*` model files
+**Issue:** Each appended `upgrades:` entry reads "Regenerated from updated API spec; no migration required". The change is a rename of the stored data name. The `RELEASE_NOTES.md` is accurate, and the hand-written extensions have an accurate description.
+**Fix:** Cosmetic. Change the generators' upgrade description if you care.
+
+### [LOW] Generic release notes and very long instance names
+The cloudflare, falai, snyk and datadog release notes are a shared template that says `&lt;resource&gt;-current` literally, so users cannot tell which names changed. The longest generated instance name is 91 characters (cloudflare api-shield `…-current`). The only host restriction I could find is the path-traversal check in `sanitizeInstanceName`, but I did not test a 91-character name against live swamp.
+
+### Items verified clean
+- **Versioning:** All 35 changed extensions have the same version in `manifest.yaml` and `model.version`, set to `2026.10.14.1`. Each has exactly one appended `upgrades` entry with a matching `toVersion` and none removed. Every `RELEASE_NOTES.md` is under 1000 bytes.
+- **Drift-state:** `compute_drift` writes `drift-result-current`. `get_drifted` and `get_drift_velocity` read exactly that name. Velocity writes `velocity-current` in both of its branches, so no two writes in one run share a name. Upstream reads use `findBySpec`, and the baseline and timeline names are unchanged. `aws/drift-state/workflows/drift-state-refresh.yaml` reads no stored data by name.
+- **config-compliance and swamp-adoption:** The README query examples are updated. No other workflow, report or YAML in the repo reads these models' data by the old names.
+- **Test assertions:** Tests were updated for the new names, and I found no exact-literal version assertions.
+- **Generators:** All five emit `${resourceName}-current` for singleton get and action instances. `update` ("updated"), `create` ("created" or "new"), and `list` ("main") are not reserved. The generated tests in snyk, datadog and griptape match the emitted code. Cloudflare and falai have no test generator.
+- **CI wiring:** `DENO_VERSION` is defined, and `deno task --cwd … scan "$GITHUB_WORKSPACE"` works with `--allow-read` and absolute paths.
+- **Scope:** `deno.lock` changes only in the new `check-reserved-names` directory, and the README changes are only the two intended files.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>86424</subagent_tokens><tool_uses>17</tool_uses><duration_ms>93139</duration_ms></usage>
+</task-notification>
