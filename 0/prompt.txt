@@ -1,0 +1,52 @@
+<task-notification>
+<task-id>af4e3bb59ecd9f0b4</task-id>
+<tool-use-id>toolu_019nPNxZMPL45Y8XXNifgtpa</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/af4e3bb59ecd9f0b4.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix cloudflare codegen + regen" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I finished all five audit items. The generator is regenerated, and all 26 generated extensions plus the root `@webframp/cloudflare` pass check, lint, fmt, fmt:check, test and `swamp extension quality` (passed, 100%). Nothing is committed. I did not run a separate adversarial reviewer, so that is still to do before pushing.
+
+**Regeneration scope.** Every hunk in `git diff cloudflare` comes from my changes or from the version, upgrade and release-notes bumps. There is no API drift: a scratch regeneration and the real one are byte-identical apart from release notes.
+
+**Why `cloudflare/RELEASE_NOTES.md` changed during the baseline run.** `main.ts` ran `deno fmt ../../cloudflare`, which reformats the hand-written root extension's markdown as well. It now formats only the extension directories it wrote.
+
+**What changed, by audit item:**
+1. **Credentials docs and errors.** Every generated README has the canonical Credentials section (`vault create`, `vault put`, `--global-arg 'apiToken=REDACTED vault.get("cloudflare", "API_TOKEN") }}'`). The `apiToken` describe and the missing-token error in `_lib/api.ts` lead with the vault. `CLOUDFLARE_API_TOKEN` is still read in code but described as a fallback that is not redacted and not recommended.
+2. **Secret arguments.** A new `lib/sensitivity.ts` marks an argument `.meta({ sensitive: true })`, plus a "pass a vault.get expression" hint, when the spec flags it `x-sensitive` (directly or through its `$ref` target) or its name matches the credential list. The name check covers snake_case and camelCase and does not match names like `token_id`, `secret_name`, `max_tokens` or `page_token`; generator tests cover both sides. Checked against swamp's real extractor, `secretAccessKey`, `token`, `cf_api_key`, `tunnel_secret`, Workers `text`, `private_key`, `auth_credentials`, `psk` and images `secret` are all marked.
+3. **Secrets in responses.** Swamp vaults a field only along plain object properties, so the generator reshapes response schemas until each secret sits on such a path:
+   - A `$ref` field holding a secret becomes a skeleton object that declares only the path to the secret.
+   - A top-level union is flattened, but only when that makes something vaultable.
+   - A bare token response is written as `{ value }`.
+   - A second method sharing a resource extends its schema with the fields it returns.
+   
+   Swamp's own extractor finds 92 vaulted fields across the generated models. They include Access service-token `client_secret`, R2 temp credentials, both Tunnel tokens, every Turnstile `secret`, the Stream signed-URL token, signing keys and live-input keys, Logpush `destination_conf`, IdP `config.client_secret` and `scim_config.secret`, and the Magic Transit PSK.
+4. **Root extension.** The five models' `apiToken` describes now give vault.get guidance (they already had sensitive meta). The README's `vault://` example and the "stored through your configured vault provider" line are replaced with an explicit `swamp vault put` step and a `vault.get` expression.
+5. **README notes.** Each generated README now has a "Secrets" table per method: secret inputs (including ones nested inside other arguments, such as Hyperdrive `password`), fields stored in a vault, and fields removed before storing.
+
+**Also fixed (same files, needed for items 3 and 5).** Twenty-six methods in 13 extensions wrote to a resource name the model never declared, so swamp rejected them and they always failed. This included Turnstile `get_create`/`get_rotate_secret` and the Tunnel management token. They now write the declared resource, and the generated tests assert this for every method.
+
+**Versions.** All 26 generated extensions and the root go from `2026.10.14.1` to `2026.10.21.1`, with identity upgrade entries and new `RELEASE_NOTES.md`. The root's five models got the upgrade entries by hand.
+
+**Test caveat.** The swamp-testing context does not perform swamp's vault step, so the generated "keeps returned secrets out of the stored resource" tests reproduce it. I checked that reproduction once against swamp's own extractor code from your local swamp checkout; that comparison is not a committed test.
+
+**Decisions for you:**
+- **Secrets in lists, maps or nested unions are deleted, not vaulted.** Swamp cannot vault inside arrays, maps or unions, so the generated method removes them before writing. This applies to list methods (Logpush jobs, Stream outputs, Access apps and IdPs), Pages `env_vars` secret values (guarded so plain-text values stay), Access app SCIM and SaaS secrets, and the Magic Transit applied PSKs. The fix spec preferred vaulting, which is impossible here; if you'd rather keep these in plaintext, say so.
+- **A vault is now required.** Methods that return a secret will fail on a repo with no vault; the release notes say so.
+- **Tunnel token resource shape changed.** Tunnel token resources change from a string to `{ value }`. The Upgrade note says so and advises deleting old plaintext resources and rotating those credentials.
+- **Some redaction is broader than the secret.** Marking whole fields means swamp's redactor also hides non-secret strings in the same run:
+  - Workers `patch_script_secrets_bulk` marks the whole `secrets` map, so secret names and the `secret_text` tag are hidden too.
+  - The root worker `deploy` now marks binding `value`, so namespace IDs and bucket names are hidden too.
+- **Not marked individually:** Hyperdrive `origin.password`. Marking the whole `origin` would hide host and user names everywhere in that run. The README lists it, and swamp already redacts values that come from `vault.get`.
+- **Nothing to vault in two audited cases:** Workers AI `create_tokens` and R2 `create_store_credentials` return no secret in the spec. Their secret inputs are marked.
+
+**Files changed:**
+- Generator, under `/home/sme/src/webframp/swamp-extensions/scripts/cloudflare-codegen/`:
+  - `main.ts` and `deno.lock` (the lockfile picked up zod from a test).
+  - In `lib/`: `sensitivity.ts` and `sensitivity_test.ts` (new); `schema_fetcher.ts`, `service_grouper.ts`, `type_mapper.ts`, `method_classifier.ts`, `extension_generator.ts`, `test_generator.ts`; tests updated for `type_mapper`, `method_classifier`, `extension_generator` and `test_generator`.
+- In each of the 26 extensions under `/home/sme/src/webframp/swamp-extensions/cloudflare/&lt;service&gt;/`: `README.md`, `RELEASE_NOTES.md`, `manifest.yaml`, the model, its test, and `_lib/api.ts`.
+- Root extension, under `/home/sme/src/webframp/swamp-extensions/cloudflare/`: `README.md`, `RELEASE_NOTES.md`, `manifest.yaml`, and `extensions/models/cloudflare/{zone,dns,waf,worker,cache}.ts`.
+
+The repo-root `README.md` cloudflare lines (327-335) were outside my scope and are untouched by me.</result>
+<usage><subagent_tokens>412141</subagent_tokens><tool_uses>150</tool_uses><duration_ms>2011874</duration_ms></usage>
+</task-notification>
