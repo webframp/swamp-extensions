@@ -1,0 +1,72 @@
+<task-notification>
+<task-id>ac55f078a5f1065a0</task-id>
+<tool-use-id>toolu_01JksR77ZdMsXyq8DGTrVzWJ</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/9ace0770-f8a3-41bc-9678-83e43e9d650d/tasks/ac55f078a5f1065a0.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review round 3" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found nothing CRITICAL or HIGH: the three generator changes in 6491e37b hold up, and the release notes for all 26 bumped extensions match their diffs. There are four LOW findings, listed at the end. The worktree was clean afterwards; I wrote to throwaway copies only and deleted them.
+
+**1. The `--notes` refusal (change a)**
+- **Before any write:** in all five `main.ts`, the refusal sits between the plan pass and the write pass. In the plan pass only datadog writes anything, its spec cache under `.cache/`, which is gitignored. `extensionsNeedingNotes` builds the same `&lt;outputBase&gt;/&lt;name&gt;` path as the write pass. Every generated extension directory in git has a `RELEASE_NOTES.md`.
+- **Forced `--version`:** on a copy of `griptape/`, `--version 2099.01.01.1` with no notes was refused, every affected extension was listed in one clear message, and the before/after file hashes were identical.
+- **Test-only refresh:** after I edited a generated test, the run went through without notes and printed "refreshing generated tests only".
+- **Brand-new extension:** after I deleted one extension directory, it was regenerated with the default "Initial code-generated release" note.
+- **Dry run:** the check is skipped on a dry run (see LOW 2).
+
+**2. The bump flow (change b)**
+- **`--all`:** it forces the next version for today on every service, so without notes the run is refused.
+- **Re-exec:** `--update-sha` and `--update-spec` re-run the bump script and pass the notes arguments through to `main.ts`. Exit codes come back through `Deno.exit(rerun.code)` and the "Generation failed" path.
+- **Imports:** only the two new `bump_test.ts` files import a bump script. `import.meta.main` is true under `deno task bump`, since the dry runs below did generate.
+- **Live dry runs:**
+  - cloudflare `deno task bump -- --dry-run`: exit 0, all 26 services "unchanged — no write needed".
+  - cloudflare `--update-sha --dry-run`: upstream has moved from `29f8cda9…` to `d04a1ddd…`; it stopped with the "preview would still read the current pin" message, exit 0.
+  - falai `deno task bump -- --dry-run`: exit 0, 9 services, nothing to write.
+  - falai `--update-spec --dry-run`: the live spec matches the pin (`1f276651…`), exit 0.
+
+**3. The fetchers (change c)**
+I could not build a case where the cache hash and the fetch hash differ. I tested a response starting with a byte-order mark: it is kept when decoded, written back as the same bytes, and kept again when the cache is read, so the hashes agree and there is no refetch loop. Invalid UTF-8 now throws before anything is cached. One side effect is LOW 3.
+
+**4. Gates**
+- check, lint, fmt:check and test pass in all five generators (test counts: 164, 62, 148, 130 and 89 passed).
+- `deno task generate:dry-run` writes nothing in any of them, and `git status` stays clean.
+
+**5. Release notes**
+I compared the notes for all 26 bumped extensions with their diffs: 11 cloudflare, datadog/synthetics, 2 falai, gitlab, 4 griptape, 2 snyk, twitch and 4 vaults.
+- Where the notes say "documentation only", the model diff really is just the version line plus an identity upgrade entry.
+- The vault-reference claims are accurate in cloudflare d1 and stream, falai storage and griptape buckets.
+- snyk/service-accounts still deletes the secret fields from list items through a hard-coded list.
+- twitch has no leftover `mod-events` references, and its upgrade chain ends at 2026.10.25.1.
+- The vault changes are only the version constant in `tracing.ts`.
+
+### [LOW] A re-pin can leave the pin moved with nothing regenerated
+**File:** `scripts/cloudflare-codegen/bump.ts` (`requireNotesForRepin`, `updatePinnedSha`), `scripts/falai-codegen/lib/bump.ts` (`requireNotesForRepin`, `updateSpec`) **Line(s):** the guard and the config write
+**Issue:** The guard only checks that a notes flag is present, not that it is usable. The comment's promise that "a run never leaves it moved with nothing regenerated" is not true.
+**Breaking input:** `deno task bump -- --update-sha --notes-file missing.md`, `--update-sha --notes ""`, or `--update-spec --version &lt;older than the upgrade chain&gt; --notes x`.
+**Impact:** `config.ts` (and falai's vendored spec) are rewritten. Then `main.ts` fails on the missing file, the empty-notes refusal or the version rejection, and the pin is left moved. Recovery is `git checkout`.
+**Fix:** Before re-pinning, check that a `--notes-file` exists and that `--notes` is not blank. Or snapshot `config.ts` and the spec, and restore them when the re-exec exits non-zero.
+
+### [LOW] A dry run does not warn that the real run will be refused
+**File:** all five `scripts/*-codegen/main.ts` **Line(s):** the `if (!opts.dryRun &amp;&amp; !opts.notes)` guard
+**Issue:** On a dry run the notes check is skipped entirely.
+**Breaking input:** `deno task generate:dry-run` after a template change.
+**Impact:** The dry run prints "would write" for extensions the real run will refuse without `--notes`.
+**Fix:** On a dry run, still call `extensionsNeedingNotes` and print the list as a warning, without exiting.
+
+### [LOW] The cloudflare fetcher now fails on a JSON spec that starts with a byte-order mark
+**File:** `scripts/cloudflare-codegen/lib/schema_fetcher.ts` **Line(s):** `fetchSpecText` decoder, then `JSON.parse` in `fetchSchema`
+**Issue:** The decoder keeps the byte-order mark, and `JSON.parse` throws on it. The old `response.text()` stripped it. Datadog's YAML parser accepts it.
+**Breaking input:** A pinned commit whose JSON starts with the bytes EF BB BF.
+**Impact:** A fatal "Unexpected token" error. Hypothetical: the current spec has no byte-order mark.
+**Fix:** Strip a leading U+FEFF before `JSON.parse`, while still hashing the raw bytes.
+
+### [LOW] One notes body covers every extension a run writes, and blank notes pass the check
+**File:** `generateReleaseNotes` in each generator's `extension_generator.ts`, and the guard in each `main.ts`
+**Issue:** A run that creates a new extension and rewrites existing ones gives the new extension the "what changed" body instead of its initial-release note. Separately, `--notes " "` passes the check and writes notes with an empty body.
+**Breaking input:** `--services new,existing --notes "x"`, or `--notes " "`.
+**Impact:** Misleading or empty notes for one version, which the registry cannot change afterwards.
+**Fix:** Use the provided body only for extensions that already have a notes file, and reject a body that trims to empty.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>128483</subagent_tokens><tool_uses>35</tool_uses><duration_ms>267825</duration_ms></usage>
+</task-notification>
