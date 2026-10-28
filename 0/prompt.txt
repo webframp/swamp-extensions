@@ -1,0 +1,82 @@
+<task-notification>
+<task-id>a1d5475f682e487e9</task-id>
+<tool-use-id>toolu_01BYqT7pVToQpfSTwvZSX6XY</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a1d5475f682e487e9.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit docs batch 0" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Batch 0 is done: I read all 39 files in full and found 31 issues in 15 of them. The worst are in aurora-datastore-bootstrap, azure-blob-datastore-bootstrap, azure/openai-usage and artifactory. I made no changes.
+
+For the two bootstrap extensions and for artifactory, I also read the code behind the README to confirm what actually happens to the secret. The extra non-README files I looked at are noted in the findings.
+
+```
+aurora-datastore-bootstrap/README.md:26 | 1,5 | high | "--input master_password=YourSecurePass123" | Make the workflow input a vault name + key and resolve it with vault.get inside the step; show `swamp vault put` first.
+aurora-datastore-bootstrap/README.md:39 | 5 | high | "| `master_password`     | _(required)_                 | Master password (8+ chars)          |" | Replace with `password_vault`/`password_key` inputs; the workflow input is recorded as cleartext run history.
+aurora-datastore-bootstrap/README.md:5 | 7 | high | "networking primitives, and a scoped IAM managed policy, then configures the current swamp repository." | Say that the datastore config embeds `REDACTED` (provisioner.ts:620); switch to an IAM-auth or vault-referenced config. (Also manifest.yaml:40 `--input master_password=&lt;your-password&gt;`.)
+aurora-datastore-bootstrap/README.md:130 | 7 | medium | "IAM-auth connections only as the master username configured at bootstrap time." | IAM auth is enabled, but the bootstrap still configures password auth; recommend IAM-token mode so no static password lands in config.
+
+azure-blob-datastore-bootstrap/README.md:64 | 7 | high | "The bootstrap retrieves the storage account's connection string and configures the datastore with `connectionString` auth mode." | The connection string holds the account key; it is stored in resource data and passed via `--config`. Default to servicePrincipal/AD auth or a vault reference.
+azure-blob-datastore-bootstrap/README.md:65 | 7 | medium | "For production, consider switching to `sharedKey` or `servicePrincipal` mode after bootstrapping" | Implies the plaintext connection-string config is fine outside production; make the safe mode the default and show vault.get for any key.
+azure-blob-datastore-bootstrap/README.md:74 | 7 | low | "The connection string is re-retrieved on each run" | Each run writes a fresh copy of the account key into versioned data; say so, or stop persisting it.
+
+azure/openai-usage/README.md:38 | 1 | high | "--global-arg 'clientSecret=&lt;secret-value&gt;'" | Use `--global-arg 'clientSecret=REDACTED vault.get("azure", "CLIENT_SECRET") }}'` after `swamp vault put azure CLIENT_SECRET`.
+azure/openai-usage/README.md:16 | 10 | medium | "`clientSecret` — Client secret value (stored in swamp vault recommended)" | Make the vault mandatory, not "recommended", and show the vault.get expression.
+
+artifactory/README.md:13 | 6 | high | "swamp vault put my-vault artifactory-token \"eyJ...\"" | Drop the inline value; use the interactive prompt or piped stdin, never the token on the command line.
+artifactory/README.md:18 | 10 | medium | "--global-arg 'token=vault://my-vault/artifactory-token'" | Not a swamp expression; the model never resolves `vault://` (artifactory.ts:25), so users fall back to pasting the raw token. Use `${{ vault.get("my-vault", "artifactory-token") }}`.
+artifactory/README.md:75 | 11 | low | "Tokens in vault references (`vault://`) are refreshed automatically if the vault supports rotation." | Repeats the unsupported `vault://` syntax and claims behavior that does not exist; rewrite around vault.get.
+
+ai-usage/README.md:27 | 10,11 | medium | "--global-arg 'analyticsKey=&lt;vault-reference&gt;'" | Show the full expression `'analyticsKey=${{ vault.get("anthropic", "ANALYTICS_KEY") }}'` plus `swamp vault put`; the placeholder invites pasting the key.
+
+anthropic/admin/README.md:23 | 11 | low | "Requires an Admin API key (`sk-ant-api01-...`)." | Optional: describe the key type without its literal prefix, or state that it must go only into the vault.
+anthropic/compliance/README.md:18 | 11 | low | "Requires a **Compliance Access Key** (`sk-ant-api01-...`) created by the primary" | Same: drop the token-shaped prefix or pair it with "store only via swamp vault put".
+
+aws/alarm-investigation/README.md:10 | 9 | low | "credentials configured (environment variables, shared credentials file, or IAM" | Point to SSO / `profile`; do not list static env vars or a credentials file as a setup path.
+aws/alarms/README.md:11 | 9 | low | "has valid AWS credentials configured (environment variables, shared credentials" | Recommend `aws sso login` + `--global-arg profile=`; drop env vars and the credentials file.
+aws/bedrock-usage/README.md:100 | 9 | low | "`fromIni({ profile })`, so it must exist in your `~/.aws/config` / `~/.aws/credentials`" | Reference `~/.aws/config` SSO/credential_process profiles only; do not imply static keys in `~/.aws/credentials`.
+aws/bedrock-usage/README.md:103 | 9 | low | "chain (env vars, instance role, etc.) instead of the `[default]` profile block" | Reword so env vars are not presented as a credential source.
+aws/inventory/README.md:11 | 9 | low | "credentials configured (environment variables, shared credentials file, or an" | Recommend SSO/`profile`; drop env vars and the credentials file.
+aws/pricing/README.md:12 | 9 | low | "public catalog data and does not require special IAM permissions, but valid AWS credentials must be present in the environment." | "In the environment" reads as env vars; say "via an SSO/named profile (`--global-arg profile=`)".
+aws/securityhub-findings/README.md:93 | 9 | low | "- AWS credentials for the delegated admin account (via `AWS_PROFILE` or env)" | Drop "or env"; name AWS_PROFILE / `profile` only.
+aws/securityhub-findings/README.md:200 | 9 | low | "resolution. Alternatively, set `AWS_PROFILE` as an environment variable" | AWS_PROFILE itself is fine; no change needed beyond making clear it holds a profile name, not keys.
+aws/support/README.md:119 | 9 | low | "loaded. The SDK falls back to environment variables, shared credentials file, or" | Recommend SSO profiles; do not list env vars or the credentials file as a fallback to rely on.
+aws/traces/README.md:103 | 9 | low | "omitted, the default credential chain applies (environment variables, shared credentials file, instance metadata)." | Reword to point at SSO/`profile`, not env or the credentials file.
+
+AGENTS.md:146 | 10 | low | "## API Integration Patterns" | Add a rule: secrets reach models only via `${{ vault.get(...) }}`; READMEs must show `swamp vault put` + vault.get; no `--input` secrets.
+AGENTS.md:57 | 10 | low | "- **Vaults** - Secret storage providers. Implement `VaultProvider`: `get()`, `put()`, `list()`, `getName()`." | Pair with guidance that model, workflow and datastore secrets must reference a vault, never literals or env.
+```
+
+The five low AWS-credential findings in bedrock-usage, securityhub-findings and support are borderline: they mention env vars or the credentials file only as part of how the credential chain works. They are included because the rubric says to be exhaustive. Treat the securityhub-findings:200 line as informational.
+
+Two related problems sit in files outside this batch, and the rubric does not say whether to report them:
+- `aurora-datastore-bootstrap/manifest.yaml:40` shows `--input master_password=&lt;your-password&gt;`.
+- `artifactory/manifest.yaml:20` and `artifactory/extensions/models/jfrog/artifactory.ts:25` repeat the unsupported `vault://` reference.
+
+Files read with no findings:
+- anthropic/analytics/README.md
+- anydoc-ingest/README.md
+- aws/acm-diagnostics/README.md
+- aws/adopt/README.md
+- aws/cfn-diagnostics/README.md
+- aws/cfn-operations/README.md
+- aws/config-compliance/README.md
+- aws/cost-audit/README.md
+- aws/cost-estimate/README.md
+- aws/cost-explorer/README.md
+- aws/cost-report/README.md
+- aws/dns-observation/README.md
+- aws/drift-state/README.md
+- aws/event-topology/README.md
+- aws/guardduty/README.md
+- aws/iam/README.md
+- aws/kiro-usage/README.md
+- aws/logs/README.md
+- aws/metrics/README.md
+- aws/networking/README.md
+- aws/ops/README.md
+- aws/service-quotas/README.md
+- aws/terraform-drift/README.md
+
+Everything in batch0.txt was audited; nothing was skipped.</result>
+<usage><subagent_tokens>156717</subagent_tokens><tool_uses>22</tool_uses><duration_ms>116732</duration_ms></usage>
+</task-notification>
