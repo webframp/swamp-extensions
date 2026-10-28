@@ -1,0 +1,95 @@
+<task-notification>
+<task-id>a998733509f77cce7</task-id>
+<tool-use-id>toolu_012oqndqLmLs9smDucRUdtnq</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/a998733509f77cce7.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial re-review iteration 5" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Iteration 5 review: @webframp/redmine 2026.10.20.1, HEAD a7c0effc
+
+Iteration 5 passes: I found no CRITICAL or HIGH issues. One MEDIUM finding (an uncapped `Retry-After` delay) needs a decision on whether this PR fixes it, and five findings are LOW.
+
+The gates all pass in the worktree: `deno task check`, `lint`, `fmt:check` and `test` (98 passed), and `swamp extension quality` (passed, 100%). `RELEASE_NOTES.md` is 4148 bytes, under the 5000 limit. Nothing in the repo besides the redmine tests calls `list_time_entries`, so the new date regex breaks no callers. I edited no tracked files; mutation testing ran on a copy in the scratchpad.
+
+### Is retrying a write on 503 + Retry-After safe?
+Yes; the risk is low and the change is acceptable. The duplicate-write risk comes from responses sent after the backend has already committed:
+- **Gateway timeouts after the backend committed:** Heroku H12 sends 503, ALB and nginx send 504, Envoy sends 503 on an upstream reset. None of these add `Retry-After` by default.
+- **Responders that do send `Retry-After`:** throttles such as Rack::Attack (which sends 429 anyway), maintenance pages, and HAProxy or Apache when no backend is available. All of these answer before Redmine runs.
+- **Redmine itself:** Rails/Puma does not send 503 with `Retry-After` from inside a request.
+
+So the header is a good sign that no work was done. The cost is the uncapped delay in the MEDIUM finding below.
+
+### Mutation results (14 mutants, 12 killed)
+| Mutant | Result |
+|---|---|
+| Drop the any-method 503+Retry-After rule; widen it to any status; restrict 429 to reads | killed |
+| Drop 502 or 504 from the read retry list; drop HEAD from reads; let a 303 rewrite HEAD | killed |
+| Ignore the `Retry-After` value; remove the `from`/`to` regex or either of its anchors | killed |
+| **Drop 503 from the read retry list** | **SURVIVED** |
+| **Upload deadline at the call site changed to 120 s** | **SURVIVED** |
+
+I ran the timing test 12 times at once: all passed, each run taking about 345–370 ms against the 280–900 ms window. I don't expect it to flake.
+
+### [MEDIUM] Retry-After is uncapped, so one method can hang for hours or days
+**File:** `redmine/extensions/models/redmine/_lib/api.ts`
+**Line(s):** 28–35 (`retryDelayMs`) and 150–153
+**Issue:** `Number(retryAfter) * 1000` is passed straight to `setTimeout` with no ceiling. In Deno I confirmed:
+- `86400` sleeps a full day.
+- Values above 2^31−1 ms (about 24.8 days), `Infinity` and negative values all fire after about 1 ms, so the request is retried almost at once.
+- An HTTP-date value is NaN and falls back to backoff of 1, 2, 4 and 8 seconds, which ignores the date.
+
+**Breaking input:** A maintenance responder sending `503` with `Retry-After: 3600` blocks any method, writes included, for 4 hours (4 retries). With `86400` it blocks for 4 days.
+**Impact:** A workflow hangs silently. The README and release notes tell users requests "time out after 120 seconds per attempt", but the sleep between attempts has no bound. The parsing was the same on main, where a 503 already retried for every method. This branch rewrote this retry loop and now documents bounded deadlines, so per your rule on defects that share a root cause, it is in scope.
+**Fix:** Cap the delay (for example 60 s). When `Retry-After` exceeds the cap, return the response without retrying. Parse the HTTP-date form with `Date.parse(v) - Date.now()`, and treat a negative or non-finite value as backoff. Add a test where a large `Retry-After` is not slept on.
+
+### [LOW] The tests don't cover a GET retrying a bare 503
+**File:** `redmine/extensions/models/redmine/_lib/api_test.ts`
+**Line(s):** 853–873
+**Issue:** The 502/503/504 GET loop sends `Retry-After: "0"` on every status. The 503 case therefore passes through the any-method rule, not the read rule.
+**Breaking input:** Mutant `return status === 502 || status === 504;` survives.
+**Impact:** A regression that stops reads retrying a bare 503 would pass CI.
+**Fix:** Send no `Retry-After` in the 503 case, or add a separate bare-503 GET test.
+
+### [LOW] The UPLOAD_TIMEOUT_MS test only checks the constant
+**File:** `redmine/extensions/models/redmine/redmine_test.ts`
+**Line(s):** 2441–2443, against `redmine.ts:2518`
+**Issue:** The test asserts the constant equals 600,000. It does not check that `upload_file` uses it.
+**Breaking input:** Mutant `AbortSignal.timeout(120_000)` at the call site survives.
+**Impact:** The documented 10-minute upload deadline is not protected by the tests.
+**Fix:** Inject the signal factory or timeout, or spy on `AbortSignal.timeout` during `upload_file` and assert it is called with `UPLOAD_TIMEOUT_MS`.
+
+### [LOW] The nginx `limit_req` example is wrong
+**File:** `redmine/README.md`, `redmine/RELEASE_NOTES.md`, and the `api.ts` comment
+**Line(s):** README 177–178; `api.ts` 17–19
+**Issue:** nginx `limit_req` returns a 503 with no `Retry-After` unless the operator adds one with `add_header ... always`.
+**Breaking input:** A default nginx `limit_req` 503 on a POST is not retried.
+**Impact:** Readers expect writes to be retried under nginx throttling, and by default they are not.
+**Fix:** Say "a throttle or maintenance responder that sends `Retry-After`", or note that nginx needs the header configured.
+
+### [LOW] The date check accepts dates that don't exist
+**File:** `redmine/extensions/models/redmine/redmine.ts`
+**Line(s):** 245, 1840–1843
+**Issue:** `/^\d{4}-\d{2}-\d{2}$/` accepts `2026-02-30` and `2026-13-45`. Redmine's `parse_date` returns nil for these, and the filter is skipped, which is the silent unfiltered result this commit set out to fix.
+**Breaking input:** `from: "2026-02-31"`
+**Impact:** The method returns unfiltered entries under a data name that says they are filtered. The ISO datetime forms Redmine also accepts are now rejected, which does no harm because `spent_on` is a date.
+**Fix:** Add `.refine()` that parses the value as UTC and checks it round-trips to the same string.
+
+### [LOW] The `limit` description doesn't match the code
+**File:** `redmine/extensions/models/redmine/redmine.ts`
+**Line(s):** 1844 (also 1233 and 2060)
+**Issue:** The description says "Max results (default 25)", but the code uses `args.limit ?? 100`, and the cap is 500, not the "max 100" stated at line 1233.
+**Impact:** Users get four times more results than documented. This predates the branch, but the branch edits these argument schemas.
+**Fix:** Change the descriptions to "default 100, max 500".
+
+### Doc check, line by line
+Everything else in the README and release notes matches the code:
+- **Retry and error sections:** they match `isRetryableStatus`.
+- **`filePath`:** the new relative-path wording matches the schema.
+- **Data-name collision list:** I checked it against `origin/main`. The `create_issue`, `update_issue` and `create_version` bare IDs and the bare `search` query are all accurate.
+- **Data-name table:** it matches the new names.
+
+## VERDICT: PASS
+
+The MEDIUM uncapped `Retry-After` delay and all five LOW findings remain open, and none is fixed in this branch. It is your call whether this PR fixes them or they are handled separately.</result>
+<usage><subagent_tokens>85159</subagent_tokens><tool_uses>19</tool_uses><duration_ms>247266</duration_ms></usage>
+</task-notification>
