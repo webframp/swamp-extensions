@@ -1,0 +1,53 @@
+<task-notification>
+<task-id>ac8494a78859b3427</task-id>
+<tool-use-id>toolu_01KSCjnLBLLENS1bokAZkXUZ</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ce907964-9d1d-4ae3-bfc2-b76f1e6e32ae/tasks/ac8494a78859b3427.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of step renames" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I ran `git stash` by mistake. The tree was clean, so it stashed nothing. The stash list entries are older and unrelated to this branch. The scoped `fmt:check` tasks pass for both extensions. The unscoped `deno fmt --check` failure was in `RELEASE_NOTES.md`, which the tasks exclude, so it isn't a CI concern.
+
+I found no CRITICAL or HIGH issues. The 10 report tests in `security_findings_triage_test.ts` pass.
+
+### [MEDIUM] Fallback test covers only one of five steps
+**File:** aws/securityhub-findings/extensions/reports/security_findings_triage_test.ts **Line(s):** 278-299 (new test); 112, 175, 263, 281 (leftover old names)
+**Issue:** The only fallback test uses `critical_findings`. Mock steps at lines 112, 175, 263 and 281 still use snake_case names (`severity_summary`, `diff_findings`, `critical_findings`), and two of them are the malformed-data test. These pass only through the fallback.
+**Breaking input:** Change the fallback to `stepName.replaceAll("-", "_")` on the wrong side, or restrict it to one name. The kebab and `critical_findings` tests still pass. Only the untested legacy names (`by_type`, `severity_summary`, `high_findings`) would break, and nothing would catch it.
+**Impact:** A regression in the legacy path for four of five steps would go unnoticed. The test mix of old and new names also makes the intent unclear.
+**Fix:** Convert lines 112, 175, 263 and 281 to kebab names. Add one table-driven legacy test that covers all five snake_case names. Optionally add a kebab-and-snake mixed-run test that asserts which step wins.
+
+### [LOW] `find` returns the first match, so a mixed run is order-dependent
+**File:** aws/securityhub-findings/extensions/reports/security_findings_triage.ts **Line(s):** 164-168
+**Issue:** If a run contained both `by-type` and `by_type` steps, `find` would pick whichever comes first in `stepExecutions`.
+**Breaking input:** A workflow with both a kebab and a snake_case step of the same logical name.
+**Impact:** Practically none. The shipped workflow has only one form per run, and no name pair collides. `replaceAll("-","_")` maps the five names one-to-one: `severity_summary`, `critical_findings`, `high_findings`, `diff_findings`, `by_type`.
+**Fix:** None required. The test above would document the behavior.
+
+### [LOW] operator-briefing release note upgrade note has no actionable content
+**File:** operator-briefing/RELEASE_NOTES.md **Line(s):** 1-7
+**Issue:** The note says "in a future version the report will be updated to use only the new-format names". But `operator_briefing.ts` never looks steps up by name. The only use of `stepName` is as a label and in notes text. For `verdict:` labels it applies only to failed typesafe `ask` steps, not `triage_batch`, so `triage-reviews` does not change any label. The line is vacuous and could mislead readers into expecting a future report change.
+**Breaking input:** None. This is a wording problem.
+**Impact:** Minor reader confusion. The note also tells readers to use `workflow resume --from triage_reviews`. I could not verify that command exists, and nothing in the repo references it.
+**Fix:** Say plainly that the report is unaffected and nothing needs migrating. Keep the "future version" line only if you intend to require it. Soften or remove the `resume --from` example.
+
+### [LOW] operator-briefing/RELEASE_NOTES.md is near the 5000-character limit
+**File:** operator-briefing/RELEASE_NOTES.md
+**Issue:** The file is 4021 bytes after this change, and it accumulates multiple versions. CLAUDE.md says the file should describe only the current version (under 5000 characters), so the old entries are the problem.
+**Impact:** The next bump could exceed 5000 characters if CI passes the whole file to `--release-notes`. The file is already over-accumulated.
+**Fix:** Trim to the current entry at the next bump. This is not caused by this diff.
+
+### [LOW] Extension version and model version now differ
+**File:** aws/securityhub-findings/manifest.yaml (2026.10.06.1); aws/securityhub-findings/extensions/models/aws/securityhub_findings.ts line 374 (model `version` 2026.09.24.1)
+**Issue:** The manifest is bumped but the model version and its `upgrades` array are not. This looks correct: the model is unchanged, and only the report and workflow changed, so no `upgrades` entry is needed. No exact-literal `model.version` assertion goes stale. I only flag it as intentional.
+**Fix:** None. Confirm that `swamp extension quality manifest.yaml` is 14/14 for both extensions. I did not run it.
+
+### Probe results
+- **Remaining old names, whole repo (excluding `.swamp/`):** Only the four test mock names above, the new fallback test, and the release-notes text. There are no CEL `steps.*` references, no `dependsOn` or README/docs references, and no other workflow or extension consuming these step names.
+- **operator-briefing report data keys:** The report and normalizers key on data handle names and `modelType`, not step names. The securityhub test helper sets `stepName` to the method name. `securityhub_findings.ts` uses data names such as `severity_summary` and `diff_findings`, and the model is unchanged, so it still works.
+- **`triage-reviews` consumers:** The `triage_batch` step output is read via data names, and the only other reference is a comment in `shapes.ts`, which the diff updated.
+- **Security Hub report lookups:** `readStepData` reads `dataHandles[0]`, independent of the step name, so no stored data is keyed by step name.
+- **Imports:** No bare import specifiers were introduced.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>62604</subagent_tokens><tool_uses>10</tool_uses><duration_ms>48651</duration_ms></usage>
+</task-notification>
