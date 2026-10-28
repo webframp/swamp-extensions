@@ -1,0 +1,63 @@
+<task-notification>
+<task-id>a331cd7e22c35d83c</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/a331cd7e22c35d83c.output</output-file>
+<status>completed</status>
+<summary>Agent "Falai codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The `falai/models` regeneration is committed on `fix/falai-codegen-regen-2026-10-07`. Nothing has been pushed and no PR is open.
+
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a331cd7e22c35d83c`
+- **Commit:** `91369f2d`, `fix(falai/models): regenerate for sort argument on get_models`, with the Co-Authored-By trailer.
+
+**What changed.** The regenerated output is `falai/models/manifest.yaml`, `falai/models/extensions/models/falai/models.ts` and `falai/models/RELEASE_NOTES.md`. It bumps the version from 2026.09.25.1 to 2026.10.07.1 and adds one change:
+- `get_models` gets an optional `sort` argument, either `relevant` or `recent`.
+- The generator appended the identity upgrade entry for 2026.10.07.1.
+- No methods were removed and no resource schemas changed, so the change is additive and needs no Upgrade note.
+- `deno.lock` did not change.
+
+I made no harness changes and hand-edited nothing generated.
+
+**Gates.**
+- **`falai/models`:** `check`, `lint`, `fmt:check` and `test` pass (8 tests).
+- **Quality:** `swamp extension quality manifest.yaml` scores 12/12 points. That is 100%, but with 2 points (`repository-verified`) pending server verification on publish. CLAUDE.md says 14/14, but the current rubric v3 totals 12.
+- **`scripts/falai-codegen`:** `check`, `lint`, `fmt:check` and `test` pass (105 tests).
+
+**Reviewer verdict.** A separate adversarial subagent returned PASS with no CRITICAL or HIGH findings. It confirmed `sort` reaches the API and is kept across pages and cursors. It did not run `fmt:check`, the quality check or the harness gates (I ran those), and it did not read `extension_generator.ts`. It raised three LOW findings that I have not acted on, since fixing them means changing the harness and regenerating:
+1. The generated tests don't assert that enum query arguments such as `sort` appear in the request URL. The fix would be in the harness test generator.
+2. `falFetch` in the generated `_lib/api.ts` has no request timeout. This is pre-existing. The fix would be `AbortSignal.timeout` in the harness `api.ts` template.
+3. The release note doesn't say that `sort` is ignored when `endpoint_id` is given.
+
+The pre-push-review skill says to fix every finding, so these need your call. I can do them in the harness and regenerate, or ship as is. The timeout fix would touch every falai extension.
+
+**Drafted PR title:** `fix(falai/models): regenerate from updated spec (adds get_models sort)`
+
+**Drafted PR body:**
+```
+## Summary
+
+Regenerates the stale `@webframp/falai/models` extension (2026.09.25.1 to
+2026.10.07.1) with `scripts/falai-codegen`, scoped to `--service models`.
+
+The updated fal.ai OpenAPI spec adds an optional `sort` argument to
+`get_models`. It accepts `relevant` (the default) or `recent`, which orders
+by publication date and falls back to creation date. The change is additive:
+no methods or resource schemas changed, and existing calls behave as before.
+The generator appended an identity upgrade entry for 2026.10.07.1.
+
+No generated file was edited by hand, and the harness is unchanged.
+
+## Validation
+
+- `falai/models`: `deno task check`, `lint`, `fmt:check` and `test` pass.
+- `swamp extension quality manifest.yaml`: 12/12 points, with 2 pending
+  server verification of the repository.
+- `scripts/falai-codegen`: `check`, `lint`, `fmt:check` and `test` pass.
+- Local adversarial review: PASS, with three LOW findings (no test coverage
+  for `sort`, no fetch timeout in the shared API helper, and a missing
+  release-note caveat for `endpoint_id` mode).
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>60606</subagent_tokens><tool_uses>16</tool_uses><duration_ms>90226</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a331cd7e22c35d83c</worktreePath><worktreeBranch>worktree-agent-a331cd7e22c35d83c</worktreeBranch></worktree>
+</task-notification>
