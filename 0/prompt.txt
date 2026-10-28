@@ -1,0 +1,1 @@
+I merged it, cleanup the worktree
