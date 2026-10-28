@@ -1,0 +1,1 @@
+I have concerns about the conclusions here: https://github.com/webframp/swamp-extensions/pull/496 the change seems like avoiding the actual problem and not fixing the actual problem or generate the right new code
