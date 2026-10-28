@@ -132,6 +132,10 @@ const RecordListSchema = z.object({
   summary: z.object({
     totalRecords: z.number(),
     zonesScanned: z.number(),
+    zonesFailed: z.array(z.string()).default([]).describe(
+      "Zone IDs whose records could not be read (ListResourceRecordSets " +
+        "failed). These are NOT counted in zonesScanned.",
+    ),
     byType: z.record(z.string(), z.number()),
   }),
 });
@@ -499,7 +503,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.10.14.1",
+  version: "2026.10.28.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -611,6 +615,14 @@ export const model = {
       toVersion: "2026.10.14.1",
       description:
         "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.28.1",
+      description:
+        "list_records: added summary.zonesFailed (defaults to []); " +
+        "zonesScanned now counts only readable zones. Additive schema " +
+        "change — existing stored records remain valid via the default.",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -838,6 +850,8 @@ export const model = {
           const records: z.infer<typeof RecordSetSchema>[] = [];
           const byType: Record<string, number> = {};
           let truncated = zoneListTruncated;
+          const zonesScanned: string[] = [];
+          const zonesFailed: string[] = [];
 
           for (const zone of zoneIds) {
             try {
@@ -900,6 +914,8 @@ export const model = {
                 pages++;
               } while (pages < MAX_PAGES);
               if (pages >= MAX_PAGES) truncated = true;
+              // The zone's records were read successfully (even if empty).
+              zonesScanned.push(zone.id);
             } catch (err) {
               context.logger.warn(
                 "ListResourceRecordSets failed for zone {zoneId}: {error}",
@@ -908,7 +924,25 @@ export const model = {
                   error: err instanceof Error ? err.message : String(err),
                 },
               );
+              zonesFailed.push(zone.id);
             }
+          }
+
+          // When the caller named zones explicitly and none could be read,
+          // "found nothing" is indistinguishable from "could not look" — so
+          // fail loudly instead of reporting a successful empty scan.
+          if (
+            args.zoneFilter && args.zoneFilter.length > 0 &&
+            zonesScanned.length === 0
+          ) {
+            throw new Error(
+              `list_records: none of the ${zoneIds.length} zone(s) in ` +
+                `zoneFilter could be read (failed: ${
+                  zonesFailed.join(", ")
+                }). Verify the values are hosted zone IDs (e.g. Z1234ABCD), ` +
+                `not zone names, and that the credentials can call ` +
+                `ListResourceRecordSets on them.`,
+            );
           }
 
           const result: z.infer<typeof RecordListSchema> = {
@@ -918,7 +952,8 @@ export const model = {
             records,
             summary: {
               totalRecords: records.length,
-              zonesScanned: zoneIds.length,
+              zonesScanned: zonesScanned.length,
+              zonesFailed,
               byType,
             },
           };
@@ -936,7 +971,11 @@ export const model = {
 
           context.logger.info(
             "Listed {count} records across {zones} zones",
-            { count: records.length, zones: zoneIds.length },
+            {
+              count: records.length,
+              zones: zonesScanned.length,
+              failed: zonesFailed.length,
+            },
           );
 
           return { dataHandles: [handle] };
