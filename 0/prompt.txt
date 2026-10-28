@@ -1,0 +1,51 @@
+<task-notification>
+<task-id>a7e01139020386b51</task-id>
+<tool-use-id>toolu_01DhBJbsA4q8YwKZnr3Ygqhb</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/2c982448-b049-42d8-9ee8-c9416f13c66b/tasks/a7e01139020386b51.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review swamp-club dedup fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH issues, so this passes. All gates pass in `swamp-club/`: `deno task check`, `deno task lint`, `deno task fmt:check` and `deno task test` (6 passed). `swamp extension quality manifest.yaml` reports `status: passed` at 100%. No files were modified.
+
+**Answers to the probes:**
+
+1. **Only partial handle?** Yes. `post_ripple`'s repeat path at `lab.ts:164` was the only early return with a name-only handle. `get_lab_issue_context` (line 143) and the normal `post_ripple` path (line 195) already returned the handle from `writeResource`. The fix works the same way as the github `existingHandle` helper (`triage.ts:27-35`): it re-writes the existing record under the same spec and name. It is inlined rather than pulled into a helper, which is fine with only one call site.
+2. **Strict schema and secrets.**
+   - `existing` comes from the ripple record, which only ever holds `{issueNumber, commentId, body, postedAt}`. A re-write of that object passes `.strict()`.
+   - `apiKey` is a global argument and is never written into a resource, so it cannot end up in `existing`.
+   - The vault-expression case is covered under the first LOW finding.
+3. **Version bump.**
+   - The manifest, `model.version` and the last `upgrades[].toVersion` all read `2026.10.12.1`.
+   - The upgrade entry is appended with an identity migration, and the earlier `2026.09.18.1` entry is intact.
+   - No test asserts an exact version.
+4. **Release notes.** They are accurate. Retention of 20 versions and the 30-day lifetime match the `ripple` spec (`garbageCollection: 20`, `lifetime: "30d"`). "No Swamp Club API call is made on a repeat" is true, because the early return comes before `request`. The claim that dedup always worked is true. The notes do not overclaim.
+5. **Tests.** The updated test checks four things: one fetch only, a second write with the same name and the same data, and a handle with a string `dataId`, a numeric `version` and an object `tags`. That covers the Zod failure (`path: dataId`). It does not run the real workflow-runtime validator, but it checks the exact fields the runtime rejected.
+6. **`if (existing)`.** `readResource` returns `Record | null`. Any stored object is truthy, even an empty `{}`, and `ripple` records are never empty. This is correct.
+
+### [LOW] Re-write persists whatever `readResource` returns, including any resolved vault expressions
+**File:** `swamp-club/extensions/models/swamp-club/lab.ts`
+**Line(s):** 163-172
+**Issue:** The API reference says `readResource` resolves vault reference expressions automatically. The re-write then saves that resolved object. The code comment ("Safe because ripple has no sensitive fields") covers only the schema, not values that might be resolved on read.
+**Breaking input:** A ripple `body` whose stored text still holds a literal `${{ vault.get(...) }}`. That would take a body that escaped CEL evaluation of the method arguments. In the normal case, argument expressions are resolved before `execute` runs, so the secret would already be in the public comment and the datastore.
+**Impact:** Unlikely. In the normal case nothing gets worse, because the same text was already posted publicly and stored. In the edge case, the re-write would store a plaintext secret in the local datastore that the original record held only as a reference. It would not reach the public comment. A second edge case: if the referenced vault is unavailable, the read may throw, and the repeat step fails instead of returning a handle. The github fix has the same exposure.
+**Fix:** Optional. Re-write the fields explicitly as `{ issueNumber, commentId, body, postedAt }` from `existing`, which also guards against extra fields, or note the assumption in the comment. Not required for merge.
+
+### [LOW] Each repeat adds a version and pushes back expiry
+**File:** `swamp-club/extensions/models/swamp-club/lab.ts`
+**Line(s):** 168-172
+**Issue:** Every repeated key writes a new version, and each write resets the 30-day lifetime. The data is unchanged and garbage collection caps it at 20 versions, so storage stays bounded. But a workflow that repeats a key on a schedule keeps the marker alive indefinitely. That works in favour of dedup, and the release notes already disclose it.
+**Breaking input:** A cron workflow that repeats the same key forever.
+**Impact:** Small. Stored data stays bounded, and the marker never expires while the workflow runs.
+**Fix:** None needed. The behaviour is documented.
+
+### [LOW] The local `Context.writeResource` type says it returns only `{ name }`
+**File:** `swamp-club/extensions/models/swamp-club/lab.ts`
+**Line(s):** 28-32
+**Issue:** The local type says `writeResource` returns `Promise&lt;{ name: string }&gt;`. That shape is exactly the name-only handle this PR fixes, so the type checker could never have caught the original bug. The github extension types it the same way.
+**Breaking input:** None at runtime.
+**Impact:** Only a weaker type check.
+**Fix:** Optional. Type the return value as a fuller `DataHandle` shape.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>56744</subagent_tokens><tool_uses>6</tool_uses><duration_ms>50403</duration_ms></usage>
+</task-notification>
