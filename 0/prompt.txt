@@ -1,0 +1,69 @@
+<task-notification>
+<task-id>aea59b5183c63565c</task-id>
+<tool-use-id>toolu_019rXxNwnPLa3ivnaxRYV2vY</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aea59b5183c63565c.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix datadog codegen + regen" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I've fixed all four datadog audit items in the generator and regenerated all 14 extensions. Every generator and extension gate passes, and every extension scores `passed` / 100% on `swamp extension quality`. Nothing is committed. One thing needs your decision: dora could not be regenerated from the pinned spec, so I used an older one (details below).
+
+## What changed
+
+**1. README.** Every README now has the canonical Credentials section: `swamp vault create local_encryption datadog`, then `swamp vault put datadog API_KEY` and `APP_KEY`. The usage example now uses `--global-arg 'apiKey=REDACTED vault.get("datadog", "API_KEY") }}'` and the same for `appKey`. The old `DD_API_KEY`/`DD_APP_KEY` literals are gone; swamp rejects literal values for sensitive global arguments anyway.
+
+**2. Argument descriptions.** `apiKey` and `appKey` were already marked sensitive; their descriptions now say to wire them with `vault.get` and never pass the literal value. The generator has no environment-variable fallback, so there was nothing to downgrade.
+
+**3. Secret-valued method arguments.** A new name matcher (`lib/sensitive.ts`) marks credential-named fields sensitive, including nested request-body fields. Its tests also check it does not catch look-alikes such as `author`, `creationAuthorId`, `session_id`, `cert`, `api_key_id`, `page_token`, `max_tokens` and `has_password`. On the pinned spec it marks no Datadog argument at all. Arguments whose name gives no hint are listed in a new `SENSITIVE_ARG_FIELDS` map in `config.ts`, which currently holds `PatchGlobalVariable.json_patch`: a patch that sets a global variable's value carries that secret.
+
+**4. Secrets in API responses.** I scanned every request, parameter and response schema of the 165 operations, resolving references fully. No create or action returns an API key, application key, token or webhook secret; the only credential-like names were public certificate fields, RUM `session_id` and author IDs. The response fields that do carry secrets are all in synthetics, listed in a new `SENSITIVE_RESPONSE_FIELDS` map and marked sensitive so swamp stores them in a vault:
+- `patch_global_variable` → `value.value` (a global variable's value, which Datadog returns unless the variable is flagged `secure`)
+- `get_test_file_download_url` → `url` (presigned URL)
+- `get_test_file_multipart_presigned_urls` → `multipart_presigned_urls_params` (presigned upload URLs)
+
+Generation now fails if a listed field is missing from the schema, or if a secret sits inside an array, record or union, where swamp does not vault resource fields. That stops API drift from silently dropping the protection.
+
+**Tests.** The generator has 14 new tests. Every generated extension now checks that both keys are marked sensitive. Synthetics also checks the `json_patch` marking and plants a sentinel secret in each of the three responses, then asserts no plaintext is left once the marked paths are replaced. The test context does not vault anything itself, so that last step stands in for swamp's data writer.
+
+## Behavior change for synthetics users
+Once a model declares sensitive output, swamp refuses to run any of its methods, reads included, until a vault exists. Synthetics method names never match swamp's read/list names, so all 35 methods are affected. The README and release notes say this.
+
+## Calls you may want to reverse
+- **Presigned URLs treated as secrets:** they are short-lived bearer URLs, so this is a judgement call.
+- **`value.value` treated as a secret:** Datadog only returns it for variables not flagged `secure`.
+- **`json_patch` marked sensitive:** swamp masks every string in the patch in output, including words like `replace` and paths like `/name`, not just the secret.
+
+## Decision needed: dora
+In the pinned spec (b51c6bd9), Datadog renamed the DORA tag from "DORA Metrics" to "Delivery Performance". The generator gets zero operations for dora and silently skips it. Because of that, dora also missed the 2026-10-15 change that added one test per method.
+
+I searched upstream for a spec that reproduces dora and found 96258a208af708ba7392d7b49912a062b43df488. With it, the dora model and README match the committed files except for my changes. I swapped that spec into the cache for the dora run only, then put the pinned b51c6bd9 file back and touched it.
+
+dora's test file therefore also picks up the four missed per-method tests (`create`, `delete`, `list` and `get_dora_failure`). The test file is not shipped.
+
+Two things remain, and neither is in this change:
+- Moving `config.ts` to the new tag. That pulls in real API drift, including a new `create_ai_impact_user_activity` method.
+- Making the generator fail rather than silently skip a configured service that matches nothing.
+
+Should either be done here, or left for later?
+
+## Versions
+All 14 go to `2026.10.21.1`. Each model got a no-op upgrade entry added by the generator.
+- From `2026.10.14.1`: dora, downtimes, events, incidents, logs, slos
+- From `2026.10.15.1`: metrics, monitors, on-call, security-rules, security-signals, security-suppressions, synthetics, teams
+
+Release notes: synthetics has its own behavioral notes. The other 13 share notes saying only documentation and argument descriptions changed.
+
+## Diff check
+Every model change is the two key descriptions, the version, the upgrade entry, plus the four synthetics markers. README changes are the Credentials and usage block, plus a "Returned secrets" table in synthetics. Manifests change only the version, and no `deno.lock` changed. A dry run on the pinned spec now reports all 13 non-dora services unchanged.
+
+## Gates
+- **Generator:** check, lint, fmt:check and test pass (53 tests).
+- **Each of the 14 extensions:** check, lint, fmt, fmt:check and test pass, and `swamp extension quality` is `passed` / 100%.
+
+## Files changed
+- `/home/sme/src/webframp/swamp-extensions/scripts/datadog-codegen/`: `config.ts`, `main.ts`, `lib/extension_generator.ts`, `lib/method_classifier.ts`, `lib/test_generator.ts`, `lib/type_mapper.ts`
+- New: `lib/sensitive.ts`, `lib/sensitive_test.ts`
+- `/home/sme/src/webframp/swamp-extensions/datadog/&lt;service&gt;/` for all 14: `README.md`, `RELEASE_NOTES.md`, `manifest.yaml`, `extensions/models/datadog/&lt;name&gt;.ts`, `&lt;name&gt;_test.ts`
+
+Everything in my scope is fixed. The only open items are the two dora follow-ups above.</result>
+<usage><subagent_tokens>229361</subagent_tokens><tool_uses>100</tool_uses><duration_ms>1111888</duration_ms></usage>
+</task-notification>
