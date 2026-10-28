@@ -1,0 +1,51 @@
+<task-notification>
+<task-id>ad07b64fd07ca9bc2</task-id>
+<tool-use-id>toolu_017St983RC965bGbcccKZYwr</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ad07b64fd07ca9bc2.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix falai codegen + regen" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All audit items for falai are fixed across `scripts/falai-codegen` and the 9 `falai/*` extensions, and every gate passes, with quality at 100% on all nine. One fal.ai response field, `signed_url`, needs your call (end of report). Regenerating from the cached spec showed no API drift: every changed file is a README, release notes, `_lib/api.ts`, a manifest, a model file or `keys_test.ts`. A final dry-run reports all 9 extensions unchanged. I did not delete the cache.
+
+**What changed**
+1. **Credentials docs.** The `--global-arg apiToken=REDACTED example is gone from the README template. In its place is the canonical Credentials section: a `falai` vault, `swamp vault put falai API_KEY`, and `--global-arg 'apiToken=REDACTED vault.get("falai", "API_KEY") }}'`. The `apiToken` description and the missing-key error now lead with `vault.get`. They mention `FAL_KEY` only as a fallback that is not redacted and not recommended. The `FAL_KEY` fallback itself is still in the code.
+2. **`create_api_key` now keeps the key.**
+   - The code that deleted `key_secret` and `key` before writing the resource is removed. The full response goes to `writeResource`.
+   - Both fields are now marked `.meta({ sensitive: true })` in the `api_key` resource schema, so swamp stores them in a vault and the resource keeps a `vault.get(...)` reference.
+   - I checked this with swamp's own `extractSensitiveFields`: it finds both fields.
+   - The marker sits before `.optional()` but after any `.min()`/`.regex()`. Zod drops metadata across a refinement, so placed earlier it would be lost.
+   - The generator now stops with an error if a configured secret field is missing from the response schema, if the resource has no schema, if it is a list resource, or if the operationId is no longer in the spec. Before, the marking would have been dropped silently.
+   - The keys README has a section saying created keys land in a vault and the method needs one.
+   - The keys release notes call out the change: previously dropped, now stored in a vault, and a vault is required. Swamp refuses to run the method before any key is created if no vault exists.
+3. **Secret-valued method arguments.** I checked every argument across the 9 extensions and found none. `api_key_id` and `key_id` are identifiers, not secrets.
+
+**How the vault storage is tested.** The generated keys test can't watch swamp move the value into a vault, because `createModelTestContext` doesn't run swamp's vault writer. Instead it checks three things:
+- The schema marks exactly `key` and `key_secret` sensitive.
+- The method passes both secrets to swamp rather than dropping them.
+- Replacing the marked fields with vault references leaves no plaintext anywhere in the resource, and the result still matches the schema.
+
+I broke the code two ways on purpose (removed the marker; dropped the secret before writing) and the test failed both times.
+
+**Version bumps** (all now 2026.10.21.1, each with a new identity upgrade entry and new release notes):
+
+| Extension | Old version |
+|---|---|
+| account, compute, models, organization, storage, workflows | 2026.10.14.1 |
+| assets, serverless | 2026.10.14.2 |
+| keys | 2026.10.14.3 |
+
+The other eight are marked documentation and error text only, with no behavior change.
+
+**Gates**
+- **Generator:** check, lint and fmt:check pass; 141 tests pass, 0 fail.
+- **Each of the 9 extensions:** check, lint, fmt, fmt:check and test all pass. `swamp extension quality` scores 13/13 (100%) on every one. No `deno.lock` changed.
+- **One existing warning:** quality reports `schema-strictness` on `keys.ts:195`, the `revoke_api_key` resource's empty passthrough schema. It doesn't cost points and isn't about secrets, so I left it. Say if you want it fixed.
+
+**Files changed**
+- Generator: `/home/sme/src/webframp/swamp-extensions/scripts/falai-codegen/` — `config.ts`, `main.ts`, and in `lib/`: `type_mapper.ts`, `method_classifier.ts`, `extension_generator.ts`, `test_generator.ts`, plus their `_test.ts` files.
+- Generated, in each of the 9 `/home/sme/src/webframp/swamp-extensions/falai/&lt;service&gt;/` directories: `README.md`, `RELEASE_NOTES.md`, `manifest.yaml`, `extensions/models/falai/&lt;service&gt;.ts`, `extensions/models/falai/_lib/api.ts`, and `falai/keys/extensions/models/falai/keys_test.ts`.
+- The release-notes sources are in the scratchpad: `falai-keys-notes.md` and `falai-notes.md`.
+
+**Decision for you:** the fal.ai spec also returns `signed_url` from `/storage/files/sign`. That is a temporary URL that grants access to a file. The audit didn't flag it and I left it alone. Marking it sensitive would put it in a vault, which defeats the point of a URL meant to be shared. I recommend leaving it as is. Should I mark it sensitive anyway?</result>
+<usage><subagent_tokens>159384</subagent_tokens><tool_uses>77</tool_uses><duration_ms>612072</duration_ms></usage>
+</task-notification>
