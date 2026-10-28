@@ -1,0 +1,76 @@
+<task-notification>
+<task-id>a1d8c3d7e9de20303</task-id>
+<tool-use-id>toolu_01TjjAZHKzf21c3CKfRsUGL9</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a1d8c3d7e9de20303.output</output-file>
+<status>completed</status>
+<summary>Agent "Review generators + generated output" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## VERDICT: PASS
+
+I found no CRITICAL or HIGH issues. The five generators keep returned secrets out of plaintext along every path I could test. Four MEDIUM findings and four LOW ones follow.
+
+**How I checked.** I read the swamp checkout at `~/src/swamp-club/swamp` @79e0800b and pinned zod 4.6.5:
+- `extractFieldsWithMetadata` walks plain object shapes only. It unwraps optional, nullable and default, and does not enter arrays, records or unions.
+- In zod 4.6.5, `.min()`, `.regex()` and `.describe()` clone with a parent link, so metadata survives them. I tested this.
+
+I wrote a script that walks every generated resource schema in cloudflare, snyk, datadog, griptape and falai. Every `sensitive` mark sits on a path swamp can reach. The only unreachable marks are snyk `get_many_*_service_account(s)` items, and those methods drop the values first.
+
+I also ran a spec-level probe against `cloudflare/.cache/openapi.json` using the generator's own `groupOperations`/`planSecrets`. Every credential-named response leaf is either vaulted or stripped; the only hits were non-secrets (booleans, opaque objects). The probe file was briefly at `scripts/cloudflare-codegen/zz_review_probe.ts` and I deleted it; the repo is otherwise untouched.
+
+Other gates:
+- All five generator test suites pass (146 / 53 / 79 / 121 / 141), and `check` and lint are clean.
+- Version and upgrade chains are intact for every changed extension in this area: manifest = model `version` = last `toVersion`, one release-notes section, under 5000 characters.
+- The CLAUDE.md spot-check greps return nothing.
+
+### [MEDIUM] Release notes and READMEs understate the vault requirement: every method of the model now needs a vault
+**File:** `scripts/cloudflare-codegen/lib/extension_generator.ts` **Line(s):** 176; `scripts/snyk-codegen/lib/extension_generator.ts` 175; `scripts/griptape-codegen/lib/extension_generator.ts` 179; `scripts/falai-codegen/lib/extension_generator.ts` 145. Generated copies: `cloudflare/*/RELEASE_NOTES.md:19`, `snyk/{apps,service-accounts}/RELEASE_NOTES.md:21`, `griptape/data-connectors/{README.md:49,RELEASE_NOTES.md:18}`, `falai/keys/RELEASE_NOTES.md:16`
+**Issue:** swamp's `method_execution_service.ts:887` rejects any method whose kind counts as mutating (`isMutatingKind`) when *any* resource of the model has a sensitive field. `inferMethodKind` only recognises the exact names `get`/`list`/…. No generated method sets `kind`, so names like `list_projects` count as mutating. The docs say otherwise:
+- cloudflare: "Such a method now needs a vault"
+- snyk: "Create a vault before running a … method that creates or rotates a credential"
+- griptape: "fail unless a vault exists when a response carries the value"
+- falai: "`create_api_key` now requires a vault"
+
+Datadog's notes are the only accurate ones ("refuses to run any of its methods, reads included").
+**Breaking input:** a user with no vault who relies on the kept `CLOUDFLARE_API_TOKEN` fallback runs `list_projects` (cloudflare/pages, which is marked only because of `web_analytics_token`). Every cloudflare model in the "Secrets" tables behaves the same way: access, stream, logpush, r2, turnstile, tunnel, magic-transit, workers-ai, workers-scripts. So do snyk/apps, snyk/service-accounts, griptape/data-connectors and falai/keys, including their list and delete methods.
+**Impact:** methods that previously worked now fail after upgrade, and the notes don't tell users.
+**Fix:** either emit `kind: "list"`/`"read"` on generated list and get methods (the data writer still requires a vault for an actual sensitive write), or reword all four templates and the regenerated notes to match datadog's.
+
+### [MEDIUM] Newly working Turnstile and Tunnel secret writers all write instance `"created"`, so each call overwrites the previous secret in the vault
+**File:** `scripts/cloudflare-codegen/lib/method_classifier.ts` **Line(s):** 1064 (create body); output in `cloudflare/turnstile/.../turnstile.ts:366-369, 526-529` and `cloudflare/tunnel/.../tunnel.ts:806-814`
+**Issue:** the create body names the instance `result.id ?? "created"`. Turnstile widgets have no `id` (their key is `sitekey`), and the tunnel management token is a bare string. These methods always failed before; the release notes now say they are fixed. In practice every call lands on `create/created`, `rotate_secret/created` or `a_cloudflare_tunnel_management_token/created`. The vault key is built from the instance name, so the stored secret is replaced.
+**Breaking input:** run `get_create` for widget A, then for widget B. A's `secret` reference now resolves to B's secret. The same happens with `get_a_cloudflare_tunnel_management_token` across two tunnels.
+**Impact:** this breaks the CLAUDE.md rule for collision-resistant instance names, in code this change made reachable. The values can be re-fetched, but stored references silently point at the wrong credential.
+**Fix:** fall back to the last path parameter or a hash of the args (as falai and griptape do) instead of `"created"`.
+
+### [MEDIUM] The 26 Cloudflare release notes are identical, not per extension
+**File:** `cloudflare/*/RELEASE_NOTES.md` (same md5 4f40057b… for all 26)
+**Issue:** kv, d1 and other extensions with no secrets tell users about Tunnel `{ value }` upgrades, Turnstile fixes and "now needs a vault". Upgrade notes that apply only to tunnel are shipped to every extension.
+**Fix:** generate the secret and upgrade paragraphs from each extension's secret plan, the way datadog and snyk do.
+
+### [MEDIUM] Tests check vaulting against a hand-written copy of swamp's walker, not swamp's own extractor
+**File:** the `persistedLikeSwamp`, `swampSensitivePaths` and `vaultedPaths` helpers in all five `test_generator.ts` files
+**Issue:** the griptape, snyk and falai helpers unwrap every `innerType` wrapper, including `readonly`, `catch` and `prefault`, which swamp's `unwrapSchema` does not. A schema that swamp would not vault would still pass these tests. Nothing emits those wrappers today, so this is latent.
+**Fix:** limit the unwrap list to `optional`/`nullable`/`default`, matching swamp, or test with swamp's extractor if swamp-testing exposes it.
+
+### [LOW] The falai comment about zod metadata is wrong
+**File:** `scripts/falai-codegen/lib/type_mapper.ts` **Line(s):** 205-209
+**Issue:** it says "zod 4 does not carry metadata across a refinement's clone". With 4.6.5, `z.string().meta({sensitive:true}).min(1)` keeps `{sensitive:true}` (I ran it). The ordering it prescribes is harmless, but the stated reason is false.
+
+### [LOW] The cloudflare test generator spreads a string fixture into method arguments
+**File:** `scripts/cloudflare-codegen/lib/test_generator.ts` **Line(s):** 356
+**Issue:** when a method's response is a bare string (the `wrapRoot` case), `buildFinalTestArgs(method, fixture)` spreads that string into numbered keys. In `cloudflare/tunnel/.../tunnel_test.ts:531-551` this produces `"0":"e","1":"y","2":"J"…`, a token-shaped `eyJ…` literal, and the required `resources` argument is missing. The test passes only because execute never validates its arguments.
+**Fix:** use `buildTestArgs` when `plan.wrapRoot || plan.dropRoot`.
+
+### [LOW] The generators disagree on what counts as a secret
+- **Snyk:** exact names only (8).
+- **Cloudflare:** a name list plus a `*_token`/`*_secret` suffix rule, with no type check. A boolean named `require_token` would be marked if it were ever emitted; none is today.
+- **Datadog:** only the final word counts, booleans and numbers are excluded, and a secret it cannot vault stops generation.
+- **Griptape:** a bare `value` counts only at top level, so Structure `env_vars[].value` is not treated as a secret.
+- **Cloudflare:** `web_analytics_token`, a public beacon tag, is vaulted. This is the only reason cloudflare/pages now needs a vault.
+
+The README headings also differ: "Secrets", "Returned secrets", "Secret-valued arguments" / "Credentials in responses", and "Created API keys land in a vault".
+
+### [LOW] Not reviewed
+`griptape/secrets` model sources were blocked by a deny rule on paths containing "secrets", so I did not check them.</result>
+<usage><subagent_tokens>291156</subagent_tokens><tool_uses>124</tool_uses><duration_ms>850018</duration_ms></usage>
+</task-notification>
