@@ -1,0 +1,65 @@
+<task-notification>
+<task-id>aedad31a61eecdba1</task-id>
+<tool-use-id>toolu_01M7gg1gHQhoDvDdpCUA5ATK</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/aedad31a61eecdba1.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review pass vault branch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings. The round-1 fixes hold, `get` and `put` stay consistent with each other, and I found no input that leaks secret content into errors or spans. Three LOW findings remain, all documentation precision or edge cases.
+
+**Gates:** `deno task check`, `lint` and `fmt:check` are clean, `deno task test` passes 52/52, and `swamp extension quality manifest.yaml` reports `passed` / 100%. `RELEASE_NOTES.md` is 1440 characters. The probe script I ran against the real `pass.ts` (with a mocked `Deno.Command`) has been deleted from `/tmp/claude-1000/`.
+
+**Round-1 fixes confirmed:**
+- **Sibling consistency:** `get` and `put` both split with `splitFieldSelector`, both set the `vault.secret_key` span attribute to the entry path and add `vault.secret_field`, and both check keys through `prefixKey`/`assertSafeKey`. `put` refuses a field-selecting key before validating it, so `put("../x#login")` fails with the "cannot write a single field" message. That is harmless.
+- **list/get round-trip:** the test that puts `plain`, `team#a/entry` and `a#`, lists them, and reads each back really would catch a broken fallback.
+- **Separators:** whitespace (including non-breaking spaces), `/` and empty separators are rejected. `INSTRUMENTATION_VERSION` now matches the manifest.
+- **URI lines:** `otpauth://` and `https://` lines are not read as fields. `url:https://a.test:8443/x` and `url: //x` still parse correctly.
+
+**Probe 2, exact inputs (separator `#` unless noted):**
+
+| Key | Result |
+|---|---|
+| `a#x`, `a#логин`, `a#user name` | read that field of `a` |
+| `a# login`, `a#login `, `#`, `##`, `a#../b`, `smtp#log:in` | read as literal entry names |
+| `a/..#login`, `..#login` | rejected by `assertSafeKey` |
+| `#login` | "must not be empty" |
+| `a###login` with separator `##` | reads field `login` of `a#` (the documented last-occurrence rule) |
+
+Separators that are regex metacharacters (`*`, `.`) are safe because the split uses `lastIndexOf`, not a regex.
+
+**Silent wrong-entry reads:** none beyond the documented case where `smtp#login` is always a field selection. On the fallback branch the path is the whole key, which `assertSafeKey` validates. In `a#../b` the segment is `a#..`, not `..`, so it does not escape the prefix.
+
+**Probe 4, secrets:** a missing field produces an error naming only the entry and field, and a fallback key surfaces only pass's "not in the password store" message, which contains key names only. `get` sends no stdin, and spans never record error messages.
+
+**Probe 6, weak tests:** every new test I checked fails under the obvious mutations: searching line 1, removing the `//` rule, matching `://` anywhere in the line, splitting at the first occurrence, and dropping the fallback.
+
+**Probe 7, TODOs:** I found no TODOs or deferred work in the diff.
+
+### [LOW] README and `tracing.ts` say `vault.secret_field` is set only on get
+**File:** `vault/pass/README.md` (Observability, "Attributes:" paragraph); `vault/pass/extensions/vaults/_lib/tracing.ts` (doc comment on `VAULT_SECRET_FIELD`)
+**Line(s):** README "…`vault.secret_field` when a get selects a field…"; tracing.ts "Field of the entry a get selected"
+**Issue:** The round-1 fix made `put` set `vault.secret_field` too, and the release notes and the otel put test say so. These two docs still describe get only.
+**Breaking input:** `put("smtp#login", …)` produces a span with `vault.secret_field: "login"`.
+**Impact:** The docs and code disagree about what reaches the trace backend.
+**Fix:** Change both to "when a get or put key selects a field".
+
+### [LOW] "Keys from `list` stay readable" is an overclaim
+**File:** `vault/pass/RELEASE_NOTES.md` (second **Added:** block); `vault/pass/README.md` ("…and every key `list` returns stays readable. A key such as `smtp#login` is always read as a field selection, though…")
+**Issue:** An entry created outside swamp, or before the separator was set, whose name ends in `#&lt;valid-field-name&gt;` is listed but cannot be read: `get` reads a field of the shorter entry. The README states this exception in its next sentence, which contradicts "every key". The release notes don't mention the exception at all.
+**Breaking input:** A store file `swamp/a#login.gpg` makes `list()` return `a#login`, and `get("a#login")` then runs `pass show swamp/a`.
+**Impact:** Users may trust the round-trip guarantee for entry names that are not covered by it.
+**Fix:** Reword both to say that keys whose text after the separator is not a field name stay readable, and that `name#field`-shaped entry names are always read as field selections.
+
+### [LOW] `passwordOnly` returns pass's directory listing header for a directory key
+**File:** `vault/pass/extensions/vaults/pass.ts`
+**Line(s):** 329, 338
+**Issue:** When the key names a directory rather than an entry, `pass show` prints a tree listing and exits 0. With `passwordOnly: true`, `get` returns that listing's first line (the directory path) as the password. This comes from pass's source and is not verified against a live store. Plain `get` returning the whole tree is old behavior, but `passwordOnly` promises "the password", so the bad value now looks like a valid one.
+**Breaking input:** Entries `swamp/smtp/example.gpg` exist and no `swamp/smtp.gpg`; `get("smtp")` with `passwordOnly: true` returns a non-secret string with no error.
+**Impact:** A consumer receives a non-secret value silently. Nothing leaks.
+**Fix:** This is your call, since it touches old `get` behavior. Options are to detect the directory case (for example, a `.gpg` existence check under `storeDir`) and throw "is a directory", or to document it.
+
+**Informational, no change needed:** a field name with leading or trailing whitespace, or containing `:`, falls back to a literal entry name. A user who types `smtp# login` therefore sees "pass show swamp/smtp# login … is not in the password store" rather than a field error. That message is confusing but follows the documented rule and leaks nothing. A typo inside a valid field name (`smtp#logn`) gets the clear "has no "logn:" field" error.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>76646</subagent_tokens><tool_uses>7</tool_uses><duration_ms>125223</duration_ms></usage>
+</task-notification>
