@@ -1,0 +1,103 @@
+<task-notification>
+<task-id>ae0cf842eb579b6b8</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/ae0cf842eb579b6b8.output</output-file>
+<status>completed</status>
+<summary>Agent "Snyk codegen regeneration PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review loop ended on PASS: iteration 4 of the adversarial reviewer found no critical or high issues. Everything is committed locally and nothing is pushed.
+
+- **Branch:** `fix/snyk-codegen-regen-2026-10-07`, a single commit `9fe035d0` on `origin/main`.
+- **Worktree:** `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-ae0cf842eb579b6b8`
+
+## Scope
+All 20 snyk extensions are regenerated at 2026.10.07.1. Each has its own `RELEASE_NOTES.md` written from its actual diff, an appended identity upgrade entry, and a manifest bump. `snyk/tenants` also gains `list_models` and `get_model`.
+
+No existing method was removed, and generated files were not hand-edited. The harness is `scripts/snyk-codegen`.
+
+## Harness fixes
+- **Response schemas are lenient.**
+  - Enums widen to their primitive type, value constraints drop, and properties accept null or absence.
+  - Unknown fields pass through at every depth.
+  - Request args stay strict.
+  - When a list and a get/create method write the same resource, the schema is a union covering both.
+- **Request hardening.**
+  - Each attempt has a 30-second timeout, including the body read.
+  - 429 handling no longer crashes with "Body already consumed". Retries clamp `Retry-After` to 30 seconds and then report the rate limit.
+  - Empty 2xx bodies return `{}`.
+  - Malformed JSON and HTTP errors name the status and request.
+  - Pagination links must stay on the Snyk origin under `/rest`, so the token cannot leak to another host.
+  - Get and create methods reject an empty body only where the spec promises content.
+  - Array `data` on a non-list call is kept under `items`.
+- **Query parameters.**
+  - Dotted API names (`meta.latest_issue_counts`, `scan_item.id`) were being sent under mangled names. They are now sent correctly.
+  - Array parameters accept a string or a list (the `provider` finding).
+  - Create, update and action methods now send their declared query params. They were dropped before.
+- **Resource names.** Every write method writes the resource the model declares. Six POST methods named `update_*` or `get_*` wrote to an undeclared name before: two in apps, one each in cloud and collections, and two in service-accounts.
+- **Response `$ref` resolution.** `list_group_issues` and `list_org_issues` were misclassified as single-item reads and stored `{}`. They now page like lists. Their resources are renamed to `group_issues` and `org_issues`, with an Upgrade note in the issues release notes.
+- **Generated tests.** Every method now runs an execute test asserting verb, exact path, query params and body, and validates the written data against the declared resource schema. Before, only a few methods were exercised.
+- **Version detection.** It now also compares the shared API helper and the test file, so helper-only changes bump the version.
+- **Descriptions** truncate at word boundaries, and the release notes were tightened.
+
+## Gates
+- **Harness:** `check`, `lint`, `fmt:check` and `test` pass, with 62 tests. A dry run reports all 20 extensions unchanged, so regeneration is idempotent.
+- **All 20 extensions:** `check`, `lint`, `fmt:check` and `test` pass. `swamp extension quality manifest.yaml` scores 12/12 (100%) for each, with 2 further points pending server verification of the repository.
+- **Deno lock:** `scripts/snyk-codegen/deno.lock` gained a zod entry from the new behavioral tests. I committed it as the normal resolution update.
+
+## Reviewer
+Four adversarial iterations by a separate subagent, never a self-review. Iterations 1 to 3 returned FAIL and found a 429 retry bug, a 204 regression and a shared-schema bug. All were fixed in the harness and regenerated. Iteration 4 returned PASS.
+
+## Not fixed
+These were left, with reasons:
+- **Union resource schemas:** four resources use `z.union`: cloud `scan`, container-images `container_image`, groups `assignments`, and tenants `broker_orgs_for_bulk_migration`. Their runtime handling in swamp is unverified. `swamp model type describe` accepts them, and the write path is covered by the tests.
+- **`list_group_audit_logs`:** it now throws on an empty result, where it silently stored `{}` before. It was already non-functional, and the notes do not mention it.
+- **Schema-strictness warnings:** I kept `z.object({}).passthrough()` for property-less schemas, so the quality rubric prints schema-strictness warnings. I did not switch to `z.record` because swamp's handling of it is unverified.
+- **Accept header:** I did not add one for non-JSON reads such as sbom. It is not a regression, because main did not set one either.
+- **Cosmetic:** a resource's description comes from its first writer, and the `create_deployment_credential` schema does not describe its `items` shape.
+
+## Drafted PR
+
+**Title:** `fix(snyk): harden codegen and regenerate all snyk extensions`
+
+**Body:**
+
+```
+Hardens the Snyk codegen harness and regenerates all 20 snyk extensions. Generated files were not hand-edited. Every fix is in scripts/snyk-codegen. The tenants extension also gains list_models and get_model from the current spec.
+
+## What was broken
+- Response schemas rejected a whole page on one unexpected enum value, null, or missing field.
+- Requests had no timeout, and 429 exhaustion crashed with "Body already consumed". An empty 2xx body or malformed JSON gave a bare parse error with no status or request.
+- Pagination followed a next link to any origin and sent the API token with it.
+- Query parameters with dotted names (meta.latest_issue_counts, scan_item.id) were sent under mangled names. Create and update methods dropped their declared query parameters. Array parameters could not take a list.
+- Six POST methods named update_* or get_* wrote to a resource the model never declared (apps, cloud, collections, service-accounts).
+- list_group_issues and list_org_issues were misclassified as single-item reads and stored an empty object. create_deployment_credential and list_assets stored an empty object because their data is a list.
+- A resource written by both a list and a get or create method used one schema that rejected the other writer's data.
+- Generated tests executed only a few methods, and a change to the shared helper or the tests did not bump the version.
+
+## What changed
+- Response schemas accept what the API returns. Request validation is unchanged except that array query parameters accept a string or a list.
+- 30-second timeout per attempt, clamped 429 retries with a clear final error, empty 2xx bodies accepted, errors that name the status and request, and pagination restricted to the Snyk origin under /rest.
+- get and create methods fail on an empty body only where the spec promises content, so 204 mutations still succeed.
+- Resources written by several methods get a union schema. Shared list responses resolve through $ref.
+- Every generated method now has an execute test asserting verb, exact path, query parameters, and body, and the written data is checked against the resource schema.
+
+## Upgrade notes (also in each RELEASE_NOTES.md)
+- Looser response schemas change validation behavior. Stored data stays valid and no migration is needed.
+- snyk/issues: the list_group_issues and list_org_issues resources are replaced by group_issues and org_issues. Data stored under the old names was empty.
+- apps, cloud, collections, service-accounts: affected methods now write the declared resource name.
+- Methods that read or create a single resource now fail on an empty body where the spec promises content.
+
+## Testing
+- scripts/snyk-codegen: check, lint, fmt:check, test (62 tests). A dry run reports all 20 extensions unchanged.
+- All 20 extensions: check, lint, fmt:check, test, and swamp extension quality at 100%.
+- Four rounds of local adversarial review, each by a separate reviewer.
+
+## Known limitations
+- Four resources use a union schema (cloud scan, container-images container_image, groups assignments, tenants broker_orgs_for_bulk_migration). Their runtime handling in swamp is unverified.
+- list_group_audit_logs now fails on an empty result where it previously stored an empty object.
+- Non-JSON reads such as sbom still send no Accept header, as before.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>317191</subagent_tokens><tool_uses>174</tool_uses><duration_ms>2563269</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-ae0cf842eb579b6b8</worktreePath><worktreeBranch>worktree-agent-ae0cf842eb579b6b8</worktreeBranch></worktree>
+</task-notification>
