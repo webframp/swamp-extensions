@@ -261,18 +261,30 @@ jobs:
           # `allPassed == false`. (jq's `//` is unusable here — it treats false
           # like null — hence the explicit `== false` test.)
           allPassedFailed=$(echo "$result" | jq -r '.allPassed == false')
+          # A perfect score is 100% of the CLIENT-earnable rubric. The
+          # `repository-verified` factor is provisional locally and in CI (it
+          # is server-confirmed only on publish); a CLI from 2026-10-28 onward
+          # excludes provisional points from the top-level `.percentage`, so a
+          # fully-compliant extension now reports `.percentage == 87` with the
+          # 2 provisional points pending. `.ifProvisionalEarned.percentage`
+          # reports what the score becomes once provisional factors are earned
+          # (100 for a compliant extension). Treat EITHER being 100 as a pass:
+          # `.percentage == 100` covers older CLIs that fold provisional points
+          # in, `.ifProvisionalEarned.percentage == 100` covers the new split.
+          # A genuine rubric miss drops both below 100 and still fails.
+          #
           # Numeric comparison via jq, not shell string equality: a future CLI
           # emitting the float 100.0 would make [ "100.0" != "100" ] true and
-          # spuriously fail a perfect score. `.percentage == 100` is int/float
-          # agnostic.
-          pctOk=$(echo "$result" | jq -r '.percentage == 100')
+          # spuriously fail a perfect score. `== 100` is int/float agnostic.
+          pctOk=$(echo "$result" | jq -r '(.percentage == 100) or (.ifProvisionalEarned.percentage == 100)')
+          provisionalPct=$(echo "$result" | jq -r '.ifProvisionalEarned.percentage // "n/a"')
           allPassed=$(echo "$result" | jq -r '.allPassed // "n/a"')
           if [ "$status" != "passed" ] || [ "$pctOk" != "true" ] || [ "$allPassedFailed" = "true" ]; then
-            echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage allPassed=$allPassed). Must be passed / 100, and allPassed must not be false."
+            echo "::error::Quality gate failed for $EXTENSION (status=$status percentage=$percentage ifProvisionalEarned.percentage=$provisionalPct allPassed=$allPassed). Must be passed and reach 100 either directly or once provisional factors are earned, and allPassed must not be false."
             echo "$result" | jq '.factors[] | select(.status != "earned" and .status != "provisional") | {id, label, status, earnedPoints, maxPoints}'
             exit 1
           fi
-          echo "Quality gate passed for $EXTENSION ($percentage%)."
+          echo "Quality gate passed for $EXTENSION ($percentage%; reaches $provisionalPct% once provisional factors are earned)."
 
   manifest-validate:
     name: Validate manifests
