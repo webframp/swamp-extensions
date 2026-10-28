@@ -1,0 +1,1 @@
+I like it, can this live as a swamp extension in webframp/swamp-extensions or does it need to live as it's own thing?
