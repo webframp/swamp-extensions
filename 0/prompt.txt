@@ -1,0 +1,1 @@
+check for workstrees that can be cleaned up if they've been merged
