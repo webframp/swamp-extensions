@@ -1,0 +1,75 @@
+<task-notification>
+<task-id>ac0e7674a2efdae1e</task-id>
+<tool-use-id>toolu_01DjjqztwUTL4QHF3gcNTrpi</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/2c982448-b049-42d8-9ee8-c9416f13c66b/tasks/ac0e7674a2efdae1e.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review github dedup fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>### [MEDIUM] The same name-only dedup bug is still in a sibling extension
+**File:** /home/sme/src/webframp/swamp-extensions/.worktrees/fix-github-dedup-handle/swamp-club/extensions/models/swamp-club/lab.ts
+**Line(s):** 158-159
+**Issue:** The idempotent lab-comment method still has `if (await context.readResource(resourceName)) { return { dataHandles: [{ name: resourceName }] }; }`. It was clearly copied from the same triage pattern. Within this PR's scope, `github/` is clean: a repo-wide grep finds no other name-only handle there.
+**Breaking input:** Running the swamp-club lab comment method twice in a workflow with the same `idempotencyKey`.
+**Impact:** The workflow step fails with the same `dataId` validation error described in #483. This does not block this PR.
+**Fix:** Open a follow-up issue or PR that applies the same re-write-and-return-handle approach to `swamp-club`.
+
+### [LOW] Re-writing the record stores secrets if a stored `result` contains a vault expression
+**File:** github/extensions/models/github/triage.ts
+**Line(s):** 25-33
+**Issue:** `readResource` resolves vault reference expressions, and `existingHandle` writes the resolved object back. `triageAction` has no `sensitive` fields and its stored values are `gh` output (issue or comment URLs, `gh run rerun` / `gh issue close` stdout, `{state, mergedAt}`). A stored vault-like string is very unlikely, and even then it is `gh` output, not something user-controlled.
+**Breaking input:** A record whose `result` text happens to contain a vault reference expression.
+**Impact:** In theory, the resolved secret would be persisted on re-write. I see no practical path to that.
+**Fix:** None needed. Optionally, mention in the helper's comment that this is only safe because the spec has no sensitive fields.
+
+### [LOW] Old records that fail the schema produce warnings, not errors
+**File:** github/extensions/models/github/triage.ts
+**Line(s):** 31
+**Issue:** The API reference says `writeResource` "warns on mismatch, doesn't throw". If an older record fails today's `triageAction` schema, the hit path logs a warning but still returns a valid handle, so the step does not fail. Every writer in this file has always produced `{repo, action, target, idempotencyKey, result, recordedAt}`, and the `repo` regex matches `REPO_SLUG_RE`. An old `merge_pull_request` record with `result: {status: "posted"}` goes down the resume path, not the helper.
+**Breaking input:** None that is realistic.
+**Impact:** At most, warning noise in logs.
+**Fix:** None needed.
+
+### [LOW] The tests leave a few gaps
+**File:** github/extensions/models/github/triage_test.ts
+**Line(s):** 12-27, 664-672
+**Issue:**
+- `typeof handle.tags === "object"` also passes when `tags` is `null`; `assertExists` or a record check would be stricter.
+- The merge hit test covers only the `succeeded` terminal state, not `failed`.
+- No test covers a hit after a `posted` record was resumed and completed.
+
+The core assertions are still sound. They check that exactly one extra write happens, with the same name and identical data, and that `dataId` (string) and `version` (number) are present. The old code returned `{name}` with no `dataId`, so these tests would fail against it.
+**Breaking input:** None.
+**Impact:** A small coverage gap; the fix itself is already shown to work.
+**Fix:** Optionally, add a `failed` terminal hit case and tighten the `tags` assertion.
+
+### [LOW] The release notes assert lifetime-refresh behaviour that the code does not prove
+**File:** github/RELEASE_NOTES.md
+**Line(s):** 12-16
+**Issue:** "Restarts its 30-day lifetime" assumes lifetime is measured from the latest version's write time. That is plausible, but nothing in the extension or the API reference states it. The rest of the notes are accurate:
+- A new version is written on every hit, and retention stays at 20.
+- No `gh` command runs on a repeat.
+- No duplicate side effects were ever sent; the old code returned before `gh` ran.
+
+The never-expires behaviour change is called out explicitly, which is good.
+**Breaking input:** None.
+**Impact:** A minor overclaim, but only if swamp measures lifetime from the first version.
+**Fix:** Confirm the lifetime semantics, or soften the wording to "the latest version's lifetime starts from the repeat".
+
+**Probes with no findings:**
+- **Sibling consistency:** All five dedup paths call `existingHandle(context, resourceName, existing)` the same way. There are no other early returns in `triage.ts`.
+- **`merge_pull_request`:**
+  - The `{result?: {status?: string}}` cast is accepted where the helper expects `Record&lt;string, unknown&gt;`; `deno check` passes.
+  - Adding the `existing &amp;&amp;` guard is redundant but harmless.
+  - A record with status `posted` still skips the helper, does not repost the comment, polls, and writes the terminal record.
+  - A record with a terminal status (`succeeded` or `failed`) now gets the full handle.
+- **Truthiness:** `readResource` returns either an object or `null`, so `if (existing)` is correct; there is no falsy-but-present value.
+- **Version bump:**
+  - The manifest, `model.version` and the last `toVersion` are all `2026.10.12.1`.
+  - The new upgrade entry is appended with an identity `upgradeAttributes`, not relabelled over the old one.
+  - The only version test is `assertExists(model.version)`, so nothing is left stale.
+  - `RELEASE_NOTES.md` is overwritten for the new version.
+- **Gates:** `deno task check`, `lint`, `fmt:check` and `test` all pass (50 passed, 0 failed).
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>64868</subagent_tokens><tool_uses>9</tool_uses><duration_ms>63479</duration_ms></usage>
+</task-notification>
