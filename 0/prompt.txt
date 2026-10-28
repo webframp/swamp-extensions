@@ -1,0 +1,96 @@
+<task-notification>
+<task-id>a6a3089f8363e3a3e</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/ed84d50a-db49-4c00-bafa-18d900570d57/tasks/a6a3089f8363e3a3e.output</output-file>
+<status>completed</status>
+<summary>Agent "Griptape spec re-pin and regen PR" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The branch is committed locally as one commit and the reviewer subagent returned PASS on the final state. I have not pushed or opened a PR.
+
+**Branch and worktree**
+- Branch: `fix/griptape-codegen-respin-2026-10-07`, single commit `4bdbe4a9`.
+- Worktree: `/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a6a3089f8363e3a3e`
+
+**Commit message:** amended so the spec changes read as "observed against a cached copy of the previous spec". I also folded the earlier re-pin commit and the hardening into this one commit, so the CalVer bump and release notes land in the PR's first commit.
+
+**Upstream spec diff**
+- The original pinned body (`189b319a…`) could not be recovered. The comparison is against the cached copy, whose hash differs from the old pin, so treat it as approximate.
+- Added: tag-profiles CRUD, `GET /api/tags`, `GET /api/license-info`, and the schemas behind them.
+- Changed: `transports` on Engine schemas, `frozen`/`is_default` on Budget schemas, `SpendDetail.modality`.
+- Removed: nothing, and nothing looked suspicious.
+- None of the new paths fall under a configured service prefix, so the re-pin alone changes no generated output.
+
+**Harness changes (`scripts/griptape-codegen`)**
+- **Spec pin:** `SPEC_SHA256` is now `eb5f5f75…`.
+- **Shared fetch helper (api.ts)**
+  - Each request has a 30-second deadline with a clear "timed out after Nms: METHOD path" error. `GT_CLOUD_TIMEOUT_MS` overrides it, capped at 2147483647.
+  - An empty 2xx body such as 202 or 204 resolves cleanly.
+  - Malformed JSON names the HTTP status and path.
+  - `Retry-After` waits are capped at 30 seconds.
+- **Paginated helper**
+  - It tolerates empty or non-object bodies and stops on its own page counter.
+  - A `null` `total_pages` or a numeric `next_page` no longer ends pagination early or loops.
+- **Response schemas:** enums become plain strings or numbers, constraints are dropped, every field is nullish, unknown keys are kept, and defaults are not filled. Request argument schemas stay strict.
+- **Query strings:** create, update and delete methods now send their declared query params. No current endpoint declares one, so nothing changes today.
+- **Resource collision bug, found by the new tests:** structures `create_events` wrote into the `events` resource, whose list-envelope schema rejects it. It now writes to `events_result`. This is the one behavioral change to flag.
+- **No-response-body resources:** stored as a loose object instead of being stripped to `{}`.
+- **Descriptions:** cut at word boundaries instead of mid-word.
+- **Change detection:** the version check now covers the api helper, tests, manifest, README, `deno.json`, LICENSE and `.gitignore`, not just the model source.
+- **Generated tests:** every method gets its own test asserting the exact request (HTTP method, path, query including enum args, auth header, JSON body) and the written resource. Separate tests cover errors, malformed JSON, empty bodies, timeout, 429 retry and tolerance of unexpected response data.
+- **Harness tests:** 4 new test files; the harness suite is 104 tests.
+
+**Generated output:** all 10 extensions are at `2026.10.07.1`, each with release notes written from the diff and an appended identity upgrade entry. Structures has the extra `events_result` note. `deno.lock` did not change.
+
+**Gates**
+- Harness: `check`, `lint`, `fmt:check` and `test` pass, and `generate:dry-run` reports all 10 extensions unchanged.
+- All 10 extensions: `check`, `lint`, `fmt:check` and `test` pass, and `swamp extension quality manifest.yaml` returns passed at 100%.
+
+**Reviewer verdict:** PASS from separate adversarial subagents, across three rounds (full, full re-review, narrow re-review). No CRITICAL, HIGH or MEDIUM findings remain. Every finding from the first round was fixed in the harness and regenerated: the unknown-key test was too weak, a `null` `total_pages` ended pagination early, an oversized timeout was accepted, and the upgrade description was inaccurate. I did not change the one finding about test fixtures using the placeholder "test-value" for the `limit` and `offset` query args, because the spec types those two as strings, so the value is correct.
+
+**Drafted PR**
+
+Title: `fix(griptape): re-pin upstream spec and harden the codegen harness`
+
+Body:
+```
+## Summary
+
+Griptape republished its OpenAPI spec at the same S3 URL, so `deno task generate` failed with a hash mismatch. This PR re-pins `SPEC_SHA256` to `eb5f5f75`, then hardens the codegen harness and regenerates all ten griptape extensions.
+
+## Upstream spec changes
+
+The original pinned body is no longer recoverable, so I compared the new spec against the harness's cached copy of the previous one. Treat this list as approximate.
+
+- Added: tag-profiles CRUD, `GET /api/tags`, `GET /api/license-info`, and their schemas.
+- Changed: `transports` on Engine schemas, `frozen` and `is_default` on Budget schemas, and `SpendDetail.modality`.
+- Removed: nothing.
+
+None of the new paths sit under a tier-1 service prefix, so the re-pin alone changes no generated output.
+
+## Harness hardening
+
+Fixes for the same classes of bug found in the datadog, falai and snyk harnesses:
+
+- The shared API helper now has a 30-second per-request deadline (`GT_CLOUD_TIMEOUT_MS` overrides it), handles empty 2xx bodies, and reports malformed JSON with the status and path.
+- Pagination tolerates empty and non-object bodies, ends on its own page counter, and no longer stops early on a `null` `total_pages`.
+- Response schemas tolerate unexpected enum members, missing fields and unknown keys. Request argument schemas stay strict.
+- Create, update and delete methods send their declared query params.
+- A non-list method no longer shares a resource with a list method. Structures `create_events` now writes to `events_result` instead of the list-shaped `events` slot, which rejected it.
+- Descriptions are cut at word boundaries.
+- Version detection covers the helper, tests, manifest, README and `deno.json`, not just the model source.
+- Generated tests exercise every method and assert the exact request and the written resource.
+
+## Generated output
+
+All ten extensions move to `2026.10.07.1` with release notes and an identity upgrade entry. Schemas only loosen, so stored data stays valid and no migration is needed. The one behavioral change to flag: anything that read `create_events` output from `events` must read `events_result`.
+
+## Verification
+
+- Harness `check`, `lint`, `fmt:check` and `test` pass (104 tests), and a dry run reports all ten extensions unchanged.
+- Each extension passes `check`, `lint`, `fmt:check`, `test` and `swamp extension quality` (100%).
+- Local adversarial review passed on the final state.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```</result>
+<usage><subagent_tokens>283634</subagent_tokens><tool_uses>110</tool_uses><duration_ms>1155089</duration_ms></usage>
+<worktree><worktreePath>/home/sme/src/webframp/swamp-extensions/.claude/worktrees/agent-a6a3089f8363e3a3e</worktreePath><worktreeBranch>worktree-agent-a6a3089f8363e3a3e</worktreeBranch></worktree>
+</task-notification>
