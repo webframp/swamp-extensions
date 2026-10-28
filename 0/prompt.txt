@@ -1,0 +1,173 @@
+<task-notification>
+<task-id>a5f278e1835f635c1</task-id>
+<tool-use-id>toolu_01JhFbA5ChPb2kp1QXox2w6W</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a5f278e1835f635c1.output</output-file>
+<status>completed</status>
+<summary>Agent "Audit docs batch 1" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I read all 59 files in batch1 in full and changed nothing. Two code generators cause most of the findings: every Cloudflare and Datadog README they produce shows the credential as a placeholder value typed on the command line, and none shows the `vault.get` pattern.
+
+Root cause: the README templates in `scripts/cloudflare-codegen` and `scripts/datadog-codegen` produce the Cloudflare and Datadog findings below. Fixing the two templates and regenerating clears 46 of these files at once.
+
+### Findings
+
+```
+bench/README.md:33 | 4 | high | export GITLAB_TOKEN="REDACTED" | Don't resolve the secret into an env var; have the harness or datastore config use ${{ vault.get(gitlab, TOKEN) }}. Also, `swamp vault get` may not be a real subcommand.
+bench/README.md:31-33 | 2 | high | export GITLAB_HOST=... export GITLAB_PROJECT=... export GITLAB_TOKEN=... | The token reaches switch-datastore.sh through the shell environment. Pass the vault name and key instead and resolve inside swamp.
+bench/README.md:81 | 2 | high | | `GITLAB_TOKEN` | — | GitLab personal access token | | Remove the token env var from the table; document `swamp vault put gitlab TOKEN` plus vault.get.
+bench/README.md:85 | 2,7 | high | | `PG_CONN` | — | PostgreSQL connection string | | Connection strings carry the REDACTEDword; supply the REDACTEDword through vault.get, not a plaintext env var.
+
+claude-cost-reconciliation/README.md:28-29 | 10 | medium | a `@webframp/anthropic/analytics` instance with Enterprise Analytics API credentials (e.g. `claude-analytics`). | Show creating the instance with `--global-arg 'apiKey=REDACTED vault.get(anthropic, ADMIN_KEY) }}'` after `swamp vault put`.
+
+cloudflare/README.md:40 | 10 | medium | apiToken: "vault://cloudflare/api-token" | Non-standard reference syntax. Replace with "${{ vault.get(cloudflare, API_TOKEN) }}" and show `swamp vault put cloudflare API_TOKEN`.
+cloudflare/README.md:32-33 | 11 | low | The API token is marked as sensitive and stored through your configured vault provider. | Implies storage happens automatically. State the explicit `swamp vault put` step and the vault.get reference.
+
+cloudflare/access/README.md:15 | 1 | high | --global-arg apiToken=REDACTED | Use --global-arg 'apiToken=REDACTED vault.get(cloudflare, API_TOKEN) }}'; fix in the cloudflare-codegen README template.
+cloudflare/access/README.md:15 | 10 | medium | (no vault guidance anywhere in README) | Add a "Credentials" section: `swamp vault put cloudflare API_TOKEN`, then the vault.get reference.
+cloudflare/api-shield/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/api-shield/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/d1/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/d1/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/durable-objects/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/durable-objects/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/email-routing/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/email-routing/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/gateway/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/gateway/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/hyperdrive/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/hyperdrive/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section. Hyperdrive configs also take DB REDACTEDwords as method input.
+cloudflare/images/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/images/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/kv/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/kv/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/load-balancing/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/load-balancing/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/logpush/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/logpush/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/magic-transit/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/magic-transit/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/pages/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/pages/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/queues/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/queues/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/r2/README.md:15 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/r2/README.md:15 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/r2/README.md:25 | 5,11 | low | | `create_store_credentials` | Store catalog credentials | | The method takes a secret as input; document REDACTEDing it via ${{ vault.get(...) }}, not a literal --input.
+cloudflare/r2/README.md:63 | 11 | low | | `create_temp_access_credentials` | Create Temporary Access Credentials | | Output contains credentials; note whether they are persisted as cleartext data and how to handle them.
+cloudflare/registrar/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/registrar/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/rulesets/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/rulesets/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/spectrum/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/spectrum/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/ssl-certificates/README.md:15 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/ssl-certificates/README.md:15 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get section. Custom-certificate methods also take private keys as input.
+cloudflare/stream/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/stream/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/tunnel/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/tunnel/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/turnstile/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/turnstile/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/turnstile/README.md:27 | 11 | low | | `get_rotate_secret` | Rotate Secret for a Turnstile Widget | | Returned widget secret may be stored as cleartext data; document storing it with `swamp vault put`.
+cloudflare/vectorize/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/vectorize/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/waiting-room/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/waiting-room/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/workers-ai/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/workers-ai/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/workers-scripts/README.md:14 | 1 | high | --global-arg apiToken=REDACTED | Use vault.get expression; fix in codegen template.
+cloudflare/workers-scripts/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+cloudflare/workers-scripts/README.md:34-38 | 5,11 | low | | `put_script_secret` | Add script secret | ... `patch_script_secrets_bulk` | Document REDACTEDing secret text via ${{ vault.get(...) }}, never a literal --input (recorded cleartext).
+
+cloudflare-audit/README.md:40 | 1 | high | --global-arg apiToken=REDACTED | Use --global-arg 'apiToken=REDACTED vault.get(cloudflare, API_TOKEN) }}'.
+cloudflare-audit/README.md:43 | 1 | high | --global-arg apiToken=REDACTED | Same; use vault.get expression.
+cloudflare-audit/README.md:47 | 1 | high | --global-arg apiToken=REDACTED | Same; use vault.get expression.
+cloudflare-audit/README.md:51 | 1 | high | --global-arg apiToken=REDACTED | Same; use vault.get expression.
+cloudflare-audit/README.md:55 | 1 | high | --global-arg apiToken=REDACTED | Same; use vault.get expression.
+cloudflare-audit/README.md:24 | 10 | medium | A Cloudflare API token with read access to zones, DNS, WAF, Workers, and cache | Add `swamp vault put cloudflare API_TOKEN` setup step before the model create commands.
+
+container-image/README.md:27-30 | 4,5 | high | TOKEN=$(aws ecr get-login-REDACTEDword --region us-east-1) ... --input REDACTEDword="$TOKEN" | A literal REDACTEDword REDACTEDed via --input is recorded in cleartext. Use a vault.get reference or ambient ECR auth.
+container-image/README.md:8 | 10 | medium | **login** — Authenticate to a private registry (REDACTEDword via stdin) | No vault guidance for GHCR/DockerHub REDACTEDwords; show --input REDACTEDword='${{ vault.get(registry, PASSWORD) }}'.
+
+datadog/dora/README.md:15 | 1 | high | --global-arg apiKey=REDACTED | Use --global-arg 'apiKey=REDACTED vault.get(datadog, API_KEY) }}'; fix in the datadog-codegen README template.
+datadog/dora/README.md:16 | 1 | high | --global-arg appKey=DD_APP_KEY | Use --global-arg 'appKey=${{ vault.get(datadog, APP_KEY) }}'.
+datadog/dora/README.md:15 | 10 | medium | (no vault guidance anywhere in README) | Add a credentials section: `swamp vault put datadog API_KEY` / `APP_KEY`, then vault.get.
+datadog/downtimes/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/downtimes/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/downtimes/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/events/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/events/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/events/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/incidents/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/incidents/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/incidents/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/logs/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/logs/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/logs/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/metrics/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/metrics/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/metrics/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/monitors/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/monitors/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/monitors/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/on-call/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/on-call/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/on-call/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/security-rules/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/security-rules/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/security-rules/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/security-signals/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/security-signals/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/security-signals/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/security-suppressions/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/security-suppressions/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/security-suppressions/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/slos/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/slos/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/slos/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/synthetics/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/synthetics/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/synthetics/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+datadog/teams/README.md:14 | 1 | high | --global-arg apiKey=REDACTED | Use vault.get expression; fix in codegen template.
+datadog/teams/README.md:15 | 1 | high | --global-arg appKey=DD_APP_KEY | Use vault.get expression.
+datadog/teams/README.md:14 | 10 | medium | (no vault guidance anywhere in README) | Add vault put + vault.get credentials section.
+
+datastore/azure-blob/README.md:32 | 7 | high | connectionString: "AccountName=myaccount;AccountKey=...;EndpointSuffix=core.windows.net" | Don't put AccountKey in .swamp.yaml; reference via ${{ vault.get(azure, CONN_STRING) }} if datastore config resolves vault expressions.
+datastore/azure-blob/README.md:46 | 7 | high | accountKey: "..." | Use a vault.get reference instead of a literal key in .swamp.yaml.
+datastore/azure-blob/README.md:61 | 7 | high | clientSecret: "..." | Use a vault.get reference instead of a literal client secret in .swamp.yaml.
+datastore/azure-blob/README.md:68 | 2 | high | export SWAMP_DATASTORE='...{"mode":"connectionString","connectionString":"AccountName=...;AccountKey=..."}...' | Env var carries the account key in cleartext; drop it or show a vault-backed alternative.
+datastore/azure-blob/README.md:15-17 | 10 | medium | Three explicit auth modes — connection string, account key, or Azure AD service principal. | No vault guidance anywhere; add a vault put + vault.get credentials section.
+
+datastore/dynamodb/README.md:44-46 | 9 | low | default credential provider chain (environment variables, shared config/ profile, or an attached IAM role) | Lists env vars first; recommend profiles/SSO/IAM role explicitly and discourage static AWS_ACCESS_KEY_ID in env.
+
+datastore/gitlab-datastore/README.md:36 | 1,7 | high | token: "glpat-xxxxxxxxxxxxxxxxxxxx" # API-scoped personal access token | Replace with token: "${{ vault.get(gitlab, TOKEN) }}" and show `swamp vault put gitlab TOKEN`.
+datastore/gitlab-datastore/README.md:27-28 | 10 | medium | Add a datastore block ... that points to this extension and supplies the required credentials. | Credentials are written literally into config; add vault guidance for the token.
+
+datastore/postgres/README.md:24 | 7 | high | connectionString: "REDACTED" | Password embedded in .swamp.yaml; source it via vault.get (or a separate REDACTEDword field from vault).
+datastore/postgres/README.md:33 | 2 | high | export SWAMP_DATASTORE='@webframp/postgres-datastore:{"connectionString":"REDACTED"}' | Env var holds the DB REDACTEDword in cleartext; show a vault-backed alternative.
+datastore/postgres/README.md:172 | 2,11 | low | POSTGRES_TEST_URL="REDACTED" deno task test | Dev-only, but shows an inline REDACTEDword on the command line; note to use a throwaway local credential.
+datastore/postgres/README.md:107-109 | 10 | medium | the connection string carries a REDACTEDword | Acknowledges a REDACTEDword but never shows vault usage; add a vault put + vault.get section.
+
+datastore/valkey/README.md:125 | 10 | medium | Blob values are file content and the connection URL embeds a REDACTEDword. | Implies a REDACTEDword in the URL in .swamp.yaml; document AUTH REDACTEDword via vault.get, never a literal URL.
+datastore/valkey/README.md:38 | 11 | low | url: "rediss://your-cluster.cache.amazonaws.com:6379" | The ElastiCache/MemoryDB example omits how AUTH/ACL credentials are supplied; add the vault pattern.
+
+CLAUDE.md:109-115 | 10 | low | ## Testing Rules ... (no secrets/vault rule anywhere in project guidance) | Add a rule: READMEs must show credentials only via `swamp vault put` + ${{ vault.get(...) }}; codegen templates too.
+```
+
+### Files with no findings
+
+- bench-datastore/README.md
+- claude-cost-reconciliation/DESIGN.md
+- CODE_OF_CONDUCT.md
+- CONTRIBUTING.md (line 11 tells users to redact tokens from logs, which is good)
+- cost-projection/README.md
+- ddd-guidance/README.md
+- design/data-contracts.md
+- devops-measurement/extensions/models/devops-measurement/COLLECTORS.md
+
+### Open questions for the fixes
+
+- **Datastore config:** I couldn't confirm that swamp resolves `${{ vault.get(...) }}` inside a `.swamp.yaml` datastore block or the `SWAMP_DATASTORE` env var. Check that before rewriting the azure-blob, gitlab-datastore and postgres examples. If it doesn't, those datastores need a code change, not just a docs fix.
+- **Cloudflare vault syntax:** `cloudflare/README.md` uses `vault://cloudflare/api-token`. That syntax appears nowhere else in this batch; it may be unsupported or simply non-standard.</result>
+<usage><subagent_tokens>151196</subagent_tokens><tool_uses>19</tool_uses><duration_ms>146250</duration_ms></usage>
+</task-notification>
