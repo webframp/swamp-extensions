@@ -1,0 +1,52 @@
+<task-notification>
+<task-id>ad473732e326fb8e8</task-id>
+<tool-use-id>toolu_017e2QemVnqg3ncRDj6X31ps</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ad473732e326fb8e8.output</output-file>
+<status>completed</status>
+<summary>Agent "Round-2 docs fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All seven findings are fixed. Every extension I changed passes check, lint, fmt, fmt:check, test and quality (`passed` / 100%). I also fixed a code bug in anthropic/admin that I hadn't been asked about. It was making one admin test fail intermittently, and I fixed it without asking first, so please review that change.
+
+**Versions:** anthropic/analytics was the only extension not yet bumped. It went from 2026.10.14.1 to 2026.10.21.1, with an identity entry appended to its upgrades. Everything else was already at 2026.10.21.1, so I edited those release notes in place. Nothing was bumped twice and no other upgrade entries were added.
+
+**Per finding:**
+1. **cloudflare-audit:** removed the false `CLOUDFLARE_API_TOKEN` fallback claim from `README.md` and `RELEASE_NOTES.md`.
+2. **Tracing version (pass, gopass, hashicorp-vault, macos-keychain):**
+   - `INSTRUMENTATION_VERSION` in each `extensions/vaults/_lib/tracing.ts` is now exported and set to 2026.10.21.1.
+   - Each extension has a new `_lib/tracing_test.ts` that reads `manifest.yaml` and asserts the two match. I checked that it fails when they differ.
+   - The gopass, hashicorp-vault and macos-keychain `deno.json` test tasks now include `--allow-read=manifest.yaml`. pass already had read access.
+   - All four release notes now open with "Fixed: Tracing spans reported a stale instrumentation version". The "no code changes" claims are gone, and the `deno.json` change is noted where it applies.
+3. **gitlab `projects.ts`:** reworded the 2026.10.21.1 upgrade description so it no longer contains the forbidden string. `gitlab/RELEASE_NOTES.md` and `reddit/RELEASE_NOTES.md` also had it, so I reworded both. The spot-check grep is now clean across my whole scope.
+4. **Secret-arg descriptions:** gitlab `token`, gitlab-review `token` and analytics `analyticsKey` now use the `vault.get(...)`, "never pass the literal" wording. All three were already `.meta({ sensitive: true })`. I also fixed the gitlab README table row that said "(use vault reference)". The analytics bump is described under Versions above.
+5. **"Passed as a literal" claims:**
+   - gopass, hashicorp-vault and macos-keychain release notes now say swamp rejects a literal for a sensitive argument and passes it through as text only for a non-sensitive one. Their READMEs had no such claim.
+   - reddit's notes now say `swamp model create` rejected the old command, because `clientSecret` and `password` are sensitive. `clientId` and `username` would have gone through as literal `vault://` text. The "recreate it" advice is replaced with "the old example could not create an instance, so existing instances need no change."
+6. **Quick Starts:** added `swamp vault create local_encryption &lt;name&gt;   # once, if you have no vault yet` plus the `vault put` line to:
+   - the READMEs and manifests of anthropic/admin, anthropic/compliance and anthropic/analytics
+   - the gitlab README, and its manifest, which had the same gap
+   - the root `README.md` Claude Enterprise section
+
+   The matching release notes now mention it.
+7. **Markdown formatting:** files that were clean at HEAD got `deno fmt`. That covers the READMEs of aws/inventory, the four vaults, reddit, gitlab-review, cloudflare-audit and anthropic/analytics, plus `vault/hashicorp-vault/docs/otel_verification.md` and the release notes I rewrote. The anthropic/admin, anthropic/compliance, gitlab and root READMEs were already unformatted at HEAD, so I edited them by hand only. My edits there were code-block lines and one table, which I aligned.
+
+**The admin bug:** the first test run failed in anthropic/admin with "set_member_roles: cancel during a group re-read reports Cancelled" (expected 100 changed, got 101). It failed about one run in three and is not caused by this PR's edits. The cause is real: if a cancel arrived while `set_member_roles` was re-reading the covering group and the read still finished, the next member's role was changed before the run stopped. I added a cancellation check right after the re-read in `anthropic/admin/extensions/models/anthropic/admin.ts`. The test then passed six runs in a row, and admin's release notes now list it as a Fixed item.
+
+**Files changed:**
+- `cloudflare-audit/{README.md,RELEASE_NOTES.md}`
+- `vault/{pass,gopass,hashicorp-vault,macos-keychain}/extensions/vaults/_lib/tracing.ts`
+- `vault/{pass,gopass,hashicorp-vault,macos-keychain}/extensions/vaults/_lib/tracing_test.ts` (new)
+- `vault/{gopass,hashicorp-vault,macos-keychain}/deno.json`
+- `vault/*/RELEASE_NOTES.md` and `vault/*/README.md` (all four)
+- `vault/hashicorp-vault/docs/otel_verification.md`
+- `gitlab/{README.md,RELEASE_NOTES.md,manifest.yaml,extensions/models/gitlab/projects.ts}`
+- `gitlab-review/{README.md,RELEASE_NOTES.md,extensions/models/gitlab-review/review.ts}`
+- `anthropic/admin/{README.md,RELEASE_NOTES.md,manifest.yaml,extensions/models/anthropic/admin.ts}`
+- `anthropic/compliance/{README.md,RELEASE_NOTES.md,manifest.yaml}`
+- `anthropic/analytics/{README.md,RELEASE_NOTES.md,manifest.yaml,extensions/models/anthropic/analytics.ts}`
+- `reddit/{README.md,RELEASE_NOTES.md}`
+- `aws/inventory/README.md`
+- `README.md`
+
+None of my extensions' `deno.lock` files changed. `scripts/cloudflare-codegen/deno.lock` is modified in the tree, but I didn't touch it. Everything assigned is done.</result>
+<usage><subagent_tokens>99053</subagent_tokens><tool_uses>49</tool_uses><duration_ms>404534</duration_ms></usage>
+</task-notification>
