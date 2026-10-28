@@ -1,0 +1,1 @@
+it's large but it's fine for this change, we'll use a separate session to fix the swamp-adoption scaffold so give me a prompt to fix that. Last bit of work for this session is to look at why merging is still blocked even though all checks have passed
