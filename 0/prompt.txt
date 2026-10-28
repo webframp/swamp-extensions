@@ -1,0 +1,7 @@
+<task-notification>
+<task-id>b1cam0tzk</task-id>
+<tool-use-id>toolu_01HTTbEdZFTaZPesr1nCgjx9</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/b1cam0tzk.output</output-file>
+<status>completed</status>
+<summary>Background command "sleep 30; for i in $(seq 1 55); do p=$(gh pr checks 505 2&gt;/dev/null | awk -F'\t' '$2=="pending"' | wc -l); [ "$p" = "0" ] &amp;&amp; break; sleep 10; done; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '{print $2}' | sort | uniq -c; gh pr checks 505 2&gt;&amp;1 | awk -F'\t' '$2=="fail"{print $1}'; gh pr view 505 --json reviews -q '.reviews[-1] | .submittedAt + "\n" + .body'" completed (exit code 0)</summary>
+</task-notification>
