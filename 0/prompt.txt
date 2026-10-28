@@ -1,0 +1,50 @@
+<task-notification>
+<task-id>ad26b4bba2702a012</task-id>
+<tool-use-id>toolu_018fzNrYWhnWB4RQazKyZ2hW</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ad26b4bba2702a012.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix snyk codegen + regen" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I switched the `rm` to a literal absolute path with `--` and no variable-built glob, and used that form for the rest of the run. With that in place, every snyk audit item is fixed except the tenants deployment credential, which turned out to carry no secret. All 20 extensions were regenerated and pass their gates and the quality check at 100%.
+
+**The rm change:** the old command was `rm -rf $S/[a-z]*`. If `S` had ever been empty it would have expanded to `rm -rf /[a-z]*`. The preview was rebuilt with `rm -rf -- /tmp/claude-1000/.../scratchpad/snykprev` and then re-created.
+
+**What changed in the generator (`scripts/snyk-codegen`):**
+- **README (item 1):** every generated README now has a Credentials section. It uses the `snyk` vault, `swamp vault put snyk API_TOKEN`, and `--global-arg 'apiToken=REDACTED vault.get("snyk", "API_TOKEN") }}'`. The literal `apiToken=REDACTED example is gone from all 20.
+- **apiToken describe (item 2):** it now says to store the token in a vault and wire it with `vault.get`. It was already marked sensitive. Snyk has no environment-variable fallback, so there is nothing to discourage.
+- **Secret method arguments (item 3):** a field counts as secret only on an exact name match: `access_token`, `api_key`, `client_secret`, `password`, `private_key`, `refresh_token`, `secret`, `token`. These fields are marked sensitive and their describe says to supply them via `vault.get`. In practice this marks `data.attributes.secret` on 3 apps methods and 2 service-accounts methods. Tests check that 16 look-alike names in the spec stay unmarked, such as `access_token_expires_at`, `personal_access_token_id`, `credential_id`, `secrets_enabled` and `key`. A scan of all 20 extensions found no other field marked.
+- **Secrets in responses (item 4):** `client_secret` (apps), and `client_secret`, `api_key` and `access_token` (service-accounts), are now marked sensitive on the resource schemas. I checked this against swamp's own source code: its write path vaults these fields and the stored data no longer contains the plaintext.
+- **README notes (item 5):** a new Secrets section appears only for apps and service-accounts. It lists the methods that return a secret, the methods that take one, and how lists behave.
+
+**Gaps I found in swamp and closed:** swamp's write-time vaulting only looks through plain objects. It does not look inside arrays or unions. That would have left three holes:
+- **List items:** a secret inside a list's items would be stored as plaintext. The generated list methods now delete any non-null secret field from each item and log a warning. This affects the two service-accounts list methods. Snyk's spec says these fields come back only on creation or rotation, so normal use loses nothing.
+- **Array responses:** if a create or rotate call returns its data as an array, the same deletion applies.
+- **Shared resources:** if one method on a resource returns a secret that the schema (built from another method) does not declare, the generator now adds the field as sensitive. The generator also refuses to produce a union resource that contains secrets. No current snyk resource needs either case; tests cover both.
+
+**Tests:**
+- **Generator:** a new `lib/secrets_test.ts` adds 15 tests, for 79 passing in total.
+- **Generated:** the apps and service-accounts tests now check three things. Secrets reach the data handed to swamp, every one is marked so swamp vaults it, and none is left in plaintext after the vault step. List items lose their secrets, and secret arguments are marked. Fixtures now use `fixture-&lt;name&gt;` instead of the spec's token-shaped `snyk_cs_…` example.
+
+**Regeneration:** the cache was never refetched; it is byte-identical to your reconstructed spec. `git diff --stat snyk` shows 102 files. Outside apps and service-accounts, each model changed in just 12 lines: the describe text, the version, and the appended upgrade entry. The other changes are the README, `RELEASE_NOTES.md`, manifests and the shared `_lib/api.ts`. No `deno.lock` changed.
+
+**Versions:** all 20 snyk extensions went from `2026.10.14.1` to `2026.10.21.1`: apps, assets, cloud, collections, container-images, groups, inventory, issues, memberships, policies, projects, sast, sbom, self, service-accounts, settings, slack, sso, tenants and tests. Each got an appended identity upgrade entry and new release notes. The notes scope the vaulting change to apps and service-accounts, say plainly that nothing behavioral changed in the other 18, and add an upgrade note to create a vault first.
+
+**Gates:**
+- **Generator:** check, lint, fmt:check and test all pass.
+- **Each of the 20 extensions:** check, lint, fmt, fmt:check and test pass, and `swamp extension quality manifest.yaml` reports passed at 100%. No failures.
+
+**Not fixed:**
+- **Tenants deployment credential (items 4 and 5):** its response has only `comment`, `deployment_id`, `environment_variable_name` and `type`. That is the name of an environment variable, not a secret value, so there is nothing to vault. A README note saying a secret is returned would be false, so I left it out.
+- **Broker connection `secrets`:** these are `{encrypted, nonce, expires_at}`, which is ciphertext, so they are not marked. If you want them vaulted anyway, adding `secrets` to the name list is a one-line change.
+
+Files changed:
+- `scripts/snyk-codegen/lib/type_mapper.ts`
+- `scripts/snyk-codegen/lib/method_classifier.ts`
+- `scripts/snyk-codegen/lib/extension_generator.ts`
+- `scripts/snyk-codegen/lib/test_generator.ts`
+- `scripts/snyk-codegen/lib/secrets_test.ts` (new)
+- the regenerated files under `snyk/*/` (README, RELEASE_NOTES, manifest, model, `_lib/api.ts`, plus the tests for apps and service-accounts)
+
+Nothing was staged or committed.</result>
+<usage><subagent_tokens>198637</subagent_tokens><tool_uses>73</tool_uses><duration_ms>801165</duration_ms></usage>
+</task-notification>
