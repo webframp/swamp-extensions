@@ -1,0 +1,76 @@
+<task-notification>
+<task-id>aeea5e84529f95c56</task-id>
+<tool-use-id>toolu_01NoTdNK1WkWJ2V4F29GhgFk</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/100f2f4e-53eb-4672-a219-b99e574b1421/tasks/aeea5e84529f95c56.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial re-review iteration 4" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No CRITICAL or HIGH findings, so iteration 4 passes. All the iteration-3 fixes are in place and correct, and the mutation tests kill every revert of a fix's core logic. I found one MEDIUM (stale README text) and six LOW items.
+
+On a scratch copy, `deno task check`, `lint`, `fmt:check` and `test` (89 passed) are clean, and `swamp extension quality manifest.yaml` reports `passed`, 100%.
+
+**Mutation results** (25 mutations, `deno test` run on a scratch copy each time):
+- **Killed (iteration-3 fixes):**
+  - Retry policy: putting back the old POST-only rule (so PUT and DELETE retry 5xx again), and moving the 429 check after the method check.
+  - Redirects: disabling the http→https upgrade, not updating `trusted` after an upgrade, `strip` not deleting credentials, `strip` deleting only the API key, downloads using `reject`, and a hop back to the origin restoring credentials.
+  - Signals: one signal shared across retries.
+  - Names: dropping `from`, `to` or `u:` from time-entries names, the unprefixed `i:`, the search hash ignoring `project`, the search name without a hash, changing 40 to 50, and the unprefixed `users-`.
+  - Rewrites: no rewrite of a 301 after POST, and keeping Content-Type after a 303.
+- **Survived:** GET without the 503 retry, GET without the 504 retry, HEAD not retried, HEAD rewritten on a 303, `upload_file` using the default timeout, and `Retry-After` being ignored. These are covered under the LOW findings below.
+
+**Probes with no finding:**
+- **Data names vs swamp's rules.** Swamp rejects names containing `..`, `/`, `\` or NUL, and the reserved name `latest` (any case). Every name now has a prefix, so none can be `latest`; on main, a search for "latest" or a project called "latest" broke on this. Project identifiers come from user args, but `list_users`, `list_versions`, `list_issue_categories` and `search` URL-encode them into the path, and `list_issues` and `list_time_entries` send them as `project_id`. Either way Redmine returns 404 before anything is written. The only user text that can reach a name unchecked is `from`/`to` (LOW below).
+- **Delimiter ambiguity.** Valid Redmine identifiers cannot contain `:`, so `issues-p:&lt;ident&gt;-a:…` and `time-entries-p:&lt;ident&gt;-u:…` each have exactly one reading. A collision needs a malformed `from` (LOW below).
+- **`searchDataName`.** `crypto.subtle.digest` is native in Deno and deterministic. Names are at most 56 characters. A 32-bit prefix is plenty. On macOS's case-insensitive filesystem, "Foo" and "foo" get different hashes, so they stay apart.
+- **Retry policy.**
+  - 429 is still retried for every method, so the rate-limit reasoning behind the 2026.09.19.1 retry feature still holds.
+  - No GET has side effects. Redmine counts downloads only for Version or Project attachments, not issue attachments.
+  - Retries reuse a byte array or string body, so they are safe.
+  - Each attempt starts again from the original URL and gets a fresh signal. The download idle timer is replaced per attempt, so a retry backoff cannot abort the live request.
+- **Version chain.** The model version matches the manifest, the last `upgrades:` entry has `toVersion` 2026.10.20.1, and the version test is a pattern match.
+- **Release notes.** 3,792 characters, under the 5,000 limit. Every claim checks out against main.
+
+### [MEDIUM] README still says there is no retry logic, contradicting the new section
+**File:** redmine/README.md **Line(s):** 134-138 (also 154)
+**Issue:** "There is no retry logic, no backoff… 429 responses crash the method execution." This has been wrong since 2026.09.19.1, and it now contradicts lines 168-180 of the same file ("Every request retries a 429"). Line 154 says `filePath` "must be an absolute path", but the Zod refine on `filePath` rejects absolute paths.
+**Breaking input:** A reader following the troubleshooting section.
+**Impact:** The shipped README (it is in `additionalFiles`) tells users the opposite of what the code does.
+**Fix:** Rewrite the 134-138 section to say errors throw after retries run out, and change line 154 to "a relative path without `..` or `~`".
+
+### [LOW] `from`/`to` are unvalidated free strings and now go into the data name
+**File:** redmine.ts **Line(s):** 1840-1841, 1906-1907
+**Issue:** The schema says `YYYY-MM-DD` but accepts any string. Redmine's `parse_date` silently ignores a date it cannot parse, so the run fetches unfiltered entries and then:
+- with `from: "01/01/2026"`, the write fails on swamp's path-traversal check, with a confusing message;
+- with `from: "2026-01-01-to:2026-02-01"` and no `to`, it gets the same name as the properly filtered `{from:"2026-01-01", to:"2026-02-01"}` and overwrites it with unfiltered data.
+
+**Impact:** Only user error can trigger it, but the CLAUDE.md rule "Zod schemas are the contract" applies.
+**Fix:** `z.string().regex(/^\d{4}-\d{2}-\d{2}$/)` on `from` and `to`.
+
+### [LOW] Untested retry branches (surviving mutations)
+**File:** _lib/api.ts **Line(s):** 21-22, 91; _lib/api_test.ts 278
+**Issue:** Removing the 503 or the 504 GET retry survives, because only 502 is tested. The HEAD branches survive because no caller uses HEAD (dead code). Ignoring `Retry-After` survives: the test called "honoring Retry-After" sends `Retry-After: 0`, so it passes either way, only slower. That test is unchanged from main. `UPLOAD_TIMEOUT_MS` is never asserted either.
+**Fix:** Run the retry test over 502, 503 and 504. Assert that `Retry-After` changes the delay (for example, a small non-zero value with timing measured, or an injected sleep). Either drop HEAD or test it.
+
+### [LOW] PUT/DELETE no longer retry a throttling proxy's 503
+**File:** _lib/api.ts **Line(s):** 19-23
+**Issue:** nginx `limit_req` rejects with 503 by default, before Redmine does any work. Since 2026.09.19.1, `update_issue`, the attach PUT in `upload_file`, and the DELETEs retried that; they now fail. This is documented and the reasoning is sound, but it is a regression for deployments that throttle with 503.
+**Fix (optional):** For writes, retry a 503 only when it carries `Retry-After`, which signals a rejection before any work. Or leave it and say so in the notes.
+
+### [LOW] Collision lists still incomplete
+**File:** RELEASE_NOTES.md (Fixed, 2nd entry); README.md 185-190
+**Issue:** The "bare numeric IDs" list leaves out `create_issue`, `update_issue` and `create_version`, which also wrote `String(id)`. It also leaves out `search`, whose old bare sanitized query (for example "all" or "42") collided with every other method. The upgrade-note mapping does cover the new names.
+**Fix:** Add those methods to both lists.
+
+### [LOW] `list_issues` and `list_time_entries` names leave out `limit` and `sort`
+**File:** redmine.ts 1290-1312, 1899-1912
+**Issue:** Runs with a different `limit` (or `sort`, for issues) overwrite each other. This was the same on main, and these are not filters, but the docs say the name includes "every filter", so a reader might expect them in it.
+**Fix:** Either add them to the name or say in the docs that they are excluded.
+
+### [LOW] Stale comment
+**File:** redmine.ts **Line(s):** 1213
+**Issue:** `// ── Stub methods (not yet implemented)` sits above `list_issues`, which is implemented. It is unchanged from main.
+**Fix:** Delete the comment.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>107502</subagent_tokens><tool_uses>26</tool_uses><duration_ms>322210</duration_ms></usage>
+</task-notification>
