@@ -1,0 +1,85 @@
+<task-notification>
+<task-id>a540f554774e010ff</task-id>
+<tool-use-id>toolu_013rS4EQGP879T9ypVsVbMDR</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/8de22bf7-67cf-4c78-bfdd-4867e3cd1ef8/tasks/a540f554774e010ff.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review: emacs-swamp branch" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Review: `feat/swamp-present` (emacs-swamp, commits b0e3d6d and 820b4a0)
+
+No CRITICAL or HIGH findings, so the verdict is PASS. There are 3 MEDIUM and 6 LOW findings below.
+
+**Checks run:**
+- **Tests:** `test-swamp.el` passes 29/29 and `test-swamp-present.el` passes 13/13.
+- **Byte-compile:** both files compile clean with `byte-compile-error-on-warn t`. I compiled copies in `/tmp/claude-1000/review-el/`, so no `.elc` files were left in the repo.
+- **End-to-end:** I copied the `presentation` extension into `/tmp/claude-1000/review-el/pres`, created a `talks` deck and ran the real swamp CLI (20261021.155838.0) from batch Emacs.
+  - Preview works, and the written HTML is byte-identical to the stored data, UTF-8 included.
+  - The outline table renders.
+  - PDF export works, and decoding the base64 output (one line, no CR) matches the stored PDF.
+- **Repo state:** nothing was modified. The untracked `.swamp/` in emacs-swamp dates from April and predates this review.
+
+**Verified correct:**
+- **swamp calls:** `swamp--run-json` and `swamp--run-json-stream` are the only `call-process` sites in `swamp.el`. Both use `swamp--command-args`, as do `swamp-present--run` and `--fetch`, so `--repo-dir` always comes after the arguments.
+- **CEL quoting:** `%S` escaping matches CEL for `"` and `\`. The decks `talks") || (true || model("x` and `nope" || model("talks` both made `data query` fail rather than match. A newline breaks the CEL parse instead of injecting, and non-ASCII characters are printed raw.
+- **Fetch:**
+  - `data query` with no version returns only the latest version (`isLatest`).
+  - Stored HTML that ends in `\n` comes back as `\n\n`, so deleting one newline is correct.
+- **JSON booleans:** `(eq x t)` handles `:false` correctly, and every field read is non-nullable in the deck schemas.
+- **Deck name in `export_pdf`:** passing `name` is correct when `swamp-present-name` is set and when the build was unchanged.
+- **Transient:** loading `swamp-present.el` 3 times still leaves exactly one `"p"` suffix in `swamp-dispatch`.
+- **Error paths:**
+  - An error inside `on-success` is reported as "error in process sentinel", and `unwind-protect` still kills the output buffers.
+  - Two builds started together both finish, and no buffers leak.
+
+### [MEDIUM] README use-package recipe breaks init under `straight-use-package-by-default`
+**File:** README.md **Line(s):** use-package + straight.el block
+**Issue:** `(use-package swamp-present :after swamp)` has no `:straight nil` (or `:ensure nil`). With `straight-use-package-by-default t`, which is the usual setup for readers of this section, straight tries to install a package called `swamp-present` from its recipe repositories and fails. **Breaking input:** the snippet copied verbatim. **Impact:** an init error. **Fix:** `(use-package swamp-present :straight nil :after swamp)`.
+
+### [MEDIUM] `swamp-present-pdf` always rebuilds the CDN deck, overwriting a self-contained build
+**File:** swamp-present.el **Line(s):** 259-263
+**Issue:** The PDF command hard-codes `self-contained` to nil and takes no prefix argument, unlike build and preview. If the stored deck was self-contained, the PDF build replaces it with a CDN version, and Chromium then has to fetch reveal.js from jsDelivr. **Breaking input:** `C-u M-x swamp-present-build` offline, then `M-x swamp-present-pdf`. **Impact:**
+- Offline PDF export fails or hits the 120 s timeout, which defeats the stated purpose of self-contained decks.
+- The stored latest deck silently stops being self-contained.
+
+**Fix:** add `(interactive "P")` and pass it through, matching the other two commands, or reuse the existing build when it is self-contained.
+
+### [MEDIUM] A second PDF export prompts "File changed on disk. Reread from disk?"
+**File:** swamp-present.el **Line(s):** 276-283
+**Issue:** The PDF is rewritten to the same path every time, then opened with `find-file-other-window`. If an earlier PDF buffer is still open, `find-file` asks the user to reread it (confirmed in batch: `"File x.txt changed on disk.  Reread from disk? "`). This happens even when the PDF is unchanged, because the rewrite updates the file's modification time. The prompt comes from inside a process sentinel. **Impact:** answering "no" shows a stale PDF while the echo area reports the new page count. **Fix:** revert an existing buffer visiting the file (`find-buffer-visiting` plus `revert-buffer t t`) before displaying it.
+
+### [LOW] "Model not found" errors show only a generic message
+**File:** swamp-present.el **Line(s):** 155-164
+**Issue:** swamp writes `{"error":"Model not found: nope","code":"model_not_found"}` to stderr, not stdout; checked with the real CLI. `--run` only parses stdout, so the echo area shows "build failed (exit 1); see *swamp-present*". This hits exactly the most common setup mistake. **Fix:** when stdout does not parse, also try parsing stderr for `error`.
+
+### [LOW] An untrusted file can choose which model instance's `build` method runs
+**File:** swamp-present.el **Line(s):** 51-56, 79-90
+**Issue:** `#+SWAMP_DECK:` is read without validation, and `swamp-present-deck` is `:safe #'stringp`, so a file-local variable can set it without a prompt. Either way, an untrusted Org or Markdown file can name any model instance in the configured repo, and `build --input source=&lt;file&gt;` then runs on it. A leading `-` is also accepted (`--help` and `--repo-dir=/x` get passed as options). This is not exploitable beyond picking a different `build` method, and the user must invoke the command. **Fix:**
+- Validate the name against a strict pattern that rejects a leading `-`.
+- Narrow the `:safe` predicate the same way.
+- Optionally check that the instance's type is `@webframp/presentation/deck`.
+
+### [LOW] `safe-local-variable` predicate is looser than swamp's `DECK_NAME_PATTERN`
+**File:** swamp-present.el **Line(s):** 69-70
+**Issue:** The extension's `_lib/source.ts` allows `^[a-z0-9][a-z0-9-]{0,62}$`. The Elisp predicate has no length cap, so a 64+ character name is accepted as safe and then rejected by swamp. **Fix:** use `\\`[a-z0-9][a-z0-9-]\\{0,62\\}\\'`.
+
+### [LOW] Predictable output file names in a shared temporary directory
+**File:** swamp-present.el **Line(s):** 188-200
+**Issue:**
+- `/tmp/swamp-present-&lt;name&gt;.html` and `.pdf` are written with `with-temp-file`, which follows symlinks. Linux `fs.protected_symlinks` mitigates this on most systems.
+- Two deck instances whose sources share a name write to the same file.
+
+**Fix:** default to a per-user directory (for example under `user-emacs-directory` or `$XDG_RUNTIME_DIR`), and include the deck instance in the file name.
+
+### [LOW] No timeout or cancel, and `--fetch` blocks Emacs from inside a sentinel
+**File:** swamp-present.el **Line(s):** 135-186
+**Issue:** The async processes never time out, so a stuck swamp (for example, waiting on a model lock) runs until killed from `list-processes`. `swamp-present--fetch` is a synchronous `call-process` running inside the sentinel, and it freezes Emacs for as long as the query takes. **Fix:** add an optional timeout, or a cancel command that kills `swamp-present*` processes.
+
+### [LOW] Test and README coverage gaps
+**File:** test-swamp-present.el, README.md
+**Issue:**
+- No test covers `swamp-present--report-build` (`unchanged`/`selfContained` as `:false`), the preview or PDF callback chains, or the PDF `name=` argument. The last of these is the deliberate design choice the diff relies on.
+- The README's buffer table does not list `*swamp-outline:&lt;name&gt;*` or `*swamp-present*`.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>99243</subagent_tokens><tool_uses>36</tool_uses><duration_ms>303174</duration_ms></usage>
+</task-notification>
