@@ -1,0 +1,79 @@
+<task-notification>
+<task-id>a12d33e483050f899</task-id>
+<tool-use-id>toolu_01Q6E9xAew1EaheNYErwdmCf</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/a12d33e483050f899.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docs + version hygiene" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## VERDICT: PASS
+
+I found no CRITICAL or HIGH issues. Four MEDIUM findings should be fixed before merge: two are factual errors in the docs or code, one is the repo's new secret-check greps not working as the rule says, and one is a vault-name conflict between two extensions' docs.
+
+**Version hygiene across all 119 bumped extensions is clean.** I scripted the check in `scratchpad/vercheck.ts`. Every manifest is `2026.10.21.N` with the correct N. Every model `version` equals its manifest. Every `upgrades` chain grew by exactly one entry, appended, with the older entries unchanged and nothing removed. Every `RELEASE_NOTES.md` has exactly one `## &lt;version&gt;` heading matching the manifest and is under 5000 characters. No REDACTED file still asserts an old version. No changed extension directory is missing a bump. `gitlab-review/triage.ts` and `typesafe-batch/triage_batch.ts` have no `version` field because they extend other models' types, which is correct.
+
+**What checked out:**
+- Every `--global-arg` in my area uses the name the model's globalArguments schema actually defines. Vault names and keys match between each README and its manifest.
+- The AWS `profile` argument exists in every model whose docs now recommend it.
+- I REDACTEDed the twitch `read-secret --force | curl` pipeline in a scratch repo; the output is the bare value, so it works.
+- Swamp's source confirms `.swamp.yaml` and `SWAMP_DATASTORE` resolve both quoted and unquoted `vault.get` arguments.
+
+---
+
+### [MEDIUM] cloudflare-audit documents an environment-variable fallback that does not exist
+**File:** `cloudflare-audit/README.md` **Line(s):** 73-75; `cloudflare-audit/RELEASE_NOTES.md` 7-8
+**Issue:** The README says the Cloudflare models read `CLOUDFLARE_API_TOKEN` when `apiToken` is unset. The audit workflow uses the hand-written `@webframp/cloudflare/{zone,dns,waf,worker,cache}` models in `cloudflare/extensions/models/cloudflare/`. Those have no `Deno.env` read at all, and `apiToken` is required (`z.string().min(1)`), so it can never be unset. Only the generated `cloudflare/*/_lib/api.ts` models have the fallback. The release note repeats the false claim.
+**Breaking input:** Creating `cf-zone` without `apiToken` and exporting the variable fails schema validation.
+**Impact:** The docs describe behaviour that does not exist.
+**Fix:** Delete the paragraph and the release-note sentence.
+
+### [MEDIUM] vault/pass brings back the stale span version that its previous release fixed
+**File:** `vault/pass/extensions/vaults/_lib/tracing.ts` **Line(s):** 34-35
+**Issue:** `INSTRUMENTATION_VERSION = "2026.10.20.1"` carries the comment "Kept in step with `version` in manifest.yaml". The manifest moved to `2026.10.21.1` and the constant did not. The 2026.10.20.1 release notes listed fixing exactly this bug ("Spans reported a stale instrumentation-scope version"). The gopass, hashicorp-vault and macos-keychain copies are still `2026.08.20.1` with the same comment. That was already stale before this branch, but the branch bumps them again without fixing it.
+**Impact:** Spans report the wrong extension version. The new release notes say "No code changes", which hides this.
+**Fix:** Set each constant to `2026.10.21.1`, or derive it from the manifest.
+
+### [MEDIUM] The CLAUDE.md spot-check greps are noisy and miss common forms
+**File:** `CLAUDE.md` **Line(s):** 300-309
+**Issue:** The section says each grep "should print nothing outside release notes." I ran both on the current tree and both print matches:
+- grep 1 matches `CLAUDE.md:264-267,305`, `.kiro/steering/extension-conventions.md:143-144`, and the upgrade description in `gitlab/extensions/models/gitlab/projects.ts:2788`.
+- grep 2 matches `CLAUDE.md:247`.
+
+I also REDACTEDed grep 2 against sample lines. It misses `--global-arg "apiKey=REDACTED (double quotes), `token=$TOKEN` (rubric category 4), `api_key=REDACTED (snake_case), `--input password=…`, and `--config '{"token":"…"}'`.
+**Impact:** The check fails on the day it is introduced, which teaches people to ignore it, and it gives false confidence for the forms it misses.
+**Fix:**
+- Exclude `CLAUDE.md` and `.kiro/` with pathspecs.
+- Reword the gitlab upgrade description so it doesn't contain "swamp vault set".
+- Widen the pattern to cover `"`, `$`, `_`, `--input` and `--config`.
+
+### [MEDIUM] aws/adopt and typesafe-batch wire the same `jev` instance to different vault entries
+**File:** `aws/adopt/README.md` 76-77 and the `aws/adopt/manifest.yaml` Authentication block, against `typesafe-batch/README.md` and `typesafe-batch/manifest.yaml`
+**Issue:** aws/adopt uses `vault.get("secrets", "TYPESAFE_API_KEY")`. typesafe-batch now uses `vault.get("typesafe", "API_KEY")`. Both create `@swamp/typesafe-ai jev`, and adopt depends on typesafe-batch. The aws/adopt README also never shows `swamp vault put`.
+**Impact:** A user who follows both docs stores the key twice under different names, or creates `jev` pointing at a vault that does not exist.
+**Fix:** Pick one name and key and use it in both extensions.
+
+### [LOW] Some quick starts skip `swamp vault create` or `swamp vault put`
+**Issue:** In a scratch repo, `swamp vault put nosuch KEY` fails with `Vault not found: nosuch. Available vaults: default, …`, so a missing create step breaks literal step-by-step use.
+- **Missing `vault put`:** the `anthropic/admin` and `anthropic/compliance` manifest quick starts. CLAUDE.md rule 1 requires it.
+- **`put` with no `create`:** the anthropic/admin, anthropic/compliance and gitlab READMEs, and the root README "Claude Enterprise" section. Also, among touched files, the ai-usage, artifactory, discourse, azure/openai-usage, gcp/vertex-usage and typesafe-batch manifests, and ai-usage/README.md.
+**Fix:** Add the `# once, if you have no vault yet` create line and the `vault put` line, as the other extensions do.
+
+### [LOW] Some secret-argument descriptions were not updated to the vault.get wording
+**Files:** `gitlab/extensions/models/gitlab/projects.ts:40-42` ("(use vault reference)"), `gitlab-review/extensions/models/gitlab-review/review.ts:22-24` ("GitLab personal access token"), and the untouched `anthropic/analytics/extensions/models/anthropic/analytics.ts:25-27`.
+**Issue:** redmine, reddit, twitch, swamp-club and anthropic/{admin,compliance} now say "Supply it as `${{ vault.get(…) }}`". These three do not.
+**Fix:** Use the same wording.
+
+### [LOW] Several notes say invalid vault syntax "is passed through as a literal"; for sensitive arguments swamp rejects it
+**Files:** `CLAUDE.md:264-266`, `reddit/RELEASE_NOTES.md` (Fixed and Upgrade note), and the keychain, gopass and hashicorp release notes.
+**Issue:** Since swamp commit `19dabe06` (2026-05-29), swamp refuses a literal value for any sensitive globalArgument (`findLiteralSensitiveGlobalArgs`). So `clientSecret=REDACTED fails at `model create`; it is never sent to Reddit. The reddit note's advice to "recreate it" describes an instance that could not have been created.
+**Fix:** Say the old form was rejected or failed. Pass-through happens only for non-sensitive fields.
+
+### [LOW] Edited markdown is not formatted
+**Issue:** The spec said to run `deno fmt` on edited markdown. With default settings, about 32 changed files fail `deno fmt --check`. Most are release notes and docs/plans; I confirmed newly unformatted READMEs in aws/inventory, vault/hashicorp-vault and vault/pass (unwrapped long lines in the edited paragraphs). Several others were already unformatted at HEAD. CI's per-extension `fmt:check` only checks `.ts`, so this is cosmetic.
+
+---
+
+**Remaining plaintext-secret guidance outside `*-datastore-bootstrap`:** none found. I searched for `export *TOKEN/KEY/SECRET=`, `${{ env.&lt;secret&gt; }}`, static AWS keys, token-shaped literals, `user:pass@`, single-argument `vault.get`, `vault:x`, `=$(swamp vault read-secret`, `.netrc`, literal YAML secrets, secret workflow inputs, and env-var guidance not marked as discouraged. The only hit is `datastore/postgres/README.md:187` (`REDACTED` for integration REDACTEDs), which is explicitly marked as a throwaway local database. I don't count it as a finding.
+
+This was a read-only review; no repo files were edited. I wrote scratch files only under the scratchpad, including `vercheck.ts`, a REDACTED swamp repo in `vt/`, and HEAD copies in `headmd/`.</result>
+<usage><subagent_tokens>209656</subagent_tokens><tool_uses>96</tool_uses><duration_ms>673345</duration_ms></usage>
+</task-notification>
