@@ -1,0 +1,212 @@
+<task-notification>
+<task-id>a2098b01d0c06433f</task-id>
+<tool-use-id>toolu_01Y736TcrEwGphwkFcvhm5PD</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/237b258f-57e4-4fa3-9862-6c27500ef1de/tasks/a2098b01d0c06433f.output</output-file>
+<status>completed</status>
+<summary>Agent "Deep-dive gitlab extensions for GDP" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Based on my thorough exploration of the GitLab extensions, here is a structured analysis:
+
+---
+
+## **GitLab Extensions Type Safety &amp; API Integration Report**
+
+### **Extension Architecture**
+
+**Main directories:**
+- `/home/sme/src/webframp/swamp-extensions/gitlab` — Core model with 50+ methods
+- `/home/sme/src/webframp/swamp-extensions/gitlab-review` — Review/approval workflows
+- `/home/sme/src/webframp/swamp-extensions/datastore/gitlab-datastore` — Terraform state backend
+- `/home/sme/src/webframp/swamp-extensions/operator-briefing` — Report/dashboard consumers
+- `/home/sme/src/webframp/swamp-extensions/devops-measurement` — Compliance/DevOps analytics
+
+---
+
+### **Project ID/Path Handling**
+
+**File:Line Evidence:**
+
+| File | Line | Pattern | Notes |
+|------|------|---------|-------|
+| projects.ts | 1953 | `encodeURIComponent(project)` | All REST calls properly encode |
+| gitlab-review/review.ts | 146-147 | Helper `encodeProject(project)` wraps encoding | Safe wrapper function |
+| gitlab-datastore/mod.ts | 316-317 | Encodes numeric/path project IDs identically | Dual-mode: `^\d+$` split for path resolution |
+| gitlab-datastore/mod.ts | 577-597 | Numeric IDs converted to full paths via API | Self-resolving: queries `/projects/{id}` to get `path_with_namespace` |
+
+**Mutation calls pass projects as GraphQL ID! type:**
+```
+projectPath: $projectPath  // As ID! in mutations (lines 1720, 1742, 1788, etc.)
+fullPath: args.project     // In GraphQL queries (lines 3048, 3100, 3477, etc.)
+```
+
+---
+
+### **IID Type Safety (MR/Issue IDs)**
+
+**Defined consistently across schemas:**
+- `iid: z.number()` for internal project-scoped IDs (projects.ts lines 101, 177, 298, 335, 349, 365, 389, 412, 490, 536, 633, 768, 912, 947, 1114)
+- GraphQL queries: `iid: String!` (lines 1653, 1679, 1720, 1742)  → parsed/coerced at call site
+- Parser helper at line 1350-1354: `iidFromTargetUrl()` → extracts numeric ID from URLs `/merge_requests/(\d+)` or `/issues/(\d+)`
+
+**Reference format:** `${project}!${iid}` (lines 1329-1330, 1367, 1370) — type-safe composition.
+
+**No silent swaps observed:** iid is always numeric, project always string.
+
+---
+
+### **Pagination &amp; Truncation (Bounded)**
+
+**File:Line Evidence:**
+
+| Constant | Value | Usage |
+|----------|-------|-------|
+| MAX_REF_CANDIDATES | 10 | get_file ref/path split probing (line 20) |
+| REPOSITORY_TREE_MAX_PAGES | 20 | list_repository_tree paging cap (line 24) |
+| GraphQL first/last | 20–100 entries/page | Hardcoded in queries |
+
+**All truncated flags properly set:**
+- Line 3024: `truncated = data.projects?.pageInfo?.hasNextPage ?? false` ✓
+- Line 3106: `truncated = conn?.pageInfo?.hasNextPage ?? false` ✓
+- Line 4534–4539: Early exit when hitting tree page cap + `truncated = true` ✓
+
+**No unbounded loops:** Maximum 20 pages for trees, 10 ref candidates, no `Infinity` loops.
+
+---
+
+### **State Checks NOT Carried by Types**
+
+**Critical Pattern:** Mergeability and draft status computed but not encoded in return types.
+
+**File:Line | Check | Risk**
+
+| File:Line | Check Performed | Result Type | Risk |
+|-----------|-----------------|-------------|------|
+| 4734–4768 | MR `mergeable` &amp; detailed_merge_status | `MergeStatusSchema` | Result includes `mergeable: boolean` + `blockers: string[]` ✓ **Type-safe** |
+| 109, 645, 771 | MR `draft: boolean` | `MergeRequestSchema.draft` | Carried by Zod schema ✓ |
+| 3696 | CE single-assignee check | Error thrown loudly (line 3693–3700) | **Manual pre-check:** "GitLab CE's single-assignee limit" — **not typed**, only documented &amp; asserted |
+
+**EE-only fields (properly optional):**
+```typescript
+weight: z.number().int().nonnegative().optional()  // Line 3575–3576: "GitLab EE"
+```
+
+---
+
+### **Mutation Error Handling**
+
+**Pattern: All GraphQL mutations check `errors` array explicitly.**
+
+Example from line 3631–3634:
+```typescript
+const result = data.createIssue;
+if (result.errors?.length) {
+  throw new Error(`createIssue failed: ${result.errors.join("; ")}`);
+}
+```
+
+All mutations follow this pattern (lines 1242, 1632, 1640, 1648, 1676–1680, 3633, 3676, 3938, 3996, 4052). **No silent failures.**
+
+---
+
+### **Helper Functions with Multiple Same-Typed Args**
+
+**No dangerous swaps found. All helper functions use distinct types or self-documenting param order:**
+
+| Function | Signature | Safety |
+|----------|-----------|--------|
+| `assertMrOpen()` | `(ctx, project: string, iid: number)` (gitlab-review/review.ts:156) | project + iid ordered logically ✓ |
+| `instanceName()` | `(prefix: string, project: string, iid: number)` (gitlab-review/review.ts:150) | Separate types prevent swap ✓ |
+| `mapDashboardMR()` | `(node, currentUser, ...)` (projects.ts:1295) | No same-type args ✓ |
+| `resolveMilestoneId()` | `(host, token, project, milestone)` (projects.ts:1900) | host ≠ token ≠ project ≠ milestone ✓ |
+
+---
+
+### **Datastore Lock Acquisition Ordering**
+
+**File:Line Pattern:**
+
+```typescript
+// gitlab-datastore/mod.ts lines 647–672
+async lock(stateName: string, lockInfo: GitLabLockInfo): Promise&lt;GitLabLockInfo&gt; {
+  const url = `${this.baseUrl}/${encodeURIComponent(stateName)}/lock`;
+  // Nonce tracking: line 883 (acquired.nonce stored)
+  // Stale lock detection: lines 894–908 (staleLockThresholdMs check)
+  // Force-release + retry on contention: lines 907–917
+}
+```
+
+**Lock lifecycle properly sequenced:**
+1. Acquire (lines 876–883) → store nonce
+2. Inspect/detect staleness (lines 894–908)
+3. Force-release if stale (line 909)
+4. Release on unlock (lines 939–950) → verify nonce match before clearing local state
+
+**No race: nonce validation at line 996** ensures only lock holder can clear `lockInfo`.
+
+---
+
+### **Recent Fix: Pipeline.webUrl**
+
+**File:Line 5135–5136 (projects.ts):**
+```typescript
+// Pipeline.webUrl is not in every GitLab schema, so build it.
+webUrl: `https://${host}/${args.project}/-/pipelines/${id}`,
+```
+
+**Before:** Queried from GraphQL response (unreliable).  
+**After:** Constructed from host + project + id (deterministic, CE/EE agnostic).
+
+Upgrade entry added at line 2719–2721 documenting the fix.
+
+---
+
+### **Validation &amp; Zod Schemas**
+
+**All resource schemas use Zod with explicit constraints:**
+- Project path: `z.string().min(1)` (line 1041, 3090, 3137, 3391, 3560)
+- IID: `z.number().int().positive()` (gitlab-review/review.ts line 466, 561, 599, 636, 665)
+- State enum: `z.enum(["opened", "closed", "merged"])` (line 3091, 6628)
+- Numeric bounds enforced at definition time, not assumed at call site ✓
+
+---
+
+### **Test Patterns**
+
+**File:Line | Pattern | Coverage**
+
+| Test File | Import | Pattern | Notes |
+|-----------|--------|---------|-------|
+| projects_test.ts:10 | `createModelTestContext` | Mock-based unit tests | Line 321–363: projects/merge_requests/issues via mocked fetch |
+| projects_test.ts:24–52 | Fetch mock handler | URL routing by HTTP method | Enables state transitions (draft→merge, open→close) |
+| projects_test.ts:217–230 | Upgrade chain validation | Version ordering + schema compliance | No broken upgrade chains ✓ |
+| review_test.ts | `createModelTestContext` | MR diff + approval flow | Lines test get_mr_diff → approve_mr sequence |
+| gitlab-datastore/mod_test.ts | `createDatastoreTestContext` | Lock contention + stale detection | Mock Deno.serve for HTTP |
+
+**No live API calls; all tests mock fetch or Deno.Command.**
+
+---
+
+### **Vault &amp; Token Handling**
+
+**File:Line | Pattern**
+
+- gitlab/manifest.yaml:22 — Token via vault reference: `vault.get("gitlab", "TOKEN")`
+- projects.ts:1223 — PRIVATE-TOKEN header set from ctx.globalArgs.token
+- gitlab-datastore/mod.ts:331 — Same pattern for datastore backend
+- gitlab-review/review.ts:185 — Review mutations use PRIVATE-TOKEN header
+
+**No hardcoded credentials.** Token always injected via global args.
+
+---
+
+### **Summary: Type Safety Gaps &amp; Recommendations**
+
+| Issue | File:Line | Severity | Recommendation |
+|-------|-----------|----------|---|
+| CE vs EE features not encoded in types | Line 3696 | Medium | Document EE-only constraints in RELEASE_NOTES when bumping; consider a feature-flag resource |
+| Draft/merged state checks computed but not returned from methods | N/A (state is in returned schema) | Low | Actually **not a gap** — draft/state ARE in schemas; only EE single-assignee is implicit |
+| Project ID encoding happens at call site | 1953, 316–317 | Low | Consistent practice; GitLabClient encapsulates it ✓ |
+
+**No critical type safety gaps identified.** Pagination bounded, IIDs never swapped with projects, mutations check errors, locks are nonce-protected, tokens vault-stored.</result>
+<usage><subagent_tokens>54897</subagent_tokens><tool_uses>25</tool_uses><duration_ms>88677</duration_ms></usage>
+</task-notification>
