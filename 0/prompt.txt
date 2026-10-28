@@ -1,0 +1,82 @@
+<task-notification>
+<task-id>ad635958934e79659</task-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/9ace0770-f8a3-41bc-9678-83e43e9d650d/tasks/ad635958934e79659.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## VERDICT: FAIL
+
+Two HIGH findings, both on the bump and regeneration paths of the generators. The 26 shipped extensions themselves are clean.
+
+### [HIGH] datadog and snyk regenerations overwrite existing RELEASE_NOTES.md with a false "Initial code-generated release" note
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions/scripts/datadog-codegen/main.ts` (about lines 378-394) and `lib/extension_generator.ts:155-170`; `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions/scripts/snyk-codegen/main.ts` (about lines 348-364) and `lib/extension_generator.ts:275-290`
+**Issue:** cloudflare (`main.ts:363`), griptape (`main.ts:328`) and falai (`main.ts:363`) refuse to rewrite an existing `RELEASE_NOTES.md` unless `--notes` is given. datadog and snyk have no such guard. They fall back to `body ?? "**Added:** Initial code-generated release…"`. This branch widened their change detection to README, manifest, deno.json and LICENSE, so this path now runs more often.
+**Breaking input:** I copied the trees to scratch with `--output`, appended a line to `datadog/dora/README.md` and to `snyk/service-accounts/README.md`, then ran `deno task generate --output &lt;copy&gt;` with no `--notes`.
+- dora went to 2026.10.25.1.
+- service-accounts went to 2026.10.25.2.
+- Both `RELEASE_NOTES.md` files now read "Initial code-generated release of …". There was no error.
+
+The same happens after a datadog re-pin, which CLAUDE.md says is done by hand-editing `SCHEMA_SHA`/`SPEC_SHA256` and then running generate.
+**Impact:** A routine regeneration publishes a false release note to the registry and GitHub releases. This is the defect the other three generators already guard against. It contradicts CLAUDE.md's "A re-pin that regenerates needs `--notes`", which nothing enforces for these two.
+**Fix:** Port the existing-RELEASE_NOTES guard from cloudflare/griptape/falai `main.ts` into datadog and snyk `main.ts`. Add a test that a changed existing extension without `--notes` exits non-zero before any write.
+
+### [HIGH] `bump --update-sha` (cloudflare) and `bump --update-spec` (falai) can move the pin, regenerate nothing, and exit 0
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions/scripts/cloudflare-codegen/bump.ts` (`detectChanges`, and the re-exec in `main`); `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions/scripts/falai-codegen/lib/bump.ts` (same structure)
+**Issue:** After rewriting the pin, both tools re-run themselves without the pin flag. The child selects services only by `hasChanges: isNew || methods.length !== oldMethods`, so it detects changes by method count alone. A schema change that keeps the method count is invisible to it. The comment on `requireNotesForRepin` promises "a run never leaves it moved with nothing regenerated", and that promise does not hold.
+**Breaking input:** An upstream commit adds or changes a property in the D1 export response without adding an operation. `deno task bump -- --update-sha --notes "x"` then:
+1. rewrites `SCHEMA_SHA`/`SPEC_SHA256`,
+2. re-runs the tool, which prints "No changes detected",
+3. exits 0.
+
+`d1.ts` is still built from the old spec. The next `generate:dry-run` reports d1 as changed, and that drift is then unrelated to whatever change triggers it. When some services do change count, only those are passed to `--services`; other services whose schemas changed are skipped.
+**Impact:** Round-1 fix #2 (re-pin then regenerate from the new spec) is only partly achieved. The pin and the committed output can disagree with a success exit code.
+**Fix:** After a re-pin, have the child run `main.ts` over all services without `--version`, so `computeModelVersion` decides by content, and forward `notesArgs`. Better still, drop the method-count prefilter in favour of main.ts's content-based detection.
+
+### [LOW] `--update-sha --dry-run` previews against the old pin
+**File:** `/home/sme/src/webframp/swamp-extensions/.worktrees/fix-pr513-open-questions/scripts/cloudflare-codegen/bump.ts`, `updatePinnedSha` dry-run branch
+**Issue:** It returns false, and the run then computes changes from the old pinned spec.
+**Breaking input:** `deno task bump -- --update-sha --dry-run` when upstream has moved.
+**Impact:** It prints "No changes detected" when the new SHA would in fact change extensions.
+**Fix:** In dry-run, fetch the new-SHA spec (the hash check is skipped there anyway) and diff against it.
+
+### [LOW] cloudflare/datadog fetchers hash decoded text, not bytes
+**File:** `scripts/cloudflare-codegen/lib/schema_fetcher.ts` and `scripts/datadog-codegen/lib/schema_fetcher.ts`, `fetchSpecText`
+**Issue:** `response.text()` strips a UTF-8 BOM and replaces invalid bytes, and the hash is taken after that. datadog's `config.ts` says to re-pin with `curl … | sha256sum`, which hashes the raw bytes. The current pins are fine: I downloaded both, they match `sha256sum`, and both are valid UTF-8 with no CR characters. A future spec with a BOM or invalid UTF-8 would fail loudly, never silently.
+**Fix:** Hash `new Uint8Array(await response.arrayBuffer())`, as the vendored fetchers already do.
+
+### [LOW] Orphaned `.tmp` file if the cache rename fails
+**File:** same two fetchers, `fetchSchema`
+**Issue:** If `Deno.rename` throws, the `.tmp` file is left behind. A failed fetch writes nothing, so only the rename case leaks. The cache is gitignored (`cloudflare/.gitignore`, `datadog/.gitignore`).
+**Fix:** Wrap the write and rename in try/finally and remove the `.tmp` file on failure.
+
+### Round-1 items: what I checked
+- **1 (cloudflare test-only refresh unformatted):** fixed. The test path is pushed to `writtenDirs`. datadog, snyk, griptape and falai run `deno fmt outputBase` unconditionally on non-dry runs.
+- **2/6 (spec pin and cache integrity):** the SHA-keyed, hash-checked, atomically renamed cache is correct, and both pins match upstream bytes. No caller passes an ignored `cacheDir` or calls a removed export. The re-exec passes arguments as an array, so `--notes "a b"` arrives intact. It drops `--update-sha`, so it cannot loop, and a failed rewrite throws. The remaining gap is the HIGH finding above.
+- **3 (presigned URLs):**
+  - cloudflare d1 (`result.signed_url`, `upload_url`) and stream (`uploadURL`) are marked sensitive.
+  - griptape buckets marks `url` sensitive, and its README and release notes match.
+  - The griptape override throws loudly if the response is a `$ref` without top-level `properties`, or if `url` is nested.
+  - `assertSensitiveOperationsExist` catches a renamed operation.
+  - No buckets method uses `kind` or an exact read name, so "reads included" in the notes is accurate against swamp's `isMutatingKind`.
+- **4 (test-only drift):** fixed in all five. A test-only perturbation printed "refreshing generated tests only" with no version change in cloudflare, datadog, snyk, griptape and falai. A README-only perturbation bumped all five.
+- **5 (`--notes` forwarding):** fixed in cloudflare and falai. Gaps remain in datadog and snyk (first HIGH) and in the re-pin path (second HIGH).
+- **7, 8, 9:** I found no remaining duplicate vault paragraph, no stale twitch mod-events text in shipped files, and CLAUDE.md matches the code.
+- **Vendored fetchers:**
+  - `bump -- --check` passes for falai and griptape.
+  - snyk reports drift (47e28a01…), which its `config.ts` documents.
+  - The `SPEC_SHA256` rewrite regex matches each `config.ts` as committed.
+
+### Gates and version hygiene
+- **Generator gates:** check, lint, `fmt:check` and test pass in all five generators: 162, 61, 146, 129 and 88 tests.
+- **Dry-runs:** `generate:dry-run` would write nothing in any generator.
+- **Bumped extensions:** all 26 are consistent.
+  - Manifest, model version and last `toVersion` are all 2026.10.25.1, with exactly one upgrade entry for it.
+  - check, lint, `fmt:check` and test pass.
+  - `swamp extension quality` reports passed/100 for every one.
+  - Every shipped-file change sits under a bumped manifest.
+- **Release notes:** I read them against the diffs for cloudflare d1/stream/workers-scripts, datadog, falai, griptape, snyk, gitlab, twitch and the four vaults. They are accurate. "Documentation only" holds wherever it is claimed. The vault README configs match each provider's `ConfigSchema`, and `swamp vault create &lt;type&gt; &lt;name&gt; --config` exists in the swamp source.
+- **Deferrals:** I found no TODO or deferral added for a defect in touched code.
+
+I changed no repo files; `git status` stays clean. All perturbation runs were in a scratch copy using `--output`. Running dry-runs in the real tree may have left a downloaded spec cache in `cloudflare/.cache`/`datadog/.cache`, which is gitignored.</result>
+<usage><subagent_tokens>178474</subagent_tokens><tool_uses>0</tool_uses><duration_ms>493294</duration_ms></usage>
+</task-notification>
