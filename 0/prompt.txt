@@ -1,0 +1,50 @@
+<task-notification>
+<task-id>ae609f383c84c8c13</task-id>
+<tool-use-id>toolu_01Fs3JVHNC5WsgwuND7DszGH</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/443af28b-33b0-41f3-a1ed-33d16738fa3c/tasks/ae609f383c84c8c13.output</output-file>
+<status>completed</status>
+<summary>Agent "Third review: directory check" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no CRITICAL or HIGH issues, so iteration 3 passes. `deno task check`, `lint`, `fmt:check` and `test` (54/54) all pass. I checked `isDirectory` against the `cmd_show` source of the installed pass 1.7.4 and ran the provider against a temporary store with the real `pass` binary. That scratch store under `/tmp/claude-1000/` is deleted, and the worktree is unchanged.
+
+What checked out:
+- **Store path:** pass looks under `PREFIX="${PASSWORD_STORE_DIR:-$HOME/.password-store}"`. `storeDir` falls back to the same `$HOME/.password-store` and `buildEnv` always passes it to pass as `PASSWORD_STORE_DIR`, so `isDirectory` checks the same tree pass reads.
+- **Lookup order:** pass tests `[[ -f $passfile ]]` first, then `[[ -d $PREFIX/$path ]]`. Both of those and `Deno.stat` follow symlinks, so symlinked entries and directories resolve the same way.
+- **Path quirks:** a trailing slash on `storeDir` works; I confirmed it empirically. `assertSafeKey` blocks empty keys and empty segments, so `prefix: ""` with a root key can't produce an empty path.
+- **Timing:** the stat runs after `pass show`, so a store change in between can give a wrong answer. Either way the result is a spurious error or the old behaviour, not a leak.
+- **Leaks:** the error text names only the key, which the README already says is visible. `withVaultSpan` records only `error.type`, and the content a directory produces is a tree of entry names, not secrets.
+- **Lint:** the empty `catch {}` has a comment and `deno lint` passes. That matches existing repo style.
+- **Tests:** they cover the directory case and the entry-file-next-to-a-same-named-directory case. The neither-exists case is covered by the existing `/tmp/store` tests. Temp dirs are removed in `finally`.
+- **Docs:** the reworded "`smtp#login` can never be read whole" text is accurate. `vault.secret_field` is set on both get and put; put sets it before throwing, and a test confirms that.
+- **Regressions:** none found from earlier rounds.
+
+### [MEDIUM] isDirectory fails open on any stat error other than "not found"
+File: `/home/sme/src/webframp/swamp-extensions/.worktrees/feat-pass-first-line-fields/vault/pass/extensions/vaults/pass.ts`
+Line(s): 315-327
+Issue: both `catch` blocks catch every error. If the stat is refused rather than missing (for example a Deno `NotCapable`/`PermissionDenied` error), the second stat fails the same way and the function returns `false`. The tree listing then goes through `firstLine` and comes back as the password, which is the bug this commit fixes.
+Breaking input: I confirmed this with real pass. The same store run with `--allow-read` returns `ERR pass key "smtp" is a directory`. Run without `--allow-read`, or with `--allow-read=/nonexistent`, it returns `get("smtp") =&gt; "swamp/smtp"` under `passwordOnly`. With a field selection it falls through to the "has no field" error instead of the directory error.
+Impact: this only happens where the host process can run `pass` but can't read the store. Plain filesystem EACCES makes pass fail too, so the realistic trigger is a Deno permission sandbox. I did not check whether swamp grants read permission to extensions. Failing open hands back a wrong secret without any error.
+Fix: count only `Deno.errors.NotFound` as missing and rethrow anything else. `NotFound` alone isn't enough, because an error thrown inside `withVaultSpan` still records only `error.type`.
+
+### [LOW] `.gpg` check accepts any file type, but pass requires a regular file
+File: same, line 317
+Issue: pass tests `-f`, a regular file. `Deno.stat` succeeds for a directory, FIFO or socket named `&lt;entry&gt;.gpg`.
+Breaking input: `swamp/odd.gpg/` and `swamp/odd/` both directories. pass prints the tree of `odd`, and `get("odd")` with `passwordOnly` returns `"swamp/odd"`. Confirmed empirically.
+Impact: requires a store containing a directory ending in `.gpg`, which is very unlikely.
+Fix: `return !(await Deno.stat(...)).isFile ? &lt;fall through&gt; : false`. In other words, treat it as an entry only when `.isFile` is true.
+
+### [LOW] Release-note wording overstates what the directory check replaces
+File: `/home/sme/src/webframp/swamp-extensions/.worktrees/feat-pass-first-line-fields/vault/pass/RELEASE_NOTES.md`
+Line(s): 22-24
+Issue: "instead of returning a line of the directory's tree listing" is true only for `passwordOnly`. A field selection on a directory previously ended with the "has no field" error, as the second run above shows, not a line of the listing. Both behaviours are new in this unreleased version, so "instead of" compares against behaviour no user has seen.
+Fix: something like "With `passwordOnly` or a field selection, a key naming a directory fails with "is a directory, not an entry" rather than yielding the first line of pass's tree listing or a misleading missing-field error."
+
+### [LOW] Tests stat the fixed shared path `/tmp/store`
+File: `/home/sme/src/webframp/swamp-extensions/.worktrees/feat-pass-first-line-fields/vault/pass/extensions/vaults/pass_test.ts`
+Line(s): 640-857 (the multiline tests using `storeDir: "/tmp/store"`)
+Issue: `passwordOnly` and field tests now call `Deno.stat` under `/tmp/store`. If a directory such as `/tmp/store/swamp/&lt;key&gt;` exists on a machine, those tests would hit the directory error and fail for reasons unrelated to the code.
+Fix: use a per-test `Deno.makeTempDir` store, as the two new tests do, or a path that is guaranteed not to exist.
+
+## VERDICT: PASS</result>
+<usage><subagent_tokens>79022</subagent_tokens><tool_uses>11</tool_uses><duration_ms>104898</duration_ms></usage>
+</task-notification>
