@@ -1,0 +1,25 @@
+<task-notification>
+<task-id>a349cbd0a12f89fdc</task-id>
+<tool-use-id>toolu_01DAjEWk2kNsKMwAdHKLRsHx</tool-use-id>
+<output-file>/tmp/claude-1000/-home-sme-src-webframp-swamp-extensions/f6be686e-623e-4264-ad10-72e5566aea00/tasks/a349cbd0a12f89fdc.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial diff review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS.** I found no blocking issues.
+
+**What I checked**
+- **URL host:** `host` is documented as a bare hostname (`projects.ts:31`). `graphqlRequest` builds `https://${host}/api/graphql` from it (`projects.ts:1220`). The new `https://${host}/...` therefore matches how the rest of the file builds URLs. A `host:port` value would also work the same way in both places.
+- **Project path:** The GraphQL query takes `fullPath` and `args.project` is passed to it unchanged. A numeric project id would fail the query before the URL is built, so `/${args.project}/` always holds a path. The path is not URL-encoded. That is correct here, because GitLab web URLs use literal slashes, not `%2F`.
+- **Other pipeline fields:** No other query selects `Pipeline.webUrl`. The merge request queries use `headPipeline { id status }` (`projects.ts:1526`) and `headPipeline { status }` (`1255–1263`). Other pipeline `webUrl` values come from REST `web_url`, which is unaffected. I found no remaining sibling instances of the bug.
+- **Version chain:** `manifest.yaml`, `model.version` and the new `upgrades` entry all say `2026.10.07.1`. The new entry is appended, not relabelled, and uses the identity migration. The test at `projects_test.ts:217` checks that the last `toVersion` equals `model.version`. No exact-literal version assertion is stale.
+- **Release notes:** `RELEASE_NOTES.md` is overwritten for the current version, as the repo rules require, and it is well under the length limit. It states the behavior change and says there is no schema or `globalArguments` change.
+- **Schema:** The `pipelineByIid` schema at `projects.ts:952` keeps `webUrl` nullable, so the change is additive and stored data stays valid.
+- **Tests:** The updated test asserts that the generated URL is `https://git.example.org/group/proj/-/pipelines/456`. It also asserts that the outgoing query string no longer contains `webUrl`, and the mocked response no longer supplies one. Both checks cover the regression.
+
+**Low severity (non-blocking)**
+1. `projects.ts:5136`: if a caller passes `project` with a leading or trailing slash, the generated URL would have a double slash. GraphQL `fullPath` would probably reject such a value anyway, so this is theoretical.
+2. The test covers only the URL for a simple `group/proj` path. A nested-group case such as `a/b/c` would be a cheap extra. Nested paths work with the current code, so this is a nice-to-have.
+3. `projects.ts:5136`: the URL is always `https`. This matches the existing GraphQL and REST calls in the file, so it is consistent.
+4. I did not run `deno check`, `deno test` or `swamp extension quality`. This was a read-only review, and the diff gives no reason to expect failures.</result>
+<usage><subagent_tokens>48904</subagent_tokens><tool_uses>4</tool_uses><duration_ms>18154</duration_ms></usage>
+</task-notification>
