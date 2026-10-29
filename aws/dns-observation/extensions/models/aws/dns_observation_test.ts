@@ -5,6 +5,7 @@ import {
   assertEquals,
   assertExists,
   assertMatch,
+  assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
 import { Route53Client } from "npm:@aws-sdk/client-route-53@3.1139.0";
@@ -741,6 +742,139 @@ Deno.test({
       for (const r of data.records) {
         assertEquals(r.zoneName, "example.com");
       }
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "list_records counts only readable zones and records partial failures " +
+    "in zonesFailed",
+  sanitizeResources: false,
+  fn: async () => {
+    // Two zones via zoneFilter. GetHostedZone resolves names for both, but
+    // ListResourceRecordSets fails for the second (e.g. access denied).
+    const restore = mockClients({
+      sts: () => stsIdentity,
+      route53: (cmd: unknown) => {
+        const c = cmd as {
+          constructor: { name: string };
+          input?: { HostedZoneId?: string };
+        };
+        const name = c.constructor.name;
+        if (name === "GetHostedZoneCommand") {
+          return { HostedZone: { Id: "/hostedzone/Z1", Name: "example.com." } };
+        }
+        if (name === "ListResourceRecordSetsCommand") {
+          if (c.input?.HostedZoneId === "ZBAD") {
+            throw new Error("AccessDenied: cannot list records");
+          }
+          return recordSetsZ1234;
+        }
+        return {};
+      },
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_records.execute(
+        { zoneFilter: ["Z1", "ZBAD"] },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        summary: { zonesScanned: number; zonesFailed: string[] };
+      };
+      // Only the readable zone is counted; the failed one is recorded.
+      assertEquals(data.summary.zonesScanned, 1);
+      assertEquals(data.summary.zonesFailed, ["ZBAD"]);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "list_records throws when an explicit zoneFilter yields no readable zones",
+  sanitizeResources: false,
+  fn: async () => {
+    // GetHostedZone fails (zone name passed as ID), then
+    // ListResourceRecordSets also fails — the exact scenario from the report.
+    const restore = mockClients({
+      sts: () => stsIdentity,
+      route53: (cmd: unknown) => {
+        const name = (cmd as { constructor: { name: string } }).constructor
+          .name;
+        if (name === "GetHostedZoneCommand") {
+          throw new Error("NoSuchHostedZone");
+        }
+        if (name === "ListResourceRecordSetsCommand") {
+          throw new Error("NoSuchHostedZone");
+        }
+        return {};
+      },
+    });
+    try {
+      const { context } = makeContext();
+      await assertRejects(
+        () =>
+          model.methods.list_records.execute(
+            { zoneFilter: ["example.com"] },
+            context as ExecuteContext,
+          ),
+        Error,
+        "none of the",
+      );
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "list_records reports success for a legitimately empty zone via zoneFilter",
+  sanitizeResources: false,
+  fn: async () => {
+    // Read succeeds but the zone genuinely holds no records — this must stay a
+    // success with zonesScanned=1 and no failures.
+    const restore = mockClients({
+      sts: () => stsIdentity,
+      route53: (cmd: unknown) => {
+        const name = (cmd as { constructor: { name: string } }).constructor
+          .name;
+        if (name === "GetHostedZoneCommand") {
+          return {
+            HostedZone: { Id: "/hostedzone/Z1", Name: "empty.example.com." },
+          };
+        }
+        if (name === "ListResourceRecordSetsCommand") {
+          return { ResourceRecordSets: [], IsTruncated: false };
+        }
+        return {};
+      },
+    });
+    try {
+      const { context, getWrittenResources } = makeContext();
+      await model.methods.list_records.execute(
+        { zoneFilter: ["Z1"] },
+        context as ExecuteContext,
+      );
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        records: unknown[];
+        summary: {
+          totalRecords: number;
+          zonesScanned: number;
+          zonesFailed: string[];
+        };
+      };
+      assertEquals(data.records.length, 0);
+      assertEquals(data.summary.totalRecords, 0);
+      assertEquals(data.summary.zonesScanned, 1);
+      assertEquals(data.summary.zonesFailed, []);
     } finally {
       restore();
     }
