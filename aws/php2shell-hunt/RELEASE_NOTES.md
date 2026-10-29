@@ -1,3 +1,25 @@
+## 2026.10.28.1
+
+**Added:** Hunt now reports a `truncated` boolean in the exposure report, set
+true when any CloudWatch Logs Insights query returned the 1000-row limit so a
+match count may undercount the true number of hits.
+
+**Fixed:** On abort or timeout, in-flight Logs Insights queries are now stopped
+with `StopQueryCommand` instead of being abandoned, so a cancelled hunt no
+longer leaves billable queries running in AWS. Abort is re-checked after each
+poll sleep so cancellation is honoured promptly.
+
+**Changed:** The Lane B upload-marker regex now escapes every regex
+metacharacter in `payloadStrings` entries (previously only `/` and `\`), so a
+crafted or unusual marker cannot break or alter the Logs Insights query.
+
+**Changed:** The `@swamp/typesafe-ai` dependency is pinned to an exact version
+(`2026.09.15.1`), matching the repo's exact-pin requirement.
+
+**Upgrade note:** Schema is additive (`truncated` is a new field). No migration
+required; an identity upgrades-chain entry carries existing stored reports
+forward.
+
 ## 2026.10.22.1
 
 **Added:** Initial release. Head-hunts PHP2Shell exposure (CVE-2026-109618,

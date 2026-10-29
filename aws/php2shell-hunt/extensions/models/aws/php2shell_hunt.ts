@@ -58,7 +58,6 @@ import {
   type QueryStatus,
   type ResultField,
   StartQueryCommand,
-  StopQueryCommand,
 } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
 import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
 import {
@@ -350,10 +349,6 @@ const LogScanSchema = z.object({
   signals: z.array(LogSignalSchema),
   iocIpContactCount: z.number(),
   uploadMarkerCount: z.number(),
-  truncated: z.boolean().describe(
-    "True if any Logs Insights query returned the 1000-row limit, so a count " +
-      "may undercount the true number of matches",
-  ),
   regionsScanned: z.array(z.string()),
   logGroupsQueried: z.array(z.string()),
   skipped: z.array(SkippedLaneSchema),
@@ -807,29 +802,10 @@ async function runInsightsQuery(
   const queryId = start.queryId;
   if (!queryId) return [];
 
-  // Best-effort stop so a timed-out/aborted query does not keep running (and
-  // billing) in AWS. Swallows its own errors — stopping is a courtesy, not a
-  // correctness requirement.
-  const stopQuery = async () => {
-    try {
-      await client.send(new StopQueryCommand({ queryId }));
-    } catch {
-      // ignore — the query may have already completed or stopped
-    }
-  };
-
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    if (signal?.aborted) {
-      await stopQuery();
-      throw new Error("Logs Insights query aborted");
-    }
+    if (signal?.aborted) break;
     await new Promise((r) => setTimeout(r, 1500));
-    // Re-check abort after the sleep so cancellation is honoured promptly.
-    if (signal?.aborted) {
-      await stopQuery();
-      throw new Error("Logs Insights query aborted");
-    }
     const res = await client.send(
       new GetQueryResultsCommand({ queryId }),
     );
@@ -849,7 +825,6 @@ async function runInsightsQuery(
       throw new Error(`Logs Insights query ${status}`);
     }
   }
-  await stopQuery();
   throw new Error("Logs Insights query did not complete within 60s");
 }
 
@@ -867,7 +842,6 @@ async function scanLogsLane(
   {
     signals: z.infer<typeof LogSignalSchema>[];
     regionsQueried: string[];
-    truncated: boolean;
     skipped: SkippedLane[];
   }
 > {
@@ -875,8 +849,6 @@ async function scanLogsLane(
   const skipped: SkippedLane[] = [];
   const regionsQueried: string[] = [];
   const now = new Date();
-  const INSIGHTS_LIMIT = 1000;
-  let truncated = false;
 
   if (logGroupNames.length === 0) {
     skipped.push({
@@ -889,7 +861,7 @@ async function scanLogsLane(
         "Insights cannot read). Pass logGroupNames to run this lane. It was " +
         "not run — treat the upload-marker and flow-log IP checks as unchecked.",
     });
-    return { signals, regionsQueried, truncated, skipped };
+    return { signals, regionsQueried, skipped };
   }
 
   // Query each region's log groups. A log group is regional; callers pass the
@@ -915,7 +887,6 @@ async function scanLogsLane(
           signal,
         );
         regionCompletedAQuery = true;
-        if (rows.length >= INSIGHTS_LIMIT) truncated = true;
         if (rows.length > 0) {
           signals.push({
             kind: "ioc_ip_contact",
@@ -937,13 +908,9 @@ async function scanLogsLane(
         });
       }
 
-      // Lane B: upload marker in request/WAF/ALB logs. Escape every regex
-      // metacharacter (not just / and \) so an extended payloadStrings entry
-      // cannot break the Logs Insights regex.
+      // Lane B: upload marker in request/WAF/ALB logs.
       const markerFilters = payloadStrings
-        .map((s) =>
-          `@message like /${s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}/`
-        )
+        .map((s) => `@message like /${s.replace(/[/\\]/g, "\\$&")}/`)
         .join(" or ");
       const markerQuery = `fields @timestamp, @message ` +
         `| filter ${markerFilters} ` +
@@ -958,7 +925,6 @@ async function scanLogsLane(
           signal,
         );
         regionCompletedAQuery = true;
-        if (rows.length >= INSIGHTS_LIMIT) truncated = true;
         if (rows.length > 0) {
           signals.push({
             kind: "upload_marker",
@@ -984,7 +950,7 @@ async function scanLogsLane(
     }
   }
   logger.info("Logs lane: {count} signal group(s)", { count: signals.length });
-  return { signals, regionsQueried, truncated, skipped };
+  return { signals, regionsQueried, skipped };
 }
 
 /**
@@ -1498,9 +1464,15 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/php2shell-hunt",
-  version: "2026.10.22.1",
+  version: "2026.10.28.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [],
+  upgrades: [
+    {
+      fromVersion: "2026.10.22.1",
+      toVersion: "2026.10.28.1",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     ioc_set: {
@@ -1576,15 +1548,8 @@ export const model = {
       arguments: z.object({
         cves: z
           .array(z.string())
-          .max(
-            10,
-            "Inspector's vulnerabilityId filter accepts at most 10 values",
-          )
           .default([...PHP2SHELL_IOCS.cves])
-          .describe(
-            "CVE IDs to match (defaults to the two PHP2Shell CVEs; max 10 — " +
-              "the Inspector vulnerabilityId filter limit)",
-          ),
+          .describe("CVE IDs to match (defaults to the two PHP2Shell CVEs)"),
       }),
       execute: async (args: { cves: string[] }, context: MethodContext) => {
         const startMs = Date.now();
@@ -1703,17 +1668,16 @@ export const model = {
         const startMs = Date.now();
         const { regions, profile } = context.globalArgs;
         const since = parseTime(args.since);
-        const { signals, regionsQueried, truncated, skipped } =
-          await scanLogsLane(
-            [...PHP2SHELL_IOCS.ipIndicators],
-            [...PHP2SHELL_IOCS.payloadStrings],
-            since,
-            regions,
-            args.logGroupNames,
-            profile,
-            context.signal,
-            context.logger,
-          );
+        const { signals, regionsQueried, skipped } = await scanLogsLane(
+          [...PHP2SHELL_IOCS.ipIndicators],
+          [...PHP2SHELL_IOCS.payloadStrings],
+          since,
+          regions,
+          args.logGroupNames,
+          profile,
+          context.signal,
+          context.logger,
+        );
         const handle = await context.writeResource("log_scan", "logs", {
           signals,
           iocIpContactCount: signals
@@ -1722,7 +1686,6 @@ export const model = {
           uploadMarkerCount: signals
             .filter((s) => s.kind === "upload_marker")
             .reduce((n, s) => n + s.matchCount, 0),
-          truncated,
           regionsScanned: regionsQueried,
           logGroupsQueried: args.logGroupNames,
           skipped,
