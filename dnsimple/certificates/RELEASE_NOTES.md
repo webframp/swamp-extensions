@@ -1,4 +1,5 @@
-## 2026.11.03.1
+## 2026.11.03.2
 
-**Added:** Initial code-generated release of @webframp/dnsimple/certificates
-with 8 methods covering the DNSimple certificates API surface.
+Changed: the bundled API helper gained a function that reports truncation for
+single-request lists. No method in this extension uses it, so nothing behaves
+differently.

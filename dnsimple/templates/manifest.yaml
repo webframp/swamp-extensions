@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/dnsimple/templates"
 license: Apache-2.0
-version: "2026.11.03.1"
+version: "2026.11.03.2"
 description: "DNSimple Templates — record templates and applying them to domains"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
