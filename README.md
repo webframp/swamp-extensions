@@ -88,6 +88,9 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/dnsimple/account`](dnsimple/account/) | DNSimple Account — identity, account list, and billing charges | None (uses fetch) |
 | [`@webframp/dnsimple/zones`](dnsimple/zones/) | DNSimple Zones — zones, records, batch changes, zone file, distribution checks, NS records, activation, and DNS analytics | None (uses fetch) |
 | [`@webframp/dnsimple/registrar`](dnsimple/registrar/) | DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices | None (uses fetch) |
+| [`@webframp/dnsimple/domains`](dnsimple/domains/) | DNSimple Domains — domains, applied services, pushes, email forwards, and vanity name servers | None (uses fetch) |
+| [`@webframp/dnsimple/certificates`](dnsimple/certificates/) | DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys | None (uses fetch) |
+| [`@webframp/dnsimple/templates`](dnsimple/templates/) | DNSimple Templates — record templates and applying them to domains | None (uses fetch) |
 | [`@webframp/griptape/threads`](griptape/threads/) | Griptape Cloud Threads — conversation threads and their messages | None (uses fetch) |
 | [`@webframp/griptape/assistants`](griptape/assistants/) | Griptape Cloud Assistants — assistant definitions and assistant runs | None (uses fetch) |
 | [`@webframp/griptape/structures`](griptape/structures/) | Griptape Cloud Structures — deployed structures, runs, logs, and spans | None (uses fetch) |
@@ -282,6 +285,9 @@ swamp extension pull @webframp/falai/workflows
 swamp extension pull @webframp/dnsimple/account
 swamp extension pull @webframp/dnsimple/zones
 swamp extension pull @webframp/dnsimple/registrar
+swamp extension pull @webframp/dnsimple/domains
+swamp extension pull @webframp/dnsimple/certificates
+swamp extension pull @webframp/dnsimple/templates
 
 # Griptape Cloud extensions
 swamp extension pull @webframp/griptape/threads
