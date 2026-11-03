@@ -381,7 +381,7 @@ jobs:
                 -f message="Superseded by new adversarial review run" \
                 -f event="DISMISS"
             done
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1, last known good
         env:
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
@@ -555,7 +555,7 @@ jobs:
                 -f message="Superseded by new CI security review run" \
                 -f event="DISMISS"
             done
-      - uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@d70510b174a1244958df0b03166a54912811f3e6 # v1, last known good
         if: steps.check.outputs.has_workflow_changes == 'true'
         env:
           AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
