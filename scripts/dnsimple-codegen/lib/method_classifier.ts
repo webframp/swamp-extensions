@@ -1072,7 +1072,7 @@ function listInstanceExpr(op: GroupedOperation): string {
 
 /**
  * Instance name for get/update/action: the path parameters, parent first
- * (`example.com-12345`); with none, `<resource>-current`.
+ * (`example.com-12345-<hash>`); with none, `<resource>-current`.
  */
 function itemInstanceExpr(method: ClassifiedMethod): string {
   const op = method.operation;
