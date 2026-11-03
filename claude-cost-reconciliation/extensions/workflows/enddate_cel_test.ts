@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-import { assertEquals } from "jsr:@std/assert@1";
+import { assertEquals } from "jsr:@std/assert@1.0.19";
 import { parse } from "npm:@marcbachmann/cel-js@7.6.1";
 
 const WORKFLOW = new URL(

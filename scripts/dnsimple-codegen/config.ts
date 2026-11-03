@@ -15,7 +15,7 @@ export const OUTPUT_BASE = "../../dnsimple";
 export const ZOD_VERSION = "4.6.5";
 
 /** swamp-testing version */
-export const SWAMP_TESTING_VERSION = "0.20260928.39";
+export const SWAMP_TESTING_VERSION = "0.20261030.68";
 
 /**
  * Pagination bounds. Defined once, in the runtime helper the generator ships

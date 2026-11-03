@@ -8,7 +8,7 @@
  */
 // deno-lint-ignore-file no-explicit-any
 
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1";
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert@1.0.19";
 import { createReportTestContext } from "@swamp-club/swamp-testing";
 import { report } from "./reconciliation.ts";
 
