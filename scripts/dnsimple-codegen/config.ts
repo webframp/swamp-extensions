@@ -220,8 +220,8 @@ export const SENSITIVE_ARG_FIELDS: Record<string, string[]> = {
  */
 export interface SpecCorrection {
   path: string[];
-  expected: string;
-  value: string;
+  expected: unknown;
+  value: unknown;
 }
 
 export const SPEC_CORRECTIONS: SpecCorrection[] = [
@@ -237,6 +237,21 @@ export const SPEC_CORRECTIONS: SpecCorrection[] = [
     ],
     expected: "The ISO 3166-1 alpha-2 country code, upper case (eg. DE).",
     value: "The postal code.",
+  },
+  {
+    // The field's own description limits it to TLDs that use authorization-
+    // based transfers, so a transfer for any other TLD must be able to omit it.
+    path: [
+      "components",
+      "requestBodies",
+      "DomainTransfer",
+      "content",
+      "application/json",
+      "schema",
+      "required",
+    ],
+    expected: ["registrant_id", "auth_code"],
+    value: ["registrant_id"],
   },
 ];
 

@@ -38,7 +38,8 @@ export function applySpecCorrections(
     const last = correction.path[correction.path.length - 1];
     if (
       parent && typeof parent === "object" &&
-      (parent as Record<string, unknown>)[last] === correction.expected
+      JSON.stringify((parent as Record<string, unknown>)[last]) ===
+        JSON.stringify(correction.expected)
     ) {
       (parent as Record<string, unknown>)[last] = correction.value;
     } else {

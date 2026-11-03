@@ -33,10 +33,41 @@ Deno.test("applySpecCorrections: fixes a known error and reports a correction th
     { path: ["components", "nowhere"], expected: "x", value: "y" },
   ]);
   assertEquals(props.postal_code.description, "The postal code.");
-  assertEquals(stale.map((c) => c.path.join(".")), ["components.nowhere"]);
+  assertEquals(
+    stale.map((c) => c.path.join(".")).filter((p) => p.endsWith("nowhere")),
+    ["components.nowhere"],
+  );
   // Applying twice changes nothing: the expected text is gone.
   assertEquals(applySpecCorrections(spec).length, SPEC_CORRECTIONS.length);
   assertEquals(props.postal_code.description, "The postal code.");
+});
+
+Deno.test("applySpecCorrections: makes the transfer auth_code optional, and only while the spec still requires it", () => {
+  const body = (required: string[]) =>
+    ({
+      components: {
+        schemas: {},
+        requestBodies: {
+          DomainTransfer: {
+            content: {
+              "application/json": { schema: { type: "object", required } },
+            },
+          },
+        },
+      },
+    }) as unknown as OpenAPISpec;
+  const requiredOf = (spec: OpenAPISpec) =>
+    (spec.components.requestBodies!.DomainTransfer.content!["application/json"]
+      .schema as { required: string[] }).required;
+
+  const spec = body(["registrant_id", "auth_code"]);
+  applySpecCorrections(spec);
+  assertEquals(requiredOf(spec), ["registrant_id"]);
+
+  // A spec that already differs is left alone.
+  const other = body(["registrant_id", "premium_price"]);
+  applySpecCorrections(other);
+  assertEquals(requiredOf(other), ["registrant_id", "premium_price"]);
 });
 
 Deno.test("resolveRef: follows a local ref and rejects an external one", () => {

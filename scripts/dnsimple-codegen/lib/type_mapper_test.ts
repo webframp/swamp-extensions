@@ -105,6 +105,22 @@ Deno.test("type_mapper: anyOf with two variants becomes z.union", () => {
   );
 });
 
+Deno.test("type_mapper: union variants that map to the same type collapse to one", () => {
+  assertEquals(
+    schemaToZod({
+      oneOf: [{ type: "integer" }, { type: "string" }, {
+        type: "string",
+        format: "date-time",
+      }],
+    }),
+    "z.union([z.number().int(), z.string()])",
+  );
+  assertEquals(
+    schemaToZod({ oneOf: [{ type: "string" }, { type: "string" }] }),
+    "z.string()",
+  );
+});
+
 Deno.test("type_mapper: oneOf with two variants becomes z.union", () => {
   const schema: SchemaObject = {
     oneOf: [

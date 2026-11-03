@@ -150,7 +150,12 @@ function schemaToZodInner(
     if (variants.length === 1) {
       return schemaToZod(variants[0], opts, depth + 1);
     }
-    const members = variants.map((v) => schemaToZod(v, opts, depth + 1));
+    // Variants that differ only by constraints a lenient schema drops map to
+    // the same type; one arm of each is enough.
+    const members = [
+      ...new Set(variants.map((v) => schemaToZod(v, opts, depth + 1))),
+    ];
+    if (members.length === 1) return members[0];
     return `z.union([${members.join(", ")}])`;
   }
 
