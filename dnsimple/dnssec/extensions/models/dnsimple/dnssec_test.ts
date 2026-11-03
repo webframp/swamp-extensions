@@ -753,6 +753,86 @@ Deno.test("dnssec model: parsing arguments adds no field the caller did not send
   }
 });
 
+Deno.test({
+  name:
+    "dnssec model: get_domain_dnssec stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/domains/test-id-123/dnssec": {
+        "status": 200,
+        "body": {
+          "data": {
+            "enabled": null,
+            "active": null,
+            "created_at": null,
+            "updated_at": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("get_domain_dnssec", { "domain": "test-id-123" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "dnssec model: list_domain_delegation_signer_records stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/domains/test-id-123/ds_records": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "domain_id": null,
+            "algorithm": null,
+            "digest": null,
+            "digest_type": null,
+            "keytag": null,
+            "public_key": null,
+            "created_at": null,
+            "updated_at": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_domain_delegation_signer_records", {
+        "domain": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("dnssec model: get_domain_dnssec rejects empty, '.' and '..' path arguments", () => {
   const args = { "domain": "test-id-123" };
   const schema = model.methods.get_domain_dnssec.arguments;
@@ -786,4 +866,46 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("dnssec model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
 });

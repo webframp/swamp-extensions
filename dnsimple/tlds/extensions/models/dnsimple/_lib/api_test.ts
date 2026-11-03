@@ -213,6 +213,116 @@ Deno.test("dnsimpleApi: a non-timeout transport failure on a write warns it may 
   );
 });
 
+Deno.test("sanitizeInstanceName: the reserved name cannot collide with another input, and case never splits a name", () => {
+  const reserved = ["late" + "st", "LATE" + "ST", "late" + "st_"].map(
+    sanitizeInstanceName,
+  );
+  assertEquals(reserved[0], reserved[1]);
+  assertEquals(reserved[0] !== reserved[2], true);
+  assertEquals(reserved[0] !== "late" + "st", true);
+  assertEquals(sanitizeInstanceName("A/b"), sanitizeInstanceName("a/b"));
+});
+
+/** A stub that answers each call from `responses` in order and counts calls. */
+function sequenceFetch(responses: Response[]) {
+  const calls: RequestInit[] = [];
+  const stub = ((_url: string | URL | Request, init?: RequestInit) => {
+    calls.push(init ?? {});
+    const next = responses[Math.min(calls.length - 1, responses.length - 1)];
+    return Promise.resolve(next.clone());
+  }) as typeof fetch;
+  return { stub, calls };
+}
+
+Deno.test("dnsimpleApi: a 5xx on a write is sent once and warns it may have completed", async () => {
+  const { stub, calls } = sequenceFetch([
+    new Response("gateway timeout", { status: 504 }),
+  ]);
+  await withStubbedFetch(stub, async () => {
+    await assertRejects(
+      () => dnsimpleApi(ARGS, "POST", "/1010/registrar/domains/x.com/renewals"),
+      Error,
+      "may have completed; check the resource before retrying",
+    );
+    assertEquals(calls.length, 1, "a write must never be re-sent after a 5xx");
+    await assertRejects(
+      () => dnsimpleApi(ARGS, "GET", "/whoami"),
+      Error,
+      "504",
+    );
+    assertEquals(calls.length, 2, "a read is sent once and not retried either");
+  });
+});
+
+Deno.test("dnsimpleApi: an unusable 2xx on a write warns it may have completed; a read does not", async () => {
+  const empty = sequenceFetch([new Response("", { status: 200 })]);
+  await withStubbedFetch(empty.stub, async () => {
+    await assertRejects(
+      () =>
+        dnsimpleApiData(ARGS, "POST", "/1010/registrar/domains/x.com/renewals"),
+      Error,
+      "may have completed",
+    );
+    const err = await assertRejects(
+      () => dnsimpleApiData(ARGS, "GET", "/whoami"),
+      Error,
+      "empty response body",
+    );
+    assertEquals(err.message.includes("may have completed"), false);
+  });
+  const nulled = sequenceFetch([
+    new Response(JSON.stringify({ data: null }), { status: 200 }),
+  ]);
+  await withStubbedFetch(nulled.stub, async () => {
+    await assertRejects(
+      () => dnsimpleApiData(ARGS, "POST", "/1010/x"),
+      Error,
+      "may have completed",
+    );
+  });
+  const bad = sequenceFetch([new Response("<html>", { status: 200 })]);
+  await withStubbedFetch(bad.stub, async () => {
+    await assertRejects(
+      () => dnsimpleApi(ARGS, "POST", "/1010/x"),
+      Error,
+      "may have completed",
+    );
+  });
+});
+
+Deno.test("dnsimpleApi: a 429 on a write is retried exactly once, and a second 429 throws", async () => {
+  const limited = () =>
+    new Response("{}", { status: 429, headers: { "Retry-After": "0" } });
+  const once = sequenceFetch([
+    limited(),
+    new Response(JSON.stringify({ data: { id: 1 } }), { status: 200 }),
+  ]);
+  await withStubbedFetch(once.stub, async () => {
+    const result = await dnsimpleApiData<{ id: number }>(
+      ARGS,
+      "POST",
+      "/1010/x",
+    );
+    assertEquals(result.id, 1);
+    assertEquals(once.calls.length, 2);
+  });
+  const twice = sequenceFetch([limited()]);
+  await withStubbedFetch(twice.stub, async () => {
+    await assertRejects(() => dnsimpleApi(ARGS, "POST", "/1010/x"), Error);
+    assertEquals(twice.calls.length, 2, "one retry, then give up");
+  });
+});
+
+Deno.test("dnsimpleApi: every request carries a hard deadline", async () => {
+  const { stub, calls } = sequenceFetch([
+    new Response(JSON.stringify({ data: {} }), { status: 200 }),
+  ]);
+  await withStubbedFetch(stub, async () => {
+    await dnsimpleApi(ARGS, "GET", "/whoami");
+    assertEquals(calls[0].signal instanceof AbortSignal, true);
+  });
+});
+
 Deno.test("buildQuery and pickBody: keep set values, drop the rest", () => {
   assertEquals(
     buildQuery({ a: "1", b: undefined, c: null, d: ["x", "y"], e: 5 }, [

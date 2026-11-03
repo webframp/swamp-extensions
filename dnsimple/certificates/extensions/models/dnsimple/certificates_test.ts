@@ -877,6 +877,104 @@ Deno.test("certificates model: parsing arguments adds no field the caller did no
   }
 });
 
+Deno.test({
+  name:
+    "certificates model: get_certificate stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/domains/test-id-123/certificates/test-id-123": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": null,
+            "domain_id": null,
+            "name": null,
+            "common_name": null,
+            "years": null,
+            "csr": null,
+            "state": null,
+            "auto_renew": null,
+            "alternate_names": null,
+            "authority_identifier": null,
+            "created_at": null,
+            "updated_at": null,
+            "expires_at": null,
+            "expires_on": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("get_certificate", {
+        "domain": "test-id-123",
+        "certificate": "test-id-123",
+      }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "certificates model: list_certificates stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/domains/test-id-123/certificates": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "domain_id": null,
+            "name": null,
+            "common_name": null,
+            "years": null,
+            "csr": null,
+            "state": null,
+            "auto_renew": null,
+            "alternate_names": null,
+            "authority_identifier": null,
+            "created_at": null,
+            "updated_at": null,
+            "expires_at": null,
+            "expires_on": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_certificates", {
+        "domain": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("certificates model: list_certificates rejects empty, '.' and '..' path arguments", () => {
   const args = { "domain": "test-id-123", "sort": "id:asc" };
   const schema = model.methods.list_certificates.arguments;
@@ -950,6 +1048,13 @@ function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
   }
   return out.sort();
 }
+
+Deno.test("certificates model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
+});
 
 Deno.test({
   name:

@@ -41,6 +41,13 @@ method without it fails before any request goes out.
 `environment` is `production` by default. Set `--global-arg environment=sandbox`
 to use DNSimple's sandbox, which has its own accounts and tokens.
 
+## Plan limits
+
+On the Solo, Solo Pro and Teams plans, DNSimple enables DNS services for a
+domain's zone when `create_domain` adds it and charges for the zone on each
+subscription renewal invoice, so the call is not marked Billable but does add to
+that invoice.
+
 ## Stored data
 
 Email forwards store their `from` and `to` addresses as ordinary swamp data.

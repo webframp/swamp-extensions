@@ -543,7 +543,7 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["name_like", "sort"]));
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("zones", instance, {
           items: results,
           truncated,
@@ -760,9 +760,11 @@ export const model = {
         );
         const instance = filter === "{}"
           ? sanitizeInstanceName(String(args.zone))
-          : `${sanitizeInstanceName(String(args.zone))}-${await shortHash(
-            filter,
-          )}`;
+          : sanitizeInstanceName(
+            `${sanitizeInstanceName(String(args.zone))}-${await shortHash(
+              filter,
+            )}`,
+          );
         const handle = await context.writeResource("zone_records", instance, {
           items: results,
           truncated,
@@ -1242,7 +1244,7 @@ export const model = {
         );
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource(
           "query_dns_analytics",
           instance,

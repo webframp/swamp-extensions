@@ -99,7 +99,15 @@ Deno.test("generateTestSource: covers pages, truncation, the receipt, the accoun
   assertStringIncludes(zones, "walks every page of a list");
   assertStringIncludes(zones, "flags truncation at the page cap");
   assertStringIncludes(zones, "requires accountId");
-  assertEquals(zones.includes("swampSensitivePaths"), false);
+  assertStringIncludes(
+    zones,
+    "the access token global argument is marked sensitive",
+  );
+  // No zones method handles a secret, so no field-specific secret test.
+  assertEquals(zones.includes("sensitive so swamp stores them"), false);
+  assertEquals(zones.includes("never writes it"), false);
+  assertStringIncludes(zones, "stores a response whose fields are all null");
+  assertStringIncludes(zones, "names a filtered list apart");
 
   const certs = generateTestSource(
     configOf("certificates"),

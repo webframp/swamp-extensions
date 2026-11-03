@@ -196,11 +196,16 @@ function billableParagraph(methods: ReadmeMethod[]): string {
     m.operation && BILLABLE_OPERATIONS.includes(m.operation.operationId)
   );
   if (billable.length === 0) return "";
+  // Enabling WHOIS privacy only buys the service when it is not yet purchased.
+  const whoisNote =
+    billable.some((m) => m.operation?.operationId === "enableWhoisPrivacy")
+      ? " (`enable_whois_privacy` only when WHOIS privacy is not already purchased)"
+      : "";
   return `
 ## Billable methods
 
-These methods charge the DNSimple account. Their descriptions open with
-"Billable:". Try them against the sandbox first.
+These methods can charge the DNSimple account${whoisNote}. Their descriptions
+open with "Billable:". Try them against the sandbox first.
 
 ${billable.map((m) => `- \`${m.name}\``).join("\n")}
 `;

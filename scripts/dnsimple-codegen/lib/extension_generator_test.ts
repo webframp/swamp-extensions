@@ -92,6 +92,7 @@ Deno.test("generateReadme: services that store personal or credential-bearing da
     registrar: "`extended_attributes`",
     domains: "`from` and `to` addresses",
     webhooks: "embeds a credential",
+    account: "email addresses",
   };
   for (const [name, text] of Object.entries(expected)) {
     const g = group(name);
@@ -116,11 +117,34 @@ Deno.test("generateReadme: services that store personal or credential-bearing da
   );
 });
 
-Deno.test("generateReadme: zones explain that record charges depend on the plan", () => {
-  const zones = group("zones");
-  const readme = generateReadme(zones.config, classifyServiceMethods(zones));
-  assertStringIncludes(readme, "## Plan limits");
-  assertStringIncludes(readme, "records_limit");
+Deno.test("generateReadme: services whose calls add plan charges say so", () => {
+  const expected: Record<string, string> = {
+    zones: "records_limit",
+    domains: "`create_domain`",
+    "secondary-dns": "`create_secondary_zone`",
+  };
+  for (const [name, text] of Object.entries(expected)) {
+    const g = group(name);
+    const readme = generateReadme(g.config, classifyServiceMethods(g));
+    assertStringIncludes(readme, "## Plan limits");
+    assertStringIncludes(readme, text);
+  }
+});
+
+Deno.test("generateReadme: the WHOIS privacy caveat appears only where that method does", () => {
+  const registrar = group("registrar");
+  assertStringIncludes(
+    generateReadme(registrar.config, classifyServiceMethods(registrar)),
+    "`enable_whois_privacy` only when WHOIS privacy is not already purchased",
+  );
+  const certificates = group("certificates");
+  assertEquals(
+    generateReadme(
+      certificates.config,
+      classifyServiceMethods(certificates),
+    ).includes("enable_whois_privacy"),
+    false,
+  );
 });
 
 Deno.test("generateReadme: documents a returned secret and the vault swamp then requires", () => {

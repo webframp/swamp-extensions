@@ -13,6 +13,7 @@ import {
   dnsimpleApiData,
   dnsimpleApiPaginated,
   requireAccountId,
+  sanitizeInstanceName,
   shortHash,
 } from "./_lib/api.ts";
 import type { ApiGlobalArgs } from "./_lib/api.ts";
@@ -255,7 +256,7 @@ export const model = {
         );
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("charges", instance, {
           items: results,
           truncated,

@@ -40,6 +40,16 @@ method without it fails before any request goes out.
 `environment` is `production` by default. Set `--global-arg environment=sandbox`
 to use DNSimple's sandbox, which has its own accounts and tokens.
 
+## Stored data
+
+`whoami` and `list_accounts` store the user's and accounts' email addresses, and
+`list_charges` stores invoice data, all as ordinary swamp data. These fields are
+not marked sensitive: a sensitive field moves to a vault and leaves only a
+reference, which would make these records unreadable to expressions and reports.
+The access controls of the datastore that holds your swamp data are the boundary
+for this data. Each resource keeps a bounded number of versions
+(`garbageCollection`), so older copies are pruned.
+
 ## Methods
 
 | Method          | Description          |

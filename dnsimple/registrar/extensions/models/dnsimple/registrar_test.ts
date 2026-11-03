@@ -1946,6 +1946,77 @@ Deno.test("registrar model: register_domain keeps every key of the free-form ext
   assertEquals(parsed.extended_attributes, value);
 });
 
+Deno.test({
+  name:
+    "registrar model: check_domain stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/registrar/domains/test-id-123/check": {
+        "status": 200,
+        "body": {
+          "data": {
+            "domain": null,
+            "available": null,
+            "premium": null,
+            "trustee": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("check_domain", { "domain": "test-id-123" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "registrar model: change_domain_delegation_to_vanity stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "PUT /1010/registrar/domains/test-id-123/delegation/vanity": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "name": null,
+            "ipv4": null,
+            "ipv6": null,
+            "created_at": null,
+            "updated_at": null,
+          }],
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("change_domain_delegation_to_vanity", {
+        "domain": "test-id-123",
+        "items": ["test-value"],
+      }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("registrar model: check_domain rejects empty, '.' and '..' path arguments", () => {
   const args = { "domain": "test-id-123" };
   const schema = model.methods.check_domain.arguments;
@@ -2015,6 +2086,13 @@ function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
   }
   return out.sort();
 }
+
+Deno.test("registrar model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
+});
 
 Deno.test({
   name:

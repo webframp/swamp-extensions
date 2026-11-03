@@ -723,6 +723,90 @@ Deno.test("secondary-dns model: parsing arguments adds no field the caller did n
   }
 });
 
+Deno.test({
+  name:
+    "secondary-dns model: get_primary_server stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/secondary_dns/primaries/test-id-123": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "ip": null,
+            "port": null,
+            "linked_secondary_zones": null,
+            "created_at": null,
+            "updated_at": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run(
+        "get_primary_server",
+        { "primaryserver": "test-id-123" },
+        context,
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "secondary-dns model: list_primary_servers stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/secondary_dns/primaries": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "ip": null,
+            "port": null,
+            "linked_secondary_zones": null,
+            "created_at": null,
+            "updated_at": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_primary_servers", { "sort": "id:asc" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("secondary-dns model: get_primary_server rejects empty, '.' and '..' path arguments", () => {
   const args = { "primaryserver": "test-id-123" };
   const schema = model.methods.get_primary_server.arguments;
@@ -756,4 +840,46 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("secondary-dns model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
 });

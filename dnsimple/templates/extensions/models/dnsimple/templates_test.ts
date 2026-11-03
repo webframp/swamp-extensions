@@ -787,6 +787,148 @@ Deno.test({
 });
 
 Deno.test({
+  name: "templates model: list_template_records walks every page of a list",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/templates/test-id-123/records": (url: URL) =>
+        url.searchParams.get("page") === "2"
+          ? {
+            body: {
+              "data": [{
+                "id": 1,
+                "template_id": 1,
+                "name": "test-value",
+                "content": "test-value",
+                "ttl": 0,
+                "priority": "test-value",
+                "type": "A",
+                "created_at": "2010-01-01T01:00:00Z",
+                "updated_at": "2010-01-01T01:00:00Z",
+              }],
+              "pagination": {
+                "current_page": 2,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          }
+          : {
+            body: {
+              "data": [{
+                "id": 1,
+                "template_id": 1,
+                "name": "test-value",
+                "content": "test-value",
+                "ttl": 0,
+                "priority": "test-value",
+                "type": "A",
+                "created_at": "2010-01-01T01:00:00Z",
+                "updated_at": "2010-01-01T01:00:00Z",
+              }],
+              "pagination": {
+                "current_page": 1,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_template_records", {
+        "template": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      assertEquals(requests.map((r) => r.url.searchParams.get("page")), [
+        "1",
+        "2",
+      ]);
+      assertEquals(
+        requests.every((r) => r.url.searchParams.get("per_page") === "100"),
+        true,
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(data.items.length, 2);
+      assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "templates model: list_template_records flags truncation at the page cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/templates/test-id-123/records": (url: URL) => ({
+        body: ((page: number) => ({
+          ...{
+            "data": [{
+              "id": 1,
+              "template_id": 1,
+              "name": "test-value",
+              "content": "test-value",
+              "ttl": 0,
+              "priority": "test-value",
+              "type": "A",
+              "created_at": "2010-01-01T01:00:00Z",
+              "updated_at": "2010-01-01T01:00:00Z",
+            }],
+            "pagination": {
+              "current_page": 1,
+              "per_page": 100,
+              "total_entries": 25,
+              "total_pages": 25,
+            },
+          },
+          pagination: {
+            current_page: page,
+            per_page: 100,
+            total_entries: 25,
+            total_pages: 25,
+          },
+        }))(Number(url.searchParams.get("page"))),
+      }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_template_records", {
+        "template": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      assertEquals(requests.length, 20);
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+        total_entries?: number;
+      };
+      assertEquals(data.items.length, 20);
+      assertEquals(data.truncated, true);
+      assertEquals(data.total_entries, 25);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "templates model: apply_template_to_domain writes a receipt for a 204",
   sanitizeResources: false,
   fn: async () => {
@@ -915,6 +1057,84 @@ Deno.test("templates model: parsing arguments adds no field the caller did not s
   }
 });
 
+Deno.test({
+  name:
+    "templates model: get_template stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/templates/test-id-123": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "sid": null,
+            "description": null,
+            "created_at": null,
+            "updated_at": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("get_template", { "template": "test-id-123" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "templates model: list_templates stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/templates": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "sid": null,
+            "description": null,
+            "created_at": null,
+            "updated_at": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_templates", { "sort": "id:asc" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("templates model: get_template rejects empty, '.' and '..' path arguments", () => {
   const args = { "template": "test-id-123" };
   const schema = model.methods.get_template.arguments;
@@ -948,4 +1168,46 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("templates model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
 });

@@ -748,6 +748,106 @@ Deno.test("contacts model: parsing arguments adds no field the caller did not se
   }
 });
 
+Deno.test({
+  name:
+    "contacts model: get_contact stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/contacts/test-id-123": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": null,
+            "account_id": null,
+            "label": null,
+            "first_name": null,
+            "last_name": null,
+            "organization_name": null,
+            "job_title": null,
+            "address1": null,
+            "address2": null,
+            "city": null,
+            "state_province": null,
+            "postal_code": null,
+            "country": null,
+            "phone": null,
+            "fax": null,
+            "email": null,
+            "created_at": null,
+            "updated_at": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("get_contact", { "contact": "test-id-123" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "contacts model: list_contacts stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/contacts": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "account_id": null,
+            "label": null,
+            "first_name": null,
+            "last_name": null,
+            "organization_name": null,
+            "job_title": null,
+            "address1": null,
+            "address2": null,
+            "city": null,
+            "state_province": null,
+            "postal_code": null,
+            "country": null,
+            "phone": null,
+            "fax": null,
+            "email": null,
+            "created_at": null,
+            "updated_at": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_contacts", { "sort": "id:asc" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("contacts model: get_contact rejects empty, '.' and '..' path arguments", () => {
   const args = { "contact": "test-id-123" };
   const schema = model.methods.get_contact.arguments;
@@ -781,4 +881,46 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("contacts model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
 });

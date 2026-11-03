@@ -24,6 +24,7 @@ import { generateTestSource } from "./lib/test_generator.ts";
 import {
   bumpVersion,
   changedFiles,
+  compareCalVer,
   computeModelVersion,
   computeUpgradesBlock,
 } from "./lib/upgrades.ts";
@@ -68,6 +69,9 @@ function parseArgs(): GenerateOptions {
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
     switch (flag) {
+      case "--":
+        // `deno task generate -- --dry-run` passes the separator through.
+        break;
       case "--dry-run":
         opts.dryRun = true;
         break;
@@ -80,7 +84,11 @@ function parseArgs(): GenerateOptions {
         break;
       case "--version":
         opts.version = value(++i, flag);
-        if (!/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(opts.version)) {
+        if (
+          !/^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])\.[1-9]\d*$/.test(
+            opts.version,
+          )
+        ) {
           fail(`--version ${opts.version} is not CalVer (YYYY.MM.DD.N)`);
         }
         break;
@@ -306,7 +314,21 @@ async function main() {
         },
       ])).length > 0;
     }
-    if (opts.version) version = opts.version;
+    if (opts.version) {
+      // A forced version may only move an extension forward. The upgrade
+      // chain's own guard needs an entry, and a first release has none.
+      const current = versionResult.existingContent?.match(
+        /^ {2}version: "(\d{4}\.\d{2}\.\d{2}\.\d+)",/m,
+      )?.[1];
+      if (current && compareCalVer(opts.version, current) <= 0) {
+        rejections.push(
+          `   • ${config.name}: --version ${opts.version} is not newer than ` +
+            `the current ${current}`,
+        );
+        continue;
+      }
+      version = opts.version;
+    }
 
     // A written extension needs release notes, and the check belongs here:
     // refusing inside the write loop would leave earlier services written.

@@ -311,9 +311,11 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? sanitizeInstanceName(String(args.domain))
-          : `${sanitizeInstanceName(String(args.domain))}-${await shortHash(
-            filter,
-          )}`;
+          : sanitizeInstanceName(
+            `${sanitizeInstanceName(String(args.domain))}-${await shortHash(
+              filter,
+            )}`,
+          );
         const handle = await context.writeResource("certificates", instance, {
           items: results,
           truncated,

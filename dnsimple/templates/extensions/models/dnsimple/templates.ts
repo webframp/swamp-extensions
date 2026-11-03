@@ -246,7 +246,7 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("templates", instance, {
           items: results,
           truncated,
@@ -435,9 +435,11 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? sanitizeInstanceName(String(args.template))
-          : `${sanitizeInstanceName(String(args.template))}-${await shortHash(
-            filter,
-          )}`;
+          : sanitizeInstanceName(
+            `${sanitizeInstanceName(String(args.template))}-${await shortHash(
+              filter,
+            )}`,
+          );
         const handle = await context.writeResource(
           "template_records",
           instance,

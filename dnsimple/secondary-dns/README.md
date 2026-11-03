@@ -40,6 +40,12 @@ method without it fails before any request goes out.
 `environment` is `production` by default. Set `--global-arg environment=sandbox`
 to use DNSimple's sandbox, which has its own accounts and tokens.
 
+## Plan limits
+
+On the Solo Pro and Teams plans, DNSimple enables DNS services for a secondary
+zone when it is created and charges for the zone on each subscription renewal
+invoice, so `create_secondary_zone` adds to that invoice.
+
 ## Methods
 
 | Method                  | Description                                   |

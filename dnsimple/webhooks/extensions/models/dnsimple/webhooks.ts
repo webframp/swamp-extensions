@@ -131,7 +131,7 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("webhooks", instance, {
           items,
           truncated: false,

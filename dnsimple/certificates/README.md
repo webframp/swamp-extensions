@@ -43,7 +43,7 @@ to use DNSimple's sandbox, which has its own accounts and tokens.
 
 ## Billable methods
 
-These methods charge the DNSimple account. Their descriptions open with
+These methods can charge the DNSimple account. Their descriptions open with
 "Billable:". Try them against the sandbox first.
 
 - `purchase_letsencrypt_certificate`

@@ -47,7 +47,9 @@ DNSimple's spec says a zone's records beyond the plan's `records_limit` are
 either charged or cannot be created. Whether `create_zone_record` and
 `batch_change_zone_records` cost anything therefore depends on your plan, so
 they are not marked Billable. Check the account's limit before creating records
-in bulk.
+in bulk. On the Solo, Solo Pro and Teams plans DNSimple also charges for each
+active zone when the subscription renews, so `activate_zone_service` adds to
+that invoice.
 
 ## Methods
 

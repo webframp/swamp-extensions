@@ -1547,7 +1547,7 @@ export const model = {
         );
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource(
           "registrant_changes",
           instance,

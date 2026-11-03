@@ -1044,7 +1044,7 @@ function instanceLines(
   if (op.queryParams.length === 0) return [`${pad}const instance = ${base};`];
   return [
     `${pad}const filter = JSON.stringify(buildQuery(args, ${queryNames(op)}));`,
-    `${pad}const instance = filter === "{}" ? ${base} : \`\${${base}}-\${await shortHash(filter)}\`;`,
+    `${pad}const instance = filter === "{}" ? ${base} : sanitizeInstanceName(\`\${${base}}-\${await shortHash(filter)}\`);`,
   ];
 }
 

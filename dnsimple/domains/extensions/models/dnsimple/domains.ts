@@ -553,7 +553,7 @@ export const model = {
         );
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("domains", instance, {
           items: results,
           truncated,
@@ -721,9 +721,11 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? sanitizeInstanceName(String(args.domain))
-          : `${sanitizeInstanceName(String(args.domain))}-${await shortHash(
-            filter,
-          )}`;
+          : sanitizeInstanceName(
+            `${sanitizeInstanceName(String(args.domain))}-${await shortHash(
+              filter,
+            )}`,
+          );
         const handle = await context.writeResource("email_forwards", instance, {
           items: results,
           truncated,
@@ -1024,7 +1026,7 @@ export const model = {
         const filter = JSON.stringify(buildQuery(args, ["sort"]));
         const instance = filter === "{}"
           ? "main"
-          : `${"main"}-${await shortHash(filter)}`;
+          : sanitizeInstanceName(`${"main"}-${await shortHash(filter)}`);
         const handle = await context.writeResource("services", instance, {
           items: results,
           truncated,

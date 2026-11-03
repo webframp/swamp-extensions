@@ -1165,6 +1165,261 @@ Deno.test({
 });
 
 Deno.test({
+  name: "zones model: list_zone_records walks every page of a list",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/zones/test-id-123/records": (url: URL) =>
+        url.searchParams.get("page") === "2"
+          ? {
+            body: {
+              "data": [{
+                "id": 1,
+                "zone_id": "test-value",
+                "parent_id": 1,
+                "name": "test-value",
+                "content": "test-value",
+                "ttl": 0,
+                "priority": 1,
+                "type": "A",
+                "regions": ["global"],
+                "system_record": true,
+                "created_at": "2010-01-01T01:00:00Z",
+                "updated_at": "2010-01-01T01:00:00Z",
+              }],
+              "pagination": {
+                "current_page": 2,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          }
+          : {
+            body: {
+              "data": [{
+                "id": 1,
+                "zone_id": "test-value",
+                "parent_id": 1,
+                "name": "test-value",
+                "content": "test-value",
+                "ttl": 0,
+                "priority": 1,
+                "type": "A",
+                "regions": ["global"],
+                "system_record": true,
+                "created_at": "2010-01-01T01:00:00Z",
+                "updated_at": "2010-01-01T01:00:00Z",
+              }],
+              "pagination": {
+                "current_page": 1,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_zone_records", {
+        "zone": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      assertEquals(requests.map((r) => r.url.searchParams.get("page")), [
+        "1",
+        "2",
+      ]);
+      assertEquals(
+        requests.every((r) => r.url.searchParams.get("per_page") === "100"),
+        true,
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(data.items.length, 2);
+      assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "zones model: list_zone_records flags truncation at the page cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/zones/test-id-123/records": (url: URL) => ({
+        body: ((page: number) => ({
+          ...{
+            "data": [{
+              "id": 1,
+              "zone_id": "test-value",
+              "parent_id": 1,
+              "name": "test-value",
+              "content": "test-value",
+              "ttl": 0,
+              "priority": 1,
+              "type": "A",
+              "regions": ["global"],
+              "system_record": true,
+              "created_at": "2010-01-01T01:00:00Z",
+              "updated_at": "2010-01-01T01:00:00Z",
+            }],
+            "pagination": {
+              "current_page": 1,
+              "per_page": 100,
+              "total_entries": 25,
+              "total_pages": 25,
+            },
+          },
+          pagination: {
+            current_page: page,
+            per_page: 100,
+            total_entries: 25,
+            total_pages: 25,
+          },
+        }))(Number(url.searchParams.get("page"))),
+      }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_zone_records", {
+        "zone": "test-id-123",
+        "sort": "id:asc",
+      }, context);
+      assertEquals(requests.length, 20);
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+        total_entries?: number;
+      };
+      assertEquals(data.items.length, 20);
+      assertEquals(data.truncated, true);
+      assertEquals(data.total_entries, 25);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "zones model: query_dns_analytics walks every page of a list",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/dns_analytics": (url: URL) =>
+        url.searchParams.get("page") === "2"
+          ? {
+            body: {
+              "data": { "rows": [[1]], "headers": ["test-value"] },
+              "pagination": {
+                "current_page": 2,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          }
+          : {
+            body: {
+              "data": { "rows": [[1]], "headers": ["test-value"] },
+              "pagination": {
+                "current_page": 1,
+                "per_page": 100,
+                "total_entries": 2,
+                "total_pages": 2,
+              },
+            },
+          },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("query_dns_analytics", { "groupings": "date" }, context);
+      assertEquals(requests.map((r) => r.url.searchParams.get("page")), [
+        "1",
+        "2",
+      ]);
+      assertEquals(
+        requests.every((r) => r.url.searchParams.get("per_page") === "100"),
+        true,
+      );
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(data.items.length, 2);
+      assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "zones model: query_dns_analytics flags truncation at the page cap",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockServer({
+      "GET /1010/dns_analytics": (url: URL) => ({
+        body: ((page: number) => ({
+          ...{
+            "data": { "rows": [[1]], "headers": ["test-value"] },
+            "pagination": {
+              "current_page": 1,
+              "per_page": 100,
+              "total_entries": 25,
+              "total_pages": 25,
+            },
+          },
+          pagination: {
+            current_page: page,
+            per_page: 100,
+            total_entries: 25,
+            total_pages: 25,
+          },
+        }))(Number(url.searchParams.get("page"))),
+      }),
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("query_dns_analytics", { "groupings": "date" }, context);
+      assertEquals(requests.length, 20);
+      const resources = getWrittenResources();
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+        total_entries?: number;
+      };
+      assertEquals(data.items.length, 20);
+      assertEquals(data.truncated, true);
+      assertEquals(data.total_entries, 25);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name:
     "zones model: list_zones names a filtered list apart from an unfiltered one",
   sanitizeResources: false,
@@ -1271,6 +1526,92 @@ Deno.test("zones model: parsing arguments adds no field the caller did not send"
   }
 });
 
+Deno.test({
+  name: "zones model: get_zone stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/zones/test-id-123": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "reverse": null,
+            "secondary": null,
+            "last_transferred_at": null,
+            "active": null,
+            "created_at": null,
+            "updated_at": null,
+            "records_count": null,
+            "records_limit": null,
+            "records_overage": null,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("get_zone", { "zone": "test-id-123" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "zones model: list_zones stores a response whose fields are all null",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/zones": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": null,
+            "account_id": null,
+            "name": null,
+            "reverse": null,
+            "secondary": null,
+            "last_transferred_at": null,
+            "active": null,
+            "created_at": null,
+            "updated_at": null,
+            "records_count": null,
+            "records_limit": null,
+            "records_overage": null,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      await run("list_zones", { "sort": "id:asc" }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
 Deno.test("zones model: get_zone rejects empty, '.' and '..' path arguments", () => {
   const args = { "zone": "test-id-123" };
   const schema = model.methods.get_zone.arguments;
@@ -1304,4 +1645,46 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+/**
+ * Paths swamp vaults in a resource schema: fields carrying
+ * .meta({ sensitive: true }) on the field or on an optional, nullable or
+ * default wrapper around it, found by walking plain object shapes only (swamp
+ * does not enter arrays or unions, or see through readonly or catch).
+ */
+function swampSensitivePaths(schema: unknown, prefix = ""): string[] {
+  // deno-lint-ignore no-explicit-any
+  const inner = (s: any): any =>
+    ["optional", "nullable", "default"].includes(s?._zod?.def?.type)
+      ? s._zod.def.innerType
+      : undefined;
+  // deno-lint-ignore no-explicit-any
+  const unwrap = (s: any): any => {
+    while (inner(s)) s = inner(s);
+    return s;
+  };
+  // deno-lint-ignore no-explicit-any
+  const isMarked = (s: any): boolean => {
+    for (let cur = s; cur; cur = inner(cur)) {
+      if (cur.meta?.()?.sensitive === true) return true;
+    }
+    return false;
+  };
+  const obj = unwrap(schema);
+  if (obj?._zod?.def?.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(obj._zod.def.shape)) {
+    const path = prefix ? prefix + "." + key : key;
+    if (isMarked(field)) out.push(path);
+    out.push(...swampSensitivePaths(field, path));
+  }
+  return out.sort();
+}
+
+Deno.test("zones model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
 });

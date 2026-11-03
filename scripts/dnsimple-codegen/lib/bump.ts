@@ -45,6 +45,8 @@ function parseArgs(): BumpOptions {
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
     switch (flag) {
+      case "--":
+        break;
       case "--dry-run":
         opts.dryRun = true;
         break;
@@ -53,7 +55,11 @@ function parseArgs(): BumpOptions {
         break;
       case "--version":
         opts.version = value(++i, flag);
-        if (!/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(opts.version)) {
+        if (
+          !/^\d{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12]\d|3[01])\.[1-9]\d*$/.test(
+            opts.version,
+          )
+        ) {
           console.error(
             `\n❌ --version ${opts.version} is not CalVer (YYYY.MM.DD.N)`,
           );

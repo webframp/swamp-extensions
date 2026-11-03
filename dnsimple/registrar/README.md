@@ -43,7 +43,8 @@ to use DNSimple's sandbox, which has its own accounts and tokens.
 
 ## Billable methods
 
-These methods charge the DNSimple account. Their descriptions open with
+These methods can charge the DNSimple account (`enable_whois_privacy` only when
+WHOIS privacy is not already purchased). Their descriptions open with
 "Billable:". Try them against the sandbox first.
 
 - `register_domain`
@@ -54,16 +55,15 @@ These methods charge the DNSimple account. Their descriptions open with
 
 ## Stored data
 
-Registrations and registrant changes store the registrant's ID and any
-`extended_attributes` you pass. Some TLDs require national identifiers or
-similar personal details there. The registrar extension stores no names,
-addresses or phone numbers; those live in `@webframp/dnsimple/contacts`.
-Extended attributes are stored as ordinary swamp data. These fields are not
-marked sensitive: a sensitive field moves to a vault and leaves only a
-reference, which would make these records unreadable to expressions and reports.
-The access controls of the datastore that holds your swamp data are the boundary
-for this data. Each resource keeps a bounded number of versions
-(`garbageCollection`), so older copies are pruned.
+Registrations store the registrant's ID. Registrant changes store the change
+itself, including any `extended_attributes`, and some TLDs require national
+identifiers or similar personal details there. The registrar extension stores no
+names, addresses or phone numbers; those live in `@webframp/dnsimple/contacts`.
+These fields are not marked sensitive: a sensitive field moves to a vault and
+leaves only a reference, which would make these records unreadable to
+expressions and reports. The access controls of the datastore that holds your
+swamp data are the boundary for this data. Each resource keeps a bounded number
+of versions (`garbageCollection`), so older copies are pruned.
 
 ## Secrets
 

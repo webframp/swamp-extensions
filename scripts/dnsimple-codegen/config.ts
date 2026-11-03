@@ -62,6 +62,8 @@ export const SERVICES: ServiceConfig[] = [
       "DNSimple Account — identity, account list, and billing charges",
     pathPrefixes: ["/whoami", "/accounts", "/{account}/billing"],
     labels: ["dnsimple", "account", "billing"],
+    storedDataNote:
+      "`whoami` and `list_accounts` store the user's and accounts' email addresses, and `list_charges` stores invoice data, all as ordinary swamp data.",
   },
   {
     name: "zones",
@@ -70,13 +72,15 @@ export const SERVICES: ServiceConfig[] = [
     pathPrefixes: ["/{account}/zones", "/{account}/dns_analytics"],
     labels: ["dnsimple", "dns", "zones", "records"],
     planLimitNote:
-      "DNSimple's spec says a zone's records beyond the plan's `records_limit` are either charged or cannot be created. Whether `create_zone_record` and `batch_change_zone_records` cost anything therefore depends on your plan, so they are not marked Billable. Check the account's limit before creating records in bulk.",
+      "DNSimple's spec says a zone's records beyond the plan's `records_limit` are either charged or cannot be created. Whether `create_zone_record` and `batch_change_zone_records` cost anything therefore depends on your plan, so they are not marked Billable. Check the account's limit before creating records in bulk. On the Solo, Solo Pro and Teams plans DNSimple also charges for each active zone when the subscription renews, so `activate_zone_service` adds to that invoice.",
   },
   {
     name: "secondary-dns",
     description: "DNSimple Secondary DNS — primary servers and secondary zones",
     pathPrefixes: ["/{account}/secondary_dns"],
     labels: ["dnsimple", "dns", "secondary-dns"],
+    planLimitNote:
+      "On the Solo Pro and Teams plans, DNSimple enables DNS services for a secondary zone when it is created and charges for the zone on each subscription renewal invoice, so `create_secondary_zone` adds to that invoice.",
   },
   {
     name: "domains",
@@ -95,6 +99,8 @@ export const SERVICES: ServiceConfig[] = [
       "/{account}/domains/{domain}/templates",
     ],
     labels: ["dnsimple", "domains", "email-forwards"],
+    planLimitNote:
+      "On the Solo, Solo Pro and Teams plans, DNSimple enables DNS services for a domain's zone when `create_domain` adds it and charges for the zone on each subscription renewal invoice, so the call is not marked Billable but does add to that invoice.",
     storedDataNote:
       "Email forwards store their `from` and `to` addresses as ordinary swamp data.",
   },
@@ -121,7 +127,7 @@ export const SERVICES: ServiceConfig[] = [
     pathPrefixes: ["/{account}/registrar"],
     labels: ["dnsimple", "registrar", "domains", "billing"],
     storedDataNote:
-      "Registrations and registrant changes store the registrant's ID and any `extended_attributes` you pass. Some TLDs require national identifiers or similar personal details there. The registrar extension stores no names, addresses or phone numbers; those live in `@webframp/dnsimple/contacts`. Extended attributes are stored as ordinary swamp data.",
+      "Registrations store the registrant's ID. Registrant changes store the change itself, including any `extended_attributes`, and some TLDs require national identifiers or similar personal details there. The registrar extension stores no names, addresses or phone numbers; those live in `@webframp/dnsimple/contacts`.",
   },
   {
     name: "contacts",

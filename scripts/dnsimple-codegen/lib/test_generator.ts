@@ -125,10 +125,13 @@ export function generateTestSource(
     lines.push(``);
   }
 
-  const paginated = methods.find((m) =>
-    m.resultKind === "list" && m.operation.pagination.paginated
-  );
-  if (paginated) {
+  // Every paginated list, not one: a method that hardcodes `truncated: false`
+  // or skips a page is a defect in that method alone.
+  for (
+    const paginated of methods.filter((m) =>
+      m.resultKind === "list" && m.operation.pagination.paginated
+    )
+  ) {
     lines.push(generateTwoPageTest(config, paginated));
     lines.push(``);
     lines.push(generateTruncationTest(config, paginated));
@@ -165,6 +168,25 @@ export function generateTestSource(
     lines.push(``);
   }
 
+  // DNSimple returns null for fields its spec types as plain values (an
+  // account's email), so a response of nothing but nulls must still be stored.
+  for (
+    const method of [
+      methods.find((m) =>
+        m.resultKind === "object" && m.type === "get" &&
+        m.operation.responseSchema?.properties
+      ),
+      methods.find((m) =>
+        m.resultKind === "list" && m.operation.responseSchema?.properties
+      ),
+    ]
+  ) {
+    if (method) {
+      lines.push(generateNullFieldsTest(config, method));
+      lines.push(``);
+    }
+  }
+
   const pathed = methods.find((m) => m.operation.pathParams.length > 0);
   if (pathed) {
     lines.push(generatePathArgumentTest(config, pathed));
@@ -187,13 +209,22 @@ export function generateTestSource(
       sensitiveTests.push(generateSensitiveArgTest(config, method));
     }
   }
-  if (sensitiveTests.length > 0) {
-    lines.push(swampSensitivePathsHelper());
+  // The access token is the one secret every model takes, so its marker is
+  // always tested; the helper therefore always exists.
+  lines.push(swampSensitivePathsHelper());
+  lines.push(``);
+  lines.push(
+    `Deno.test("${svc} model: the access token global argument is marked sensitive", () => {
+  assertEquals(
+    swampSensitivePaths(model.globalArguments).includes("apiToken"),
+    true,
+  );
+});`,
+  );
+  lines.push(``);
+  for (const test of sensitiveTests) {
+    lines.push(test);
     lines.push(``);
-    for (const test of sensitiveTests) {
-      lines.push(test);
-      lines.push(``);
-    }
   }
 
   return lines.join("\n");
@@ -567,6 +598,48 @@ function generateReceiptTest(
       assertEquals(receipt.args, ${
       JSON.stringify(receiptArgs(method, args))
     });`,
+    {},
+  );
+}
+
+/** A row with every field set to null. */
+function nullFields(row: unknown): unknown {
+  return row && typeof row === "object" && !Array.isArray(row)
+    ? Object.fromEntries(Object.keys(row).map((key) => [key, null]))
+    : row;
+}
+
+/** A response whose rows hold only nulls is stored and matches the schema. */
+function generateNullFieldsTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const body = structuredClone(mockBody(method)) as Record<string, unknown>;
+  if (method.resultKind === "list") {
+    const path = method.operation.pagination.paginated
+      ? method.operation.pagination.resultsPath
+      : ["data"];
+    let cursor = body;
+    for (const key of path.slice(0, -1)) {
+      cursor = cursor[key] as Record<string, unknown>;
+    }
+    const last = path[path.length - 1];
+    cursor[last] = (cursor[last] as unknown[]).map(nullFields);
+  } else {
+    body.data = nullFields(body.data);
+  }
+  const routes = `      ${JSON.stringify(routeKey(method))}: ${
+    JSON.stringify({ status: 200, body })
+  },`;
+  return testCase(
+    `${config.name} model: ${method.name} stores a response whose fields are all null`,
+    routes,
+    `      await run(${JSON.stringify(method.name)}, ${
+      JSON.stringify(buildMethodArgs(method))
+    }, context);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      parseAgainstSchema(resources[0].specName, resources[0].data);`,
     {},
   );
 }

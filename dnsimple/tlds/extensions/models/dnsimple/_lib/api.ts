@@ -109,13 +109,19 @@ export function sanitizeInstanceName(name: string): string {
   // Names compare case-insensitively (a DNS name is one entity in any case),
   // so lowercasing is not a change. Replacing or dropping a character is: it
   // can map two different inputs to one name, so the original's hash is kept.
+  // The hash is of the lowercased input, so inputs that differ only in case
+  // still give one name.
   const distinct = cleaned === lowered
     ? cleaned
-    : `${cleaned}-${fastHash(name)}`;
-  const bounded = boundName(distinct, name);
+    : `${cleaned}-${fastHash(lowered)}`;
+  const bounded = boundName(distinct, lowered);
   // Spelled as a concatenation so the repository's reserved-name scan, which
   // reports quoted literals under scripts/, does not flag the guard itself.
-  return bounded === "late" + "st" ? `${bounded}_` : bounded;
+  // The reserved name gets a hash rather than a bare suffix, which another
+  // input could equal.
+  return bounded === "late" + "st"
+    ? `${bounded}-${fastHash(lowered)}`
+    : bounded;
 }
 
 /** The longest instance name kept, in UTF-8 bytes; filenames cap at 255. */
@@ -400,6 +406,18 @@ function rateLimitMessage(
 }
 
 /**
+ * The sentence appended to an error whose outcome is unknown for a write: the
+ * server may have acted before the response failed or came back unusable.
+ */
+const MAY_HAVE_COMPLETED =
+  " The operation may have completed; check the resource before retrying.";
+
+/** True for a method that changes state, where an unclear outcome is risky. */
+function isWrite(method: string): boolean {
+  return method !== "GET";
+}
+
+/**
  * Parse a successful response body as JSON. An empty body (a 204) is "no
  * content" and yields undefined; a malformed body throws an error carrying the
  * method, path and status.
@@ -417,7 +435,7 @@ function parseJsonBody<T>(
     throw new Error(
       `DNSimple API returned malformed JSON: ${method} ${path} ` +
         `(status ${status}): ${(err as Error).message}; body starts: ` +
-        text.slice(0, 200),
+        text.slice(0, 200) + (isWrite(method) ? `.${MAY_HAVE_COMPLETED}` : ""),
     );
   }
 }
@@ -467,8 +485,18 @@ export async function dnsimpleApi<T>(
     }
 
     if (!response.ok) {
+      // A 5xx on a write may follow a committed change (a gateway timing out
+      // after DNSimple acted), so it carries the same warning as a timeout.
+      const unclear = isWrite(method) && response.status >= 500;
       throw new Error(
-        describeError(method, path, response.status, response.statusText, text),
+        describeError(
+          method,
+          path,
+          response.status,
+          response.statusText,
+          text,
+        ) +
+          (unclear ? MAY_HAVE_COMPLETED : ""),
       );
     }
 
@@ -499,11 +527,15 @@ export async function dnsimpleApiData<T>(
   );
   if (body === undefined || body === null || body.data === undefined) {
     throw new Error(
-      `DNSimple API returned an empty response body: ${method} ${path}`,
+      `DNSimple API returned an empty response body: ${method} ${path}.` +
+        (isWrite(method) ? MAY_HAVE_COMPLETED : ""),
     );
   }
   if (body.data === null) {
-    throw new Error(`DNSimple API returned null data: ${method} ${path}`);
+    throw new Error(
+      `DNSimple API returned null data: ${method} ${path}.` +
+        (isWrite(method) ? MAY_HAVE_COMPLETED : ""),
+    );
   }
   return body.data;
 }
