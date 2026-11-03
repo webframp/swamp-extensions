@@ -86,7 +86,7 @@ Every extension is licensed under **Apache-2.0**, matching the repository root
   Omitting `license:` scores 92% and fails the quality gate. Before that
   release the bundled file alone earned the `has-license` point and a manifest
   `license:` was forbidden; that guidance is obsolete.
-- **Generators and scaffolds.** The five `scripts/*-codegen` generators emit
+- **Generators and scaffolds.** The six `scripts/*-codegen` generators emit
   `license: Apache-2.0` in every manifest they write; keep that in sync if the
   manifest template changes.
 
