@@ -91,6 +91,11 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/dnsimple/domains`](dnsimple/domains/) | DNSimple Domains — domains, applied services, pushes, email forwards, and vanity name servers | None (uses fetch) |
 | [`@webframp/dnsimple/certificates`](dnsimple/certificates/) | DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys | None (uses fetch) |
 | [`@webframp/dnsimple/templates`](dnsimple/templates/) | DNSimple Templates — record templates and applying them to domains | None (uses fetch) |
+| [`@webframp/dnsimple/secondary-dns`](dnsimple/secondary-dns/) | DNSimple Secondary DNS — primary servers and secondary zones | None (uses fetch) |
+| [`@webframp/dnsimple/dnssec`](dnsimple/dnssec/) | DNSimple DNSSEC — DNSSEC state and delegation signer records | None (uses fetch) |
+| [`@webframp/dnsimple/contacts`](dnsimple/contacts/) | DNSimple Contacts — registrant contacts | None (uses fetch) |
+| [`@webframp/dnsimple/webhooks`](dnsimple/webhooks/) | DNSimple Webhooks — webhook subscriptions | None (uses fetch) |
+| [`@webframp/dnsimple/tlds`](dnsimple/tlds/) | DNSimple TLDs — TLD catalog and extended attributes | None (uses fetch) |
 | [`@webframp/griptape/threads`](griptape/threads/) | Griptape Cloud Threads — conversation threads and their messages | None (uses fetch) |
 | [`@webframp/griptape/assistants`](griptape/assistants/) | Griptape Cloud Assistants — assistant definitions and assistant runs | None (uses fetch) |
 | [`@webframp/griptape/structures`](griptape/structures/) | Griptape Cloud Structures — deployed structures, runs, logs, and spans | None (uses fetch) |
@@ -288,6 +293,11 @@ swamp extension pull @webframp/dnsimple/registrar
 swamp extension pull @webframp/dnsimple/domains
 swamp extension pull @webframp/dnsimple/certificates
 swamp extension pull @webframp/dnsimple/templates
+swamp extension pull @webframp/dnsimple/secondary-dns
+swamp extension pull @webframp/dnsimple/dnssec
+swamp extension pull @webframp/dnsimple/contacts
+swamp extension pull @webframp/dnsimple/webhooks
+swamp extension pull @webframp/dnsimple/tlds
 
 # Griptape Cloud extensions
 swamp extension pull @webframp/griptape/threads
