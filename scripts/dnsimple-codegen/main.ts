@@ -13,7 +13,7 @@
  */
 
 import { OUTPUT_BASE, SERVICES } from "./config.ts";
-import { fetchSchema } from "./lib/schema_fetcher.ts";
+import { applySpecCorrections, fetchSchema } from "./lib/schema_fetcher.ts";
 import { groupOperations } from "./lib/service_grouper.ts";
 import {
   assertSensitiveOperationsExist,
@@ -50,32 +50,64 @@ interface GenerateOptions {
   notes?: string;
 }
 
+/** The release-notes limit swamp's `--release-notes` flag enforces. */
+const MAX_NOTES_LENGTH = 5000;
+
 function parseArgs(): GenerateOptions {
   const args = Deno.args;
   const opts: GenerateOptions = { dryRun: false };
+  const fail = (message: string): never => {
+    console.error(`\n❌ ${message}`);
+    Deno.exit(1);
+  };
+  const value = (i: number, flag: string): string => {
+    const v = args[i];
+    if (v === undefined || v.startsWith("--")) {
+      return fail(`${flag} needs a value`);
+    }
+    return v;
+  };
 
   for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
+    const flag = args[i];
+    switch (flag) {
       case "--dry-run":
         opts.dryRun = true;
         break;
       case "--service":
       case "--services":
-        opts.services = args[++i]?.split(",");
+        opts.services = value(++i, flag).split(",");
         break;
       case "--output":
-        opts.outputBase = args[++i];
+        opts.outputBase = value(++i, flag);
         break;
       case "--version":
-        opts.version = args[++i];
+        opts.version = value(++i, flag);
         break;
       case "--notes":
-        opts.notes = args[++i];
+        opts.notes = value(++i, flag);
         break;
       case "--notes-file":
-        opts.notes = Deno.readTextFileSync(args[++i]);
+        opts.notes = Deno.readTextFileSync(value(++i, flag));
         break;
+      default:
+        fail(`unknown argument ${flag}`);
     }
+  }
+
+  const known = new Set(SERVICES.map((s) => s.name));
+  const unknown = (opts.services ?? []).filter((n) => !known.has(n));
+  if (unknown.length > 0) {
+    fail(
+      `unknown service ${unknown.join(", ")}. Available: ${
+        [...known].join(", ")
+      }`,
+    );
+  }
+  if (opts.notes !== undefined && opts.notes.length > MAX_NOTES_LENGTH) {
+    fail(
+      `release notes are ${opts.notes.length} characters; the limit is ${MAX_NOTES_LENGTH}`,
+    );
   }
 
   return opts;
@@ -127,6 +159,12 @@ async function main() {
   );
   console.log(``);
 
+  for (const stale of applySpecCorrections(spec)) {
+    console.log(
+      `   ℹ️  spec correction at ${stale.path.join(".")} no longer applies; ` +
+        `remove it from SPEC_CORRECTIONS`,
+    );
+  }
   assertSensitiveOperationsExist(spec);
 
   // Claim checks run against every configured service, so a --service subset
@@ -271,6 +309,24 @@ async function main() {
     }
     if (opts.version) version = opts.version;
 
+    // A written extension needs release notes, and the check belongs here:
+    // refusing inside the write loop would leave earlier services written.
+    if (status !== "unchanged" || opts.version) {
+      const hasNotes = await Deno.stat(
+        join(outputBase, config.name, "RELEASE_NOTES.md"),
+      ).then(() => true, () => false);
+      if (!opts.notes && (hasNotes || status === "changed")) {
+        rejections.push(
+          `   • ${config.name}: ${
+            hasNotes ? "already has" : "is a changed extension with"
+          } RELEASE_NOTES.md, so this is not an initial release; pass ` +
+            `--notes "<body>" or --notes-file <path> describing what ` +
+            `changed in ${version}`,
+        );
+        continue;
+      }
+    }
+
     let upgradesBlock: string;
     try {
       upgradesBlock = computeUpgradesBlock(
@@ -296,8 +352,8 @@ async function main() {
 
   if (rejections.length > 0) {
     console.error(
-      `\n❌ --version ${opts.version} was rejected by ${rejections.length} ` +
-        `service(s); no files were written:\n${rejections.join("\n")}`,
+      `\n❌ ${rejections.length} service(s) were rejected; no files were ` +
+        `written:\n${rejections.join("\n")}`,
     );
     Deno.exit(1);
   }
@@ -369,19 +425,6 @@ async function main() {
     const denoJson = generateDenoJson();
     const readme = generateReadme(config, methods);
 
-    const notesPath = join(extDir, "RELEASE_NOTES.md");
-    const hasExistingNotes = await Deno.stat(notesPath).then(
-      () => true,
-      () => false,
-    );
-    if (hasExistingNotes && !opts.notes) {
-      console.error(
-        `\n❌ ${config.name} already has RELEASE_NOTES.md, so this is not an ` +
-          `initial release.\n   Pass --notes "<body>" or --notes-file <path> ` +
-          `describing what changed in ${version}.`,
-      );
-      Deno.exit(1);
-    }
     const releaseNotes = generateReleaseNotes(
       config,
       version,

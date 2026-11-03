@@ -190,7 +190,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_dnssec");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -232,7 +236,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_domain_dnssec");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -264,7 +272,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_domain_dnssec");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -323,7 +335,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_delegation_signer_records");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -381,7 +397,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_delegation_signer_record");
-      assertEquals(resources[0].name, "test-id-123-1");
+      assertEquals(
+        new RegExp("^test-id-123-1(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -429,7 +449,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_delegation_signer_record");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -636,6 +662,19 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test("dnssec model: get_domain_dnssec rejects empty, '.' and '..' path arguments", () => {
+  const args = { "domain": "test-id-123" };
+  const schema = model.methods.get_domain_dnssec.arguments;
+  assertEquals(schema.safeParse(args).success, true);
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(
+      schema.safeParse({ ...args, domain: bad }).success,
+      false,
+      JSON.stringify(bad),
+    );
+  }
 });
 
 Deno.test({

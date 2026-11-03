@@ -188,6 +188,47 @@ Deno.test("groupOperations: an excluded operation needs no service", () => {
   assertEquals(groups.map((g) => g.config.name), ["z"]);
 });
 
+Deno.test("groupOperations: a service that matches no operation fails generation", () => {
+  assertThrows(
+    () =>
+      groupOperations(specOf("/zones"), [
+        service("z", ["/zones"]),
+        service("typo", ["/zonez"]),
+      ]),
+    Error,
+    "service typo matched no operations",
+  );
+});
+
+Deno.test("groupOperations: an operationId or path that cannot be emitted as source fails generation", () => {
+  const badId = specOf("/zones");
+  (badId.paths["/zones"] as { get: { operationId: string } }).get.operationId =
+    'get-zone"x';
+  assertThrows(
+    () => groupOperations(badId, [service("z", ["/zones"])]),
+    Error,
+    "expected camelCase letters and digits",
+  );
+  assertThrows(
+    () => groupOperations(specOf("/zones/`x`"), [service("z", ["/zones"])]),
+    Error,
+    "characters the generator cannot emit",
+  );
+});
+
+Deno.test("groupOperations: an HTTP method the generator does not support fails generation", () => {
+  const spec = specOf("/zones");
+  (spec.paths["/zones"] as Record<string, unknown>).head = {
+    operationId: "headZones",
+    responses: { "200": { description: "ok" } },
+  };
+  assertThrows(
+    () => groupOperations(spec, [service("z", ["/zones"])]),
+    Error,
+    "HEAD /zones uses an HTTP method the generator does not support",
+  );
+});
+
 Deno.test("groupOperations: only returns the requested services", () => {
   const groups = groupOperations(loadSpec(), SERVICES, { only: ["tlds"] });
   assertEquals(groups.map((g) => g.config.name), ["tlds"]);

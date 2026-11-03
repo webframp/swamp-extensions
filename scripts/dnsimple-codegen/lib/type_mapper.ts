@@ -60,6 +60,14 @@ export interface TypeMapperOptions {
    * rejects real data. Request schemas keep the spec's nullability.
    */
   nullTolerant?: boolean;
+  /**
+   * Emit `.default(...)` for properties that declare a default. Off for
+   * DNSimple: a default on an update's request body is sent on every call
+   * and silently resets the field (a content-only record update would reset
+   * its ttl), and a default on a response schema fabricates data a stored
+   * resource never held. The API applies its own defaults.
+   */
+  emitDefaults?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
@@ -69,6 +77,7 @@ const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   sensitiveFields: [],
   passthrough: false,
   nullTolerant: false,
+  emitDefaults: true,
 };
 
 /**
@@ -122,7 +131,14 @@ function schemaToZodInner(
   // by the caller via `.nullable()` so the enum's non-null members stay clean.
   if (schema.enum) {
     const nonNull = schema.enum.filter((v) => v !== null);
-    if (nonNull.length > 0) return enumToZod(nonNull);
+    if (nonNull.length > 0) {
+      // A response must survive the API adding a value, so lenient mode
+      // widens a string enum to a plain string. Requests stay strict.
+      if (opts.lenient && nonNull.every((v) => typeof v === "string")) {
+        return "z.string()";
+      }
+      return enumToZod(nonNull);
+    }
   }
 
   // Union types
@@ -256,8 +272,11 @@ function objectToZod(
 
   const suffix = opts.passthrough ? ".passthrough()" : "";
 
+  // An object with no declared properties is free-form. A plain z.object({})
+  // would strip every key a caller passes (extended_attributes on a
+  // registration), so it maps to a record.
   if (!schema.properties) {
-    return `z.object({})${suffix}`;
+    return "z.record(z.string(), z.unknown())";
   }
 
   const required = opts.lenient
@@ -273,7 +292,7 @@ function objectToZod(
 
   const fields: string[] = [];
   for (const [name, prop] of Object.entries(schema.properties)) {
-    const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
+    const safeName = isSafeIdentifier(name) ? name : JSON.stringify(name);
     let fieldType = schemaToZod(prop, childOpts, depth + 1);
     if (opts.nullTolerant && !fieldType.endsWith(".nullable()")) {
       fieldType += ".nullable()";
@@ -292,7 +311,7 @@ function objectToZod(
     }
 
     // Add .default() if the schema declares a default value
-    if (prop.default !== undefined) {
+    if (opts.emitDefaults && prop.default !== undefined) {
       fieldType += `.default(${JSON.stringify(prop.default)})`;
     }
 
@@ -307,7 +326,7 @@ function objectToZod(
   }
 
   if (fields.length === 0) {
-    return `z.object({})${suffix}`;
+    return "z.record(z.string(), z.unknown())";
   }
 
   return `z.object({\n${fields.join("\n")}\n${closingIndent}})${suffix}`;
@@ -329,7 +348,11 @@ function isSafeIdentifier(name: string): boolean {
 
 /** Escape string for use inside a double-quoted TypeScript string */
 function escapeString(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r").replace(/\u2028/g, "\\u2028").replace(
+      /\u2029/g,
+      "\\u2029",
+    );
 }
 
 /** Truncate long descriptions for .describe() calls */

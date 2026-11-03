@@ -229,7 +229,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domains");
-      assertEquals(resources[0].name, "main");
+      assertEquals(
+        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -281,7 +285,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain");
-      assertEquals(resources[0].name, "1");
+      assertEquals(
+        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -333,7 +341,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -411,7 +423,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domains_research_status");
-      assertEquals(resources[0].name, "domains_research_status-current");
+      assertEquals(
+        new RegExp("^domains_research_status-[0-9a-f]{16}$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -467,7 +485,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forwards");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -516,7 +538,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forward");
-      assertEquals(resources[0].name, "test-id-123-1");
+      assertEquals(
+        new RegExp("^test-id-123-1(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -561,7 +587,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forward");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -641,7 +673,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "initiate_domain_push");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -689,7 +725,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "pushes");
-      assertEquals(resources[0].name, "main");
+      assertEquals(
+        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -721,7 +761,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "accept_push");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -815,7 +859,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "services");
-      assertEquals(resources[0].name, "main");
+      assertEquals(
+        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -871,7 +919,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "service");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -932,7 +984,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_applied_services");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -966,7 +1022,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "apply_service_to_domain");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -1001,7 +1063,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "unapply_service_from_domain");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -1045,7 +1113,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_vanity_name_servers");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -1077,7 +1149,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_vanity_name_servers");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -1261,6 +1337,19 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test("domains model: get_domain rejects empty, '.' and '..' path arguments", () => {
+  const args = { "domain": "test-id-123" };
+  const schema = model.methods.get_domain.arguments;
+  assertEquals(schema.safeParse(args).success, true);
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(
+      schema.safeParse({ ...args, domain: bad }).success,
+      false,
+      JSON.stringify(bad),
+    );
+  }
 });
 
 Deno.test({

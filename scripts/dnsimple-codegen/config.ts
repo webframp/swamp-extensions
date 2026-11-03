@@ -198,7 +198,35 @@ export const SENSITIVE_ARG_FIELDS: Record<string, string[]> = {
 };
 
 /**
- * Operations that charge the account. Their describe string opens with
+ * Known errors in DNSimple's spec text. A correction applies only while the
+ * spec still holds `expected` at `path`, so an upstream fix is never
+ * overwritten and a stale entry does nothing.
+ */
+export interface SpecCorrection {
+  path: string[];
+  expected: string;
+  value: string;
+}
+
+export const SPEC_CORRECTIONS: SpecCorrection[] = [
+  {
+    // Copied from the country field upstream.
+    path: [
+      "components",
+      "schemas",
+      "Contact",
+      "properties",
+      "postal_code",
+      "description",
+    ],
+    expected: "The ISO 3166-1 alpha-2 country code, upper case (eg. DE).",
+    value: "The postal code.",
+  },
+];
+
+/**
+ * Operations that charge the account. Enabling WHOIS privacy buys a year of
+ * the service when it is not already purchased. Their describe string opens with
  * "Billable:" so the cost is visible in `swamp model describe` output.
  */
 export const BILLABLE_OPERATIONS: string[] = [
@@ -206,6 +234,7 @@ export const BILLABLE_OPERATIONS: string[] = [
   "renewDomain",
   "transferDomain",
   "restoreDomain",
+  "enableWhoisPrivacy",
   "purchaseLetsencryptCertificate",
   "purchaseRenewalLetsencryptCertificate",
 ];

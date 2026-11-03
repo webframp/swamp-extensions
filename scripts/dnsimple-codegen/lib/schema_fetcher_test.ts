@@ -1,5 +1,7 @@
 import { assertEquals, assertThrows } from "@std/assert";
+import { SPEC_CORRECTIONS } from "../config.ts";
 import {
+  applySpecCorrections,
   type OpenAPISpec,
   resolveParameter,
   resolveRef,
@@ -20,6 +22,22 @@ function specWith(
     components: { schemas, ...extra },
   } as unknown as OpenAPISpec;
 }
+
+Deno.test("applySpecCorrections: fixes a known error and reports a correction that no longer applies", () => {
+  const spec = loadSpec();
+  const props = (spec.components.schemas.Contact as unknown as {
+    properties: Record<string, { description?: string }>;
+  }).properties;
+  const stale = applySpecCorrections(spec, [
+    ...SPEC_CORRECTIONS,
+    { path: ["components", "nowhere"], expected: "x", value: "y" },
+  ]);
+  assertEquals(props.postal_code.description, "The postal code.");
+  assertEquals(stale.map((c) => c.path.join(".")), ["components.nowhere"]);
+  // Applying twice changes nothing: the expected text is gone.
+  assertEquals(applySpecCorrections(spec).length, SPEC_CORRECTIONS.length);
+  assertEquals(props.postal_code.description, "The postal code.");
+});
 
 Deno.test("resolveRef: follows a local ref and rejects an external one", () => {
   const spec = loadSpec();

@@ -314,8 +314,8 @@ Deno.test("passthrough: every object, at every depth, tolerates unknown fields",
   );
   assertEquals(
     out.match(/\.passthrough\(\)/g)?.length,
-    4,
-    "root, child, list item and the empty object",
+    3,
+    "root, child and list item; the empty object is a record",
   );
 });
 
@@ -336,6 +336,38 @@ Deno.test("nullTolerant: every object field accepts null, once, at every depth",
     schemaToZod(schema).includes("email: z.string().nullable()"),
     false,
   );
+});
+
+Deno.test("emitDefaults: false leaves a declared default out of the schema", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: { ttl: { type: "integer", default: 3600 } },
+  };
+  assertEquals(schemaToZod(schema).includes(".default(3600)"), true);
+  assertEquals(
+    schemaToZod(schema, { emitDefaults: false }).includes(".default("),
+    false,
+  );
+});
+
+Deno.test("free-form object: no declared properties maps to a record, never a stripping z.object", () => {
+  const schema: SchemaObject = { type: "object" };
+  assertEquals(schemaToZod(schema), "z.record(z.string(), z.unknown())");
+  assertEquals(
+    schemaToZod(schema, { passthrough: true }),
+    "z.record(z.string(), z.unknown())",
+  );
+});
+
+Deno.test("lenient: a string enum widens to a string, a strict one stays an enum", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: { type: { type: "string", enum: ["A", "MX"] } },
+  };
+  assertEquals(schemaToZod(schema).includes('z.enum(["A", "MX"])'), true);
+  const lenient = schemaToZod(schema, { lenient: true });
+  assertEquals(lenient.includes("z.enum"), false);
+  assertEquals(lenient.includes("type: z.string().optional()"), true);
 });
 
 Deno.test("passthrough: off by default and kept before .nullable()", () => {

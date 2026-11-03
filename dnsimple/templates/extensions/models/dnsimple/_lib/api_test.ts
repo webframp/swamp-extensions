@@ -149,6 +149,17 @@ Deno.test("instanceName: parent-prefixed, hashed past two parts", async () => {
   assertEquals(hashed.length, 16);
 });
 
+Deno.test("instanceName: no parts is main, and hyphenated pairs do not collide", async () => {
+  assertEquals(await instanceName([]), "main");
+  const a = await instanceName(["a-b", "c"]);
+  const b = await instanceName(["a", "b-c"]);
+  assertEquals(a === b, false);
+  assertEquals(a.startsWith("a-b-c-"), true);
+  assertEquals(a, await instanceName(["a-b", "c"]));
+  // A pair with no hyphen keeps the readable form.
+  assertEquals(await instanceName(["example.com", 12345]), "example.com-12345");
+});
+
 Deno.test("buildQuery and pickBody: keep set values, drop the rest", () => {
   assertEquals(
     buildQuery({ a: "1", b: undefined, c: null, d: ["x", "y"], e: 5 }, [
@@ -404,6 +415,111 @@ Deno.test("dnsimpleApi: no token at all names the vault path", async () => {
       "vault.get",
     );
   });
+});
+
+/** Run `fn` with `fetch` replaced by `stub`, restoring it after. */
+async function withStubbedFetch(
+  stub: typeof fetch,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = stub;
+  try {
+    await fn();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+Deno.test("dnsimpleApi: a token with a stray character is refused without echoing it", async () => {
+  await withTokenEnv(undefined, async () => {
+    for (const token of ["abc\nX-Evil: 1", "ab cd", "tokén"]) {
+      const err = await assertRejects(
+        () => dnsimpleApi({ apiToken: token }, "GET", "/whoami"),
+        Error,
+        "stray newline",
+      );
+      assertEquals(err.message.includes("X-Evil"), false);
+      assertEquals(err.message.includes("abc"), false);
+    }
+    await assertRejects(
+      () => dnsimpleApi({ apiToken: "   " }, "GET", "/whoami"),
+      Error,
+      "vault.get",
+    );
+  });
+});
+
+Deno.test({
+  name: "dnsimpleApi: surrounding whitespace on the token is trimmed",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi(
+      () => ({ body: { data: {} } }),
+      async (requests) => {
+        await dnsimpleApi({ apiToken: "  test-token\n" }, "GET", "/whoami");
+        assertEquals(requests[0].authorization, "Bearer test-token");
+      },
+    );
+  },
+});
+
+Deno.test("dnsimpleApi: a header TypeError from fetch never quotes the token", async () => {
+  await withStubbedFetch(
+    () => {
+      throw new TypeError('Invalid header value: "Bearer s3cr3t-value"');
+    },
+    async () => {
+      const err = await assertRejects(
+        () => dnsimpleApi(ARGS, "GET", "/whoami"),
+        Error,
+        "request header is invalid",
+      );
+      assertEquals(err.message.includes("s3cr3t-value"), false);
+    },
+  );
+});
+
+Deno.test("dnsimpleApi: a timed-out write warns it may have completed; a read does not", async () => {
+  await withStubbedFetch(
+    () => Promise.reject(new DOMException("timed out", "TimeoutError")),
+    async () => {
+      await assertRejects(
+        () => dnsimpleApi(ARGS, "POST", "/1010/registrar/domains/x.com"),
+        Error,
+        "may have completed; check the resource before retrying",
+      );
+      const err = await assertRejects(
+        () => dnsimpleApi(ARGS, "GET", "/whoami"),
+        Error,
+        "timed out after 60s",
+      );
+      assertEquals(err.message.includes("may have completed"), false);
+    },
+  );
+});
+
+Deno.test({
+  name: "dnsimpleApi: a huge rate-limit header still reports the 429",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi(
+      () => ({
+        status: 429,
+        headers: {
+          "Retry-After": "99999999999999999999999",
+          "X-RateLimit-Reset": "99999999999999999999999",
+        },
+      }),
+      async () => {
+        await assertRejects(
+          () => dnsimpleApi(ARGS, "GET", "/whoami"),
+          Error,
+          "DNSimple API rate limited: GET /whoami; Retry-After is",
+        );
+      },
+    );
+  },
 });
 
 Deno.test({

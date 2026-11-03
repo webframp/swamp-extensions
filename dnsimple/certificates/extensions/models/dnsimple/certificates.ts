@@ -16,6 +16,7 @@ import {
   pickBody,
   requireAccountId,
   sanitizeInstanceName,
+  shortHash,
 } from "./_lib/api.ts";
 import type { ApiGlobalArgs } from "./_lib/api.ts";
 
@@ -55,22 +56,10 @@ const CertificatesItemSchema = z.object({
   common_name: z.string().nullable().optional(),
   years: z.number().int().nullable().optional(),
   csr: z.string().nullable().optional(),
-  state: z.enum([
-    "new",
-    "purchased",
-    "configured",
-    "submitted",
-    "issued",
-    "rejected",
-    "refunded",
-    "cancelled",
-    "requesting",
-    "failed",
-  ]).nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   alternate_names: z.array(z.string()).nullable().optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
-    .optional(),
+  authority_identifier: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -107,22 +96,10 @@ const CertificateSchema = z.object({
   common_name: z.string().nullable().optional(),
   years: z.number().int().nullable().optional(),
   csr: z.string().nullable().optional(),
-  state: z.enum([
-    "new",
-    "purchased",
-    "configured",
-    "submitted",
-    "issued",
-    "rejected",
-    "refunded",
-    "cancelled",
-    "requesting",
-    "failed",
-  ]).nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   alternate_names: z.array(z.string()).nullable().optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
-    .optional(),
+  authority_identifier: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -150,18 +127,7 @@ const CertificatePrivateKeySchema = z.object({
 const PurchaseLetsencryptCertificateSchema = z.object({
   id: z.number().int().nullable().optional(),
   certificate_id: z.number().int().nullable().optional(),
-  state: z.enum([
-    "new",
-    "purchased",
-    "configured",
-    "submitted",
-    "issued",
-    "rejected",
-    "refunded",
-    "cancelled",
-    "requesting",
-    "failed",
-  ]).nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
@@ -178,22 +144,10 @@ const IssueLetsencryptCertificateSchema = z.object({
   common_name: z.string().nullable().optional(),
   years: z.number().int().nullable().optional(),
   csr: z.string().nullable().optional(),
-  state: z.enum([
-    "new",
-    "purchased",
-    "configured",
-    "submitted",
-    "issued",
-    "rejected",
-    "refunded",
-    "cancelled",
-    "requesting",
-    "failed",
-  ]).nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   alternate_names: z.array(z.string()).nullable().optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
-    .optional(),
+  authority_identifier: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -212,8 +166,7 @@ const PurchaseRenewalLetsencryptCertificateSchema = z.object({
   id: z.number().int().nullable().optional(),
   old_certificate_id: z.number().int().nullable().optional(),
   new_certificate_id: z.number().int().nullable().optional(),
-  state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
@@ -230,22 +183,10 @@ const IssueRenewalLetsencryptCertificateSchema = z.object({
   common_name: z.string().nullable().optional(),
   years: z.number().int().nullable().optional(),
   csr: z.string().nullable().optional(),
-  state: z.enum([
-    "new",
-    "purchased",
-    "configured",
-    "submitted",
-    "issued",
-    "rejected",
-    "refunded",
-    "cancelled",
-    "requesting",
-    "failed",
-  ]).nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   alternate_names: z.array(z.string()).nullable().optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
-    .optional(),
+  authority_identifier: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -267,7 +208,7 @@ const IssueRenewalLetsencryptCertificateSchema = z.object({
 /** DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys */
 export const model = {
   type: "@webframp/dnsimple/certificates",
-  version: "2026.11.03.2",
+  version: "2026.11.03.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -279,6 +220,12 @@ export const model = {
     },
     {
       toVersion: "2026.11.03.2",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.3",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -340,7 +287,10 @@ export const model = {
     list_certificates: {
       description: "List certificates",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         sort: z.enum([
           "id:asc",
           "id:desc",
@@ -377,18 +327,20 @@ export const model = {
             { count: results.length, total: totalEntries ?? results.length },
           );
         }
-        const handle = await context.writeResource(
-          "certificates",
-          sanitizeInstanceName(String(args.domain)),
-          {
-            items: results,
-            truncated,
-            total_entries: totalEntries,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
-        );
+        const filter = JSON.stringify(buildQuery(args, ["sort"]));
+        const instance = filter === "{}"
+          ? sanitizeInstanceName(String(args.domain))
+          : `${sanitizeInstanceName(String(args.domain))}-${await shortHash(
+            filter,
+          )}`;
+        const handle = await context.writeResource("certificates", instance, {
+          items: results,
+          truncated,
+          total_entries: totalEntries,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Found {count} certificates", {
           count: results.length,
         });
@@ -398,10 +350,17 @@ export const model = {
     get_certificate: {
       description: "Retrieve a certificate",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        certificate: z.union([z.string(), z.number().int()]).describe(
-          "The certificate id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        certificate: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -430,10 +389,17 @@ export const model = {
     download_certificate: {
       description: "Download a certificate",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        certificate: z.union([z.string(), z.number().int()]).describe(
-          "The certificate id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        certificate: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -464,10 +430,17 @@ export const model = {
     get_certificate_private_key: {
       description: "Retrieve a certificate private key",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        certificate: z.union([z.string(), z.number().int()]).describe(
-          "The certificate id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        certificate: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -498,7 +471,10 @@ export const model = {
     purchase_letsencrypt_certificate: {
       description: "Billable: Let's Encrypt: Order a certificate",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         auto_renew: z.boolean().optional().describe(
           "Enable the auto-renewal of the certificate",
         ),
@@ -538,8 +514,17 @@ export const model = {
     issue_letsencrypt_certificate: {
       description: "Let's Encrypt: Issue a certificate",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        purchaseId: z.union([z.string(), z.number().int()]).describe(
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        purchaseId: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe(
           "The certificate purchase order id received by `purchaseLetsencryptCertificate`.",
         ),
       }),
@@ -572,10 +557,17 @@ export const model = {
     purchase_renewal_letsencrypt_certificate: {
       description: "Billable: Let's Encrypt: Order a certificate renewal",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        certificate: z.union([z.string(), z.number().int()]).describe(
-          "The certificate id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        certificate: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate id"),
         auto_renew: z.boolean().optional().describe(
           "Enable the auto-renewal of the certificate",
         ),
@@ -616,13 +608,24 @@ export const model = {
     issue_renewal_letsencrypt_certificate: {
       description: "Let's Encrypt: Issue a certificate renewal",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        certificate: z.union([z.string(), z.number().int()]).describe(
-          "The certificate id",
-        ),
-        renewalId: z.union([z.string(), z.number().int()]).describe(
-          "The certificate renewal order id received by...",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        certificate: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate id"),
+        renewalId: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The certificate renewal order id received by..."),
       }),
       execute: async (
         args: Record<string, unknown>,

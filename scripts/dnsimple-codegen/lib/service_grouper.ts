@@ -91,6 +91,17 @@ export interface ServiceGroup {
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 
+/** Verbs OpenAPI allows on a path that the generator does not support. */
+const UNSUPPORTED_METHODS = ["head", "options", "trace"] as const;
+
+/**
+ * Operation IDs and paths are emitted into generated source as identifiers and
+ * template-literal text, so anything outside these shapes stops generation
+ * rather than producing code that does not parse.
+ */
+const OPERATION_ID = /^[a-z][a-zA-Z0-9]*$/;
+const PATH_TEXT = /^[A-Za-z0-9_\-./{}]+$/;
+
 export interface GroupOptions {
   /** Service names to return; every service is still used for claim checks. */
   only?: string[];
@@ -118,12 +129,32 @@ export function groupOperations(
   for (const [path, pathItem] of Object.entries(spec.paths)) {
     if (!pathItem) continue;
     const pathLevelParams = (pathItem.parameters ?? []) as ParameterObject[];
+    if (!PATH_TEXT.test(path)) {
+      problems.push(`${path} has characters the generator cannot emit`);
+      continue;
+    }
+    for (const method of UNSUPPORTED_METHODS) {
+      if (method in pathItem) {
+        problems.push(
+          `${method.toUpperCase()} ${path} uses an HTTP method the generator does not support`,
+        );
+      }
+    }
 
     for (const method of HTTP_METHODS) {
       const operation = pathItem[method] as OperationObject | undefined;
       if (!operation || typeof operation !== "object") continue;
       const label = operation.operationId ?? `${method} ${path}`;
       if (excluded.has(operation.operationId ?? "")) continue;
+      if (!OPERATION_ID.test(operation.operationId ?? "")) {
+        problems.push(
+          `${method.toUpperCase()} ${path} has operationId ` +
+            `${
+              JSON.stringify(operation.operationId)
+            }; expected camelCase letters and digits`,
+        );
+        continue;
+      }
 
       const match = findService(path, services);
       if (match.kind === "none") {
@@ -143,6 +174,14 @@ export function groupOperations(
 
       groups.get(match.service.name)!.operations.push(
         extractOperation(spec, method, path, operation, pathLevelParams),
+      );
+    }
+  }
+
+  for (const group of groups.values()) {
+    if (group.operations.length === 0) {
+      problems.push(
+        `service ${group.config.name} matched no operations; check its pathPrefixes`,
       );
     }
   }

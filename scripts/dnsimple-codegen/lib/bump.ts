@@ -11,9 +11,13 @@
  */
 
 import { OUTPUT_BASE, SERVICES } from "../config.ts";
-import { fetchSchemaFresh } from "./schema_fetcher.ts";
+import { applySpecCorrections, fetchSchemaFresh } from "./schema_fetcher.ts";
 import { groupOperations } from "./service_grouper.ts";
-import { classifyServiceMethods } from "./method_classifier.ts";
+import {
+  classifyServiceMethods,
+  generateModelSource,
+} from "./method_classifier.ts";
+import { computeModelVersion } from "./upgrades.ts";
 import { join } from "@std/path";
 import { exists } from "@std/fs";
 
@@ -21,14 +25,26 @@ interface BumpOptions {
   dryRun: boolean;
   all: boolean;
   version?: string;
+  /** Release notes forwarded to main.ts, which requires them for a bump. */
+  notes?: string;
+  notesFile?: string;
 }
 
 function parseArgs(): BumpOptions {
   const args = Deno.args;
   const opts: BumpOptions = { dryRun: false, all: false };
+  const value = (i: number, flag: string): string => {
+    const v = args[i];
+    if (v === undefined || v.startsWith("--")) {
+      console.error(`\n❌ ${flag} needs a value`);
+      Deno.exit(1);
+    }
+    return v;
+  };
 
   for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
+    const flag = args[i];
+    switch (flag) {
       case "--dry-run":
         opts.dryRun = true;
         break;
@@ -36,8 +52,17 @@ function parseArgs(): BumpOptions {
         opts.all = true;
         break;
       case "--version":
-        opts.version = args[++i];
+        opts.version = value(++i, flag);
         break;
+      case "--notes":
+        opts.notes = value(++i, flag);
+        break;
+      case "--notes-file":
+        opts.notesFile = value(++i, flag);
+        break;
+      default:
+        console.error(`\n❌ unknown argument ${flag}`);
+        Deno.exit(1);
     }
   }
 
@@ -81,11 +106,23 @@ interface ServiceDiff {
   hasChanges: boolean;
 }
 
+/** Stand-in version, so the candidate source compares equal to what is on disk. */
+const PLACEHOLDER = "0.0.0.0";
+
+/**
+ * Compare each service's freshly generated model source with the file on
+ * disk. A new response field or enum value changes the source without
+ * changing the method count, so the comparison is on content.
+ */
 async function detectChanges(
   outputBase: string,
   groups: ReturnType<typeof groupOperations>,
 ): Promise<ServiceDiff[]> {
   const diffs: ServiceDiff[] = [];
+  const now = new Date();
+  const datePrefix = `${now.getFullYear()}.${
+    String(now.getMonth() + 1).padStart(2, "0")
+  }.${String(now.getDate()).padStart(2, "0")}`;
 
   for (const group of groups) {
     const methods = classifyServiceMethods(group);
@@ -100,11 +137,25 @@ async function detectChanges(
 
     let isNew = false;
     let oldMethods = 0;
+    let contentChanged = false;
 
     if (await exists(modelPath)) {
       const content = await Deno.readTextFile(modelPath);
       const methodMatches = content.match(/^\s{4}\w+:\s*{$/gm);
       oldMethods = methodMatches?.length ?? 0;
+      const candidate = generateModelSource(
+        group,
+        methods,
+        PLACEHOLDER,
+        "  upgrades: [],",
+      );
+      const result = await computeModelVersion(
+        modelPath,
+        datePrefix,
+        candidate,
+        PLACEHOLDER,
+      );
+      contentChanged = result.status !== "unchanged";
     } else {
       isNew = true;
     }
@@ -114,7 +165,7 @@ async function detectChanges(
       oldMethods,
       newMethods: methods.length,
       isNew,
-      hasChanges: isNew || methods.length !== oldMethods,
+      hasChanges: isNew || contentChanged,
     });
   }
 
@@ -133,6 +184,7 @@ async function main() {
 
   console.log(`📥 Fetching fresh DNSimple OpenAPI spec...`);
   const spec = await fetchSchemaFresh(join(OUTPUT_BASE, ".cache"));
+  applySpecCorrections(spec);
   console.log(
     `   ✓ Loaded: ${Object.keys(spec.paths).length} paths`,
   );
@@ -171,11 +223,22 @@ async function main() {
     Deno.exit(0);
   }
 
+  if (!opts.notes && !opts.notesFile) {
+    console.error(
+      `❌ A bump rewrites RELEASE_NOTES.md. Pass --notes "<body>" or ` +
+        `--notes-file <path> describing what changed.`,
+    );
+    Deno.exit(1);
+  }
+
   const version = opts.version ?? await getNextVersion(OUTPUT_BASE);
   console.log(`📌 Version: ${version}`);
   console.log(``);
 
   const serviceNames = changed.map((d) => d.name).join(",");
+  const notesArgs = opts.notes
+    ? ["--notes", opts.notes]
+    : ["--notes-file", opts.notesFile!];
   const cmd = new Deno.Command(Deno.execPath(), {
     args: [
       "run",
@@ -189,6 +252,7 @@ async function main() {
       serviceNames,
       "--version",
       version,
+      ...notesArgs,
     ],
     cwd: import.meta.dirname ? join(import.meta.dirname, "..") : ".",
     stdout: "inherit",

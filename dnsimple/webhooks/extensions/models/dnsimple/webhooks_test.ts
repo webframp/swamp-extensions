@@ -184,7 +184,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhooks");
-      assertEquals(resources[0].name, "main");
+      assertEquals(
+        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -224,7 +228,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhook");
-      assertEquals(resources[0].name, "1");
+      assertEquals(
+        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -266,7 +274,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhook");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -304,6 +316,19 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test("webhooks model: get_webhook rejects empty, '.' and '..' path arguments", () => {
+  const args = { "webhook": "test-id-123" };
+  const schema = model.methods.get_webhook.arguments;
+  assertEquals(schema.safeParse(args).success, true);
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(
+      schema.safeParse({ ...args, webhook: bad }).success,
+      false,
+      JSON.stringify(bad),
+    );
+  }
 });
 
 Deno.test({

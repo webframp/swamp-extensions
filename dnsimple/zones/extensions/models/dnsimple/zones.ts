@@ -157,38 +157,16 @@ const ZoneNsRecordsItemSchema = z.object({
   content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
-  priority: z.number().int().nullable().optional().default(0).describe(
+  priority: z.number().int().nullable().optional().describe(
     "The priority value for MX and SRV records. Lower values have higher priority.",
   ),
-  type: z.enum([
-    "A",
-    "AAAA",
-    "ALIAS",
-    "CAA",
-    "CNAME",
-    "DNSKEY",
-    "DS",
-    "HINFO",
-    "MX",
-    "NAPTR",
-    "NS",
-    "POOL",
-    "PTR",
-    "SOA",
-    "SPF",
-    "SRV",
-    "SSHFP",
-    "TXT",
-    "URL",
-  ]).nullable().optional().describe(
+  type: z.string().nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
-  regions: z.array(
-    z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).nullable().optional().describe(
+  regions: z.array(z.string()).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
   system_record: z.boolean().nullable().optional().describe(
@@ -233,38 +211,16 @@ const ZoneRecordsItemSchema = z.object({
   content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
-  priority: z.number().int().nullable().optional().default(0).describe(
+  priority: z.number().int().nullable().optional().describe(
     "The priority value for MX and SRV records. Lower values have higher priority.",
   ),
-  type: z.enum([
-    "A",
-    "AAAA",
-    "ALIAS",
-    "CAA",
-    "CNAME",
-    "DNSKEY",
-    "DS",
-    "HINFO",
-    "MX",
-    "NAPTR",
-    "NS",
-    "POOL",
-    "PTR",
-    "SOA",
-    "SPF",
-    "SRV",
-    "SSHFP",
-    "TXT",
-    "URL",
-  ]).nullable().optional().describe(
+  type: z.string().nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
-  regions: z.array(
-    z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).nullable().optional().describe(
+  regions: z.array(z.string()).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
   system_record: z.boolean().nullable().optional().describe(
@@ -309,38 +265,16 @@ const ZoneRecordSchema = z.object({
   content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
-  priority: z.number().int().nullable().optional().default(0).describe(
+  priority: z.number().int().nullable().optional().describe(
     "The priority value for MX and SRV records. Lower values have higher priority.",
   ),
-  type: z.enum([
-    "A",
-    "AAAA",
-    "ALIAS",
-    "CAA",
-    "CNAME",
-    "DNSKEY",
-    "DS",
-    "HINFO",
-    "MX",
-    "NAPTR",
-    "NS",
-    "POOL",
-    "PTR",
-    "SOA",
-    "SPF",
-    "SRV",
-    "SSHFP",
-    "TXT",
-    "URL",
-  ]).nullable().optional().describe(
+  type: z.string().nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
-  regions: z.array(
-    z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).nullable().optional().describe(
+  regions: z.array(z.string()).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
   system_record: z.boolean().nullable().optional().describe(
@@ -362,42 +296,10 @@ const BatchChangeZoneRecordsSchema = z.object({
       parent_id: z.number().int().nullable().optional(),
       name: z.string().nullable().optional(),
       content: z.string().nullable().optional(),
-      ttl: z.number().int().min(0).nullable().optional().default(3600),
-      priority: z.number().int().nullable().optional().default(0),
-      type: z.enum([
-        "A",
-        "AAAA",
-        "ALIAS",
-        "CAA",
-        "CNAME",
-        "DNSKEY",
-        "DS",
-        "HINFO",
-        "MX",
-        "NAPTR",
-        "NS",
-        "POOL",
-        "PTR",
-        "SOA",
-        "SPF",
-        "SRV",
-        "SSHFP",
-        "TXT",
-        "URL",
-      ]).nullable().optional(),
-      regions: z.array(
-        z.enum([
-          "global",
-          "SV1",
-          "ORD",
-          "IAD",
-          "AMS",
-          "TKO",
-          "SYD",
-          "CDG",
-          "FRA",
-        ]),
-      ).nullable().optional(),
+      ttl: z.number().int().min(0).nullable().optional(),
+      priority: z.number().int().nullable().optional(),
+      type: z.string().nullable().optional(),
+      regions: z.array(z.string()).nullable().optional(),
       system_record: z.boolean().nullable().optional(),
       created_at: z.string().nullable().optional(),
       updated_at: z.string().nullable().optional(),
@@ -410,42 +312,10 @@ const BatchChangeZoneRecordsSchema = z.object({
       parent_id: z.number().int().nullable().optional(),
       name: z.string().nullable().optional(),
       content: z.string().nullable().optional(),
-      ttl: z.number().int().min(0).nullable().optional().default(3600),
-      priority: z.number().int().nullable().optional().default(0),
-      type: z.enum([
-        "A",
-        "AAAA",
-        "ALIAS",
-        "CAA",
-        "CNAME",
-        "DNSKEY",
-        "DS",
-        "HINFO",
-        "MX",
-        "NAPTR",
-        "NS",
-        "POOL",
-        "PTR",
-        "SOA",
-        "SPF",
-        "SRV",
-        "SSHFP",
-        "TXT",
-        "URL",
-      ]).nullable().optional(),
-      regions: z.array(
-        z.enum([
-          "global",
-          "SV1",
-          "ORD",
-          "IAD",
-          "AMS",
-          "TKO",
-          "SYD",
-          "CDG",
-          "FRA",
-        ]),
-      ).nullable().optional(),
+      ttl: z.number().int().min(0).nullable().optional(),
+      priority: z.number().int().nullable().optional(),
+      type: z.string().nullable().optional(),
+      regions: z.array(z.string()).nullable().optional(),
       system_record: z.boolean().nullable().optional(),
       created_at: z.string().nullable().optional(),
       updated_at: z.string().nullable().optional(),
@@ -557,7 +427,7 @@ const QueryDnsAnalyticsSchema = z.object({
 /** DNSimple Zones — zones, records, batch changes, zone file, distribution checks, NS records, activation, and DNS analytics */
 export const model = {
   type: "@webframp/dnsimple/zones",
-  version: "2026.11.03.2",
+  version: "2026.11.03.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -569,6 +439,12 @@ export const model = {
     },
     {
       toVersion: "2026.11.03.2",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.3",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -682,7 +558,11 @@ export const model = {
             { count: results.length, total: totalEntries ?? results.length },
           );
         }
-        const handle = await context.writeResource("zones", "main", {
+        const filter = JSON.stringify(buildQuery(args, ["name_like", "sort"]));
+        const instance = filter === "{}"
+          ? "main"
+          : `${"main"}-${await shortHash(filter)}`;
+        const handle = await context.writeResource("zones", instance, {
           items: results,
           truncated,
           total_entries: totalEntries,
@@ -697,7 +577,10 @@ export const model = {
     get_zone: {
       description: "Retrieve a zone",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -723,7 +606,10 @@ export const model = {
     get_zone_file: {
       description: "Download a zone file",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -749,7 +635,10 @@ export const model = {
     check_zone_distribution: {
       description: "Check zone distribution",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -778,7 +667,10 @@ export const model = {
     update_zone_ns_records: {
       description: "Update a zone's NS records",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
         body: z.union([
           z.object({
             ns_names: z.array(z.string()),
@@ -807,9 +699,10 @@ export const model = {
           }/ns_records`,
           { body: args.body },
         );
+        const instance = await instanceName([args.zone]);
         const handle = await context.writeResource(
           "zone_ns_records",
-          await instanceName([args.zone]),
+          instance,
           {
             items,
             truncated: false,
@@ -827,7 +720,10 @@ export const model = {
     list_zone_records: {
       description: "List zone records",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
         name_like: z.string().optional().describe(
           "Only include results with a name field containing the given string",
         ),
@@ -877,18 +773,22 @@ export const model = {
             { count: results.length, total: totalEntries ?? results.length },
           );
         }
-        const handle = await context.writeResource(
-          "zone_records",
-          sanitizeInstanceName(String(args.zone)),
-          {
-            items: results,
-            truncated,
-            total_entries: totalEntries,
-            fetchedAt: new Date().toISOString(),
-            durationMs: Date.now() - startMs,
-            collectedBy: EXTENSION_NAME,
-          },
+        const filter = JSON.stringify(
+          buildQuery(args, ["name_like", "name", "type", "sort"]),
         );
+        const instance = filter === "{}"
+          ? sanitizeInstanceName(String(args.zone))
+          : `${sanitizeInstanceName(String(args.zone))}-${await shortHash(
+            filter,
+          )}`;
+        const handle = await context.writeResource("zone_records", instance, {
+          items: results,
+          truncated,
+          total_entries: totalEntries,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
         context.logger.info("Found {count} zone_records", {
           count: results.length,
         });
@@ -898,7 +798,10 @@ export const model = {
     create_zone_record: {
       description: "Create a zone record",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
         name: z.string(),
         type: z.enum([
           "A",
@@ -975,10 +878,17 @@ export const model = {
     get_zone_record: {
       description: "Retrieve a zone record",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
-        zonerecord: z.union([z.string(), z.number().int()]).describe(
-          "The zone record id",
-        ),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
+        zonerecord: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The zone record id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1007,10 +917,17 @@ export const model = {
     update_zone_record: {
       description: "Update a zone record",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
-        zonerecord: z.union([z.string(), z.number().int()]).describe(
-          "The zone record id",
-        ),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
+        zonerecord: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The zone record id"),
         name: z.string().optional(),
         content: z.string().optional(),
         ttl: z.number().int().min(0).optional().describe(
@@ -1060,10 +977,17 @@ export const model = {
     delete_zone_record: {
       description: "Delete a zone record",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
-        zonerecord: z.union([z.string(), z.number().int()]).describe(
-          "The zone record id",
-        ),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
+        zonerecord: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The zone record id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1087,7 +1011,10 @@ export const model = {
     batch_change_zone_records: {
       description: "Batch create, update, and/or delete records in a zone",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
         creates: z.array(z.object({
           name: z.string(),
           type: z.enum([
@@ -1112,7 +1039,7 @@ export const model = {
             "URL",
           ]),
           content: z.string(),
-          ttl: z.number().int().min(0).optional().default(3600),
+          ttl: z.number().int().min(0).optional(),
           priority: z.number().int().optional(),
           regions: z.array(
             z.enum([
@@ -1132,7 +1059,7 @@ export const model = {
           id: z.number().int(),
           name: z.string().optional(),
           content: z.string().optional(),
-          ttl: z.number().int().min(0).optional().default(3600),
+          ttl: z.number().int().min(0).optional(),
           priority: z.number().int().optional(),
           regions: z.array(
             z.enum([
@@ -1180,10 +1107,17 @@ export const model = {
     check_zone_record_distribution: {
       description: "Check zone record distribution",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
-        zonerecord: z.union([z.string(), z.number().int()]).describe(
-          "The zone record id",
-        ),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
+        zonerecord: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The zone record id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1214,7 +1148,10 @@ export const model = {
     activate_zone_service: {
       description: "Activate a zone DNS service",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1243,7 +1180,10 @@ export const model = {
     deactivate_zone_service: {
       description: "Deactivate a zone DNS service",
       arguments: z.object({
-        zone: z.string().describe("The zone name"),
+        zone: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The zone name"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1278,7 +1218,9 @@ export const model = {
         end_date: z.string().optional().describe(
           "Only include results before the given date. Format is ISO8601 (YYYY-MM-DD)....",
         ),
-        groupings: z.enum(["date", "volume", "zone_name"]).optional().describe(
+        groupings: z.string().regex(
+          /^(date|volume|zone_name)(,(date|volume|zone_name))*$/,
+        ).optional().describe(
           "How to group the results of the account's DNS analytics. No groupings will...",
         ),
         sort: z.string().optional().describe(
@@ -1315,9 +1257,15 @@ export const model = {
             { count: results.length, total: totalEntries ?? results.length },
           );
         }
+        const filter = JSON.stringify(
+          buildQuery(args, ["start_date", "end_date", "groupings", "sort"]),
+        );
+        const instance = filter === "{}"
+          ? "main"
+          : `${"main"}-${await shortHash(filter)}`;
         const handle = await context.writeResource(
           "query_dns_analytics",
-          "main",
+          instance,
           {
             items: results,
             truncated,

@@ -44,7 +44,7 @@ const DEFAULT_RETRY_SECONDS = 1;
  * not redact it. Throws a descriptive error when neither is set.
  */
 function resolveToken(apiToken?: string): string {
-  const token = apiToken ?? Deno.env.get("DNSIMPLE_TOKEN");
+  const token = (apiToken ?? Deno.env.get("DNSIMPLE_TOKEN"))?.trim();
   if (!token) {
     throw new Error(
       "DNSimple API token not set. Store it in a vault and set the apiToken " +
@@ -52,6 +52,14 @@ function resolveToken(apiToken?: string): string {
         '\'apiToken=${{ vault.get("dnsimple", "ACCESS_TOKEN") }}\'. The ' +
         "DNSIMPLE_TOKEN environment variable is read as a fallback, but it " +
         "is not redacted and is not recommended.",
+    );
+  }
+  // The value never appears in this message: a token with a stray newline or
+  // control character would otherwise reach swamp logs and run history.
+  if (!/^[\x21-\x7e]+$/.test(token)) {
+    throw new Error(
+      "DNSimple API token contains whitespace or a non-printable character; " +
+        "check the vaulted value for a stray newline.",
     );
   }
   return token;
@@ -120,13 +128,24 @@ export async function shortHash(input: string): Promise<string> {
 
 /**
  * Name a resource instance from a method's non-account path parameters, parent
- * first: one value names itself, two read `<parent>-<id>` (for example
- * `example.com-12345` for a zone record), and three or more are hashed so the
- * name stays collision-resistant.
+ * first: no values give `main`, one value names itself, two read
+ * `<parent>-<id>` (for example `example.com-12345` for a zone record), and
+ * three or more are hashed so the name stays collision-resistant. Two values
+ * where either contains `-` get a hash of the pair appended, because the
+ * joined form alone cannot tell `["a-b", "c"]` from `["a", "b-c"]`.
  */
 export async function instanceName(parts: unknown[]): Promise<string> {
   const strings = parts.map(String);
-  if (strings.length <= 2) return sanitizeInstanceName(strings.join("-"));
+  if (strings.length === 0) return "main";
+  if (strings.length === 1) return sanitizeInstanceName(strings[0]);
+  if (strings.length === 2) {
+    const joined = strings.join("-");
+    return sanitizeInstanceName(
+      strings.some((s) => s.includes("-"))
+        ? `${joined}-${await shortHash(JSON.stringify(strings))}`
+        : joined,
+    );
+  }
   return sanitizeInstanceName(await shortHash(JSON.stringify(strings)));
 }
 
@@ -204,10 +223,24 @@ async function fetchWithTimeout(
     });
     return { response, text: await response.text() };
   } catch (err) {
+    const method = init.method ?? "GET";
     if (err instanceof DOMException && err.name === "TimeoutError") {
-      throw new Error(
+      const timedOut =
         `DNSimple API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ` +
-          `${init.method ?? "GET"} ${url}`,
+        `${method} ${url}`;
+      throw new Error(
+        method === "GET"
+          ? timedOut
+          : `${timedOut}. The operation may have completed; check the ` +
+            `resource before retrying.`,
+      );
+    }
+    // A header the runtime rejects can quote its value, and the only
+    // caller-supplied header value is the access token.
+    if (err instanceof TypeError && /header/i.test(err.message)) {
+      throw new Error(
+        "DNSimple API request could not be sent: a request header is invalid " +
+          "(check the access token for stray characters).",
       );
     }
     throw err;
@@ -267,14 +300,21 @@ function rateLimitMessage(
   retried: boolean,
 ): string {
   const reset = Number(response.headers.get("X-RateLimit-Reset"));
-  const resetAt = Number.isFinite(reset) && reset > 0
+  const fromHeader = Number.isFinite(reset) && reset > 0
     ? new Date(reset * 1000)
-    : new Date(Date.now() + waitSeconds * 1000);
+    : undefined;
+  const fromWait = new Date(Date.now() + waitSeconds * 1000);
+  // A huge header value makes an invalid Date, whose toISOString() throws.
+  const resetAt = [fromHeader, fromWait].find((d) =>
+    d !== undefined && Number.isFinite(d.getTime())
+  );
   const reason = retried
     ? "still rate limited after one retry"
     : `Retry-After is ${waitSeconds}s, too long to wait inside a step`;
   return `DNSimple API rate limited: ${method} ${path}; ${reason} ` +
-    `(resets at ${resetAt.toISOString()})`;
+    (resetAt
+      ? `(resets at ${resetAt.toISOString()})`
+      : `(resets in about ${waitSeconds}s)`);
 }
 
 /**

@@ -50,6 +50,7 @@ These methods charge the DNSimple account. Their descriptions open with
 - `transfer_domain`
 - `renew_domain`
 - `restore_domain`
+- `enable_whois_privacy`
 
 ## Contact data
 
@@ -63,8 +64,8 @@ of versions (`garbageCollection`), so older copies are pruned.
 
 ## Secrets
 
-These methods take a secret argument. The argument is marked sensitive and is
-left out of the receipt the method writes.
+These methods take a secret argument. The argument is marked sensitive, and the
+extension never writes it to a stored resource.
 
 | Method            | Sensitive arguments |
 | ----------------- | ------------------- |
@@ -95,7 +96,7 @@ left out of the receipt the method writes.
 | `disable_domain_transfer_lock`         | Disable domain transfer lock         |
 | `enable_domain_auto_renewal`           | Enable domain auto-renewal           |
 | `disable_domain_auto_renewal`          | Disable domain auto-renewal          |
-| `enable_whois_privacy`                 | Enable WHOIS privacy                 |
+| `enable_whois_privacy`                 | Billable: Enable WHOIS privacy       |
 | `disable_whois_privacy`                | Disable WHOIS privacy                |
 | `list_registrant_changes`              | List registrant changes              |
 | `create_registrant_change`             | Start registrant change              |

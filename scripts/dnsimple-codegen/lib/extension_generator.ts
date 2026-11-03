@@ -295,8 +295,8 @@ ${
   }
 `;
   const takesText = taking.length === 0 ? "" : `
-These methods take a secret argument. The argument is marked sensitive and is
-left out of the receipt the method writes.
+These methods take a secret argument. The argument is marked sensitive, and
+the extension never writes it to a stored resource.
 
 | Method | Sensitive arguments |
 |--------|---------------------|

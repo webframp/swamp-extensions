@@ -133,9 +133,19 @@ export function generateTestSource(
     lines.push(``);
   }
 
-  const receipt = methods.find((m) => m.resultKind === "receipt");
-  if (receipt) {
-    lines.push(generateReceiptTest(config, receipt));
+  // One method per kind: a receipt, and an object-or-receipt method whose 204
+  // branch a 200 body alone would never reach.
+  for (const kind of ["receipt", "object-or-receipt"]) {
+    const receipt = methods.find((m) => m.resultKind === kind);
+    if (receipt) {
+      lines.push(generateReceiptTest(config, receipt));
+      lines.push(``);
+    }
+  }
+
+  const pathed = methods.find((m) => m.operation.pathParams.length > 0);
+  if (pathed) {
+    lines.push(generatePathArgumentTest(config, pathed));
     lines.push(``);
   }
 
@@ -417,7 +427,9 @@ function generateExecutionTest(
   const instance = expectedInstanceName(method);
   if (instance !== undefined) {
     checks.push(
-      `      assertEquals(resources[0].name, ${JSON.stringify(instance)});`,
+      `      assertEquals(new RegExp(${
+        JSON.stringify(instance)
+      }).test(resources[0].name), true, resources[0].name);`,
     );
   }
   checks.push(
@@ -535,6 +547,31 @@ function generateReceiptTest(
     });`,
     {},
   );
+}
+
+/**
+ * A path argument of "", "." or ".." is rejected by the method's argument
+ * schema: fetch normalizes dot segments, so one would retarget the call at the
+ * parent resource.
+ */
+function generatePathArgumentTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const args = buildMethodArgs(method);
+  const param = sanitizeFieldName(method.operation.pathParams[0].name);
+  return `Deno.test("${config.name} model: ${method.name} rejects empty, '.' and '..' path arguments", () => {
+  const args = ${JSON.stringify(args)};
+  const schema = model.methods.${method.name}.arguments;
+  assertEquals(schema.safeParse(args).success, true);
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(
+      schema.safeParse({ ...args, ${param}: bad }).success,
+      false,
+      JSON.stringify(bad),
+    );
+  }
+});`;
 }
 
 /** An account-scoped method without `accountId` fails before any request. */
@@ -737,6 +774,11 @@ function receiptArgs(
   args: Record<string, unknown>,
 ): Record<string, unknown> {
   const skip = new Set(sensitiveArgFields(method.operation));
+  // Mirrors the generated receipt: a free-form body is never recorded.
+  const shape = bodyShape(method.operation);
+  if (shape && shape !== "properties") {
+    skip.add(shape === "array" ? "items" : "body");
+  }
   return Object.fromEntries(
     Object.entries(args).filter(([k]) => !skip.has(k)),
   );
@@ -901,19 +943,30 @@ function expectedRequestBody(
 function expectedInstanceName(method: ClassifiedMethod): string | undefined {
   const op = method.operation;
   const parents = op.pathParams.map(() => PATH_PARAM_TEST_VALUE);
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // The runtime appends a 16-hex hash when a filter was supplied or when a
+  // two-part name has a hyphen in a part, so the readable base is anchored
+  // and the hash is optional.
+  const hash = "(-[0-9a-f]{16})?";
+  const named = (base: string) => `^${escape(base)}${hash}$`;
   const join = (parts: string[]) =>
-    parts.length <= 2 ? parts.join("-") : undefined;
+    parts.length <= 2 ? named(parts.join("-")) : undefined;
 
   if (method.resultKind === "list" && method.type === "list") {
-    if (parents.length === 0) return "main";
-    return parents.length === 1 ? parents[0] : undefined;
+    if (parents.length === 0) return named("main");
+    return parents.length === 1 ? named(parents[0]) : undefined;
   }
   if (method.type === "create") {
     if (!hasId(method)) return undefined;
     const fixture = generateFixture(method) as Record<string, unknown>;
     return join([...parents, String(fixture.id)]);
   }
-  if (parents.length === 0) return `${method.resource}-current`;
+  if (parents.length === 0) {
+    const resource = escape(method.resource!);
+    return op.queryParams.length === 0 && !op.requestBody
+      ? `^${resource}-current$`
+      : `^${resource}-[0-9a-f]{16}$`;
+  }
   return join(parents);
 }
 

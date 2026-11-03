@@ -10,11 +10,43 @@
  * handle either.
  */
 
-import { SCHEMA_URL } from "../config.ts";
+import { SCHEMA_URL, SPEC_CORRECTIONS } from "../config.ts";
+import type { SpecCorrection } from "../config.ts";
 import { join } from "@std/path";
 
 const CACHE_DIR = ".cache";
 const CACHE_FILE = "openapi.json";
+
+/**
+ * Fix known errors in the spec's text, in place. A correction applies only
+ * when the value at its path is still the expected one; the others are
+ * returned so the caller can report entries upstream has since fixed.
+ */
+export function applySpecCorrections(
+  spec: OpenAPISpec,
+  corrections: SpecCorrection[] = SPEC_CORRECTIONS,
+): SpecCorrection[] {
+  const stale: SpecCorrection[] = [];
+  for (const correction of corrections) {
+    const parent = correction.path.slice(0, -1).reduce<unknown>(
+      (node, key) =>
+        node && typeof node === "object"
+          ? (node as Record<string, unknown>)[key]
+          : undefined,
+      spec,
+    );
+    const last = correction.path[correction.path.length - 1];
+    if (
+      parent && typeof parent === "object" &&
+      (parent as Record<string, unknown>)[last] === correction.expected
+    ) {
+      (parent as Record<string, unknown>)[last] = correction.value;
+    } else {
+      stale.push(correction);
+    }
+  }
+  return stale;
+}
 
 export interface OpenAPISpec {
   openapi: string;

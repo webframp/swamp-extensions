@@ -5,6 +5,7 @@ import {
   assertThrows,
 } from "@std/assert";
 import { join } from "@std/path";
+import { z } from "npm:zod@4.6.5";
 import {
   argFields,
   assertSensitiveOperationsExist,
@@ -182,6 +183,7 @@ Deno.test("describe strings: only billable operations open with Billable:", () =
     .map((m) => m.operation.operationId)
     .sort();
   assertEquals(billable, [
+    "enableWhoisPrivacy",
     "purchaseLetsencryptCertificate",
     "purchaseRenewalLetsencryptCertificate",
     "registerDomain",
@@ -294,7 +296,7 @@ Deno.test("argFields: integer path ids accept a string or a number", () => {
   assertMatch(record.find((f) => f.name === "zone")!.zod, /^z\.string\(\)/);
   assertMatch(
     record.find((f) => f.name === "zonerecord")!.zod,
-    /^z\.union\(\[z\.string\(\), z\.number\(\)\.int\(\)\]\)/,
+    /^z\.union\(\[z\.string\(\)\.regex\(.*\), z\.number\(\)\.int\(\)\]\)/,
   );
 });
 
@@ -336,11 +338,65 @@ Deno.test("generated source: a list names its instance from its parent, so two z
     classifyServiceMethods(groups.find((g) => g.config.name === "zones")!),
     "2026.01.01.1",
   );
+  assertStringIncludes(source, 'writeResource("zone_records", instance');
   assertStringIncludes(
     source,
-    'writeResource("zone_records", sanitizeInstanceName(String(args.zone))',
+    'filter === "{}" ? sanitizeInstanceName(String(args.zone))',
   );
-  assertStringIncludes(source, 'writeResource("zones", "main"');
+  assertStringIncludes(source, 'filter === "{}" ? "main"');
+});
+
+Deno.test("argFields: a path argument rejects empty, '.' and '..'", () => {
+  const zone = argFields(byId.deleteZoneRecord).find((f) => f.name === "zone")!;
+  const schema = new Function("z", `return ${zone.zod};`)(z) as z.ZodString;
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(schema.safeParse(bad).success, false, JSON.stringify(bad));
+  }
+  for (const good of ["example.com", "..example.com", "a.."]) {
+    assertEquals(schema.safeParse(good).success, true, good);
+  }
+});
+
+Deno.test("argFields: a comma-separated enum query accepts several members", () => {
+  const groupings = argFields(byId.queryDnsAnalytics).find((f) =>
+    f.name === "groupings"
+  )!;
+  const schema = new Function("z", `return ${groupings.zod};`)(z) as z.ZodType;
+  assertEquals(schema.safeParse("date").success, true);
+  assertEquals(schema.safeParse("date,zone_name").success, true);
+  assertEquals(schema.safeParse("date,bogus").success, false);
+});
+
+Deno.test("generated source: request schemas carry no defaults", () => {
+  const zones = groups.find((g) => g.config.name === "zones")!;
+  const source = generateModelSource(
+    zones,
+    classifyServiceMethods(zones),
+    "2026.01.01.1",
+  );
+  // The only default is the `environment` global argument, not a spec value.
+  assertEquals(source.match(/\.default\(/g)?.length, 1);
+  assertStringIncludes(source, '.default("production")');
+});
+
+Deno.test("generated source: a free-form body is left out of the receipt", () => {
+  const domains = groups.find((g) => g.config.name === "domains")!;
+  const source = generateModelSource(
+    domains,
+    classifyServiceMethods(domains),
+    "2026.01.01.1",
+  );
+  assertStringIncludes(source, 'pickBody(args, ["body"])');
+});
+
+Deno.test("generated source: a parameterless action keys its instance on its arguments", () => {
+  const registrar = groups.find((g) => g.config.name === "registrar")!;
+  const source = generateModelSource(
+    registrar,
+    classifyServiceMethods(registrar),
+    "2026.01.01.1",
+  );
+  assertEquals(source.includes('"check_registrant_change-current"'), false);
 });
 
 Deno.test({

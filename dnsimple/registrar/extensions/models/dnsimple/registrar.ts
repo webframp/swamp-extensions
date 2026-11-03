@@ -103,8 +103,7 @@ const RegisterDomainSchema = z.object({
   domain_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
   period: z.number().int().min(1).max(10).nullable().optional(),
-  state: z.enum(["cancelled", "new", "registering", "registered", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   whois_privacy: z.boolean().nullable().optional(),
   trustee: z.boolean().nullable().optional(),
@@ -121,8 +120,7 @@ const DomainRegistrationSchema = z.object({
   domain_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
   period: z.number().int().min(1).max(10).nullable().optional(),
-  state: z.enum(["cancelled", "new", "registering", "registered", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   whois_privacy: z.boolean().nullable().optional(),
   trustee: z.boolean().nullable().optional(),
@@ -138,8 +136,7 @@ const TransferDomainSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
-  state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   whois_privacy: z.boolean().nullable().optional(),
   trustee: z.boolean().nullable().optional(),
@@ -156,8 +153,7 @@ const DomainTransferSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
-  state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   whois_privacy: z.boolean().nullable().optional(),
   trustee: z.boolean().nullable().optional(),
@@ -174,8 +170,7 @@ const CancelDomainTransferSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
-  state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   auto_renew: z.boolean().nullable().optional(),
   whois_privacy: z.boolean().nullable().optional(),
   trustee: z.boolean().nullable().optional(),
@@ -192,8 +187,7 @@ const RenewDomainSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
   period: z.number().int().min(1).max(9).nullable().optional(),
-  state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -206,8 +200,7 @@ const DomainRenewalSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
   period: z.number().int().min(1).max(9).nullable().optional(),
-  state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -219,8 +212,7 @@ const DomainRenewalSchema = z.object({
 const RestoreDomainSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
-  state: z.enum(["new", "restoring", "restored", "cancelled"]).nullable()
-    .optional(),
+  state: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -232,8 +224,7 @@ const RestoreDomainSchema = z.object({
 const DomainRestoreSchema = z.object({
   id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
-  state: z.enum(["new", "restoring", "restored", "cancelled"]).nullable()
-    .optional(),
+  state: z.string().nullable().optional(),
   created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
@@ -351,8 +342,7 @@ const RegistrantChangesItemSchema = z.object({
   account_id: z.number().int().nullable().optional(),
   contact_id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
-  state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
   registry_owner_change: z.boolean().nullable().optional(),
   irt_lock_lifted_by: z.string().nullable().optional().describe(
@@ -386,8 +376,7 @@ const RegistrantChangeSchema = z.object({
   account_id: z.number().int().nullable().optional(),
   contact_id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
-  state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
   registry_owner_change: z.boolean().nullable().optional(),
   irt_lock_lifted_by: z.string().nullable().optional().describe(
@@ -427,8 +416,7 @@ const DeleteRegistrantChangeSchemaData = z.object({
   account_id: z.number().int().nullable().optional(),
   contact_id: z.number().int().nullable().optional(),
   domain_id: z.number().int().nullable().optional(),
-  state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .nullable().optional(),
+  state: z.string().nullable().optional(),
   extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
   registry_owner_change: z.boolean().nullable().optional(),
   irt_lock_lifted_by: z.string().nullable().optional().describe(
@@ -454,7 +442,7 @@ const DeleteRegistrantChangeSchema = z.union([
 /** DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices */
 export const model = {
   type: "@webframp/dnsimple/registrar",
-  version: "2026.11.03.3",
+  version: "2026.11.03.4",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -472,6 +460,12 @@ export const model = {
     },
     {
       toVersion: "2026.11.03.3",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.4",
       description:
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
@@ -606,7 +600,7 @@ export const model = {
       garbageCollection: 20,
     },
     "enable_whois_privacy": {
-      description: "Enable WHOIS privacy",
+      description: "Billable: Enable WHOIS privacy",
       schema: EnableWhoisPrivacySchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -647,7 +641,10 @@ export const model = {
     check_domain: {
       description: "Check domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -673,7 +670,10 @@ export const model = {
     get_domain_prices: {
       description: "Get prices for a domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -702,7 +702,10 @@ export const model = {
     register_domain: {
       description: "Billable: Register a domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         registrant_id: z.number().int().describe(
           "The ID of an existing contact in your account.",
         ),
@@ -715,9 +718,8 @@ export const model = {
         trustee: z.boolean().optional().describe(
           "Set to true will attempt to purchase/enable trustee service as part of the...",
         ),
-        extended_attributes: z.object({}).optional().describe(
-          "Required for TLDs that require extended attributes.",
-        ),
+        extended_attributes: z.record(z.string(), z.unknown()).optional()
+          .describe("Required for TLDs that require extended attributes."),
         premium_price: z.string().optional().describe(
           "Required as confirmation of the price, only if the domain is premium.",
         ),
@@ -753,10 +755,17 @@ export const model = {
     get_domain_registration: {
       description: "Retrieve a domain registration",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        domainregistration: z.union([z.string(), z.number().int()]).describe(
-          "The domain registration id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        domainregistration: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The domain registration id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -787,7 +796,10 @@ export const model = {
     transfer_domain: {
       description: "Billable: Transfer a domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         registrant_id: z.number().int().describe(
           "The ID of an existing contact in your account.",
         ),
@@ -803,9 +815,8 @@ export const model = {
         trustee: z.boolean().optional().describe(
           "Set to true to use a trustee service for the transfer. An extra cost may...",
         ),
-        extended_attributes: z.object({}).optional().describe(
-          "Required for TLDs that require extended attributes.",
-        ),
+        extended_attributes: z.record(z.string(), z.unknown()).optional()
+          .describe("Required for TLDs that require extended attributes."),
         premium_price: z.string().optional().describe(
           "Required as confirmation of the price, only if the domain is premium.",
         ),
@@ -838,10 +849,17 @@ export const model = {
     get_domain_transfer: {
       description: "Retrieve a domain transfer",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        domaintransfer: z.union([z.string(), z.number().int()]).describe(
-          "The domain transfer id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        domaintransfer: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The domain transfer id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -870,10 +888,17 @@ export const model = {
     cancel_domain_transfer: {
       description: "Cancel a domain transfer",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        domaintransfer: z.union([z.string(), z.number().int()]).describe(
-          "The domain transfer id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        domaintransfer: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The domain transfer id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -902,7 +927,10 @@ export const model = {
     renew_domain: {
       description: "Billable: Renew a domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         period: z.number().int(),
         premium_price: z.string().optional().describe(
           "Required as confirmation of the price, only if the domain is premium.",
@@ -933,10 +961,17 @@ export const model = {
     get_domain_renewal: {
       description: "Retrieve a domain renewal",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        domainrenewal: z.union([z.string(), z.number().int()]).describe(
-          "The domain renewal id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        domainrenewal: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The domain renewal id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -965,7 +1000,10 @@ export const model = {
     restore_domain: {
       description: "Billable: Restore a domain",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         premium_price: z.string().optional().describe(
           "Required as confirmation of the price, only if the domain is premium.",
         ),
@@ -998,10 +1036,17 @@ export const model = {
     get_domain_restore: {
       description: "Retrieve a domain restore",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
-        domainrestore: z.union([z.string(), z.number().int()]).describe(
-          "The domain restore id",
-        ),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
+        domainrestore: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The domain restore id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1030,7 +1075,10 @@ export const model = {
     authorize_domain_transfer_out: {
       description: "Authorize a domain transfer out",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1064,7 +1112,10 @@ export const model = {
     get_domain_delegation: {
       description: "List domain name servers",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1082,9 +1133,10 @@ export const model = {
             encodeURIComponent(String(args.domain))
           }/delegation`,
         );
+        const instance = await instanceName([args.domain]);
         const handle = await context.writeResource(
           "domain_delegation",
-          await instanceName([args.domain]),
+          instance,
           {
             items,
             truncated: false,
@@ -1102,7 +1154,10 @@ export const model = {
     change_domain_delegation: {
       description: "Change domain name servers",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         items: z.array(z.string()),
       }),
       execute: async (
@@ -1122,9 +1177,10 @@ export const model = {
           }/delegation`,
           { body: args.items },
         );
+        const instance = await instanceName([args.domain]);
         const handle = await context.writeResource(
           "change_domain_delegation",
-          await instanceName([args.domain]),
+          instance,
           {
             items,
             truncated: false,
@@ -1142,7 +1198,10 @@ export const model = {
     change_domain_delegation_to_vanity: {
       description: "Delegate to vanity name servers",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
         items: z.array(z.string()),
       }),
       execute: async (
@@ -1162,9 +1221,10 @@ export const model = {
           }/delegation/vanity`,
           { body: args.items },
         );
+        const instance = await instanceName([args.domain]);
         const handle = await context.writeResource(
           "change_domain_delegation_to_vanity",
-          await instanceName([args.domain]),
+          instance,
           {
             items,
             truncated: false,
@@ -1183,7 +1243,10 @@ export const model = {
     change_domain_delegation_from_vanity: {
       description: "De-delegate from vanity name servers",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1220,7 +1283,10 @@ export const model = {
     get_domain_transfer_lock: {
       description: "Domain transfer lock status",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1249,7 +1315,10 @@ export const model = {
     enable_domain_transfer_lock: {
       description: "Enable domain transfer lock",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1278,7 +1347,10 @@ export const model = {
     disable_domain_transfer_lock: {
       description: "Disable domain transfer lock",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1307,7 +1379,10 @@ export const model = {
     enable_domain_auto_renewal: {
       description: "Enable domain auto-renewal",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1341,7 +1416,10 @@ export const model = {
     disable_domain_auto_renewal: {
       description: "Disable domain auto-renewal",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1373,9 +1451,12 @@ export const model = {
       },
     },
     enable_whois_privacy: {
-      description: "Enable WHOIS privacy",
+      description: "Billable: Enable WHOIS privacy",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1404,7 +1485,10 @@ export const model = {
     disable_whois_privacy: {
       description: "Disable WHOIS privacy",
       arguments: z.object({
-        domain: z.string().describe("The domain name or id"),
+        domain: z.string().regex(
+          /^(?!\.{1,2}$).+$/,
+          "must be non-empty and not '.' or '..'",
+        ).describe("The domain name or id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1482,9 +1566,15 @@ export const model = {
             { count: results.length, total: totalEntries ?? results.length },
           );
         }
+        const filter = JSON.stringify(
+          buildQuery(args, ["sort", "state", "domain_id", "contact_id"]),
+        );
+        const instance = filter === "{}"
+          ? "main"
+          : `${"main"}-${await shortHash(filter)}`;
         const handle = await context.writeResource(
           "registrant_changes",
-          "main",
+          instance,
           {
             items: results,
             truncated,
@@ -1558,7 +1648,10 @@ export const model = {
         );
         const handle = await context.writeResource(
           "check_registrant_change",
-          "check_registrant_change-current",
+          "check_registrant_change-" +
+            sanitizeInstanceName(
+              await shortHash(JSON.stringify(pickBody(args, []))),
+            ),
           result,
         );
         context.logger.info("Executed check_registrant_change", {});
@@ -1568,9 +1661,13 @@ export const model = {
     get_registrant_change: {
       description: "Retrieve a registrant change",
       arguments: z.object({
-        registrantchange: z.union([z.string(), z.number().int()]).describe(
-          "The registrant change id",
-        ),
+        registrantchange: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The registrant change id"),
       }),
       execute: async (
         args: Record<string, unknown>,
@@ -1599,9 +1696,13 @@ export const model = {
     delete_registrant_change: {
       description: "Cancel a registrant change",
       arguments: z.object({
-        registrantchange: z.union([z.string(), z.number().int()]).describe(
-          "The registrant change id",
-        ),
+        registrantchange: z.union([
+          z.string().regex(
+            /^(?!\.{1,2}$).+$/,
+            "must be non-empty and not '.' or '..'",
+          ),
+          z.number().int(),
+        ]).describe("The registrant change id"),
       }),
       execute: async (
         args: Record<string, unknown>,

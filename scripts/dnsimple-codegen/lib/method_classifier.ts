@@ -512,6 +512,7 @@ const RECEIPT_SCHEMA = `const ReceiptSchema = z.object({
 /** Map options shared by every response schema: tolerant and passthrough. */
 const RESPONSE_OPTS = {
   indent: 2,
+  emitDefaults: false,
   lenient: true,
   passthrough: true,
   nullTolerant: true,
@@ -649,6 +650,34 @@ export function sanitizeFieldName(name: string): string {
     .replace(/^\d/, "_$&");
 }
 
+/** Options for request argument schemas: the spec's types, no defaults. */
+const REQUEST_OPTS = { indent: 2, emitDefaults: false };
+
+/**
+ * A path argument. fetch normalizes `.` and `..` segments, so an unchecked
+ * `..` would retarget the call at the parent resource (a DELETE of a record
+ * becoming a DELETE of its domain); an empty value collapses the segment.
+ */
+const PATH_STRING =
+  `z.string().regex(/^(?!\\.{1,2}$).+$/, "must be non-empty and not '.' or '..'")`;
+
+/**
+ * An enum query parameter the spec says takes several comma-separated values,
+ * as a pattern over the enum members. Undefined for any other parameter.
+ */
+function commaListZod(
+  schema: SchemaObject,
+  description: string | undefined,
+): string | undefined {
+  const members = schema.enum?.filter((v) => typeof v === "string");
+  if (!members?.length || !/comma/i.test(description ?? "")) return undefined;
+  const alt = members.map((m) =>
+    String(m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  )
+    .join("|");
+  return `z.string().regex(/^(${alt})(,(${alt}))*$/)`;
+}
+
 /** One generated argument field: `name: zod,` with its provenance. */
 interface ArgField {
   name: string;
@@ -681,8 +710,8 @@ export function argFields(method: ClassifiedMethod): ArgField[] {
       ? p.schema.type[0]
       : p.schema?.type;
     const base = type === "integer" || type === "number"
-      ? "z.union([z.string(), z.number().int()])"
-      : "z.string()";
+      ? `z.union([${PATH_STRING}, z.number().int()])`
+      : PATH_STRING;
     claim({ name, zod: `${base}${describe(p.description)}`, origin: "path" });
   }
 
@@ -695,7 +724,8 @@ export function argFields(method: ClassifiedMethod): ArgField[] {
       );
     }
     const base = p.schema
-      ? schemaToZod(p.schema, { indent: 2 }, 2)
+      ? commaListZod(p.schema, p.description) ??
+        schemaToZod(p.schema, REQUEST_OPTS, 2)
       : "z.string()";
     claim({
       name,
@@ -718,7 +748,7 @@ export function argFields(method: ClassifiedMethod): ArgField[] {
             `identifier; the generated body builder sends argument names as-is`,
         );
       }
-      let zod = schemaToZod(schema, { indent: 2 }, 2);
+      let zod = schemaToZod(schema, REQUEST_OPTS, 2);
       if (sensitive.has(prop)) zod = markSensitive(zod);
       claim({
         name,
@@ -733,7 +763,7 @@ export function argFields(method: ClassifiedMethod): ArgField[] {
     const shape = bodyShape(op);
     if (shape === "union") {
       const variants = (body.oneOf ?? body.anyOf)!.map((v) =>
-        schemaToZod(v, { indent: 2 }, 2)
+        schemaToZod(v, REQUEST_OPTS, 2)
       );
       const zod = variants.length === 1
         ? variants[0]
@@ -744,7 +774,7 @@ export function argFields(method: ClassifiedMethod): ArgField[] {
         origin: "body",
       });
     } else if (shape === "array") {
-      const item = schemaToZod(body.items ?? {}, { indent: 2 }, 2);
+      const item = schemaToZod(body.items ?? {}, REQUEST_OPTS, 2);
       claim({
         name: "items",
         zod: `z.array(${item})${optional}${describe(body.description)}`,
@@ -865,10 +895,9 @@ function generateExecuteBody(
     );
     lines.push(`${pad}}`);
     const kept = op.pagination.keep.map((k) => `${pad}  ${k}: kept.${k},`);
+    lines.push(...instanceLines(op, listInstanceExpr(op), pad));
     lines.push(
-      `${pad}const handle = await context.writeResource("${resource}", ${
-        listInstanceExpr(op)
-      }, {`,
+      `${pad}const handle = await context.writeResource("${resource}", instance, {`,
     );
     lines.push(`${pad}  items: results,`);
     lines.push(`${pad}  truncated,`);
@@ -891,11 +920,12 @@ function generateExecuteBody(
     lines.push(
       `${pad}const items = await dnsimpleApiData<unknown[]>(context.globalArgs, "${httpMethod}", ${path}${options});`,
     );
-    const instance = op.pathParams.length > 0 || method.type !== "list"
+    const base = op.pathParams.length > 0 || method.type !== "list"
       ? itemInstanceExpr(method)
       : `"main"`;
+    lines.push(...instanceLines(op, base, pad));
     lines.push(
-      `${pad}const handle = await context.writeResource("${resource}", ${instance}, {`,
+      `${pad}const handle = await context.writeResource("${resource}", instance, {`,
     );
     lines.push(`${pad}  items,`);
     lines.push(`${pad}  truncated: false,`);
@@ -925,7 +955,13 @@ function generateExecuteBody(
   if (
     method.resultKind === "receipt" || method.resultKind === "object-or-receipt"
   ) {
-    const receiptArgs = `pickBody(args, ${JSON.stringify(sensitive)})`;
+    // A free-form body (a settings hash, a record array) can carry a secret
+    // no field list names, so a receipt records only the named arguments.
+    const shape = bodyShape(op);
+    const omitted = shape && shape !== "properties"
+      ? [...sensitive, shape === "array" ? "items" : "body"]
+      : sensitive;
+    const receiptArgs = `pickBody(args, ${JSON.stringify(omitted)})`;
     lines.push(
       `${pad}const response = await dnsimpleApi<{ data?: Record<string, unknown> }>(context.globalArgs, "${httpMethod}", ${path}${options});`,
     );
@@ -993,6 +1029,23 @@ function requestOptions(method: ClassifiedMethod): string {
 }
 
 /**
+ * Declare `instance`: the base name, extended with a hash of the query
+ * arguments actually supplied so a filtered list never overwrites the
+ * unfiltered one (or another filter's) under the same name.
+ */
+function instanceLines(
+  op: GroupedOperation,
+  base: string,
+  pad: string,
+): string[] {
+  if (op.queryParams.length === 0) return [`${pad}const instance = ${base};`];
+  return [
+    `${pad}const filter = JSON.stringify(buildQuery(args, ${queryNames(op)}));`,
+    `${pad}const instance = filter === "{}" ? ${base} : \`\${${base}}-\${await shortHash(filter)}\`;`,
+  ];
+}
+
+/**
  * Instance name for a list: a parentless list is "main"; one path parameter
  * names itself; several are hashed so two parents never overwrite each other.
  */
@@ -1013,7 +1066,16 @@ function listInstanceExpr(op: GroupedOperation): string {
  */
 function itemInstanceExpr(method: ClassifiedMethod): string {
   const op = method.operation;
-  if (op.pathParams.length === 0) return `"${method.resource}-current"`;
+  if (op.pathParams.length === 0) {
+    // With no target in the path, two calls differing only in their query or
+    // body arguments (a check for one domain/contact pair, another pair) must
+    // not share one instance.
+    if (op.queryParams.length === 0 && !op.requestBody) {
+      return `"${method.resource}-current"`;
+    }
+    const sensitive = JSON.stringify(sensitiveArgFields(op));
+    return `"${method.resource}-" + sanitizeInstanceName(await shortHash(JSON.stringify(pickBody(args, ${sensitive}))))`;
+  }
   const refs = op.pathParams.map((p) => `args.${sanitizeFieldName(p.name)}`);
   return `await instanceName([${refs.join(", ")}])`;
 }
@@ -1060,7 +1122,10 @@ function toPascalCase(name: string): string {
 }
 
 function escapeStr(s: string): string {
-  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, " ");
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(
+    /[\r\n\u2028\u2029]/g,
+    " ",
+  );
 }
 
 function truncateStr(s: string): string {

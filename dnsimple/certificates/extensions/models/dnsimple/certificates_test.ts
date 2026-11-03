@@ -215,7 +215,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "certificates");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -268,7 +272,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "certificate");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -310,7 +320,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "download_certificate");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -346,7 +362,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "certificate_private_key");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -399,7 +421,11 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "purchase_letsencrypt_certificate");
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -453,7 +479,13 @@ Deno.test({
       const resources = getWrittenResources();
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "issue_letsencrypt_certificate");
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -508,7 +540,13 @@ Deno.test({
         resources[0].specName,
         "purchase_renewal_letsencrypt_certificate",
       );
-      assertEquals(resources[0].name, "test-id-123-test-id-123");
+      assertEquals(
+        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+          resources[0].name,
+        ),
+        true,
+        resources[0].name,
+      );
       parseAgainstSchema(resources[0].specName, resources[0].data);
     } finally {
       uninstall();
@@ -729,6 +767,19 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test("certificates model: list_certificates rejects empty, '.' and '..' path arguments", () => {
+  const args = { "domain": "test-id-123", "sort": "id:asc" };
+  const schema = model.methods.list_certificates.arguments;
+  assertEquals(schema.safeParse(args).success, true);
+  for (const bad of ["", ".", ".."]) {
+    assertEquals(
+      schema.safeParse({ ...args, domain: bad }).success,
+      false,
+      JSON.stringify(bad),
+    );
+  }
 });
 
 Deno.test({
