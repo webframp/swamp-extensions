@@ -249,7 +249,7 @@ Deno.test({
       const result = await run("create_primary_server", {
         "name": "test-value",
         "ip": "test-value",
-        "port": "test-value",
+        "port": 1,
       }, context);
       assertEquals(requests.length, 1);
       assertEquals(requests[0].method, "POST");
@@ -257,7 +257,7 @@ Deno.test({
       assertEquals(requests[0].body, {
         "name": "test-value",
         "ip": "test-value",
-        "port": "test-value",
+        "port": 1,
       });
       assertEquals(result.dataHandles.length, 1);
       const resources = getWrittenResources();

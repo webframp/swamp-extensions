@@ -1,4 +1,6 @@
-## 2026.11.03.1
+## 2026.11.03.2
 
-**Added:** Initial code-generated release of @webframp/dnsimple/webhooks with 4
-methods covering the DNSimple webhooks API surface.
+Fixed: list_webhooks no longer stores truncated: false unconditionally. It
+stores true when the response reports more pages than were fetched. DNSimple
+returns every webhook in one response today, so nothing changes for current
+accounts.

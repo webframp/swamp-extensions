@@ -13,6 +13,7 @@ import {
   describeError,
   dnsimpleApi,
   dnsimpleApiData,
+  dnsimpleApiList,
   dnsimpleApiPaginated,
   hashArgs,
   instanceName,
@@ -698,6 +699,66 @@ Deno.test({
         assertEquals(await dnsimpleApiData(ARGS, "GET", "/one"), { id: 1 });
         await assertRejects(
           () => dnsimpleApiData(ARGS, "GET", "/empty"),
+          Error,
+          "empty response body",
+        );
+      },
+    );
+  },
+});
+
+Deno.test({
+  name:
+    "dnsimpleApiList: one request; truncated only when the response reports more pages",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi(
+      (req) => {
+        switch (req.url.pathname) {
+          case "/plain":
+            return { body: { data: [{ id: 1 }] } };
+          case "/last":
+            return { body: page(2, 2, 1) };
+          case "/more":
+            return { body: page(1, 3, 1) };
+          case "/odd":
+            return {
+              body: {
+                data: [],
+                pagination: { current_page: "x", total_pages: 2 },
+              },
+            };
+          case "/null":
+            return { body: { data: null } };
+          default:
+            return { status: 204 };
+        }
+      },
+      async () => {
+        assertEquals(await dnsimpleApiList(ARGS, "GET", "/plain"), {
+          items: [{ id: 1 }],
+          truncated: false,
+        });
+        assertEquals(
+          (await dnsimpleApiList(ARGS, "GET", "/last")).truncated,
+          false,
+        );
+        assertEquals(
+          (await dnsimpleApiList(ARGS, "GET", "/more")).truncated,
+          true,
+        );
+        // An unreadable current page counts as the first, never as complete.
+        assertEquals(
+          (await dnsimpleApiList(ARGS, "GET", "/odd")).truncated,
+          true,
+        );
+        await assertRejects(
+          () => dnsimpleApiList(ARGS, "GET", "/null"),
+          Error,
+          "null data",
+        );
+        await assertRejects(
+          () => dnsimpleApiList(ARGS, "GET", "/gone"),
           Error,
           "empty response body",
         );

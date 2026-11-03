@@ -1,4 +1,5 @@
-## 2026.11.03.1
+## 2026.11.03.2
 
-**Added:** Initial code-generated release of @webframp/dnsimple/secondary-dns
-with 7 methods covering the DNSimple secondary dns API surface.
+Fixed: create_primary_server sends port as an integer. The argument was typed as
+a string although DNSimple returns the port as an integer, so the request
+carried a string the API can refuse. Pass a number, for example 53.
