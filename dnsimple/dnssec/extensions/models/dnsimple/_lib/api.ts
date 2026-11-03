@@ -184,21 +184,19 @@ export async function shortHash(input: string): Promise<string> {
 /**
  * Name a resource instance from a method's non-account path parameters, parent
  * first: no values give `main`, one value names itself, two read
- * `<parent>-<id>` (for example `example.com-12345` for a zone record), and
- * three or more are hashed so the name stays collision-resistant. Two values
- * where either contains `-` get a hash of the pair appended, because the
- * joined form alone cannot tell `["a-b", "c"]` from `["a", "b-c"]`.
+ * `<parent>-<id>-<hash>` (for example `example.com-12345-<hash>` for a zone
+ * record), and three or more are hashed so the name stays collision-resistant.
+ * The pair's hash is always appended: the joined form alone cannot tell
+ * `["a-b", "c"]` from `["a", "b-c"]`, nor `["a", "b"]` from the one value
+ * `"a-b"`.
  */
 export async function instanceName(parts: unknown[]): Promise<string> {
   const strings = parts.map(String);
   if (strings.length === 0) return "main";
   if (strings.length === 1) return sanitizeInstanceName(strings[0]);
   if (strings.length === 2) {
-    const joined = strings.join("-");
     return sanitizeInstanceName(
-      strings.some((s) => s.includes("-"))
-        ? `${joined}-${await shortHash(JSON.stringify(strings))}`
-        : joined,
+      `${strings.join("-")}-${await shortHash(JSON.stringify(strings))}`,
     );
   }
   return sanitizeInstanceName(await shortHash(JSON.stringify(strings)));

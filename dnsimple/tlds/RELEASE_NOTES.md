@@ -1,4 +1,4 @@
-## 2026.11.03.2
+## 2026.11.03.3
 
 Fixed: get_tld_extended_attributes no longer stores truncated: false
 unconditionally. It stores true when the response reports more pages than were
