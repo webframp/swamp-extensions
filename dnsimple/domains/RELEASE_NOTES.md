@@ -1,4 +1,4 @@
-## 2026.11.02.1
+## 2026.11.03.1
 
-**Added:** Initial code-generated release of @webframp/dnsimple/domains with 20
-methods covering the DNSimple domains API surface.
+**Added:** Initial code-generated release of the @webframp/dnsimple extensions
+covering the DNSimple API v2 surface.

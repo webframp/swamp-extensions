@@ -40,6 +40,16 @@ method without it fails before any request goes out.
 `environment` is `production` by default. Set `--global-arg environment=sandbox`
 to use DNSimple's sandbox, which has its own accounts and tokens.
 
+## Contact data
+
+Registrant contact details (names, email addresses, phone numbers and postal
+addresses) are required to manage a domain, so this extension stores them as
+ordinary swamp data and does not mark them sensitive. Sensitive fields move to a
+vault and leave only a reference, which would make contact records unreadable to
+expressions and reports. The access controls of the datastore that holds your
+swamp data are the boundary for this data. Each resource keeps a bounded number
+of versions (`garbageCollection`), so older copies are pruned.
+
 ## Methods
 
 | Method           | Description        |

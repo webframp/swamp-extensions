@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/dnsimple/dnssec"
 license: Apache-2.0
-version: "2026.11.02.1"
+version: "2026.11.03.1"
 description: "DNSimple DNSSEC — DNSSEC state and delegation signer records"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

@@ -51,16 +51,16 @@ const GlobalArgsSchema = z.object({
 });
 
 const PrimaryServersItemSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  ip: z.string().optional(),
-  port: z.number().int().optional(),
-  linked_secondary_zones: z.array(z.string()).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  port: z.number().int().nullable().optional(),
+  linked_secondary_zones: z.array(z.string()).nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -81,79 +81,79 @@ const PrimaryServersSchema = z.object({
 });
 
 const PrimaryServerSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  ip: z.string().optional(),
-  port: z.number().int().optional(),
-  linked_secondary_zones: z.array(z.string()).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  port: z.number().int().nullable().optional(),
+  linked_secondary_zones: z.array(z.string()).nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const LinkPrimaryServerSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  ip: z.string().optional(),
-  port: z.number().int().optional(),
-  linked_secondary_zones: z.array(z.string()).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  port: z.number().int().nullable().optional(),
+  linked_secondary_zones: z.array(z.string()).nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const UnlinkPrimaryServerSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  ip: z.string().optional(),
-  port: z.number().int().optional(),
-  linked_secondary_zones: z.array(z.string()).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ip: z.string().nullable().optional(),
+  port: z.number().int().nullable().optional(),
+  linked_secondary_zones: z.array(z.string()).nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const SecondaryZoneSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  reverse: z.boolean().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  reverse: z.boolean().nullable().optional().describe(
     "Returns true for a reverse zone, false for a forward zone.",
   ),
-  secondary: z.boolean().optional().describe(
+  secondary: z.boolean().nullable().optional().describe(
     "Returns true for a secondary zone, false for a primary zone.",
   ),
   last_transferred_at: z.string().nullable().optional().describe(
     "Returns the date the zone was last transferred. Used if it is a secondary zone.",
   ),
-  active: z.boolean().optional().describe(
+  active: z.boolean().nullable().optional().describe(
     "Returns true if DNS services are active for the zone. If false, DNS services are disabled and DNS...",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  records_count: z.number().int().optional().describe(
+  records_count: z.number().int().nullable().optional().describe(
     "The number of records in the zone. Returned only when retrieving a single zone.",
   ),
-  records_limit: z.number().int().optional().describe(
+  records_limit: z.number().int().nullable().optional().describe(
     "The record limit of the zone. Depending on your plan, records above it are either charged or cann...",
   ),
-  records_overage: z.number().int().optional().describe(
+  records_overage: z.number().int().nullable().optional().describe(
     "The number of records above the limit, 0 when the zone is at or below its limit. Returned only wh...",
   ),
 }).passthrough();
@@ -165,10 +165,17 @@ const SecondaryZoneSchema = z.object({
 /** DNSimple Secondary DNS — primary servers and secondary zones */
 export const model = {
   type: "@webframp/dnsimple/secondary-dns",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "primary_servers": {

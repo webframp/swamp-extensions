@@ -319,6 +319,25 @@ Deno.test("passthrough: every object, at every depth, tolerates unknown fields",
   );
 });
 
+Deno.test("nullTolerant: every object field accepts null, once, at every depth", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      email: { type: "string" },
+      already: { type: ["string", "null"] },
+      child: { type: "object", properties: { id: { type: "integer" } } },
+    },
+  };
+  const out = schemaToZod(schema, { nullTolerant: true, lenient: true });
+  assertEquals(out.includes("email: z.string().nullable()"), true);
+  assertEquals(out.includes(".nullable().nullable()"), false);
+  assertEquals(out.includes("id: z.number().int().nullable()"), true);
+  assertEquals(
+    schemaToZod(schema).includes("email: z.string().nullable()"),
+    false,
+  );
+});
+
 Deno.test("passthrough: off by default and kept before .nullable()", () => {
   const schema: SchemaObject = {
     type: ["object", "null"],

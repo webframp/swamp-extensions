@@ -46,45 +46,45 @@ const GlobalArgsSchema = z.object({
 });
 
 const TldsItemSchema = z.object({
-  tld: z.string().optional().describe(
+  tld: z.string().nullable().optional().describe(
     "The registerable suffix. In most cases the suffix matches a TLD, but there are some cases where t...",
   ),
-  tld_type: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional()
-    .describe(
+  tld_type: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable()
+    .optional().describe(
       "TLD types are: * 1 - gTLD (global TLD) * 2 - ccTLD (country-code TLD) * 3 - newTLD (new global TLD)",
     ),
-  whois_privacy: z.boolean().optional().describe(
+  whois_privacy: z.boolean().nullable().optional().describe(
     "true if the suffix allows WHOIS privacy as a separate component. Some registries may provide WHOI...",
   ),
-  auto_renew_only: z.boolean().optional().describe(
+  auto_renew_only: z.boolean().nullable().optional().describe(
     "true if the suffix requires auto-renewal and can't be renewed manually",
   ),
-  idn: z.boolean().optional().describe(
+  idn: z.boolean().nullable().optional().describe(
     "true if the suffix supports Internationalized Domain Names (IDN)",
   ),
-  minimum_registration: z.number().int().optional(),
-  registration_enabled: z.boolean().optional().describe(
+  minimum_registration: z.number().int().nullable().optional(),
+  registration_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports registrations for this TLD",
   ),
-  renewal_enabled: z.boolean().optional().describe(
+  renewal_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports renewals for this TLD",
   ),
-  transfer_enabled: z.boolean().optional().describe(
+  transfer_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports inbound transfers for this TLD",
   ),
-  dnssec_interface_type: z.enum(["ds", "key"]).optional().describe(
+  dnssec_interface_type: z.enum(["ds", "key"]).nullable().optional().describe(
     "type of data interface required for DNSSEC",
   ),
-  name_server_min: z.number().int().optional().describe(
+  name_server_min: z.number().int().nullable().optional().describe(
     "minimum number of name servers required for this TLD",
   ),
-  name_server_max: z.number().int().optional().describe(
+  name_server_max: z.number().int().nullable().optional().describe(
     "maximum number of name servers allowed for this TLD",
   ),
-  trustee_service_enabled: z.boolean().optional().describe(
+  trustee_service_enabled: z.boolean().nullable().optional().describe(
     "true if trustee service is enabled by default for this TLD",
   ),
-  trustee_service_required: z.boolean().optional().describe(
+  trustee_service_required: z.boolean().nullable().optional().describe(
     "true if trustee is required for this TLD",
   ),
 }).passthrough();
@@ -105,61 +105,61 @@ const TldsSchema = z.object({
 });
 
 const TldSchema = z.object({
-  tld: z.string().optional().describe(
+  tld: z.string().nullable().optional().describe(
     "The registerable suffix. In most cases the suffix matches a TLD, but there are some cases where t...",
   ),
-  tld_type: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional()
-    .describe(
+  tld_type: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable()
+    .optional().describe(
       "TLD types are: * 1 - gTLD (global TLD) * 2 - ccTLD (country-code TLD) * 3 - newTLD (new global TLD)",
     ),
-  whois_privacy: z.boolean().optional().describe(
+  whois_privacy: z.boolean().nullable().optional().describe(
     "true if the suffix allows WHOIS privacy as a separate component. Some registries may provide WHOI...",
   ),
-  auto_renew_only: z.boolean().optional().describe(
+  auto_renew_only: z.boolean().nullable().optional().describe(
     "true if the suffix requires auto-renewal and can't be renewed manually",
   ),
-  idn: z.boolean().optional().describe(
+  idn: z.boolean().nullable().optional().describe(
     "true if the suffix supports Internationalized Domain Names (IDN)",
   ),
-  minimum_registration: z.number().int().optional(),
-  registration_enabled: z.boolean().optional().describe(
+  minimum_registration: z.number().int().nullable().optional(),
+  registration_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports registrations for this TLD",
   ),
-  renewal_enabled: z.boolean().optional().describe(
+  renewal_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports renewals for this TLD",
   ),
-  transfer_enabled: z.boolean().optional().describe(
+  transfer_enabled: z.boolean().nullable().optional().describe(
     "true if DNSimple supports inbound transfers for this TLD",
   ),
-  dnssec_interface_type: z.enum(["ds", "key"]).optional().describe(
+  dnssec_interface_type: z.enum(["ds", "key"]).nullable().optional().describe(
     "type of data interface required for DNSSEC",
   ),
-  name_server_min: z.number().int().optional().describe(
+  name_server_min: z.number().int().nullable().optional().describe(
     "minimum number of name servers required for this TLD",
   ),
-  name_server_max: z.number().int().optional().describe(
+  name_server_max: z.number().int().nullable().optional().describe(
     "maximum number of name servers allowed for this TLD",
   ),
-  trustee_service_enabled: z.boolean().optional().describe(
+  trustee_service_enabled: z.boolean().nullable().optional().describe(
     "true if trustee service is enabled by default for this TLD",
   ),
-  trustee_service_required: z.boolean().optional().describe(
+  trustee_service_required: z.boolean().nullable().optional().describe(
     "true if trustee is required for this TLD",
   ),
 }).passthrough();
 
 const TldExtendedAttributesItemSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  required: z.boolean().optional(),
+  name: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  required: z.boolean().nullable().optional(),
   options: z.array(
     z.object({
-      title: z.string().optional(),
-      value: z.string().optional(),
-      description: z.string().optional(),
+      title: z.string().nullable().optional(),
+      value: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
     }).passthrough(),
-  ).optional(),
-  title: z.string().optional(),
+  ).nullable().optional(),
+  title: z.string().nullable().optional(),
 }).passthrough();
 
 const TldExtendedAttributesSchema = z.object({
@@ -184,10 +184,17 @@ const TldExtendedAttributesSchema = z.object({
 /** DNSimple TLDs — TLD catalog and extended attributes */
 export const model = {
   type: "@webframp/dnsimple/tlds",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "tlds": {

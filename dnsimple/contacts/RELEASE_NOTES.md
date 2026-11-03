@@ -1,4 +1,4 @@
-## 2026.11.02.1
+## 2026.11.03.2
 
-**Added:** Initial code-generated release of @webframp/dnsimple/contacts with 5
-methods covering the DNSimple contacts API surface.
+**Added:** Initial code-generated release of the @webframp/dnsimple extensions
+covering the DNSimple API v2 surface.

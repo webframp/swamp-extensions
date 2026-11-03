@@ -60,178 +60,184 @@ const ReceiptSchema = z.object({
 });
 
 const CheckDomainSchema = z.object({
-  domain: z.string().optional().describe("The domain name that was checked"),
-  available: z.boolean().optional().describe(
+  domain: z.string().nullable().optional().describe(
+    "The domain name that was checked",
+  ),
+  available: z.boolean().nullable().optional().describe(
     "True if the domain is available to register",
   ),
-  premium: z.boolean().optional().describe(
+  premium: z.boolean().nullable().optional().describe(
     "True if the domain is a premium domain and thus will have a non-standard registration, renewal, a...",
   ),
-  trustee: z.boolean().optional().describe(
+  trustee: z.boolean().nullable().optional().describe(
     "True if trustee service is enabled for this domain.",
   ),
 }).passthrough();
 
 const DomainPricesSchema = z.object({
-  domain: z.string().optional().describe("The domain name that was checked."),
-  premium: z.boolean().optional().describe(
+  domain: z.string().nullable().optional().describe(
+    "The domain name that was checked.",
+  ),
+  premium: z.boolean().nullable().optional().describe(
     "True if the domain is a premium domain and thus will have a non-standard registration, renewal, a...",
   ),
-  registration_price: z.number().optional().describe(
+  registration_price: z.number().nullable().optional().describe(
     "The domain registration price represented as a USD amount with dollars and cents.",
   ),
-  renewal_price: z.number().optional().describe(
+  renewal_price: z.number().nullable().optional().describe(
     "The domain renewal price represented as a USD amount with dollars and cents.",
   ),
-  transfer_price: z.number().optional().describe(
+  transfer_price: z.number().nullable().optional().describe(
     "The domain transfer price represented as a USD amount with dollars and cents.",
   ),
-  restore_price: z.number().optional().describe(
+  restore_price: z.number().nullable().optional().describe(
     "The domain restore price represented as a USD amount with dollars and cents.",
   ),
-  trustee_price: z.number().optional().describe(
+  trustee_price: z.number().nullable().optional().describe(
     "The trustee service price represented as a USD amount with dollars and cents.",
   ),
 }).passthrough();
 
 const RegisterDomainSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  registrant_id: z.number().int().optional(),
-  period: z.number().int().min(1).max(10).optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  registrant_id: z.number().int().nullable().optional(),
+  period: z.number().int().min(1).max(10).nullable().optional(),
   state: z.enum(["cancelled", "new", "registering", "registered", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  whois_privacy: z.boolean().optional(),
-  trustee: z.boolean().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  whois_privacy: z.boolean().nullable().optional(),
+  trustee: z.boolean().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DomainRegistrationSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  registrant_id: z.number().int().optional(),
-  period: z.number().int().min(1).max(10).optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  registrant_id: z.number().int().nullable().optional(),
+  period: z.number().int().min(1).max(10).nullable().optional(),
   state: z.enum(["cancelled", "new", "registering", "registered", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  whois_privacy: z.boolean().optional(),
-  trustee: z.boolean().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  whois_privacy: z.boolean().nullable().optional(),
+  trustee: z.boolean().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const TransferDomainSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  registrant_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  registrant_id: z.number().int().nullable().optional(),
   state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  whois_privacy: z.boolean().optional(),
-  trustee: z.boolean().optional(),
-  status_description: z.string().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  whois_privacy: z.boolean().nullable().optional(),
+  trustee: z.boolean().nullable().optional(),
+  status_description: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DomainTransferSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  registrant_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  registrant_id: z.number().int().nullable().optional(),
   state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  whois_privacy: z.boolean().optional(),
-  trustee: z.boolean().optional(),
-  status_description: z.string().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  whois_privacy: z.boolean().nullable().optional(),
+  trustee: z.boolean().nullable().optional(),
+  status_description: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const CancelDomainTransferSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  registrant_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  registrant_id: z.number().int().nullable().optional(),
   state: z.enum(["cancelled", "new", "transferring", "transferred", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  whois_privacy: z.boolean().optional(),
-  trustee: z.boolean().optional(),
-  status_description: z.string().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  whois_privacy: z.boolean().nullable().optional(),
+  trustee: z.boolean().nullable().optional(),
+  status_description: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const RenewDomainSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  period: z.number().int().min(1).max(9).optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  period: z.number().int().min(1).max(9).nullable().optional(),
   state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DomainRenewalSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  period: z.number().int().min(1).max(9).optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  period: z.number().int().min(1).max(9).nullable().optional(),
   state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const RestoreDomainSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  state: z.enum(["new", "restoring", "restored", "cancelled"]).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  state: z.enum(["new", "restoring", "restored", "cancelled"]).nullable()
+    .optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DomainRestoreSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  state: z.enum(["new", "restoring", "restored", "cancelled"]).optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  state: z.enum(["new", "restoring", "restored", "cancelled"]).nullable()
+    .optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -271,14 +277,14 @@ const ChangeDomainDelegationSchema = z.object({
 });
 
 const ChangeDomainDelegationToVanityItemSchema = z.object({
-  id: z.number().int().optional(),
-  name: z.string().optional(),
-  ipv4: z.string().optional(),
-  ipv6: z.string().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ipv4: z.string().nullable().optional(),
+  ipv6: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -299,63 +305,63 @@ const ChangeDomainDelegationToVanitySchema = z.object({
 });
 
 const DomainTransferLockSchema = z.object({
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().nullable().optional(),
 }).passthrough();
 
 const EnableDomainTransferLockSchema = z.object({
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().nullable().optional(),
 }).passthrough();
 
 const DisableDomainTransferLockSchema = z.object({
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().nullable().optional(),
 }).passthrough();
 
 const EnableWhoisPrivacySchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  enabled: z.boolean().optional(),
-  expires_on: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  enabled: z.boolean().nullable().optional(),
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DisableWhoisPrivacySchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  enabled: z.boolean().optional(),
-  expires_on: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  enabled: z.boolean().nullable().optional(),
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const RegistrantChangesItemSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  contact_id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
   state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .optional(),
-  extended_attributes: z.record(z.string(), z.string()).optional(),
-  registry_owner_change: z.boolean().optional(),
-  irt_lock_lifted_by: z.string().optional().describe(
+    .nullable().optional(),
+  extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
+  registry_owner_change: z.boolean().nullable().optional(),
+  irt_lock_lifted_by: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -376,62 +382,62 @@ const RegistrantChangesSchema = z.object({
 });
 
 const RegistrantChangeSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  contact_id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
   state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .optional(),
-  extended_attributes: z.record(z.string(), z.string()).optional(),
-  registry_owner_change: z.boolean().optional(),
-  irt_lock_lifted_by: z.string().optional().describe(
+    .nullable().optional(),
+  extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
+  registry_owner_change: z.boolean().nullable().optional(),
+  irt_lock_lifted_by: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const CheckRegistrantChangeSchema = z.object({
-  contact_id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
   extended_attributes: z.array(
     z.object({
-      name: z.string().optional(),
-      description: z.string().optional(),
-      required: z.boolean().optional(),
+      name: z.string().nullable().optional(),
+      description: z.string().nullable().optional(),
+      required: z.boolean().nullable().optional(),
       options: z.array(
         z.object({
-          title: z.string().optional(),
-          value: z.string().optional(),
-          description: z.string().optional(),
+          title: z.string().nullable().optional(),
+          value: z.string().nullable().optional(),
+          description: z.string().nullable().optional(),
         }).passthrough(),
-      ).optional(),
-      title: z.string().optional(),
+      ).nullable().optional(),
+      title: z.string().nullable().optional(),
     }).passthrough(),
-  ).optional(),
-  registry_owner_change: z.boolean().optional(),
+  ).nullable().optional(),
+  registry_owner_change: z.boolean().nullable().optional(),
 }).passthrough();
 
 const DeleteRegistrantChangeSchemaData = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  contact_id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
   state: z.enum(["new", "pending", "cancelling", "cancelled", "completed"])
-    .optional(),
-  extended_attributes: z.record(z.string(), z.string()).optional(),
-  registry_owner_change: z.boolean().optional(),
-  irt_lock_lifted_by: z.string().optional().describe(
+    .nullable().optional(),
+  extended_attributes: z.record(z.string(), z.string()).nullable().optional(),
+  registry_owner_change: z.boolean().nullable().optional(),
+  irt_lock_lifted_by: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -448,10 +454,23 @@ const DeleteRegistrantChangeSchema = z.union([
 /** DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices */
 export const model = {
   type: "@webframp/dnsimple/registrar",
-  version: "2026.11.02.1",
+  version: "2026.11.03.2",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.2",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "check_domain": {

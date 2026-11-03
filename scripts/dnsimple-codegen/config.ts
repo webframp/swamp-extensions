@@ -44,6 +44,8 @@ export interface ServiceConfig {
   labels: string[];
   /** Skip paths under these prefixes even if a prefix above matches */
   excludePaths?: string[];
+  /** The service returns registrant contact details; its README says how they are stored */
+  storesContactData?: boolean;
 }
 
 /**
@@ -112,12 +114,14 @@ export const SERVICES: ServiceConfig[] = [
       "DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices",
     pathPrefixes: ["/{account}/registrar"],
     labels: ["dnsimple", "registrar", "domains", "billing"],
+    storesContactData: true,
   },
   {
     name: "contacts",
     description: "DNSimple Contacts — registrant contacts",
     pathPrefixes: ["/{account}/contacts"],
     labels: ["dnsimple", "contacts", "registrant"],
+    storesContactData: true,
   },
   {
     name: "templates",

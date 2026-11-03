@@ -60,15 +60,15 @@ const ReceiptSchema = z.object({
 });
 
 const TemplatesItemSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  sid: z.string().optional(),
-  description: z.string().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  sid: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -89,25 +89,25 @@ const TemplatesSchema = z.object({
 });
 
 const TemplateSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  sid: z.string().optional(),
-  description: z.string().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  sid: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const TemplateRecordsItemSchema = z.object({
-  id: z.number().int().optional(),
-  template_id: z.number().int().optional(),
-  name: z.string().optional(),
-  content: z.string().optional(),
-  ttl: z.number().int().min(0).optional().default(3600).describe(
+  id: z.number().int().nullable().optional(),
+  template_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  content: z.string().nullable().optional(),
+  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
   priority: z.string().nullable().optional(),
@@ -131,11 +131,13 @@ const TemplateRecordsItemSchema = z.object({
     "SSHFP",
     "TXT",
     "URL",
-  ]).optional().describe("Supported DNS record types for templates."),
-  created_at: z.string().optional().describe(
+  ]).nullable().optional().describe(
+    "Supported DNS record types for templates.",
+  ),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -156,11 +158,11 @@ const TemplateRecordsSchema = z.object({
 });
 
 const TemplateRecordSchema = z.object({
-  id: z.number().int().optional(),
-  template_id: z.number().int().optional(),
-  name: z.string().optional(),
-  content: z.string().optional(),
-  ttl: z.number().int().min(0).optional().default(3600).describe(
+  id: z.number().int().nullable().optional(),
+  template_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  content: z.string().nullable().optional(),
+  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
   priority: z.string().nullable().optional(),
@@ -184,11 +186,13 @@ const TemplateRecordSchema = z.object({
     "SSHFP",
     "TXT",
     "URL",
-  ]).optional().describe("Supported DNS record types for templates."),
-  created_at: z.string().optional().describe(
+  ]).nullable().optional().describe(
+    "Supported DNS record types for templates.",
+  ),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -200,10 +204,17 @@ const TemplateRecordSchema = z.object({
 /** DNSimple Templates — record templates and applying them to domains */
 export const model = {
   type: "@webframp/dnsimple/templates",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "templates": {

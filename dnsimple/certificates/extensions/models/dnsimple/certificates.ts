@@ -49,12 +49,12 @@ const GlobalArgsSchema = z.object({
 });
 
 const CertificatesItemSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  name: z.string().optional(),
-  common_name: z.string().optional(),
-  years: z.number().int().optional(),
-  csr: z.string().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  common_name: z.string().nullable().optional(),
+  years: z.number().int().nullable().optional(),
+  csr: z.string().nullable().optional(),
   state: z.enum([
     "new",
     "purchased",
@@ -66,21 +66,21 @@ const CertificatesItemSchema = z.object({
     "cancelled",
     "requesting",
     "failed",
-  ]).optional(),
-  auto_renew: z.boolean().optional(),
-  alternate_names: z.array(z.string()).optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"])
+  ]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  alternate_names: z.array(z.string()).nullable().optional(),
+  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
     .optional(),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  expires_at: z.string().optional().describe(
+  expires_at: z.string().nullable().optional().describe(
     "A date-time value formatted as ISO 8601.",
   ),
-  expires_on: z.string().optional().describe(
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -101,12 +101,12 @@ const CertificatesSchema = z.object({
 });
 
 const CertificateSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  name: z.string().optional(),
-  common_name: z.string().optional(),
-  years: z.number().int().optional(),
-  csr: z.string().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  common_name: z.string().nullable().optional(),
+  years: z.number().int().nullable().optional(),
+  csr: z.string().nullable().optional(),
   state: z.enum([
     "new",
     "purchased",
@@ -118,38 +118,38 @@ const CertificateSchema = z.object({
     "cancelled",
     "requesting",
     "failed",
-  ]).optional(),
-  auto_renew: z.boolean().optional(),
-  alternate_names: z.array(z.string()).optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"])
+  ]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  alternate_names: z.array(z.string()).nullable().optional(),
+  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
     .optional(),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  expires_at: z.string().optional().describe(
+  expires_at: z.string().nullable().optional().describe(
     "A date-time value formatted as ISO 8601.",
   ),
-  expires_on: z.string().optional().describe(
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DownloadCertificateSchema = z.object({
-  server: z.string().optional(),
+  server: z.string().nullable().optional(),
   root: z.string().nullable().optional(),
-  chain: z.array(z.string()).optional(),
+  chain: z.array(z.string()).nullable().optional(),
 }).passthrough();
 
 const CertificatePrivateKeySchema = z.object({
-  private_key: z.string().meta({ sensitive: true }).optional(),
+  private_key: z.string().meta({ sensitive: true }).nullable().optional(),
 }).passthrough();
 
 const PurchaseLetsencryptCertificateSchema = z.object({
-  id: z.number().int().optional(),
-  certificate_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  certificate_id: z.number().int().nullable().optional(),
   state: z.enum([
     "new",
     "purchased",
@@ -161,23 +161,23 @@ const PurchaseLetsencryptCertificateSchema = z.object({
     "cancelled",
     "requesting",
     "failed",
-  ]).optional(),
-  auto_renew: z.boolean().optional(),
-  created_at: z.string().optional().describe(
+  ]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const IssueLetsencryptCertificateSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  name: z.string().optional(),
-  common_name: z.string().optional(),
-  years: z.number().int().optional(),
-  csr: z.string().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  common_name: z.string().nullable().optional(),
+  years: z.number().int().nullable().optional(),
+  csr: z.string().nullable().optional(),
   state: z.enum([
     "new",
     "purchased",
@@ -189,47 +189,47 @@ const IssueLetsencryptCertificateSchema = z.object({
     "cancelled",
     "requesting",
     "failed",
-  ]).optional(),
-  auto_renew: z.boolean().optional(),
-  alternate_names: z.array(z.string()).optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"])
+  ]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  alternate_names: z.array(z.string()).nullable().optional(),
+  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
     .optional(),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  expires_at: z.string().optional().describe(
+  expires_at: z.string().nullable().optional().describe(
     "A date-time value formatted as ISO 8601.",
   ),
-  expires_on: z.string().optional().describe(
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const PurchaseRenewalLetsencryptCertificateSchema = z.object({
-  id: z.number().int().optional(),
-  old_certificate_id: z.number().int().optional(),
-  new_certificate_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  old_certificate_id: z.number().int().nullable().optional(),
+  new_certificate_id: z.number().int().nullable().optional(),
   state: z.enum(["cancelled", "new", "renewing", "renewed", "failed"])
-    .optional(),
-  auto_renew: z.boolean().optional(),
-  created_at: z.string().optional().describe(
+    .nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const IssueRenewalLetsencryptCertificateSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  name: z.string().optional(),
-  common_name: z.string().optional(),
-  years: z.number().int().optional(),
-  csr: z.string().optional(),
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  common_name: z.string().nullable().optional(),
+  years: z.number().int().nullable().optional(),
+  csr: z.string().nullable().optional(),
   state: z.enum([
     "new",
     "purchased",
@@ -241,21 +241,21 @@ const IssueRenewalLetsencryptCertificateSchema = z.object({
     "cancelled",
     "requesting",
     "failed",
-  ]).optional(),
-  auto_renew: z.boolean().optional(),
-  alternate_names: z.array(z.string()).optional(),
-  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"])
+  ]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  alternate_names: z.array(z.string()).nullable().optional(),
+  authority_identifier: z.enum(["comodo", "rapidssl", "letsencrypt"]).nullable()
     .optional(),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  expires_at: z.string().optional().describe(
+  expires_at: z.string().nullable().optional().describe(
     "A date-time value formatted as ISO 8601.",
   ),
-  expires_on: z.string().optional().describe(
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -267,10 +267,17 @@ const IssueRenewalLetsencryptCertificateSchema = z.object({
 /** DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys */
 export const model = {
   type: "@webframp/dnsimple/certificates",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "certificates": {

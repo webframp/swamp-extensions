@@ -51,34 +51,34 @@ const GlobalArgsSchema = z.object({
 });
 
 const ZonesItemSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  reverse: z.boolean().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  reverse: z.boolean().nullable().optional().describe(
     "Returns true for a reverse zone, false for a forward zone.",
   ),
-  secondary: z.boolean().optional().describe(
+  secondary: z.boolean().nullable().optional().describe(
     "Returns true for a secondary zone, false for a primary zone.",
   ),
   last_transferred_at: z.string().nullable().optional().describe(
     "Returns the date the zone was last transferred. Used if it is a secondary zone.",
   ),
-  active: z.boolean().optional().describe(
+  active: z.boolean().nullable().optional().describe(
     "Returns true if DNS services are active for the zone. If false, DNS services are disabled and DNS...",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  records_count: z.number().int().optional().describe(
+  records_count: z.number().int().nullable().optional().describe(
     "The number of records in the zone. Returned only when retrieving a single zone.",
   ),
-  records_limit: z.number().int().optional().describe(
+  records_limit: z.number().int().nullable().optional().describe(
     "The record limit of the zone. Depending on your plan, records above it are either charged or cann...",
   ),
-  records_overage: z.number().int().optional().describe(
+  records_overage: z.number().int().nullable().optional().describe(
     "The number of records above the limit, 0 when the zone is at or below its limit. Returned only wh...",
   ),
 }).passthrough();
@@ -99,65 +99,65 @@ const ZonesSchema = z.object({
 });
 
 const ZoneSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  reverse: z.boolean().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  reverse: z.boolean().nullable().optional().describe(
     "Returns true for a reverse zone, false for a forward zone.",
   ),
-  secondary: z.boolean().optional().describe(
+  secondary: z.boolean().nullable().optional().describe(
     "Returns true for a secondary zone, false for a primary zone.",
   ),
   last_transferred_at: z.string().nullable().optional().describe(
     "Returns the date the zone was last transferred. Used if it is a secondary zone.",
   ),
-  active: z.boolean().optional().describe(
+  active: z.boolean().nullable().optional().describe(
     "Returns true if DNS services are active for the zone. If false, DNS services are disabled and DNS...",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  records_count: z.number().int().optional().describe(
+  records_count: z.number().int().nullable().optional().describe(
     "The number of records in the zone. Returned only when retrieving a single zone.",
   ),
-  records_limit: z.number().int().optional().describe(
+  records_limit: z.number().int().nullable().optional().describe(
     "The record limit of the zone. Depending on your plan, records above it are either charged or cann...",
   ),
-  records_overage: z.number().int().optional().describe(
+  records_overage: z.number().int().nullable().optional().describe(
     "The number of records above the limit, 0 when the zone is at or below its limit. Returned only wh...",
   ),
 }).passthrough();
 
 const ZoneFileSchema = z.object({
-  zone: z.string().optional(),
+  zone: z.string().nullable().optional(),
 }).passthrough();
 
 const CheckZoneDistributionSchema = z.object({
-  distributed: z.boolean().optional().describe(
+  distributed: z.boolean().nullable().optional().describe(
     "Returns true if the zone is fully distributed, false if not.",
   ),
 }).passthrough();
 
 const ZoneNsRecordsItemSchema = z.object({
-  id: z.number().int().optional().describe(
+  id: z.number().int().nullable().optional().describe(
     "The unique identifier for the record.",
   ),
-  zone_id: z.string().optional().describe(
+  zone_id: z.string().nullable().optional().describe(
     "The unique identifier of the zone this record belongs to",
   ),
   parent_id: z.number().int().nullable().optional().describe(
     "Deprecated - the value is always null.",
   ),
-  name: z.string().optional().describe(
+  name: z.string().nullable().optional().describe(
     'The name of the record (e.g., "www" for www.example.com).',
   ),
-  content: z.string().optional().describe(
+  content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
   priority: z.number().int().nullable().optional().default(0).describe(
@@ -183,21 +183,21 @@ const ZoneNsRecordsItemSchema = z.object({
     "SSHFP",
     "TXT",
     "URL",
-  ]).optional().describe(
+  ]).nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
   regions: z.array(
     z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).optional().describe(
+  ).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
-  system_record: z.boolean().optional().describe(
+  system_record: z.boolean().nullable().optional().describe(
     "Returns true if a record is a system generated record and thus is not modifiable.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -218,22 +218,22 @@ const ZoneNsRecordsSchema = z.object({
 });
 
 const ZoneRecordsItemSchema = z.object({
-  id: z.number().int().optional().describe(
+  id: z.number().int().nullable().optional().describe(
     "The unique identifier for the record.",
   ),
-  zone_id: z.string().optional().describe(
+  zone_id: z.string().nullable().optional().describe(
     "The unique identifier of the zone this record belongs to",
   ),
   parent_id: z.number().int().nullable().optional().describe(
     "Deprecated - the value is always null.",
   ),
-  name: z.string().optional().describe(
+  name: z.string().nullable().optional().describe(
     'The name of the record (e.g., "www" for www.example.com).',
   ),
-  content: z.string().optional().describe(
+  content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
   priority: z.number().int().nullable().optional().default(0).describe(
@@ -259,21 +259,21 @@ const ZoneRecordsItemSchema = z.object({
     "SSHFP",
     "TXT",
     "URL",
-  ]).optional().describe(
+  ]).nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
   regions: z.array(
     z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).optional().describe(
+  ).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
-  system_record: z.boolean().optional().describe(
+  system_record: z.boolean().nullable().optional().describe(
     "Returns true if a record is a system generated record and thus is not modifiable.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -294,22 +294,22 @@ const ZoneRecordsSchema = z.object({
 });
 
 const ZoneRecordSchema = z.object({
-  id: z.number().int().optional().describe(
+  id: z.number().int().nullable().optional().describe(
     "The unique identifier for the record.",
   ),
-  zone_id: z.string().optional().describe(
+  zone_id: z.string().nullable().optional().describe(
     "The unique identifier of the zone this record belongs to",
   ),
   parent_id: z.number().int().nullable().optional().describe(
     "Deprecated - the value is always null.",
   ),
-  name: z.string().optional().describe(
+  name: z.string().nullable().optional().describe(
     'The name of the record (e.g., "www" for www.example.com).',
   ),
-  content: z.string().optional().describe(
+  content: z.string().nullable().optional().describe(
     "The content/value of the record (e.g., IP address for A records, hostname for CNAME records).",
   ),
-  ttl: z.number().int().min(0).optional().default(3600).describe(
+  ttl: z.number().int().min(0).nullable().optional().default(3600).describe(
     "The Time To Live (TTL) value for the entry, in seconds.",
   ),
   priority: z.number().int().nullable().optional().default(0).describe(
@@ -335,21 +335,21 @@ const ZoneRecordSchema = z.object({
     "SSHFP",
     "TXT",
     "URL",
-  ]).optional().describe(
+  ]).nullable().optional().describe(
     "The type of DNS record. Supported DNS record types are listed below. Note that some record types ...",
   ),
   regions: z.array(
     z.enum(["global", "SV1", "ORD", "IAD", "AMS", "TKO", "SYD", "CDG", "FRA"]),
-  ).optional().describe(
+  ).nullable().optional().describe(
     "The regions where this record is active. If empty, the record is active in all regions.",
   ),
-  system_record: z.boolean().optional().describe(
+  system_record: z.boolean().nullable().optional().describe(
     "Returns true if a record is a system generated record and thus is not modifiable.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -357,12 +357,12 @@ const ZoneRecordSchema = z.object({
 const BatchChangeZoneRecordsSchema = z.object({
   creates: z.array(
     z.object({
-      id: z.number().int().optional(),
-      zone_id: z.string().optional(),
+      id: z.number().int().nullable().optional(),
+      zone_id: z.string().nullable().optional(),
       parent_id: z.number().int().nullable().optional(),
-      name: z.string().optional(),
-      content: z.string().optional(),
-      ttl: z.number().int().min(0).optional().default(3600),
+      name: z.string().nullable().optional(),
+      content: z.string().nullable().optional(),
+      ttl: z.number().int().min(0).nullable().optional().default(3600),
       priority: z.number().int().nullable().optional().default(0),
       type: z.enum([
         "A",
@@ -384,7 +384,7 @@ const BatchChangeZoneRecordsSchema = z.object({
         "SSHFP",
         "TXT",
         "URL",
-      ]).optional(),
+      ]).nullable().optional(),
       regions: z.array(
         z.enum([
           "global",
@@ -397,20 +397,20 @@ const BatchChangeZoneRecordsSchema = z.object({
           "CDG",
           "FRA",
         ]),
-      ).optional(),
-      system_record: z.boolean().optional(),
-      created_at: z.string().optional(),
-      updated_at: z.string().optional(),
+      ).nullable().optional(),
+      system_record: z.boolean().nullable().optional(),
+      created_at: z.string().nullable().optional(),
+      updated_at: z.string().nullable().optional(),
     }).passthrough(),
-  ).optional().describe("Zone records that were created"),
+  ).nullable().optional().describe("Zone records that were created"),
   updates: z.array(
     z.object({
-      id: z.number().int().optional(),
-      zone_id: z.string().optional(),
+      id: z.number().int().nullable().optional(),
+      zone_id: z.string().nullable().optional(),
       parent_id: z.number().int().nullable().optional(),
-      name: z.string().optional(),
-      content: z.string().optional(),
-      ttl: z.number().int().min(0).optional().default(3600),
+      name: z.string().nullable().optional(),
+      content: z.string().nullable().optional(),
+      ttl: z.number().int().min(0).nullable().optional().default(3600),
       priority: z.number().int().nullable().optional().default(0),
       type: z.enum([
         "A",
@@ -432,7 +432,7 @@ const BatchChangeZoneRecordsSchema = z.object({
         "SSHFP",
         "TXT",
         "URL",
-      ]).optional(),
+      ]).nullable().optional(),
       regions: z.array(
         z.enum([
           "global",
@@ -445,87 +445,87 @@ const BatchChangeZoneRecordsSchema = z.object({
           "CDG",
           "FRA",
         ]),
-      ).optional(),
-      system_record: z.boolean().optional(),
-      created_at: z.string().optional(),
-      updated_at: z.string().optional(),
+      ).nullable().optional(),
+      system_record: z.boolean().nullable().optional(),
+      created_at: z.string().nullable().optional(),
+      updated_at: z.string().nullable().optional(),
     }).passthrough(),
-  ).optional().describe("Zone records that were updated"),
+  ).nullable().optional().describe("Zone records that were updated"),
   deletes: z.array(
     z.object({
-      id: z.number().int().optional(),
+      id: z.number().int().nullable().optional(),
     }).passthrough(),
-  ).optional().describe("Zone records that were deleted"),
+  ).nullable().optional().describe("Zone records that were deleted"),
 }).passthrough();
 
 const CheckZoneRecordDistributionSchema = z.object({
-  distributed: z.boolean().optional().describe(
+  distributed: z.boolean().nullable().optional().describe(
     "Returns true if the zone is fully distributed, false if not.",
   ),
 }).passthrough();
 
 const ActivateZoneServiceSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  reverse: z.boolean().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  reverse: z.boolean().nullable().optional().describe(
     "Returns true for a reverse zone, false for a forward zone.",
   ),
-  secondary: z.boolean().optional().describe(
+  secondary: z.boolean().nullable().optional().describe(
     "Returns true for a secondary zone, false for a primary zone.",
   ),
   last_transferred_at: z.string().nullable().optional().describe(
     "Returns the date the zone was last transferred. Used if it is a secondary zone.",
   ),
-  active: z.boolean().optional().describe(
+  active: z.boolean().nullable().optional().describe(
     "Returns true if DNS services are active for the zone. If false, DNS services are disabled and DNS...",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  records_count: z.number().int().optional().describe(
+  records_count: z.number().int().nullable().optional().describe(
     "The number of records in the zone. Returned only when retrieving a single zone.",
   ),
-  records_limit: z.number().int().optional().describe(
+  records_limit: z.number().int().nullable().optional().describe(
     "The record limit of the zone. Depending on your plan, records above it are either charged or cann...",
   ),
-  records_overage: z.number().int().optional().describe(
+  records_overage: z.number().int().nullable().optional().describe(
     "The number of records above the limit, 0 when the zone is at or below its limit. Returned only wh...",
   ),
 }).passthrough();
 
 const DeactivateZoneServiceSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  name: z.string().optional(),
-  reverse: z.boolean().optional().describe(
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  reverse: z.boolean().nullable().optional().describe(
     "Returns true for a reverse zone, false for a forward zone.",
   ),
-  secondary: z.boolean().optional().describe(
+  secondary: z.boolean().nullable().optional().describe(
     "Returns true for a secondary zone, false for a primary zone.",
   ),
   last_transferred_at: z.string().nullable().optional().describe(
     "Returns the date the zone was last transferred. Used if it is a secondary zone.",
   ),
-  active: z.boolean().optional().describe(
+  active: z.boolean().nullable().optional().describe(
     "Returns true if DNS services are active for the zone. If false, DNS services are disabled and DNS...",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
-  records_count: z.number().int().optional().describe(
+  records_count: z.number().int().nullable().optional().describe(
     "The number of records in the zone. Returned only when retrieving a single zone.",
   ),
-  records_limit: z.number().int().optional().describe(
+  records_limit: z.number().int().nullable().optional().describe(
     "The record limit of the zone. Depending on your plan, records above it are either charged or cann...",
   ),
-  records_overage: z.number().int().optional().describe(
+  records_overage: z.number().int().nullable().optional().describe(
     "The number of records above the limit, 0 when the zone is at or below its limit. Returned only wh...",
   ),
 }).passthrough();
@@ -557,10 +557,17 @@ const QueryDnsAnalyticsSchema = z.object({
 /** DNSimple Zones — zones, records, batch changes, zone file, distribution checks, NS records, activation, and DNS analytics */
 export const model = {
   type: "@webframp/dnsimple/zones",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "zones": {

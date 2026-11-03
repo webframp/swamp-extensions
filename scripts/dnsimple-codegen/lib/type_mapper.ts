@@ -53,6 +53,13 @@ export interface TypeMapperOptions {
    * redact undeclared fields.
    */
   passthrough?: boolean;
+  /**
+   * Accept `null` for every object field, at every depth. DNSimple's spec
+   * declares fields such as an account's `email` as plain strings, yet the
+   * live API returns null for them; a response schema that trusts the spec
+   * rejects real data. Request schemas keep the spec's nullability.
+   */
+  nullTolerant?: boolean;
 }
 
 const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
@@ -61,6 +68,7 @@ const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
   lenient: false,
   sensitiveFields: [],
   passthrough: false,
+  nullTolerant: false,
 };
 
 /**
@@ -267,6 +275,9 @@ function objectToZod(
   for (const [name, prop] of Object.entries(schema.properties)) {
     const safeName = isSafeIdentifier(name) ? name : `"${name}"`;
     let fieldType = schemaToZod(prop, childOpts, depth + 1);
+    if (opts.nullTolerant && !fieldType.endsWith(".nullable()")) {
+      fieldType += ".nullable()";
+    }
 
     // Before .optional()/.default()/.describe(), so for a scalar field the
     // marker shares the field's first line, which the quality rubric's

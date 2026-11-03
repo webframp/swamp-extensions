@@ -510,7 +510,12 @@ const RECEIPT_SCHEMA = `const ReceiptSchema = z.object({
 });`;
 
 /** Map options shared by every response schema: tolerant and passthrough. */
-const RESPONSE_OPTS = { indent: 2, lenient: true, passthrough: true };
+const RESPONSE_OPTS = {
+  indent: 2,
+  lenient: true,
+  passthrough: true,
+  nullTolerant: true,
+};
 
 /** Generate Zod schemas for all unique response shapes */
 function generateResponseSchemas(

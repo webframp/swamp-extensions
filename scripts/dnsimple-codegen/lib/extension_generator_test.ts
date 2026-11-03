@@ -86,6 +86,22 @@ Deno.test("generateReadme: lists the billable methods", () => {
   );
 });
 
+Deno.test("generateReadme: contact services document that contact data is stored plainly", () => {
+  for (const name of ["contacts", "registrar"]) {
+    const g = group(name);
+    const readme = generateReadme(g.config, classifyServiceMethods(g));
+    assertStringIncludes(readme, "## Contact data");
+    assertStringIncludes(readme, "does not mark them sensitive");
+  }
+  const zones = group("zones");
+  assertEquals(
+    generateReadme(zones.config, classifyServiceMethods(zones)).includes(
+      "## Contact data",
+    ),
+    false,
+  );
+});
+
 Deno.test("generateReadme: documents a returned secret and the vault swamp then requires", () => {
   const methods = classifyServiceMethods(group("certificates"));
   assertEquals(modelRequiresVault(methods), true);

@@ -60,25 +60,25 @@ const ReceiptSchema = z.object({
 });
 
 const DomainsItemSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
-  name: z.string().optional(),
-  unicode_name: z.string().optional(),
-  state: z.enum(["hosted", "registered", "expired"]).optional(),
-  auto_renew: z.boolean().optional(),
-  private_whois: z.boolean().optional(),
+  name: z.string().nullable().optional(),
+  unicode_name: z.string().nullable().optional(),
+  state: z.enum(["hosted", "registered", "expired"]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  private_whois: z.boolean().nullable().optional(),
   expires_at: z.string().nullable().optional().describe(
     "A nullable date-time value. The value can be null, when present the value is formatted according ...",
   ),
-  trustee: z.boolean().optional(),
-  expires_on: z.string().optional().describe(
+  trustee: z.boolean().nullable().optional(),
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -99,52 +99,56 @@ const DomainsSchema = z.object({
 });
 
 const DomainSchema = z.object({
-  id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
+  id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
   registrant_id: z.number().int().nullable().optional(),
-  name: z.string().optional(),
-  unicode_name: z.string().optional(),
-  state: z.enum(["hosted", "registered", "expired"]).optional(),
-  auto_renew: z.boolean().optional(),
-  private_whois: z.boolean().optional(),
+  name: z.string().nullable().optional(),
+  unicode_name: z.string().nullable().optional(),
+  state: z.enum(["hosted", "registered", "expired"]).nullable().optional(),
+  auto_renew: z.boolean().nullable().optional(),
+  private_whois: z.boolean().nullable().optional(),
   expires_at: z.string().nullable().optional().describe(
     "A nullable date-time value. The value can be null, when present the value is formatted according ...",
   ),
-  trustee: z.boolean().optional(),
-  expires_on: z.string().optional().describe(
+  trustee: z.boolean().nullable().optional(),
+  expires_on: z.string().nullable().optional().describe(
     "A date value formatted as ISO 8601.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const DomainsResearchStatusSchema = z.object({
-  request_id: z.string().optional().describe(
+  request_id: z.string().nullable().optional().describe(
     "UUID identifier for this research request",
   ),
-  domain: z.string().optional().describe("The domain name that was researched"),
-  availability: z.enum(["available", "unavailable", "unknown"]).optional()
-    .describe("The availability status"),
-  errors: z.array(z.string()).optional().describe(
+  domain: z.string().nullable().optional().describe(
+    "The domain name that was researched",
+  ),
+  availability: z.enum(["available", "unavailable", "unknown"]).nullable()
+    .optional().describe("The availability status"),
+  errors: z.array(z.string()).nullable().optional().describe(
     "Array of error messages if the domain cannot be registered or researched",
   ),
 }).passthrough();
 
 const EmailForwardsItemSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  alias_email: z.string().optional().describe("The receiving email recipient."),
-  destination_email: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  alias_email: z.string().nullable().optional().describe(
+    "The receiving email recipient.",
+  ),
+  destination_email: z.string().nullable().optional().describe(
     "The email recipient the messages are delivered to.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -165,29 +169,31 @@ const EmailForwardsSchema = z.object({
 });
 
 const EmailForwardSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  alias_email: z.string().optional().describe("The receiving email recipient."),
-  destination_email: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  alias_email: z.string().nullable().optional().describe(
+    "The receiving email recipient.",
+  ),
+  destination_email: z.string().nullable().optional().describe(
     "The email recipient the messages are delivered to.",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
 
 const InitiateDomainPushSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  contact_id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
   accepted_at: z.string().nullable().optional().describe(
@@ -196,14 +202,14 @@ const InitiateDomainPushSchema = z.object({
 }).passthrough();
 
 const PushesItemSchema = z.object({
-  id: z.number().int().optional(),
-  domain_id: z.number().int().optional(),
-  contact_id: z.number().int().optional(),
-  account_id: z.number().int().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  domain_id: z.number().int().nullable().optional(),
+  contact_id: z.number().int().nullable().optional(),
+  account_id: z.number().int().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
   accepted_at: z.string().nullable().optional().describe(
@@ -227,39 +233,39 @@ const PushesSchema = z.object({
 });
 
 const ServicesItemSchema = z.object({
-  id: z.number().int().optional().describe("A unique identifier"),
-  name: z.string().optional().describe("A human-readable name"),
-  sid: z.string().optional().describe(
+  id: z.number().int().nullable().optional().describe("A unique identifier"),
+  name: z.string().nullable().optional().describe("A human-readable name"),
+  sid: z.string().nullable().optional().describe(
     "A string identifier that can be used in URLs (always lowercase)",
   ),
-  description: z.string().optional().describe(
+  description: z.string().nullable().optional().describe(
     "A human-readable description of the one-click service",
   ),
   setup_description: z.string().nullable().optional().describe(
     "Describes setup requirements",
   ),
-  requires_setup: z.boolean().optional().describe(
+  requires_setup: z.boolean().nullable().optional().describe(
     "Flag indicating whether setup is required",
   ),
   default_subdomain: z.string().nullable().optional().describe(
     "The default subdomain used when creating DNS records",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
   settings: z.array(
     z.object({
-      name: z.string().optional(),
-      label: z.string().optional(),
+      name: z.string().nullable().optional(),
+      label: z.string().nullable().optional(),
       append: z.string().nullable().optional(),
-      description: z.string().optional(),
-      example: z.string().optional(),
-      password: z.boolean().optional().default(false),
+      description: z.string().nullable().optional(),
+      example: z.string().nullable().optional(),
+      password: z.boolean().nullable().optional().default(false),
     }).passthrough(),
-  ).optional(),
+  ).nullable().optional(),
 }).passthrough();
 
 const ServicesSchema = z.object({
@@ -278,75 +284,75 @@ const ServicesSchema = z.object({
 });
 
 const ServiceSchema = z.object({
-  id: z.number().int().optional().describe("A unique identifier"),
-  name: z.string().optional().describe("A human-readable name"),
-  sid: z.string().optional().describe(
+  id: z.number().int().nullable().optional().describe("A unique identifier"),
+  name: z.string().nullable().optional().describe("A human-readable name"),
+  sid: z.string().nullable().optional().describe(
     "A string identifier that can be used in URLs (always lowercase)",
   ),
-  description: z.string().optional().describe(
+  description: z.string().nullable().optional().describe(
     "A human-readable description of the one-click service",
   ),
   setup_description: z.string().nullable().optional().describe(
     "Describes setup requirements",
   ),
-  requires_setup: z.boolean().optional().describe(
+  requires_setup: z.boolean().nullable().optional().describe(
     "Flag indicating whether setup is required",
   ),
   default_subdomain: z.string().nullable().optional().describe(
     "The default subdomain used when creating DNS records",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
   settings: z.array(
     z.object({
-      name: z.string().optional(),
-      label: z.string().optional(),
+      name: z.string().nullable().optional(),
+      label: z.string().nullable().optional(),
       append: z.string().nullable().optional(),
-      description: z.string().optional(),
-      example: z.string().optional(),
-      password: z.boolean().optional().default(false),
+      description: z.string().nullable().optional(),
+      example: z.string().nullable().optional(),
+      password: z.boolean().nullable().optional().default(false),
     }).passthrough(),
-  ).optional(),
+  ).nullable().optional(),
 }).passthrough();
 
 const DomainAppliedServicesItemSchema = z.object({
-  id: z.number().int().optional().describe("A unique identifier"),
-  name: z.string().optional().describe("A human-readable name"),
-  sid: z.string().optional().describe(
+  id: z.number().int().nullable().optional().describe("A unique identifier"),
+  name: z.string().nullable().optional().describe("A human-readable name"),
+  sid: z.string().nullable().optional().describe(
     "A string identifier that can be used in URLs (always lowercase)",
   ),
-  description: z.string().optional().describe(
+  description: z.string().nullable().optional().describe(
     "A human-readable description of the one-click service",
   ),
   setup_description: z.string().nullable().optional().describe(
     "Describes setup requirements",
   ),
-  requires_setup: z.boolean().optional().describe(
+  requires_setup: z.boolean().nullable().optional().describe(
     "Flag indicating whether setup is required",
   ),
   default_subdomain: z.string().nullable().optional().describe(
     "The default subdomain used when creating DNS records",
   ),
-  created_at: z.string().optional().describe(
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
   settings: z.array(
     z.object({
-      name: z.string().optional(),
-      label: z.string().optional(),
+      name: z.string().nullable().optional(),
+      label: z.string().nullable().optional(),
       append: z.string().nullable().optional(),
-      description: z.string().optional(),
-      example: z.string().optional(),
-      password: z.boolean().optional().default(false),
+      description: z.string().nullable().optional(),
+      example: z.string().nullable().optional(),
+      password: z.boolean().nullable().optional().default(false),
     }).passthrough(),
-  ).optional(),
+  ).nullable().optional(),
 }).passthrough();
 
 const DomainAppliedServicesSchema = z.object({
@@ -365,14 +371,14 @@ const DomainAppliedServicesSchema = z.object({
 });
 
 const EnableVanityNameServersItemSchema = z.object({
-  id: z.number().int().optional(),
-  name: z.string().optional(),
-  ipv4: z.string().optional(),
-  ipv6: z.string().optional(),
-  created_at: z.string().optional().describe(
+  id: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  ipv4: z.string().nullable().optional(),
+  ipv6: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was created, formatted as ISO 8601.",
   ),
-  updated_at: z.string().optional().describe(
+  updated_at: z.string().nullable().optional().describe(
     "A date-time value, representing when the entry was last updated, formatted as ISO 8601.",
   ),
 }).passthrough();
@@ -399,10 +405,17 @@ const EnableVanityNameServersSchema = z.object({
 /** DNSimple Domains — domains, applied services, pushes, email forwards, and vanity name servers */
 export const model = {
   type: "@webframp/dnsimple/domains",
-  version: "2026.11.02.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "domains": {
