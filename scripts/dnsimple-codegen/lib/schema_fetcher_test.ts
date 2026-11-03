@@ -42,6 +42,10 @@ Deno.test("applySpecCorrections: fixes a known error and reports a correction th
   assertEquals(props.postal_code.description, "The postal code.");
 });
 
+Deno.test("applySpecCorrections: every configured correction applies to the pinned spec", () => {
+  assertEquals(applySpecCorrections(loadSpec()), []);
+});
+
 Deno.test("applySpecCorrections: makes the transfer auth_code optional, and only while the spec still requires it", () => {
   const body = (required: string[]) =>
     ({

@@ -253,6 +253,22 @@ export const SPEC_CORRECTIONS: SpecCorrection[] = [
     expected: ["registrant_id", "auth_code"],
     value: ["registrant_id"],
   },
+  {
+    // A primary server's port is an integer in every response.
+    path: [
+      "components",
+      "requestBodies",
+      "PrimaryServerCreate",
+      "content",
+      "application/json",
+      "schema",
+      "properties",
+      "port",
+      "type",
+    ],
+    expected: "string",
+    value: "integer",
+  },
 ];
 
 /**

@@ -388,6 +388,7 @@ export function generateModelSource(
     "buildQuery",
     "dnsimpleApi",
     "dnsimpleApiData",
+    "dnsimpleApiList",
     "dnsimpleApiPaginated",
     "hashArgs",
     "instanceName",
@@ -918,11 +919,17 @@ function generateExecuteBody(
   }
 
   if (method.resultKind === "list") {
-    // An array `data` with no pagination object: one request.
+    // An array `data` with no pagination object: one request. A response that
+    // reports more pages anyway is stored as truncated.
     lines.push(`${pad}const startMs = Date.now();`);
     lines.push(
-      `${pad}const items = await dnsimpleApiData<unknown[]>(context.globalArgs, "${httpMethod}", ${path}${options});`,
+      `${pad}const { items, truncated } = await dnsimpleApiList<unknown>(context.globalArgs, "${httpMethod}", ${path}${options});`,
     );
+    lines.push(`${pad}if (truncated) {`);
+    lines.push(
+      `${pad}  context.logger.info("WARNING: the API reports more pages than were fetched; stored results are incomplete", {});`,
+    );
+    lines.push(`${pad}}`);
     const base = op.pathParams.length > 0 || method.type !== "list"
       ? itemInstanceExpr(method)
       : `"main"`;
@@ -931,7 +938,7 @@ function generateExecuteBody(
       `${pad}const handle = await context.writeResource("${resource}", instance, {`,
     );
     lines.push(`${pad}  items,`);
-    lines.push(`${pad}  truncated: false,`);
+    lines.push(`${pad}  truncated,`);
     lines.push(`${pad}  fetchedAt: new Date().toISOString(),`);
     lines.push(`${pad}  durationMs: Date.now() - startMs,`);
     lines.push(`${pad}  collectedBy: EXTENSION_NAME,`);

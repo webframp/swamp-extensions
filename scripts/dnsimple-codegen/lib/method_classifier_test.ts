@@ -380,6 +380,24 @@ Deno.test("generated source: no service carries a spec default in a request or r
   }
 });
 
+Deno.test("generated source: no list hardcodes truncated: false", () => {
+  for (const group of groups) {
+    const source = generateModelSource(
+      group,
+      classifyServiceMethods(group),
+      "2026.01.01.1",
+    );
+    assertEquals(source.includes("truncated: false"), false, group.config.name);
+  }
+  const webhooks = groups.find((g) => g.config.name === "webhooks")!;
+  const source = generateModelSource(
+    webhooks,
+    classifyServiceMethods(webhooks),
+    "2026.01.01.1",
+  );
+  assertStringIncludes(source, "await dnsimpleApiList<unknown>(");
+});
+
 Deno.test("generated source: a free-form body is left out of the receipt", () => {
   const domains = groups.find((g) => g.config.name === "domains")!;
   const source = generateModelSource(
