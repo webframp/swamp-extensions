@@ -389,6 +389,7 @@ export function generateModelSource(
     "dnsimpleApi",
     "dnsimpleApiData",
     "dnsimpleApiPaginated",
+    "hashArgs",
     "instanceName",
     "pickBody",
     "requireAccountId",
@@ -675,7 +676,9 @@ function commaListZod(
     String(m).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   )
     .join("|");
-  return `z.string().regex(/^(${alt})(,(${alt}))*$/)`;
+  return `z.string().regex(new RegExp(${
+    JSON.stringify(`^(${alt})(,(${alt}))*$`)
+  }))`;
 }
 
 /** One generated argument field: `name: zod,` with its provenance. */
@@ -1074,7 +1077,7 @@ function itemInstanceExpr(method: ClassifiedMethod): string {
       return `"${method.resource}-current"`;
     }
     const sensitive = JSON.stringify(sensitiveArgFields(op));
-    return `"${method.resource}-" + sanitizeInstanceName(await shortHash(JSON.stringify(pickBody(args, ${sensitive}))))`;
+    return `"${method.resource}-" + sanitizeInstanceName(await hashArgs(args, ${sensitive}))`;
   }
   const refs = op.pathParams.map((p) => `args.${sanitizeFieldName(p.name)}`);
   return `await instanceName([${refs.join(", ")}])`;
@@ -1089,8 +1092,7 @@ function createInstanceExpr(method: ClassifiedMethod): string {
   const op = method.operation;
   const parents = op.pathParams.map((p) => `args.${sanitizeFieldName(p.name)}`);
   const sensitive = JSON.stringify(sensitiveArgFields(op));
-  const fallback =
-    `sanitizeInstanceName(await shortHash(JSON.stringify(pickBody(args, ${sensitive}))))`;
+  const fallback = `sanitizeInstanceName(await hashArgs(args, ${sensitive}))`;
   if (!op.responseSchema?.properties?.id) return fallback;
   return `result["id"] !== undefined && result["id"] !== null ? await instanceName([${
     [...parents, `result["id"]`].join(", ")

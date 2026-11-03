@@ -133,9 +133,12 @@ function schemaToZodInner(
     const nonNull = schema.enum.filter((v) => v !== null);
     if (nonNull.length > 0) {
       // A response must survive the API adding a value, so lenient mode
-      // widens a string enum to a plain string. Requests stay strict.
-      if (opts.lenient && nonNull.every((v) => typeof v === "string")) {
-        return "z.string()";
+      // widens an enum to its base type. Requests stay strict.
+      if (opts.lenient) {
+        if (nonNull.every((v) => typeof v === "string")) return "z.string()";
+        if (nonNull.every((v) => typeof v === "number")) return "z.number()";
+        if (nonNull.every((v) => typeof v === "boolean")) return "z.boolean()";
+        return "z.unknown()";
       }
       return enumToZod(nonNull);
     }
@@ -153,10 +156,10 @@ function schemaToZodInner(
 
   switch (concreteType) {
     case "string":
-      return stringToZod(schema);
+      return stringToZod(schema, opts.lenient);
     case "number":
     case "integer":
-      return numberToZod(schema, concreteType);
+      return numberToZod(schema, concreteType, opts.lenient);
     case "boolean":
       return "z.boolean()";
     case "array":
@@ -172,8 +175,14 @@ function schemaToZodInner(
   }
 }
 
-function stringToZod(schema: SchemaObject): string {
+/**
+ * Bounds and patterns constrain what a caller may send. A response that
+ * breaks one (a purchase that succeeded) must still be stored, so lenient
+ * schemas keep only the base type.
+ */
+function stringToZod(schema: SchemaObject, lenient = false): string {
   let s = "z.string()";
+  if (lenient) return s;
   if (schema.minLength !== undefined) {
     s += `.min(${schema.minLength})`;
   }
@@ -188,11 +197,16 @@ function stringToZod(schema: SchemaObject): string {
   return s;
 }
 
-function numberToZod(schema: SchemaObject, concreteType: string): string {
+function numberToZod(
+  schema: SchemaObject,
+  concreteType: string,
+  lenient = false,
+): string {
   let s = "z.number()";
   if (concreteType === "integer") {
     s += ".int()";
   }
+  if (lenient) return s;
   if (schema.minimum !== undefined) {
     s += `.min(${schema.minimum})`;
   }

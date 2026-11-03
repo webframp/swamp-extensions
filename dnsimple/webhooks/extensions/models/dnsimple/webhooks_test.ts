@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./webhooks.ts";
 
 // ---------------------------------------------------------------------------
@@ -185,7 +186,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhooks");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -229,7 +230,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhook");
       assertEquals(
-        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^1$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -275,7 +276,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "webhook");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -316,6 +317,73 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "webhooks model: list_webhooks names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/webhooks": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "url": "https://example.com",
+            "suppressed_at": "2024-01-01T00:00:00Z",
+          }],
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_webhooks";
+      await run(name, {}, context);
+      await run(name, { "sort": "id:asc" }, context);
+      await run(name, { "sort": "id:asc" }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("webhooks model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_webhooks": {},
+    "create_webhook": { "url": "https://example.com" },
+    "get_webhook": { "webhook": "test-id-123" },
+    "delete_webhook": { "webhook": "test-id-123" },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
 });
 
 Deno.test("webhooks model: get_webhook rejects empty, '.' and '..' path arguments", () => {

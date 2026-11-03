@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./registrar.ts";
 
 // ---------------------------------------------------------------------------
@@ -234,7 +235,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "check_domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -285,7 +286,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_prices");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -352,7 +353,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "register_domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -405,7 +406,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_registration");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -474,7 +475,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "transfer_domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -527,7 +528,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_transfer");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -582,7 +583,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "cancel_domain_transfer");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -636,7 +637,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "renew_domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -685,7 +686,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_renewal");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -734,7 +735,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "restore_domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -782,7 +783,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_restore");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -822,7 +823,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "authorize_domain_transfer_out");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -861,7 +862,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_delegation");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -901,7 +902,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "change_domain_delegation");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -950,7 +951,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "change_domain_delegation_to_vanity");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -991,7 +992,7 @@ Deno.test({
         "change_domain_delegation_from_vanity",
       );
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1030,7 +1031,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_transfer_lock");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1069,7 +1070,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_domain_transfer_lock");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1108,7 +1109,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_domain_transfer_lock");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1144,7 +1145,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_domain_auto_renewal");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1182,7 +1183,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_domain_auto_renewal");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1230,7 +1231,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_whois_privacy");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1278,7 +1279,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_whois_privacy");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1347,7 +1348,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "registrant_changes");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1405,7 +1406,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "registrant_change");
       assertEquals(
-        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^1$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1519,7 +1520,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "registrant_change");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1571,7 +1572,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "delete_registrant_change");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1789,6 +1790,160 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "registrar model: list_registrant_changes names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/registrar/registrant_changes": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "account_id": 1,
+            "contact_id": 1,
+            "domain_id": 1,
+            "state": "new",
+            "extended_attributes": {},
+            "registry_owner_change": true,
+            "irt_lock_lifted_by": "2010-01-01",
+            "created_at": "2010-01-01T01:00:00Z",
+            "updated_at": "2010-01-01T01:00:00Z",
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_registrant_changes";
+      await run(name, {}, context);
+      await run(name, {
+        "sort": "id:asc",
+        "state": "new",
+        "domain_id": "filter",
+        "contact_id": "filter",
+      }, context);
+      await run(name, {
+        "sort": "id:asc",
+        "state": "new",
+        "domain_id": "filter",
+        "contact_id": "filter",
+      }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("registrar model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "check_domain": { "domain": "test-id-123" },
+    "get_domain_prices": { "domain": "test-id-123" },
+    "register_domain": { "domain": "test-id-123", "registrant_id": 1 },
+    "get_domain_registration": {
+      "domain": "test-id-123",
+      "domainregistration": "test-id-123",
+    },
+    "transfer_domain": {
+      "domain": "test-id-123",
+      "registrant_id": 1,
+      "auth_code": "test-value",
+    },
+    "get_domain_transfer": {
+      "domain": "test-id-123",
+      "domaintransfer": "test-id-123",
+    },
+    "cancel_domain_transfer": {
+      "domain": "test-id-123",
+      "domaintransfer": "test-id-123",
+    },
+    "renew_domain": { "domain": "test-id-123", "period": 1 },
+    "get_domain_renewal": {
+      "domain": "test-id-123",
+      "domainrenewal": "test-id-123",
+    },
+    "restore_domain": { "domain": "test-id-123" },
+    "get_domain_restore": {
+      "domain": "test-id-123",
+      "domainrestore": "test-id-123",
+    },
+    "authorize_domain_transfer_out": { "domain": "test-id-123" },
+    "get_domain_delegation": { "domain": "test-id-123" },
+    "change_domain_delegation": {
+      "domain": "test-id-123",
+      "items": ["test-value"],
+    },
+    "change_domain_delegation_to_vanity": {
+      "domain": "test-id-123",
+      "items": ["test-value"],
+    },
+    "change_domain_delegation_from_vanity": { "domain": "test-id-123" },
+    "get_domain_transfer_lock": { "domain": "test-id-123" },
+    "enable_domain_transfer_lock": { "domain": "test-id-123" },
+    "disable_domain_transfer_lock": { "domain": "test-id-123" },
+    "enable_domain_auto_renewal": { "domain": "test-id-123" },
+    "disable_domain_auto_renewal": { "domain": "test-id-123" },
+    "enable_whois_privacy": { "domain": "test-id-123" },
+    "disable_whois_privacy": { "domain": "test-id-123" },
+    "list_registrant_changes": {},
+    "create_registrant_change": {
+      "domain_id": "test-value",
+      "contact_id": "test-value",
+    },
+    "check_registrant_change": {
+      "domain_id": "test-value",
+      "contact_id": "test-value",
+    },
+    "get_registrant_change": { "registrantchange": "test-id-123" },
+    "delete_registrant_change": { "registrantchange": "test-id-123" },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
+});
+
+Deno.test("registrar model: register_domain keeps every key of the free-form extended_attributes argument", () => {
+  const value = { first: "1", second: "2" };
+  const parsed = model.methods.register_domain.arguments.parse({
+    ...{ "domain": "test-id-123", "registrant_id": 1 },
+    extended_attributes: value,
+  }) as Record<string, unknown>;
+  assertEquals(parsed.extended_attributes, value);
 });
 
 Deno.test("registrar model: check_domain rejects empty, '.' and '..' path arguments", () => {

@@ -86,20 +86,41 @@ Deno.test("generateReadme: lists the billable methods", () => {
   );
 });
 
-Deno.test("generateReadme: contact services document that contact data is stored plainly", () => {
-  for (const name of ["contacts", "registrar"]) {
+Deno.test("generateReadme: services that store personal or credential-bearing data say how", () => {
+  const expected: Record<string, string> = {
+    contacts: "names, email addresses, phone numbers and postal addresses",
+    registrar: "`extended_attributes`",
+    domains: "`from` and `to` addresses",
+    webhooks: "embeds a credential",
+  };
+  for (const [name, text] of Object.entries(expected)) {
     const g = group(name);
     const readme = generateReadme(g.config, classifyServiceMethods(g));
-    assertStringIncludes(readme, "## Contact data");
-    assertStringIncludes(readme, "does not mark them sensitive");
+    assertStringIncludes(readme, "## Stored data");
+    assertStringIncludes(readme, text);
+    assertStringIncludes(readme, "not marked sensitive");
   }
-  const zones = group("zones");
+  // The registrar stores no contact fields, so its README must not claim to.
+  const registrar = group("registrar");
   assertEquals(
-    generateReadme(zones.config, classifyServiceMethods(zones)).includes(
-      "## Contact data",
+    generateReadme(registrar.config, classifyServiceMethods(registrar))
+      .includes("stores them as ordinary"),
+    false,
+  );
+  const tlds = group("tlds");
+  assertEquals(
+    generateReadme(tlds.config, classifyServiceMethods(tlds)).includes(
+      "## Stored data",
     ),
     false,
   );
+});
+
+Deno.test("generateReadme: zones explain that record charges depend on the plan", () => {
+  const zones = group("zones");
+  const readme = generateReadme(zones.config, classifyServiceMethods(zones));
+  assertStringIncludes(readme, "## Plan limits");
+  assertStringIncludes(readme, "records_limit");
 });
 
 Deno.test("generateReadme: documents a returned secret and the vault swamp then requires", () => {

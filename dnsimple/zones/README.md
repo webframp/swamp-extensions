@@ -41,6 +41,14 @@ method without it fails before any request goes out.
 `environment` is `production` by default. Set `--global-arg environment=sandbox`
 to use DNSimple's sandbox, which has its own accounts and tokens.
 
+## Plan limits
+
+DNSimple's spec says a zone's records beyond the plan's `records_limit` are
+either charged or cannot be created. Whether `create_zone_record` and
+`batch_change_zone_records` cost anything therefore depends on your plan, so
+they are not marked Billable. Check the account's limit before creating records
+in bulk.
+
 ## Methods
 
 | Method                           | Description                                           |

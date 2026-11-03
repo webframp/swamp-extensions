@@ -53,6 +53,12 @@ function parseArgs(): BumpOptions {
         break;
       case "--version":
         opts.version = value(++i, flag);
+        if (!/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(opts.version)) {
+          console.error(
+            `\n❌ --version ${opts.version} is not CalVer (YYYY.MM.DD.N)`,
+          );
+          Deno.exit(1);
+        }
         break;
       case "--notes":
         opts.notes = value(++i, flag);
@@ -213,7 +219,9 @@ async function main() {
         `   ➖ ${diff.name}: ${diff.oldMethods} → ${diff.newMethods} methods`,
       );
     } else {
-      console.log(`   🔄 ${diff.name}: ${diff.newMethods} methods (forced)`);
+      console.log(
+        `   🔄 ${diff.name}: ${diff.newMethods} methods (content changed, or forced with --all)`,
+      );
     }
   }
   console.log(``);

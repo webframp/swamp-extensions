@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./templates.ts";
 
 // ---------------------------------------------------------------------------
@@ -204,7 +205,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "templates");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -259,7 +260,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template");
       assertEquals(
-        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^1$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -309,7 +310,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -365,7 +366,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -459,7 +460,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template_records");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -521,7 +522,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template_record");
       assertEquals(
-        new RegExp("^test-id-123-1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-1-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -573,7 +574,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "template_record");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -642,7 +643,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "apply_template_to_domain");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -815,6 +816,103 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "templates model: list_templates names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/templates": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "account_id": 1,
+            "name": "test-value",
+            "sid": "test-value",
+            "description": "test-value",
+            "created_at": "2010-01-01T01:00:00Z",
+            "updated_at": "2010-01-01T01:00:00Z",
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_templates";
+      await run(name, {}, context);
+      await run(name, { "sort": "id:asc" }, context);
+      await run(name, { "sort": "id:asc" }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("templates model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_templates": {},
+    "create_template": { "sid": "test-value", "name": "test-value" },
+    "get_template": { "template": "test-id-123" },
+    "update_template": { "template": "test-id-123" },
+    "delete_template": { "template": "test-id-123" },
+    "list_template_records": { "template": "test-id-123" },
+    "create_template_record": {
+      "template": "test-id-123",
+      "name": "test-value",
+      "type": "test-value",
+      "content": "test-value",
+    },
+    "get_template_record": {
+      "template": "test-id-123",
+      "templaterecord": "test-id-123",
+    },
+    "delete_template_record": {
+      "template": "test-id-123",
+      "templaterecord": "test-id-123",
+    },
+    "apply_template_to_domain": {
+      "domain": "test-id-123",
+      "template": "test-id-123",
+    },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
 });
 
 Deno.test("templates model: get_template rejects empty, '.' and '..' path arguments", () => {

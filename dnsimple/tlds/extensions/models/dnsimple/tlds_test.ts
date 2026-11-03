@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./tlds.ts";
 
 // ---------------------------------------------------------------------------
@@ -198,7 +199,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "tlds");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -251,7 +252,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "tld");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -302,7 +303,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "tld_extended_attributes");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -462,6 +463,89 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "tlds model: list_tlds names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /tlds": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "tld": "test-value",
+            "tld_type": 1,
+            "whois_privacy": true,
+            "auto_renew_only": true,
+            "idn": true,
+            "minimum_registration": 1,
+            "registration_enabled": true,
+            "renewal_enabled": true,
+            "transfer_enabled": true,
+            "dnssec_interface_type": "ds",
+            "name_server_min": 1,
+            "name_server_max": 1,
+            "trustee_service_enabled": true,
+            "trustee_service_required": true,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_tlds";
+      await run(name, {}, context);
+      await run(name, { "sort": "tld:asc" }, context);
+      await run(name, { "sort": "tld:asc" }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("tlds model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_tlds": {},
+    "get_tld": { "tld": "test-id-123" },
+    "get_tld_extended_attributes": { "tld": "test-id-123" },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
 });
 
 Deno.test("tlds model: get_tld rejects empty, '.' and '..' path arguments", () => {

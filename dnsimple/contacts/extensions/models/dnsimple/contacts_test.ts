@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./contacts.ts";
 
 // ---------------------------------------------------------------------------
@@ -207,7 +208,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "contacts");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -294,7 +295,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "contact");
       assertEquals(
-        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^1$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -355,7 +356,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "contact");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -443,7 +444,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "contact");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -646,6 +647,105 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "contacts model: list_contacts names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/contacts": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "account_id": 1,
+            "label": "test-value",
+            "first_name": "test-value",
+            "last_name": "test-value",
+            "organization_name": "test-value",
+            "job_title": "test-value",
+            "address1": "test-value",
+            "address2": "test-value",
+            "city": "test-value",
+            "state_province": "test-value",
+            "postal_code": "test-value",
+            "country": "test-value",
+            "phone": "test-value",
+            "fax": "test-value",
+            "email": "test-value",
+            "created_at": "2010-01-01T01:00:00Z",
+            "updated_at": "2010-01-01T01:00:00Z",
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_contacts";
+      await run(name, {}, context);
+      await run(name, { "sort": "id:asc" }, context);
+      await run(name, { "sort": "id:asc" }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("contacts model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_contacts": {},
+    "create_contact": {
+      "first_name": "test-value",
+      "last_name": "test-value",
+      "address1": "test-value",
+      "city": "test-value",
+      "state_province": "test-value",
+      "postal_code": "test-value",
+      "country": "test-value",
+      "email": "test-value",
+      "phone": "test-value",
+    },
+    "get_contact": { "contact": "test-id-123" },
+    "update_contact": { "contact": "test-id-123" },
+    "delete_contact": { "contact": "test-id-123" },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
 });
 
 Deno.test("contacts model: get_contact rejects empty, '.' and '..' path arguments", () => {

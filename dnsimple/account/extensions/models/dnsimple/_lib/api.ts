@@ -101,13 +101,62 @@ function baseUrl(args: ApiGlobalArgs): string {
  * through this before it reaches the datastore.
  */
 export function sanitizeInstanceName(name: string): string {
-  const cleaned = name
+  const lowered = name.toLowerCase();
+  const cleaned = lowered
     .replace(/[/\\]/g, "_")
     .replace(/\.\./g, "_")
     .replace(/\0/g, "");
+  // Names compare case-insensitively (a DNS name is one entity in any case),
+  // so lowercasing is not a change. Replacing or dropping a character is: it
+  // can map two different inputs to one name, so the original's hash is kept.
+  const distinct = cleaned === lowered
+    ? cleaned
+    : `${cleaned}-${fastHash(name)}`;
+  const bounded = boundName(distinct, name);
   // Spelled as a concatenation so the repository's reserved-name scan, which
   // reports quoted literals under scripts/, does not flag the guard itself.
-  return cleaned.toLowerCase() === "late" + "st" ? `${cleaned}_` : cleaned;
+  return bounded === "late" + "st" ? `${bounded}_` : bounded;
+}
+
+/** The longest instance name kept, in UTF-8 bytes; filenames cap at 255. */
+const MAX_NAME_BYTES = 200;
+
+/**
+ * Keep a name within MAX_NAME_BYTES by cutting its readable part and ending
+ * with a hash of the full original, so a long name stays unique.
+ */
+function boundName(name: string, original: string): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(name).length <= MAX_NAME_BYTES) return name;
+  const suffix = `-${fastHash(original)}`;
+  let readable = "";
+  for (const ch of name) {
+    if (
+      encoder.encode(readable + ch + suffix).length > MAX_NAME_BYTES
+    ) break;
+    readable += ch;
+  }
+  return `${readable}${suffix}`;
+}
+
+/**
+ * Synchronous 53-bit string hash (cyrb53), as 14 hex characters. Used where
+ * sanitizing must stay synchronous; `shortHash` is the stronger async form.
+ */
+function fastHash(input: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const n = 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  return n.toString(16).padStart(14, "0");
 }
 
 /**
@@ -147,6 +196,26 @@ export async function instanceName(parts: unknown[]): Promise<string> {
     );
   }
   return sanitizeInstanceName(await shortHash(JSON.stringify(strings)));
+}
+
+/**
+ * Hash a method's arguments into an instance-name suffix: the keys sorted,
+ * every value as a string, so `5` and `"5"` (one HTTP request) and different
+ * key orders give one name.
+ */
+export async function hashArgs(
+  args: Record<string, unknown>,
+  exclude: string[],
+): Promise<string> {
+  const entries = Object.entries(pickBody(args, exclude))
+    .map(([key, value]): [string, string] => [
+      key,
+      typeof value === "object" && value !== null
+        ? JSON.stringify(value)
+        : String(value),
+    ])
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return await shortHash(JSON.stringify(entries));
 }
 
 /**
@@ -237,10 +306,23 @@ async function fetchWithTimeout(
     }
     // A header the runtime rejects can quote its value, and the only
     // caller-supplied header value is the access token.
-    if (err instanceof TypeError && /header/i.test(err.message)) {
+    if (
+      err instanceof TypeError &&
+      /invalid header|header (value|name)/i.test(err.message)
+    ) {
       throw new Error(
         "DNSimple API request could not be sent: a request header is invalid " +
           "(check the access token for stray characters).",
+      );
+    }
+    // A write that fails after it was sent (a reset connection) may still have
+    // been processed, exactly like a timeout; a read can simply be retried.
+    if (method !== "GET") {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `DNSimple API request failed: ${method} ${url}: ${reason}. The ` +
+          `operation may have completed; check the resource before retrying.`,
+        { cause: err },
       );
     }
     throw err;
@@ -368,6 +450,9 @@ export async function dnsimpleApi<T>(
   for (let attempt = 0;; attempt++) {
     const { response, text } = await fetchWithTimeout(url, init);
 
+    // A 429 is rejected before the request is processed, so retrying once is
+    // safe for every method, billable POSTs included. 5xx responses and
+    // timeouts are never retried: a write may have gone through.
     if (response.status === 429) {
       const waitSeconds =
         parseRetryAfter(response.headers.get("Retry-After")) ??

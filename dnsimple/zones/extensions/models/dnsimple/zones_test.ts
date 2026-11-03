@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./zones.ts";
 
 // ---------------------------------------------------------------------------
@@ -221,7 +222,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zones");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -272,7 +273,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -312,7 +313,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_file");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -351,7 +352,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "check_zone_distribution");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -409,7 +410,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_ns_records");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -474,7 +475,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_records");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -542,7 +543,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_record");
       assertEquals(
-        new RegExp("^test-id-123-1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-1-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -596,7 +597,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_record");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -665,7 +666,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "zone_record");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -803,7 +804,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "batch_change_zone_records");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -843,7 +844,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "check_zone_record_distribution");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -899,7 +900,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "activate_zone_service");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -953,7 +954,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "deactivate_zone_service");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1007,7 +1008,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "query_dns_analytics");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1161,6 +1162,113 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "zones model: list_zones names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/zones": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "account_id": 1,
+            "name": "test-value",
+            "reverse": true,
+            "secondary": true,
+            "last_transferred_at": "2010-01-01T01:00:00Z",
+            "active": true,
+            "created_at": "2010-01-01T01:00:00Z",
+            "updated_at": "2010-01-01T01:00:00Z",
+            "records_count": 1,
+            "records_limit": 1,
+            "records_overage": 1,
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_zones";
+      await run(name, {}, context);
+      await run(name, { "sort": "id:asc", "name_like": "filter" }, context);
+      await run(name, { "sort": "id:asc", "name_like": "filter" }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("zones model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_zones": {},
+    "get_zone": { "zone": "test-id-123" },
+    "get_zone_file": { "zone": "test-id-123" },
+    "check_zone_distribution": { "zone": "test-id-123" },
+    "update_zone_ns_records": { "zone": "test-id-123" },
+    "list_zone_records": { "zone": "test-id-123" },
+    "create_zone_record": {
+      "zone": "test-id-123",
+      "name": "test-value",
+      "type": "A",
+      "content": "test-value",
+    },
+    "get_zone_record": { "zone": "test-id-123", "zonerecord": "test-id-123" },
+    "update_zone_record": {
+      "zone": "test-id-123",
+      "zonerecord": "test-id-123",
+    },
+    "delete_zone_record": {
+      "zone": "test-id-123",
+      "zonerecord": "test-id-123",
+    },
+    "batch_change_zone_records": { "zone": "test-id-123" },
+    "check_zone_record_distribution": {
+      "zone": "test-id-123",
+      "zonerecord": "test-id-123",
+    },
+    "activate_zone_service": { "zone": "test-id-123" },
+    "deactivate_zone_service": { "zone": "test-id-123" },
+    "query_dns_analytics": {},
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
 });
 
 Deno.test("zones model: get_zone rejects empty, '.' and '..' path arguments", () => {

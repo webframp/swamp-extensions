@@ -133,9 +133,9 @@ account-scoped method without it fails before any request goes out.
 
 \`environment\` is \`production\` by default. Set \`--global-arg environment=sandbox\`
 to use DNSimple's sandbox, which has its own accounts and tokens.
-${billableParagraph(methods)}${contactDataSection(config)}${
-    vaultRequirementParagraph(methods)
-  }${secretsSection(methods)}
+${billableParagraph(methods)}${planLimitSection(config)}${
+    storedDataSection(config)
+  }${vaultRequirementParagraph(methods)}${secretsSection(methods)}
 ## Methods
 
 | Method | Description |
@@ -163,21 +163,30 @@ Apache-2.0 — see [LICENSE.md](LICENSE.md).
 }
 
 /**
- * The README's "Contact data" section, or "" for services that do not return
- * registrant details. Contact fields are deliberately not marked sensitive.
+ * The README's "Stored data" section, or "" for services with nothing to say.
+ * The service's own note names what is stored; the shared tail explains why it
+ * is not marked sensitive and where the boundary lies.
  */
-function contactDataSection(config: ServiceConfig): string {
-  if (!config.storesContactData) return "";
+function storedDataSection(config: ServiceConfig): string {
+  if (!config.storedDataNote) return "";
   return `
-## Contact data
+## Stored data
 
-Registrant contact details (names, email addresses, phone numbers and postal
-addresses) are required to manage a domain, so this extension stores them as
-ordinary swamp data and does not mark them sensitive. Sensitive fields move to
-a vault and leave only a reference, which would make contact records unreadable
-to expressions and reports. The access controls of the datastore that holds
-your swamp data are the boundary for this data. Each resource keeps a bounded
-number of versions (\`garbageCollection\`), so older copies are pruned.
+${config.storedDataNote} These fields are not marked sensitive: a sensitive field
+moves to a vault and leaves only a reference, which would make these records
+unreadable to expressions and reports. The access controls of the datastore that holds your swamp data are
+the boundary for this data. Each resource keeps a bounded number of versions
+(\`garbageCollection\`), so older copies are pruned.
+`;
+}
+
+/** The README's "Plan limits" section, or "". */
+function planLimitSection(config: ServiceConfig): string {
+  if (!config.planLimitNote) return "";
+  return `
+## Plan limits
+
+${config.planLimitNote}
 `;
 }
 
@@ -322,11 +331,20 @@ export function generateReleaseNotes(
     `**Added:** Initial code-generated release of @webframp/dnsimple/${config.name} with ${methodCount} methods covering the DNSimple ${
       config.name.replace(/-/g, " ")
     } API surface.`;
-  return `## ${version}
+  const notes = `## ${version}
 
 ${text.trimEnd()}
 `;
+  if (notes.length > MAX_RELEASE_NOTES_LENGTH) {
+    throw new Error(
+      `release notes are ${notes.length} characters; the limit is ${MAX_RELEASE_NOTES_LENGTH}`,
+    );
+  }
+  return notes;
 }
+
+/** The limit swamp's `--release-notes` flag enforces on the whole file. */
+export const MAX_RELEASE_NOTES_LENGTH = 5000;
 
 /**
  * Generate .swamp.yaml, preserving an existing repoId.

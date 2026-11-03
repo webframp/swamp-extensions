@@ -4,6 +4,7 @@
 
 import {
   assertEquals,
+  assertMatch,
   assertRejects,
   assertThrows,
 } from "jsr:@std/assert@1.0.19";
@@ -13,6 +14,7 @@ import {
   dnsimpleApi,
   dnsimpleApiData,
   dnsimpleApiPaginated,
+  hashArgs,
   instanceName,
   MAX_PAGES,
   parseRetryAfter,
@@ -133,7 +135,8 @@ Deno.test("requireAccountId: returns the ID or names the method", () => {
 });
 
 Deno.test("sanitizeInstanceName: strips path traversal and the reserved name", () => {
-  assertEquals(sanitizeInstanceName("a/b\\c..d\0"), "a_b_c_d");
+  const cleaned = sanitizeInstanceName("a/b\\c..d\0");
+  assertMatch(cleaned, /^a_b_c_d-[0-9a-f]{14}$/);
   assertEquals(sanitizeInstanceName("example.com"), "example.com");
   assertEquals(sanitizeInstanceName("late" + "st") !== "late" + "st", true);
 });
@@ -158,6 +161,56 @@ Deno.test("instanceName: no parts is main, and hyphenated pairs do not collide",
   assertEquals(a, await instanceName(["a-b", "c"]));
   // A pair with no hyphen keeps the readable form.
   assertEquals(await instanceName(["example.com", 12345]), "example.com-12345");
+});
+
+Deno.test("sanitizeInstanceName: distinct inputs stay distinct, case folds, long names are bounded", () => {
+  const names = ["a/b", "a\\b", "a..b", "a_b"].map(sanitizeInstanceName);
+  assertEquals(new Set(names).size, 4);
+  assertEquals(sanitizeInstanceName("Example.COM"), "example.com");
+  const long = `${"a".repeat(240)}.com`;
+  const bounded = sanitizeInstanceName(long);
+  assertEquals(new TextEncoder().encode(bounded).length <= 200, true);
+  assertEquals(bounded, sanitizeInstanceName(long));
+  assertEquals(bounded !== sanitizeInstanceName(`${long}x`), true);
+});
+
+Deno.test("instanceName: a long zone plus id and hash stays within the filename limit", async () => {
+  const zone = `${"a-".repeat(120)}.com`;
+  const name = await instanceName([zone, 12345678]);
+  assertEquals(new TextEncoder().encode(name).length <= 200, true);
+  assertEquals(name !== await instanceName([zone, 12345679]), true);
+});
+
+Deno.test('hashArgs: key order and 5 versus "5" give one name; a different value gives another', async () => {
+  const a = await hashArgs({ domain_id: 5, contact_id: "7" }, []);
+  assertEquals(a, await hashArgs({ contact_id: 7, domain_id: "5" }, []));
+  assertEquals(
+    a !== await hashArgs({ domain_id: 6, contact_id: "7" }, []),
+    true,
+  );
+  assertEquals(
+    await hashArgs({ domain_id: 5, secret: "x" }, ["secret"]),
+    await hashArgs({ domain_id: 5 }, []),
+  );
+});
+
+Deno.test("dnsimpleApi: a non-timeout transport failure on a write warns it may have completed", async () => {
+  await withStubbedFetch(
+    () => Promise.reject(new TypeError("connection reset")),
+    async () => {
+      await assertRejects(
+        () => dnsimpleApi(ARGS, "POST", "/1010/registrar/domains/x.com"),
+        Error,
+        "may have completed; check the resource before retrying",
+      );
+      const err = await assertRejects(
+        () => dnsimpleApi(ARGS, "GET", "/whoami"),
+        TypeError,
+        "connection reset",
+      );
+      assertEquals(err.message.includes("may have completed"), false);
+    },
+  );
 });
 
 Deno.test("buildQuery and pickBody: keep set values, drop the rest", () => {

@@ -27,6 +27,7 @@ import {
   MAX_PAGES,
   SENSITIVE_RESPONSE_FIELDS,
   type ServiceConfig,
+  ZOD_VERSION,
 } from "../config.ts";
 
 /** The value substituted for every path parameter in generated tests. */
@@ -65,6 +66,7 @@ export function generateTestSource(
   lines.push(
     `import { createModelTestContext } from "@swamp-club/swamp-testing";`,
   );
+  lines.push(`import { z } from "npm:zod@${ZOD_VERSION}";`);
   lines.push(`import { model } from "./${modelFileName}.ts";`);
   lines.push(``);
 
@@ -141,6 +143,26 @@ export function generateTestSource(
       lines.push(generateReceiptTest(config, receipt));
       lines.push(``);
     }
+  }
+
+  const filterable = methods.find((m) =>
+    m.resultKind === "list" && m.operation.queryParams.length > 0 &&
+    m.operation.pathParams.length <= 1
+  );
+  if (filterable) {
+    lines.push(generateFilterNameTest(config, filterable));
+    lines.push(``);
+  }
+
+  lines.push(generateNoFabricatedArgsTest(config, methods));
+  lines.push(``);
+
+  const recordArg = methods.find((m) =>
+    argFields(m).some((f) => f.zod.startsWith("z.record("))
+  );
+  if (recordArg) {
+    lines.push(generateRecordArgTest(config, recordArg));
+    lines.push(``);
   }
 
   const pathed = methods.find((m) => m.operation.pathParams.length > 0);
@@ -424,7 +446,7 @@ function generateExecutionTest(
       JSON.stringify(method.resource)
     });`,
   );
-  const instance = expectedInstanceName(method);
+  const instance = expectedInstanceName(method, args);
   if (instance !== undefined) {
     checks.push(
       `      assertEquals(new RegExp(${
@@ -547,6 +569,118 @@ function generateReceiptTest(
     });`,
     {},
   );
+}
+
+/** The argument names a call must supply: the spec's required ones only. */
+function requiredArgs(method: ClassifiedMethod): Record<string, unknown> {
+  const op = method.operation;
+  const all = buildMethodArgs(method);
+  const names = new Set<string>(
+    op.pathParams.map((p) => sanitizeFieldName(p.name)),
+  );
+  for (const q of op.queryParams) {
+    if (q.required) names.add(sanitizeFieldName(q.name));
+  }
+  const body = op.requestBody;
+  if (body?.properties) {
+    for (const name of body.required ?? []) names.add(sanitizeFieldName(name));
+  } else if (body && op.requestBodyRequired) {
+    names.add(bodyShape(op) === "array" ? "items" : "body");
+  }
+  return Object.fromEntries(
+    Object.entries(all).filter(([name]) => names.has(name)),
+  );
+}
+
+/**
+ * Two filters name two instances and one filter names one, so a filtered list
+ * never overwrites the unfiltered one or another filter's.
+ */
+function generateFilterNameTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const filtered = buildMethodArgs(method);
+  const queryNames = new Set(
+    method.operation.queryParams.map((p) => sanitizeFieldName(p.name)),
+  );
+  const unfiltered = Object.fromEntries(
+    Object.entries(filtered).filter(([name]) => !queryNames.has(name)),
+  );
+  // One value for every filter, so the filtered call differs from the
+  // unfiltered one even when the spec's only filters are optional.
+  const withFilter: Record<string, unknown> = { ...filtered };
+  for (const p of method.operation.queryParams) {
+    const name = sanitizeFieldName(p.name);
+    if (withFilter[name] === undefined) {
+      withFilter[name] = p.schema?.enum?.[0] ?? "filter";
+    }
+  }
+  const response = JSON.stringify({ status: 200, body: mockBody(method) });
+  const routes = `      ${JSON.stringify(routeKey(method))}: ${response},`;
+  return testCase(
+    `${config.name} model: ${method.name} names a filtered list apart from an unfiltered one`,
+    routes,
+    `      const name = ${JSON.stringify(method.name)};
+      await run(name, ${JSON.stringify(unfiltered)}, context);
+      await run(name, ${JSON.stringify(withFilter)}, context);
+      await run(name, ${JSON.stringify(withFilter)}, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(names[0] !== names[1], true, "a filter must change the name");
+      assertEquals(names[1], names[2], "one filter must keep one name");`,
+    {},
+  );
+}
+
+/**
+ * Parsing a call's arguments adds nothing the caller did not send: a default
+ * on a request field would be sent on every call and silently overwrite what
+ * the API holds (a content-only update resetting a ttl).
+ */
+function generateNoFabricatedArgsTest(
+  config: ServiceConfig,
+  methods: ClassifiedMethod[],
+): string {
+  const cases = Object.fromEntries(
+    methods.map((m) => [m.name, requiredArgs(m)]),
+  );
+  return `Deno.test("${config.name} model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = ${
+    JSON.stringify(cases)
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(schema.includes('"default"'), false, \`\${name} declares a default\`);
+  }
+});`;
+}
+
+/** A free-form record argument keeps every key it is given. */
+function generateRecordArgTest(
+  config: ServiceConfig,
+  method: ClassifiedMethod,
+): string {
+  const field = argFields(method).find((f) => f.zod.startsWith("z.record("))!;
+  const args = requiredArgs(method);
+  return `Deno.test("${config.name} model: ${method.name} keeps every key of the free-form ${field.name} argument", () => {
+  const value = { first: "1", second: "2" };
+  const parsed = model.methods.${method.name}.arguments.parse({
+    ...${JSON.stringify(args)},
+    ${field.name}: value,
+  }) as Record<string, unknown>;
+  assertEquals(parsed.${field.name}, value);
+});`;
 }
 
 /**
@@ -940,21 +1074,32 @@ function expectedRequestBody(
  * The resource instance name a call should write, or undefined when it is a
  * hash the test cannot predict. Mirrors the rules in method_classifier.ts.
  */
-function expectedInstanceName(method: ClassifiedMethod): string | undefined {
+function expectedInstanceName(
+  method: ClassifiedMethod,
+  args: Record<string, unknown>,
+): string | undefined {
   const op = method.operation;
   const parents = op.pathParams.map(() => PATH_PARAM_TEST_VALUE);
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // The runtime appends a 16-hex hash when a filter was supplied or when a
-  // two-part name has a hyphen in a part, so the readable base is anchored
-  // and the hash is optional.
-  const hash = "(-[0-9a-f]{16})?";
-  const named = (base: string) => `^${escape(base)}${hash}$`;
+  // A 16-hex hash suffix, required when the name carries one.
+  const named = (base: string, hashed: boolean) =>
+    `^${escape(base)}${hashed ? "-[0-9a-f]{16}" : ""}$`;
+  // A list that was sent a filter appends a hash of it to the name.
+  const filtered = method.resultKind === "list" && op.queryParams.some((p) => {
+    const v = args[sanitizeFieldName(p.name)];
+    return v !== undefined && v !== null;
+  });
+  // Two parts get a hash because the test value contains a hyphen.
   const join = (parts: string[]) =>
-    parts.length <= 2 ? named(parts.join("-")) : undefined;
+    parts.length === 1
+      ? named(parts[0], false)
+      : parts.length === 2
+      ? named(parts.join("-"), true)
+      : undefined;
 
   if (method.resultKind === "list" && method.type === "list") {
-    if (parents.length === 0) return named("main");
-    return parents.length === 1 ? named(parents[0]) : undefined;
+    if (parents.length === 0) return named("main", filtered);
+    return parents.length === 1 ? named(parents[0], filtered) : undefined;
   }
   if (method.type === "create") {
     if (!hasId(method)) return undefined;
@@ -967,7 +1112,9 @@ function expectedInstanceName(method: ClassifiedMethod): string | undefined {
       ? `^${resource}-current$`
       : `^${resource}-[0-9a-f]{16}$`;
   }
-  return join(parents);
+  return filtered && parents.length === 1
+    ? named(parents[0], true)
+    : join(parents);
 }
 
 /**

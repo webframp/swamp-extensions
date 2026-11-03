@@ -367,16 +367,17 @@ Deno.test("argFields: a comma-separated enum query accepts several members", () 
   assertEquals(schema.safeParse("date,bogus").success, false);
 });
 
-Deno.test("generated source: request schemas carry no defaults", () => {
-  const zones = groups.find((g) => g.config.name === "zones")!;
-  const source = generateModelSource(
-    zones,
-    classifyServiceMethods(zones),
-    "2026.01.01.1",
-  );
-  // The only default is the `environment` global argument, not a spec value.
-  assertEquals(source.match(/\.default\(/g)?.length, 1);
-  assertStringIncludes(source, '.default("production")');
+Deno.test("generated source: no service carries a spec default in a request or response schema", () => {
+  for (const group of groups) {
+    const source = generateModelSource(
+      group,
+      classifyServiceMethods(group),
+      "2026.01.01.1",
+    );
+    // The only default is the `environment` global argument, not a spec value.
+    assertEquals(source.match(/\.default\(/g)?.length, 1, group.config.name);
+    assertStringIncludes(source, '.default("production")');
+  }
 });
 
 Deno.test("generated source: a free-form body is left out of the receipt", () => {

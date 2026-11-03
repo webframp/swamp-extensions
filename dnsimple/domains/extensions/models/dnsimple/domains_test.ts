@@ -8,6 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
+import { z } from "npm:zod@4.6.5";
 import { model } from "./domains.ts";
 
 // ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domains");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -286,7 +287,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain");
       assertEquals(
-        new RegExp("^1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^1$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -342,7 +343,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -486,7 +487,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forwards");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -539,7 +540,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forward");
       assertEquals(
-        new RegExp("^test-id-123-1(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123-1-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -588,7 +589,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "email_forward");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -674,7 +675,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "initiate_domain_push");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -726,7 +727,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "pushes");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -762,7 +763,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "accept_push");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -860,7 +861,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "services");
       assertEquals(
-        new RegExp("^main(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^main-[0-9a-f]{16}$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -920,7 +921,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "service");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -985,7 +986,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "domain_applied_services");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1023,7 +1024,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "apply_service_to_domain");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -1064,7 +1065,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "unapply_service_from_domain");
       assertEquals(
-        new RegExp("^test-id-123-test-id-123(-[0-9a-f]{16})?$").test(
+        new RegExp("^test-id-123-test-id-123-[0-9a-f]{16}$").test(
           resources[0].name,
         ),
         true,
@@ -1114,7 +1115,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "enable_vanity_name_servers");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1150,7 +1151,7 @@ Deno.test({
       assertEquals(resources.length, 1);
       assertEquals(resources[0].specName, "disable_vanity_name_servers");
       assertEquals(
-        new RegExp("^test-id-123(-[0-9a-f]{16})?$").test(resources[0].name),
+        new RegExp("^test-id-123$").test(resources[0].name),
         true,
         resources[0].name,
       );
@@ -1337,6 +1338,134 @@ Deno.test({
       await server.shutdown();
     }
   },
+});
+
+Deno.test({
+  name:
+    "domains model: list_domains names a filtered list apart from an unfiltered one",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockServer({
+      "GET /1010/domains": {
+        "status": 200,
+        "body": {
+          "data": [{
+            "id": 1,
+            "account_id": 1,
+            "registrant_id": 1,
+            "name": "test-value",
+            "unicode_name": "test-value",
+            "state": "hosted",
+            "auto_renew": true,
+            "private_whois": true,
+            "expires_at": "2024-01-01T00:00:00Z",
+            "trustee": true,
+            "expires_on": "2010-01-01",
+            "created_at": "2010-01-01T01:00:00Z",
+            "updated_at": "2010-01-01T01:00:00Z",
+          }],
+          "pagination": {
+            "current_page": 1,
+            "per_page": 100,
+            "total_entries": 1,
+            "total_pages": 1,
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = newContext();
+      const name = "list_domains";
+      await run(name, {}, context);
+      await run(name, {
+        "sort": "id:asc",
+        "name_like": "filter",
+        "registrant_id": "filter",
+      }, context);
+      await run(name, {
+        "sort": "id:asc",
+        "name_like": "filter",
+        "registrant_id": "filter",
+      }, context);
+      const names = getWrittenResources().map((r) => r.name);
+      assertEquals(names.length, 3);
+      assertEquals(
+        names[0] !== names[1],
+        true,
+        "a filter must change the name",
+      );
+      assertEquals(names[1], names[2], "one filter must keep one name");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test("domains model: parsing arguments adds no field the caller did not send", () => {
+  const cases: Record<string, Record<string, unknown>> = {
+    "list_domains": {},
+    "create_domain": { "name": "test-value" },
+    "get_domain": { "domain": "test-id-123" },
+    "delete_domain": { "domain": "test-id-123" },
+    "get_domains_research_status": { "domain": "test-value" },
+    "list_email_forwards": { "domain": "test-id-123" },
+    "create_email_forward": { "domain": "test-id-123" },
+    "get_email_forward": {
+      "domain": "test-id-123",
+      "emailforward": "test-id-123",
+    },
+    "delete_email_forward": {
+      "domain": "test-id-123",
+      "emailforward": "test-id-123",
+    },
+    "initiate_domain_push": { "domain": "test-id-123" },
+    "list_pushes": {},
+    "accept_push": { "push": "test-id-123", "contact_id": 1 },
+    "reject_push": { "push": "test-id-123" },
+    "list_services": {},
+    "get_service": { "service": "test-id-123" },
+    "list_domain_applied_services": { "domain": "test-id-123" },
+    "apply_service_to_domain": {
+      "domain": "test-id-123",
+      "service": "test-id-123",
+    },
+    "unapply_service_from_domain": {
+      "domain": "test-id-123",
+      "service": "test-id-123",
+    },
+    "enable_vanity_name_servers": { "domain": "test-id-123" },
+    "disable_vanity_name_servers": { "domain": "test-id-123" },
+  };
+  const methods = model.methods as unknown as Record<
+    string,
+    { arguments: { parse: (a: unknown) => Record<string, unknown> } }
+  >;
+  for (const [name, args] of Object.entries(cases)) {
+    const parsed = methods[name].arguments.parse(args);
+    assertEquals(Object.keys(parsed).sort(), Object.keys(args).sort(), name);
+    // Nested request objects too: a default on an item of an array argument
+    // (a batch update) would be sent for every row and overwrite its field.
+    const schema = JSON.stringify(
+      z.toJSONSchema(methods[name].arguments as unknown as z.ZodType),
+    );
+    assertEquals(
+      schema.includes('"default"'),
+      false,
+      `${name} declares a default`,
+    );
+  }
+});
+
+Deno.test("domains model: apply_service_to_domain keeps every key of the free-form body argument", () => {
+  const value = { first: "1", second: "2" };
+  const parsed = model.methods.apply_service_to_domain.arguments.parse({
+    ...{ "domain": "test-id-123", "service": "test-id-123" },
+    body: value,
+  }) as Record<string, unknown>;
+  assertEquals(parsed.body, value);
 });
 
 Deno.test("domains model: get_domain rejects empty, '.' and '..' path arguments", () => {

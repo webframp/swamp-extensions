@@ -245,8 +245,8 @@ Deno.test("type_mapper: sensitiveFields keeps chained refinements after the mark
       blob: { type: "object", properties: { a: { type: "string" } } },
     },
   };
+  // Not lenient: lenient response schemas drop refinements altogether.
   const out = schemaToZod(schema, {
-    lenient: true,
     sensitiveFields: ["token", "blob"],
   });
   assertEquals(
@@ -368,6 +368,28 @@ Deno.test("lenient: a string enum widens to a string, a strict one stays an enum
   const lenient = schemaToZod(schema, { lenient: true });
   assertEquals(lenient.includes("z.enum"), false);
   assertEquals(lenient.includes("type: z.string().optional()"), true);
+});
+
+Deno.test("lenient: integer and mixed enums widen too, and response bounds are dropped", () => {
+  const schema: SchemaObject = {
+    type: "object",
+    properties: {
+      kind: { type: "integer", enum: [1, 2, 3] },
+      mixed: { enum: ["a", 1] },
+      period: { type: "integer", minimum: 1, maximum: 10 },
+      name: { type: "string", minLength: 2, pattern: "^a" },
+    },
+  };
+  const lenient = schemaToZod(schema, { lenient: true });
+  assertEquals(lenient.includes("z.literal"), false);
+  assertEquals(lenient.includes("kind: z.number().optional()"), true);
+  assertEquals(lenient.includes("mixed: z.unknown().optional()"), true);
+  assertEquals(lenient.includes(".min(") || lenient.includes(".max("), false);
+  assertEquals(lenient.includes(".regex("), false);
+  // Request schemas keep every constraint.
+  const strict = schemaToZod(schema);
+  assertEquals(strict.includes(".min(1).max(10)"), true);
+  assertEquals(strict.includes(".regex("), true);
 });
 
 Deno.test("passthrough: off by default and kept before .nullable()", () => {

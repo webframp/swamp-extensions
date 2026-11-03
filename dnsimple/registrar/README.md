@@ -52,15 +52,18 @@ These methods charge the DNSimple account. Their descriptions open with
 - `restore_domain`
 - `enable_whois_privacy`
 
-## Contact data
+## Stored data
 
-Registrant contact details (names, email addresses, phone numbers and postal
-addresses) are required to manage a domain, so this extension stores them as
-ordinary swamp data and does not mark them sensitive. Sensitive fields move to a
-vault and leave only a reference, which would make contact records unreadable to
-expressions and reports. The access controls of the datastore that holds your
-swamp data are the boundary for this data. Each resource keeps a bounded number
-of versions (`garbageCollection`), so older copies are pruned.
+Registrations and registrant changes store the registrant's ID and any
+`extended_attributes` you pass. Some TLDs require national identifiers or
+similar personal details there. The registrar extension stores no names,
+addresses or phone numbers; those live in `@webframp/dnsimple/contacts`.
+Extended attributes are stored as ordinary swamp data. These fields are not
+marked sensitive: a sensitive field moves to a vault and leaves only a
+reference, which would make these records unreadable to expressions and reports.
+The access controls of the datastore that holds your swamp data are the boundary
+for this data. Each resource keeps a bounded number of versions
+(`garbageCollection`), so older copies are pruned.
 
 ## Secrets
 

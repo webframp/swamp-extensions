@@ -50,9 +50,6 @@ interface GenerateOptions {
   notes?: string;
 }
 
-/** The release-notes limit swamp's `--release-notes` flag enforces. */
-const MAX_NOTES_LENGTH = 5000;
-
 function parseArgs(): GenerateOptions {
   const args = Deno.args;
   const opts: GenerateOptions = { dryRun: false };
@@ -83,6 +80,9 @@ function parseArgs(): GenerateOptions {
         break;
       case "--version":
         opts.version = value(++i, flag);
+        if (!/^\d{4}\.\d{2}\.\d{2}\.\d+$/.test(opts.version)) {
+          fail(`--version ${opts.version} is not CalVer (YYYY.MM.DD.N)`);
+        }
         break;
       case "--notes":
         opts.notes = value(++i, flag);
@@ -104,10 +104,9 @@ function parseArgs(): GenerateOptions {
       }`,
     );
   }
-  if (opts.notes !== undefined && opts.notes.length > MAX_NOTES_LENGTH) {
-    fail(
-      `release notes are ${opts.notes.length} characters; the limit is ${MAX_NOTES_LENGTH}`,
-    );
+  if (opts.notes !== undefined) {
+    opts.notes = opts.notes.trim();
+    if (opts.notes === "") fail("release notes are empty");
   }
 
   return opts;
@@ -323,6 +322,15 @@ async function main() {
             `--notes "<body>" or --notes-file <path> describing what ` +
             `changed in ${version}`,
         );
+        continue;
+      }
+    }
+
+    if (opts.notes && (status !== "unchanged" || opts.version)) {
+      try {
+        generateReleaseNotes(config, version, methods.length, opts.notes);
+      } catch (err) {
+        rejections.push(`   • ${config.name}: ${(err as Error).message}`);
         continue;
       }
     }

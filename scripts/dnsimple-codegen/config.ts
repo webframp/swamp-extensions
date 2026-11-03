@@ -44,8 +44,10 @@ export interface ServiceConfig {
   labels: string[];
   /** Skip paths under these prefixes even if a prefix above matches */
   excludePaths?: string[];
-  /** The service returns registrant contact details; its README says how they are stored */
-  storesContactData?: boolean;
+  /** README "Stored data" text: what personal or credential-bearing data the service stores, and how */
+  storedDataNote?: string;
+  /** README "Plan limits" text: a cost that depends on the account's plan */
+  planLimitNote?: string;
 }
 
 /**
@@ -67,6 +69,8 @@ export const SERVICES: ServiceConfig[] = [
       "DNSimple Zones — zones, records, batch changes, zone file, distribution checks, NS records, activation, and DNS analytics",
     pathPrefixes: ["/{account}/zones", "/{account}/dns_analytics"],
     labels: ["dnsimple", "dns", "zones", "records"],
+    planLimitNote:
+      "DNSimple's spec says a zone's records beyond the plan's `records_limit` are either charged or cannot be created. Whether `create_zone_record` and `batch_change_zone_records` cost anything therefore depends on your plan, so they are not marked Billable. Check the account's limit before creating records in bulk.",
   },
   {
     name: "secondary-dns",
@@ -91,6 +95,8 @@ export const SERVICES: ServiceConfig[] = [
       "/{account}/domains/{domain}/templates",
     ],
     labels: ["dnsimple", "domains", "email-forwards"],
+    storedDataNote:
+      "Email forwards store their `from` and `to` addresses as ordinary swamp data.",
   },
   {
     name: "dnssec",
@@ -114,14 +120,16 @@ export const SERVICES: ServiceConfig[] = [
       "DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices",
     pathPrefixes: ["/{account}/registrar"],
     labels: ["dnsimple", "registrar", "domains", "billing"],
-    storesContactData: true,
+    storedDataNote:
+      "Registrations and registrant changes store the registrant's ID and any `extended_attributes` you pass. Some TLDs require national identifiers or similar personal details there. The registrar extension stores no names, addresses or phone numbers; those live in `@webframp/dnsimple/contacts`. Extended attributes are stored as ordinary swamp data.",
   },
   {
     name: "contacts",
     description: "DNSimple Contacts — registrant contacts",
     pathPrefixes: ["/{account}/contacts"],
     labels: ["dnsimple", "contacts", "registrant"],
-    storesContactData: true,
+    storedDataNote:
+      "Registrant contact details (names, email addresses, phone numbers and postal addresses) are required to manage a domain, so this extension stores them as ordinary swamp data.",
   },
   {
     name: "templates",
@@ -138,6 +146,8 @@ export const SERVICES: ServiceConfig[] = [
     description: "DNSimple Webhooks — webhook subscriptions",
     pathPrefixes: ["/{account}/webhooks"],
     labels: ["dnsimple", "webhooks"],
+    storedDataNote:
+      "Webhook URLs are stored as ordinary swamp data. A URL that embeds a credential (some chat services issue such URLs) is stored as given, so treat the datastore accordingly, or use an endpoint that authenticates another way.",
   },
   {
     name: "tlds",
