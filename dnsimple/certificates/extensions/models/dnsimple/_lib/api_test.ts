@@ -144,7 +144,10 @@ Deno.test("sanitizeInstanceName: strips path traversal and the reserved name", (
 
 Deno.test("instanceName: parent-prefixed, hashed past two parts", async () => {
   assertEquals(await instanceName(["example.com"]), "example.com");
-  assertEquals(await instanceName(["example.com", 12345]), "example.com-12345");
+  assertMatch(
+    await instanceName(["example.com", 12345]),
+    /^example\.com-12345-[0-9a-f]{16}$/,
+  );
   const hashed = await instanceName(["example.com", 7, 9]);
   assertEquals(
     hashed,
@@ -160,8 +163,15 @@ Deno.test("instanceName: no parts is main, and hyphenated pairs do not collide",
   assertEquals(a === b, false);
   assertEquals(a.startsWith("a-b-c-"), true);
   assertEquals(a, await instanceName(["a-b", "c"]));
-  // A pair with no hyphen keeps the readable form.
-  assertEquals(await instanceName(["example.com", 12345]), "example.com-12345");
+  // A pair never equals the single value its join spells.
+  assertEquals(
+    (await instanceName(["a", "b"])) === (await instanceName(["a-b"])),
+    false,
+  );
+  assertEquals(
+    (await instanceName(["a", "b"])) === sanitizeInstanceName("a-b"),
+    false,
+  );
 });
 
 Deno.test("sanitizeInstanceName: distinct inputs stay distinct, case folds, long names are bounded", () => {
