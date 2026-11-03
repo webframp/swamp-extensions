@@ -1864,11 +1864,7 @@ Deno.test("registrar model: parsing arguments adds no field the caller did not s
       "domain": "test-id-123",
       "domainregistration": "test-id-123",
     },
-    "transfer_domain": {
-      "domain": "test-id-123",
-      "registrant_id": 1,
-      "auth_code": "test-value",
-    },
+    "transfer_domain": { "domain": "test-id-123", "registrant_id": 1 },
     "get_domain_transfer": {
       "domain": "test-id-123",
       "domaintransfer": "test-id-123",

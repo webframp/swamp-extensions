@@ -525,6 +525,14 @@ export async function dnsimpleApiData<T>(
     path,
     options,
   );
+  return requireData(body, method, path);
+}
+
+function requireData<T>(
+  body: { data?: T | null } | undefined | null,
+  method: string,
+  path: string,
+): T {
   if (body === undefined || body === null || body.data === undefined) {
     throw new Error(
       `DNSimple API returned an empty response body: ${method} ${path}.` +
@@ -538,6 +546,30 @@ export async function dnsimpleApiData<T>(
     );
   }
   return body.data;
+}
+
+/**
+ * One request for a list the spec does not paginate. If the response carries a
+ * pagination object that reports more pages, the list is incomplete and
+ * `truncated` says so, so a spec that drifts never yields a silent partial.
+ */
+export async function dnsimpleApiList<T>(
+  args: ApiGlobalArgs,
+  method: string,
+  path: string,
+  options: RequestOptions = {},
+): Promise<{ items: T[]; truncated: boolean }> {
+  const { body } = await dnsimpleApi<{
+    data?: T[] | null;
+    pagination?: { current_page?: unknown; total_pages?: unknown } | null;
+  }>(args, method, path, options);
+  const items = requireData(body, method, path);
+  const current = Number(body?.pagination?.current_page ?? 1);
+  const total = Number(body?.pagination?.total_pages ?? 1);
+  return {
+    items,
+    truncated: total > (Number.isFinite(current) ? current : 1),
+  };
 }
 
 /** Options for a paginated walk. */

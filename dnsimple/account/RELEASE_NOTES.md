@@ -1,4 +1,5 @@
-## 2026.11.03.1
+## 2026.11.03.2
 
-**Added:** Initial code-generated release of @webframp/dnsimple/account with 3
-methods covering the DNSimple account API surface.
+Changed: list methods store truncated: true when a response reports more pages
+than were fetched, instead of always storing false. Nothing changes for lists
+DNSimple returns in one page.
