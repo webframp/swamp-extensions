@@ -48,10 +48,10 @@ Deno.test("generateReadme: shows the vault path end to end and never a literal t
     classifyServiceMethods(group("zones")),
   );
   assertStringIncludes(readme, "swamp vault create local_encryption dnsimple");
-  assertStringIncludes(readme, "swamp vault put dnsimple API_TOKEN");
+  assertStringIncludes(readme, "swamp vault put dnsimple ACCESS_TOKEN");
   assertStringIncludes(
     readme,
-    `'apiToken=\${{ vault.get("dnsimple", "API_TOKEN") }}'`,
+    `'apiToken=\${{ vault.get("dnsimple", "ACCESS_TOKEN") }}'`,
   );
   assertStringIncludes(
     readme,

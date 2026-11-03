@@ -472,13 +472,13 @@ swamp extension pull @webframp/dnsimple/zones
 swamp extension pull @webframp/dnsimple/registrar
 
 swamp vault create local_encryption dnsimple   # once, if you have no vault yet
-swamp vault put dnsimple API_TOKEN             # prompts; never pass the token inline
+swamp vault put dnsimple ACCESS_TOKEN             # prompts; never pass the token inline
 swamp model create @webframp/dnsimple/account dns-account \
-  --global-arg 'apiToken=${{ vault.get("dnsimple", "API_TOKEN") }}'
+  --global-arg 'apiToken=${{ vault.get("dnsimple", "ACCESS_TOKEN") }}'
 swamp model method run dns-account whoami      # prints the account id
 
 swamp model create @webframp/dnsimple/zones dns-zones \
-  --global-arg 'apiToken=${{ vault.get("dnsimple", "API_TOKEN") }}' \
+  --global-arg 'apiToken=${{ vault.get("dnsimple", "ACCESS_TOKEN") }}' \
   --global-arg accountId=<account id from whoami>
 swamp model method run dns-zones get_zone_file --input zone=example.com
 swamp model method run dns-zones list_zone_records --input zone=example.com

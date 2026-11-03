@@ -480,7 +480,7 @@ export function generateModelSource(
 /** Generate GlobalArgsSchema: token, account scope and environment. */
 function generateGlobalArgsSchema(): string {
   const tokenDescription =
-    'DNSimple API access token (account or user token). Wire it with ${{ vault.get("dnsimple", "API_TOKEN") }}; never pass the literal value. The DNSIMPLE_TOKEN environment variable is read as a fallback, but it is not redacted and is not recommended.';
+    'DNSimple API access token (account or user token). Wire it with ${{ vault.get("dnsimple", "ACCESS_TOKEN") }}; never pass the literal value. The DNSIMPLE_TOKEN environment variable is read as a fallback, but it is not redacted and is not recommended.';
   const accountDescription =
     "Numeric DNSimple account ID that account-scoped paths use. The account model's whoami method returns it.";
   const environmentDescription =

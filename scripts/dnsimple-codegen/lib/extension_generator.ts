@@ -114,9 +114,9 @@ Store the DNSimple access token in a swamp vault and reference it with a
 
 \`\`\`bash
 swamp vault create local_encryption dnsimple   # once, if you have no vault yet
-swamp vault put dnsimple API_TOKEN             # prompts; the value never reaches shell history
+swamp vault put dnsimple ACCESS_TOKEN             # prompts; the value never reaches shell history
 swamp model create @webframp/dnsimple/${config.name} dnsimple-${config.name} \\
-  --global-arg 'apiToken=\${{ vault.get("dnsimple", "API_TOKEN") }}' \\
+  --global-arg 'apiToken=\${{ vault.get("dnsimple", "ACCESS_TOKEN") }}' \\
   --global-arg accountId=<account id from whoami>
 \`\`\`
 

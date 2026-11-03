@@ -49,7 +49,7 @@ function resolveToken(apiToken?: string): string {
     throw new Error(
       "DNSimple API token not set. Store it in a vault and set the apiToken " +
         "global argument to a vault.get(...) expression, e.g. " +
-        '\'apiToken=${{ vault.get("dnsimple", "API_TOKEN") }}\'. The ' +
+        '\'apiToken=${{ vault.get("dnsimple", "ACCESS_TOKEN") }}\'. The ' +
         "DNSIMPLE_TOKEN environment variable is read as a fallback, but it " +
         "is not redacted and is not recommended.",
     );
