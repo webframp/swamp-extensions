@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@webframp/dnsimple/registrar"
+license: Apache-2.0
+version: "2026.11.03.1"
+description: "DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - dnsimple/registrar.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - dnsimple
+  - registrar
+  - domains
+  - billing
