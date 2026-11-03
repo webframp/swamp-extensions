@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@webframp/dnsimple/certificates"
+license: Apache-2.0
+version: "2026.11.02.1"
+description: "DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - dnsimple/certificates.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - dnsimple
+  - certificates
+  - tls
+  - letsencrypt

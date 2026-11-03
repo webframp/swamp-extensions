@@ -85,6 +85,17 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/falai/serverless`](falai/serverless/) | fal.ai Serverless — app deployments, queue, revisions, files, logs, metrics, requests, usage | None (uses fetch) |
 | [`@webframp/falai/storage`](falai/storage/) | fal.ai Storage — file ACLs, signed URLs, storage settings | None (uses fetch) |
 | [`@webframp/falai/workflows`](falai/workflows/) | fal.ai Workflows — workflow definitions | None (uses fetch) |
+| [`@webframp/dnsimple/account`](dnsimple/account/) | DNSimple Account — identity, account list, and billing charges | None (uses fetch) |
+| [`@webframp/dnsimple/zones`](dnsimple/zones/) | DNSimple Zones — zones, records, batch changes, zone file, distribution checks, NS records, activation, and DNS analytics | None (uses fetch) |
+| [`@webframp/dnsimple/secondary-dns`](dnsimple/secondary-dns/) | DNSimple Secondary DNS — primary servers and secondary zones | None (uses fetch) |
+| [`@webframp/dnsimple/domains`](dnsimple/domains/) | DNSimple Domains — domains, applied services, pushes, email forwards, and vanity name servers | None (uses fetch) |
+| [`@webframp/dnsimple/dnssec`](dnsimple/dnssec/) | DNSimple DNSSEC — DNSSEC state and delegation signer records | None (uses fetch) |
+| [`@webframp/dnsimple/certificates`](dnsimple/certificates/) | DNSimple Certificates — certificates, Let's Encrypt orders and renewals, and private keys | None (uses fetch) |
+| [`@webframp/dnsimple/registrar`](dnsimple/registrar/) | DNSimple Registrar — registration, renewal, transfer, restore, delegation, WHOIS privacy, transfer lock, auto-renewal, registrant changes, and prices | None (uses fetch) |
+| [`@webframp/dnsimple/contacts`](dnsimple/contacts/) | DNSimple Contacts — registrant contacts | None (uses fetch) |
+| [`@webframp/dnsimple/templates`](dnsimple/templates/) | DNSimple Templates — record templates and applying them to domains | None (uses fetch) |
+| [`@webframp/dnsimple/webhooks`](dnsimple/webhooks/) | DNSimple Webhooks — webhook subscriptions | None (uses fetch) |
+| [`@webframp/dnsimple/tlds`](dnsimple/tlds/) | DNSimple TLDs — TLD catalog and extended attributes | None (uses fetch) |
 | [`@webframp/griptape/threads`](griptape/threads/) | Griptape Cloud Threads — conversation threads and their messages | None (uses fetch) |
 | [`@webframp/griptape/assistants`](griptape/assistants/) | Griptape Cloud Assistants — assistant definitions and assistant runs | None (uses fetch) |
 | [`@webframp/griptape/structures`](griptape/structures/) | Griptape Cloud Structures — deployed structures, runs, logs, and spans | None (uses fetch) |
@@ -275,6 +286,19 @@ swamp extension pull @webframp/falai/serverless
 swamp extension pull @webframp/falai/storage
 swamp extension pull @webframp/falai/workflows
 
+# DNSimple extensions
+swamp extension pull @webframp/dnsimple/account
+swamp extension pull @webframp/dnsimple/zones
+swamp extension pull @webframp/dnsimple/secondary-dns
+swamp extension pull @webframp/dnsimple/domains
+swamp extension pull @webframp/dnsimple/dnssec
+swamp extension pull @webframp/dnsimple/certificates
+swamp extension pull @webframp/dnsimple/registrar
+swamp extension pull @webframp/dnsimple/contacts
+swamp extension pull @webframp/dnsimple/templates
+swamp extension pull @webframp/dnsimple/webhooks
+swamp extension pull @webframp/dnsimple/tlds
+
 # Griptape Cloud extensions
 swamp extension pull @webframp/griptape/threads
 swamp extension pull @webframp/griptape/assistants
@@ -439,6 +463,37 @@ swamp model method run falai-compute list_compute_instances
 Every `@webframp/falai/*` model also reads the `FAL_KEY` environment variable as
 a fallback when `apiToken` is unset, but that value is not redacted and is not
 recommended.
+
+### DNSimple zone backup and domain audit
+
+```bash
+swamp extension pull @webframp/dnsimple/account
+swamp extension pull @webframp/dnsimple/zones
+swamp extension pull @webframp/dnsimple/registrar
+
+swamp vault create local_encryption dnsimple   # once, if you have no vault yet
+swamp vault put dnsimple API_TOKEN             # prompts; never pass the token inline
+swamp model create @webframp/dnsimple/account dns-account \
+  --global-arg 'apiToken=${{ vault.get("dnsimple", "API_TOKEN") }}'
+swamp model method run dns-account whoami      # prints the account id
+
+swamp model create @webframp/dnsimple/zones dns-zones \
+  --global-arg 'apiToken=${{ vault.get("dnsimple", "API_TOKEN") }}' \
+  --global-arg accountId=<account id from whoami>
+swamp model method run dns-zones get_zone_file --input zone=example.com
+swamp model method run dns-zones list_zone_records --input zone=example.com
+```
+
+Account-scoped methods substitute `accountId` for DNSimple's `/{account}` path
+segment, and fail before any request goes out when it is unset. Set
+`--global-arg environment=sandbox` to target DNSimple's sandbox, which has its
+own accounts and tokens. The methods that charge the account (`register_domain`,
+`renew_domain`, `transfer_domain`, `restore_domain` and the two Let's Encrypt
+purchases) open their descriptions with "Billable:"; try them in the sandbox
+first. Every `@webframp/dnsimple/*` model also reads the `DNSIMPLE_TOKEN`
+environment variable as a fallback when `apiToken` is unset, but that value is
+not redacted and is not recommended. The generator lives in
+`scripts/dnsimple-codegen`.
 
 ### Claude Enterprise User → Custom role migration
 
