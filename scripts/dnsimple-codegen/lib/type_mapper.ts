@@ -1,0 +1,377 @@
+/**
+ * Type mapper — converts OpenAPI schema objects to Zod source code strings.
+ *
+ * Generates TypeScript source code that defines Zod schemas matching
+ * the shapes described by the OpenAPI spec. Handles:
+ * - Primitives (string, number, integer, boolean)
+ * - Objects with properties and required fields
+ * - Arrays
+ * - Enums
+ * - Nullable — both the OpenAPI 3.0 `nullable: true` sibling keyword AND the
+ *   OpenAPI 3.1 `type: [T, "null"]` array form DNSimple's spec actually uses.
+ * - Optional (not in required array)
+ * - Unions (oneOf/anyOf)
+ * - Records (additionalProperties)
+ */
+
+import type { SchemaObject } from "./schema_fetcher.ts";
+
+/** Configuration for type mapper output */
+export interface TypeMapperOptions {
+  /** Indent level (number of spaces per level) */
+  indent?: number;
+  /** Maximum depth before collapsing to z.unknown() */
+  maxDepth?: number;
+  /**
+   * Ignore the OpenAPI `required` array and mark every object field
+   * `.optional()` (or `.nullable().optional()`), at every depth.
+   *
+   * Response schemas validate data that may have been persisted to a
+   * datastore resource under an earlier model version. The upgrade chain for
+   * additive changes is the identity transform (see upgrades.ts) — it does
+   * not backfill new keys — so a field the live API newly marks required can
+   * still be absent from an old stored resource. Without this, Zod throws
+   * "Required" the first time such a resource is read back. Request/argument
+   * schemas describe a fresh call, not stored data, so they keep the spec's
+   * required-ness as-is.
+   */
+  lenient?: boolean;
+  /**
+   * Top-level object field names to mark `.meta({ sensitive: true })`.
+   *
+   * swamp's data writer reads this metadata from the resource schema, stores
+   * each marked value in a vault, and persists only a `vault.get(...)`
+   * reference in its place. Applied to the root object's own properties only
+   * (and to each root-level union variant); nested objects never inherit it.
+   */
+  sensitiveFields?: string[];
+  /**
+   * Append `.passthrough()` to every generated object, at every depth, so a
+   * field DNSimple adds to an existing object survives validation instead of
+   * failing a working model the day it appears. Fields listed in
+   * `sensitiveFields` stay declared explicitly: a passthrough schema does not
+   * redact undeclared fields.
+   */
+  passthrough?: boolean;
+  /**
+   * Accept `null` for every object field, at every depth. DNSimple's spec
+   * declares fields such as an account's `email` as plain strings, yet the
+   * live API returns null for them; a response schema that trusts the spec
+   * rejects real data. Request schemas keep the spec's nullability.
+   */
+  nullTolerant?: boolean;
+  /**
+   * Emit `.default(...)` for properties that declare a default. Off for
+   * DNSimple: a default on an update's request body is sent on every call
+   * and silently resets the field (a content-only record update would reset
+   * its ttl), and a default on a response schema fabricates data a stored
+   * resource never held. The API applies its own defaults.
+   */
+  emitDefaults?: boolean;
+}
+
+const DEFAULT_OPTIONS: Required<TypeMapperOptions> = {
+  indent: 2,
+  maxDepth: 8,
+  lenient: false,
+  sensitiveFields: [],
+  passthrough: false,
+  nullTolerant: false,
+  emitDefaults: true,
+};
+
+/**
+ * Split a 3.1-style `type` (string or array) into its concrete (non-null)
+ * type and whether "null" was present in the array.
+ */
+function splitType(
+  type: string | string[] | undefined,
+): { concrete?: string; nullableFromType: boolean } {
+  if (type === undefined) return { nullableFromType: false };
+  if (typeof type === "string") {
+    return { concrete: type, nullableFromType: false };
+  }
+  const nullableFromType = type.includes("null");
+  const concreteTypes = type.filter((t) => t !== "null");
+  return { concrete: concreteTypes[0], nullableFromType };
+}
+
+/**
+ * Convert an OpenAPI SchemaObject to a Zod schema source code string.
+ */
+export function schemaToZod(
+  schema: SchemaObject,
+  options?: TypeMapperOptions,
+  depth = 0,
+): string {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+
+  if (depth > opts.maxDepth) {
+    return "z.unknown()";
+  }
+
+  const { concrete, nullableFromType } = splitType(schema.type);
+  const nullable = schema.nullable === true || nullableFromType;
+  let base = schemaToZodInner(schema, concrete, opts, depth);
+
+  if (nullable) {
+    base = `${base}.nullable()`;
+  }
+
+  return base;
+}
+
+function schemaToZodInner(
+  schema: SchemaObject,
+  concreteType: string | undefined,
+  opts: Required<TypeMapperOptions>,
+  depth: number,
+): string {
+  // Enum takes priority. Filter out a `null` literal — nullability is handled
+  // by the caller via `.nullable()` so the enum's non-null members stay clean.
+  if (schema.enum) {
+    const nonNull = schema.enum.filter((v) => v !== null);
+    if (nonNull.length > 0) {
+      // A response must survive the API adding a value, so lenient mode
+      // widens an enum to its base type. Requests stay strict.
+      if (opts.lenient) {
+        if (nonNull.every((v) => typeof v === "string")) return "z.string()";
+        if (nonNull.every((v) => typeof v === "number")) return "z.number()";
+        if (nonNull.every((v) => typeof v === "boolean")) return "z.boolean()";
+        return "z.unknown()";
+      }
+      return enumToZod(nonNull);
+    }
+  }
+
+  // Union types
+  if (schema.oneOf || schema.anyOf) {
+    const variants = (schema.oneOf ?? schema.anyOf)!;
+    if (variants.length === 1) {
+      return schemaToZod(variants[0], opts, depth + 1);
+    }
+    const members = variants.map((v) => schemaToZod(v, opts, depth + 1));
+    return `z.union([${members.join(", ")}])`;
+  }
+
+  switch (concreteType) {
+    case "string":
+      return stringToZod(schema, opts.lenient);
+    case "number":
+    case "integer":
+      return numberToZod(schema, concreteType, opts.lenient);
+    case "boolean":
+      return "z.boolean()";
+    case "array":
+      return arrayToZod(schema, opts, depth);
+    case "object":
+      return objectToZod(schema, opts, depth);
+    default:
+      // No type specified — could be a freeform object or unknown
+      if (schema.properties) {
+        return objectToZod(schema, opts, depth);
+      }
+      return "z.unknown()";
+  }
+}
+
+/**
+ * Bounds and patterns constrain what a caller may send. A response that
+ * breaks one (a purchase that succeeded) must still be stored, so lenient
+ * schemas keep only the base type.
+ */
+function stringToZod(schema: SchemaObject, lenient = false): string {
+  let s = "z.string()";
+  if (lenient) return s;
+  if (schema.minLength !== undefined) {
+    s += `.min(${schema.minLength})`;
+  }
+  if (schema.maxLength !== undefined) {
+    s += `.max(${schema.maxLength})`;
+  }
+  if (schema.pattern !== undefined) {
+    // new RegExp(...) with a JSON-encoded source so backslashes and quotes in
+    // the spec's pattern survive into valid TypeScript.
+    s += `.regex(new RegExp(${JSON.stringify(schema.pattern)}))`;
+  }
+  return s;
+}
+
+function numberToZod(
+  schema: SchemaObject,
+  concreteType: string,
+  lenient = false,
+): string {
+  let s = "z.number()";
+  if (concreteType === "integer") {
+    s += ".int()";
+  }
+  if (lenient) return s;
+  if (schema.minimum !== undefined) {
+    s += `.min(${schema.minimum})`;
+  }
+  if (schema.maximum !== undefined) {
+    s += `.max(${schema.maximum})`;
+  }
+  return s;
+}
+
+function enumToZod(values: (string | number | boolean | null)[]): string {
+  // Filter to only string values for z.enum (most common case)
+  const stringValues = values.filter((v) => typeof v === "string") as string[];
+  if (stringValues.length === values.length && stringValues.length > 0) {
+    const literals = stringValues.map((v) => `"${escapeString(v)}"`);
+    return `z.enum([${literals.join(", ")}])`;
+  }
+  // Mixed types — use z.union of literals
+  const literals = values.map((v) => {
+    if (typeof v === "string") return `z.literal("${escapeString(v)}")`;
+    if (typeof v === "boolean") return `z.literal(${v})`;
+    return `z.literal(${v})`;
+  });
+  return `z.union([${literals.join(", ")}])`;
+}
+
+function arrayToZod(
+  schema: SchemaObject,
+  opts: Required<TypeMapperOptions>,
+  depth: number,
+): string {
+  if (!schema.items) {
+    return "z.array(z.unknown())";
+  }
+  const itemType = schemaToZod(
+    schema.items,
+    { ...opts, sensitiveFields: [] },
+    depth + 1,
+  );
+  return `z.array(${itemType})`;
+}
+
+/**
+ * Append `.meta({ sensitive: true })` to a field's mapped type, ahead of a
+ * trailing `.nullable()`. In zod 4.6.5 a refinement (`.min()`, `.regex()`,
+ * ...) keeps the metadata of the schema it extends, so the marker could sit
+ * anywhere in the chain; placing it last, on the inner type, is simply the one
+ * consistent spot. swamp's metadata lookup unwraps the
+ * `.nullable()`/`.optional()`/`.default()` wrappers added after it.
+ */
+function markSensitive(fieldType: string): string {
+  const marker = ".meta({ sensitive: true })";
+  const nullable = ".nullable()";
+  return fieldType.endsWith(nullable)
+    ? `${fieldType.slice(0, -nullable.length)}${marker}${nullable}`
+    : `${fieldType}${marker}`;
+}
+
+function objectToZod(
+  schema: SchemaObject,
+  opts: Required<TypeMapperOptions>,
+  depth: number,
+): string {
+  // Record type (additionalProperties without fixed properties)
+  if (
+    schema.additionalProperties && !schema.properties
+  ) {
+    if (schema.additionalProperties === true) {
+      return "z.record(z.string(), z.unknown())";
+    }
+    const valueType = schemaToZod(
+      schema.additionalProperties as SchemaObject,
+      { ...opts, sensitiveFields: [] },
+      depth + 1,
+    );
+    return `z.record(z.string(), ${valueType})`;
+  }
+
+  const suffix = opts.passthrough ? ".passthrough()" : "";
+
+  // An object with no declared properties is free-form. A plain z.object({})
+  // would strip every key a caller passes (extended_attributes on a
+  // registration), so it maps to a record.
+  if (!schema.properties) {
+    return "z.record(z.string(), z.unknown())";
+  }
+
+  const required = opts.lenient
+    ? new Set<string>()
+    : new Set(schema.required ?? []);
+  // Sensitive marking applies to this object's own fields only; children are
+  // mapped without it so a nested field that happens to share a name is not
+  // marked.
+  const sensitive = new Set(opts.sensitiveFields);
+  const childOpts = { ...opts, sensitiveFields: [] };
+  const indent = " ".repeat(opts.indent * (depth + 1));
+  const closingIndent = " ".repeat(opts.indent * depth);
+
+  const fields: string[] = [];
+  for (const [name, prop] of Object.entries(schema.properties)) {
+    const safeName = isSafeIdentifier(name) ? name : JSON.stringify(name);
+    let fieldType = schemaToZod(prop, childOpts, depth + 1);
+    if (opts.nullTolerant && !fieldType.endsWith(".nullable()")) {
+      fieldType += ".nullable()";
+    }
+
+    // Before .optional()/.default()/.describe(), so for a scalar field the
+    // marker shares the field's first line, which the quality rubric's
+    // credentials check reads.
+    if (sensitive.has(name)) {
+      fieldType = markSensitive(fieldType);
+    }
+
+    // Add .optional() for non-required fields
+    if (!required.has(name)) {
+      fieldType += ".optional()";
+    }
+
+    // Add .default() if the schema declares a default value
+    if (opts.emitDefaults && prop.default !== undefined) {
+      fieldType += `.default(${JSON.stringify(prop.default)})`;
+    }
+
+    // Add .describe() if there's a description (only for top-level fields)
+    if (prop.description && depth < 2) {
+      fieldType += `.describe(${
+        JSON.stringify(truncateDescription(prop.description))
+      })`;
+    }
+
+    fields.push(`${indent}${safeName}: ${fieldType},`);
+  }
+
+  if (fields.length === 0) {
+    return "z.record(z.string(), z.unknown())";
+  }
+
+  return `z.object({\n${fields.join("\n")}\n${closingIndent}})${suffix}`;
+}
+
+/** Generate a Zod schema variable name from an operation/resource name */
+export function schemaVarName(baseName: string): string {
+  // Convert to PascalCase + "Schema" suffix
+  const pascal = baseName
+    .replace(/[-_](.)/g, (_, c) => c.toUpperCase())
+    .replace(/^(.)/, (_, c) => c.toUpperCase());
+  return `${pascal}Schema`;
+}
+
+/** Generate a TypeScript-safe identifier for a field name */
+function isSafeIdentifier(name: string): boolean {
+  return /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name);
+}
+
+/** Escape string for use inside a double-quoted TypeScript string */
+function escapeString(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r").replace(/\u2028/g, "\\u2028").replace(
+      /\u2029/g,
+      "\\u2029",
+    );
+}
+
+/** Truncate long descriptions for .describe() calls */
+function truncateDescription(desc: string): string {
+  const oneLine = desc.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= 100) return oneLine;
+  return oneLine.slice(0, 97) + "...";
+}
