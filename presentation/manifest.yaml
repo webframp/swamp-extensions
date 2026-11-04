@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/presentation"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.11.03.1"
 description: |
   Build reveal.js presentations from Org or Markdown and keep every build,
   outline and PDF as versioned swamp data.

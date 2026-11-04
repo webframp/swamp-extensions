@@ -4,7 +4,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/discourse";
 
@@ -203,7 +203,7 @@ function mapTopic(raw: Record<string, unknown>): z.infer<typeof TopicSchema> {
 /** Discourse forum model — query categories, topics, and posts via REST API. */
 export const model = {
   type: "@webframp/discourse",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -264,6 +264,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "No schema changes — apiKey is now marked sensitive (vault.get only)",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

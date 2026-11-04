@@ -13,7 +13,7 @@ Deno.test("generated vaultedPaths: unwraps only the wrappers swamp unwraps", asy
     await Deno.writeTextFile(
       tmp,
       `// deno-lint-ignore-file
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 const model = { resources: {}, methods: {} };
 function assertEquals(..._args: unknown[]): void {}
 ${generateSecretHelpers()}

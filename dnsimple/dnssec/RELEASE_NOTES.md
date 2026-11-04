@@ -1,3 +1,7 @@
+## 2026.11.03.4
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.11.03.3
 
 Fixed: a delegation signer record, named from a domain and a record ID, could

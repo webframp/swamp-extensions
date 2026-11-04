@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/iam"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.11.03.1"
 description: |
   Cross-account IAM observation model for role, user, and policy inventory.
   Factory-pattern discovery fans out across AWS profiles to capture trust

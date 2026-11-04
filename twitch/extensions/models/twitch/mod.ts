@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { helixApi, helixApiPaginated } from "./_lib/api.ts";
 import type { TwitchCredentials } from "./_lib/types.ts";
 
@@ -241,7 +241,7 @@ const ModEventsSchema = z.object({
 /** Twitch Moderation Toolkit — cross-channel moderation visibility via the Helix API. */
 export const model = {
   type: "@webframp/twitch",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -320,6 +320,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "No schema changes — documentation and credential descriptions now direct secrets through vault.get expressions",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

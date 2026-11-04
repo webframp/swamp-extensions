@@ -8,7 +8,7 @@
  */
 // SPDX-License-Identifier: AGPL-3.0-or-later WITH Swamp-Extension-Exception
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   initiateDeviceCode,
   MicrosoftAuthError,
@@ -418,7 +418,7 @@ function chatLabel(ch: GraphChat): string {
 /** Microsoft Teams read-only model via Graph API. */
 export const model = {
   type: "@webframp/microsoft/teams",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -499,6 +499,11 @@ export const model = {
       description:
         "No attribute migration — refreshToken global argument is now optional " +
         "(set it after bootstrap); bootstrap stores the token in a vault",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.28.1
 
 **Fixed:** `list_records` reported `status: succeeded` with `zonesScanned`

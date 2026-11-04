@@ -11,7 +11,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/gitlab-datastore-bootstrap";
 
@@ -233,7 +233,7 @@ async function createProjectToken(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/gitlab-datastore-bootstrap/provisioner",
-  version: "2026.10.22.3",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -322,6 +322,11 @@ export const model = {
       toVersion: "2026.10.22.3",
       description:
         "Marked the token global argument and the datastoreConfig result field sensitive so swamp vaults them and persists vault references instead of plaintext. datastoreConfig embeds the active (possibly newly created) project access token. No stored-key change; identity transform preserves all attributes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -11,7 +11,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/anthropic/compliance";
 
@@ -432,7 +432,7 @@ type ModelContext = {
 /** Claude Enterprise Compliance API — activity feed, directory, and effective settings observation. */
 export const model = {
   type: "@webframp/anthropic/compliance",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -520,6 +520,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "No schema changes — complianceKey description drops the token-shaped prefix and directs the key through vault.get",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

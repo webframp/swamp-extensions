@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/anthropic/admin"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.11.03.1"
 description: |
   Manage the people in a Claude Enterprise organization through the Admin API
   user-management endpoints: read members, custom roles, and RBAC groups with

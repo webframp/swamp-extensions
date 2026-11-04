@@ -10,7 +10,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/gitlab";
 
@@ -2716,7 +2716,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.10.21.3",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2944,6 +2944,11 @@ export const model = {
       toVersion: "2026.10.21.3",
       description:
         "No schema changes; the token argument description and README now point to vault.get and an interactive vault put",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

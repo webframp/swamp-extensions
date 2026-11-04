@@ -34,7 +34,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   Inspector2Client,
   ListFindingsCommand as ListInspectorFindingsCommand,
@@ -1498,9 +1498,13 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/php2shell-hunt",
-  version: "2026.10.22.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
-  upgrades: [],
+  upgrades: [{
+    toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }],
 
   resources: {
     ioc_set: {

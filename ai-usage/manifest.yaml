@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/ai-usage"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.11.03.1"
 description: |
   Unified cross-provider AI token usage monitoring — workflow, model, and
   report that aggregates Bedrock, Vertex AI, Azure OpenAI, and Anthropic

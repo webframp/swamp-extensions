@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.22.1
 
 **Fixed:** Existing definitions created against an earlier version were stranded on upgrade. The model shipped new versions without a corresponding `upgrades` chain, so swamp could not migrate a definition's `typeVersion` and logged a warning that global arguments would not be migrated. This release backfills the full upgrade chain through every shipped version and terminates it at the current version, so stale definitions migrate cleanly. The transform is identity — no stored global argument value changes.

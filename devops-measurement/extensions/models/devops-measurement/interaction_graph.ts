@@ -27,7 +27,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { type Event, EventSchema, isCrossBoundary } from "./_lib/event.ts";
 
 const EXTENSION_NAME = "@webframp/devops-measurement";
@@ -404,7 +404,7 @@ type MethodContext = {
 /** Interaction graph model — HELPED edges, in-degree centrality, hubs/bridges. */
 export const model = {
   type: "@webframp/devops-measurement/interaction-graph",
-  version: "2026.10.14.1",
+  version: "2026.11.03.1",
   upgrades: [{
     toVersion: "2026.09.15.1",
     description: "No schema changes — dependency/license maintenance bump",
@@ -417,6 +417,10 @@ export const model = {
     toVersion: "2026.10.14.1",
     description:
       "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   globalArguments: GlobalArgsSchema,

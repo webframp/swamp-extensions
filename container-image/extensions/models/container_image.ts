@@ -7,7 +7,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/container-image";
 
@@ -172,7 +172,7 @@ async function runCommand(
 /** Container image model definition. */
 export const model = {
   type: "@webframp/container-image",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -238,6 +238,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "No schema changes — login password guidance now uses vault.get",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

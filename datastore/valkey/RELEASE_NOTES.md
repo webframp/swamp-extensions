@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.21.1
 
 **Changed:** The `password` config field is marked sensitive, and its

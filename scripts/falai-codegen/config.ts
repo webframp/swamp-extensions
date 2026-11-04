@@ -12,7 +12,7 @@ export const SCHEMA_URL = "https://api.fal.ai/v1/openapi.json";
 export const OUTPUT_BASE = "../../falai";
 
 /** Zod version to use in generated code */
-export const ZOD_VERSION = "4.6.5";
+export const ZOD_VERSION = "4.6.7";
 
 /** swamp-testing version */
 export const SWAMP_TESTING_VERSION = "0.20261030.68";

@@ -1,3 +1,7 @@
+## 2026.11.03.4
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.11.03.3
 
 Fixed: list_webhooks no longer stores truncated: false unconditionally. It

@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/swamp-adoption";
 
@@ -308,7 +308,7 @@ function validateSpdxExpression(expr: string): string | null {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.11.03.1",
+  version: "2026.11.03.2",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -409,6 +409,11 @@ export const model = {
       toVersion: "2026.11.03.1",
       description:
         "No schema changes — generated deno.json pins @swamp-club/swamp-testing@0.20261030.68",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.2",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -909,7 +914,7 @@ Each generated file includes TODO comments marking where the user adds real logi
           `// ${safeExtName} Model`,
           ...(license ? [`// SPDX-License-Identifier: ${license}`] : []),
           "",
-          'import { z } from "npm:zod@4.6.5";',
+          'import { z } from "npm:zod@4.6.7";',
           "",
           "const GlobalArgsSchema = z.object({",
           "  // TODO: add global arguments from design",

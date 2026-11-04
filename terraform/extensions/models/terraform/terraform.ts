@@ -11,7 +11,7 @@
 
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/terraform";
 
@@ -280,7 +280,7 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/terraform",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
 
   upgrades: [
     {
@@ -363,6 +363,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "No schema changes — read_state now masks sensitive attributes in values",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

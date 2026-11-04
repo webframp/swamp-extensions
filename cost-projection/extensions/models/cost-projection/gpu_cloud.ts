@@ -13,7 +13,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // deno-lint-ignore-file no-explicit-any
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/cost-projection";
 
@@ -232,7 +232,7 @@ function computeProjection(s: ScenarioInput) {
 /** GPU cloud inference cost projection model. */
 export const model = {
   type: "@webframp/cost-projection/gpu-cloud",
-  version: "2026.10.22.1",
+  version: "2026.11.03.1",
   globalArguments: z.object({}),
   upgrades: [
     {
@@ -314,6 +314,11 @@ export const model = {
       toVersion: "2026.10.22.1",
       description:
         "Backfill upgrade chain so existing definitions migrate instead of stranding; identity transform preserves all global arguments",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

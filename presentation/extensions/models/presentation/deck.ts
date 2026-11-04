@@ -21,7 +21,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   defaultCacheDir,
   ensureElisp,
@@ -808,7 +808,7 @@ async function exportDeckPdf(
  */
 export const model = {
   type: "@webframp/presentation/deck",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   reports: ["@webframp/presentation/deck-summary"],
   globalArguments: GlobalArgsSchema,
 

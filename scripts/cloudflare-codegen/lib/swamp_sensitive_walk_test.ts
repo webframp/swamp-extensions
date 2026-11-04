@@ -12,7 +12,7 @@ Deno.test("generated sensitivePathsOf: unwraps only the wrappers swamp unwraps",
   try {
     await Deno.writeTextFile(
       tmp,
-      `import { z } from "npm:zod@4.6.5";
+      `import { z } from "npm:zod@4.6.7";
 ${generateSecretHelpers()}
 const secret = () => z.string().meta({ sensitive: true });
 const schema = z.object({

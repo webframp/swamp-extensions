@@ -5,7 +5,7 @@ import {
   assertThrows,
 } from "@std/assert";
 import { join } from "@std/path";
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   argFields,
   assertSensitiveOperationsExist,
