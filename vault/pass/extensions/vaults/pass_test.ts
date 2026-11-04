@@ -16,8 +16,8 @@ import {
   InMemorySpanExporter,
   type ReadableSpan,
   SimpleSpanProcessor,
-} from "npm:@opentelemetry/sdk-trace-base@2.10.0";
-import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
+} from "npm:@opentelemetry/sdk-trace-base@2.12.0";
+import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.12.0";
 import {
   assertVaultConformance,
   assertVaultExportConformance,

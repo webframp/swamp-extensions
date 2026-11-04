@@ -5,13 +5,13 @@
 
 import { assert, assertEquals, assertExists } from "@std/assert";
 import { context, trace } from "npm:@opentelemetry/api@1.9.1";
-import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.10.0";
+import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.12.0";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
   type ReadableSpan,
   SimpleSpanProcessor,
-} from "npm:@opentelemetry/sdk-trace-base@2.10.0";
+} from "npm:@opentelemetry/sdk-trace-base@2.12.0";
 
 import { datastore } from "./mod.ts";
 import { Attr, withSpan } from "./_lib/tracing.ts";
