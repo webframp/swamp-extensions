@@ -1,0 +1,5 @@
+look closely at the swamp behaviors used in ~/src/swamp-club/swamp, they are a replacement for the previous github workflows. Help me understand their flow
+
+---
+
+you're right, there is no direct parallel. What I want to do is take the exist github actions workflows and convert them entirely into swamp behaviors that can run on remote swamp workers, registered to swamp serve and triggered via webhooks. We can preserve the existing workflows for now while I work on setting up the swamp serve style ci driven in parallel as an experiment
