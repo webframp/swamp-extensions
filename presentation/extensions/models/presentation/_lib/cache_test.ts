@@ -5,7 +5,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
-import { withMockedFetch } from "jsr:@swamp-club/swamp-testing@0.20260928.39";
+import { withMockedFetch } from "jsr:@swamp-club/swamp-testing@0.20261030.68";
 import {
   defaultCacheDir,
   ensureElisp,

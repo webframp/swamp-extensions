@@ -9,7 +9,7 @@ import {
 import {
   createModelTestContext,
   withMockedCommand,
-} from "jsr:@swamp-club/swamp-testing@0.20260928.39";
+} from "jsr:@swamp-club/swamp-testing@0.20261030.68";
 import {
   type Deck,
   deckHtmlName,

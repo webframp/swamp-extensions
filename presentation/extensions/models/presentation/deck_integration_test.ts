@@ -15,7 +15,7 @@ import {
   assertEquals,
   assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
-import { createModelTestContext } from "jsr:@swamp-club/swamp-testing@0.20260928.39";
+import { createModelTestContext } from "jsr:@swamp-club/swamp-testing@0.20261030.68";
 import { type Deck, type DeckPdf, model } from "./deck.ts";
 import { ensureElisp, fetchRevealFile } from "./_lib/cache.ts";
 import { REVEAL_FILES } from "./_lib/pins.ts";

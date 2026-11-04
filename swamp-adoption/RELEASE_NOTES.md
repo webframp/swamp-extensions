@@ -1,3 +1,11 @@
+## 2026.11.03.1
+
+**Changed:** The scaffolded `deno.json` now pins
+`@swamp-club/swamp-testing@0.20261030.68` (was `0.20260928.39`). Newly
+scaffolded extensions pick up the current testing-library release. No schema or
+behavioral changes to the model itself; existing scaffolded extensions are
+unaffected until regenerated.
+
 ## 2026.10.14.2
 
 **Added:** `scaffold` takes an optional `license` argument: an SPDX expression

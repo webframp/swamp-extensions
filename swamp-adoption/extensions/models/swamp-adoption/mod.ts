@@ -308,7 +308,7 @@ function validateSpdxExpression(expr: string): string | null {
 /** Swamp adoption guidance model — discovery interviews, extension design, scaffolding. */
 export const model = {
   type: "@webframp/swamp-adoption",
-  version: "2026.10.14.2",
+  version: "2026.11.03.1",
   upgrades: [
     {
       toVersion: "2026.07.18.2",
@@ -403,6 +403,12 @@ export const model = {
       toVersion: "2026.10.14.2",
       description:
         "No schema changes — scaffold gains an optional license argument",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description:
+        "No schema changes — generated deno.json pins @swamp-club/swamp-testing@0.20261030.68",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -948,7 +954,7 @@ Each generated file includes TODO comments marking where the user adds real logi
             lint: { rules: { exclude: ["no-import-prefix"] } },
             imports: {
               "@swamp-club/swamp-testing":
-                "jsr:@swamp-club/swamp-testing@0.20260928.39",
+                "jsr:@swamp-club/swamp-testing@0.20261030.68",
             },
           },
           null,
