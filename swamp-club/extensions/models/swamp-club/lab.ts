@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 const GlobalArgs = z.object({
   host: z.string().min(1).default("swamp-club.com"),
   apiKey: z.string().min(1).meta({ sensitive: true }).describe(
@@ -65,7 +65,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -94,6 +94,10 @@ export const model = {
     toVersion: "2026.10.21.1",
     description:
       "No schema changes — apiKey description and README now direct the key through vault.get",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {

@@ -21,7 +21,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { isAbsolute, resolve, sep } from "node:path";
 
 const GUIDE_FILE = "guides/editorial-principles.md";
@@ -570,7 +570,7 @@ export function draftTag(): string {
 export const model = {
   type: "@webframp/editorial-review",
   // A string literal: the registry catalog reads it statically.
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     request: {

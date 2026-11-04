@@ -12,7 +12,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/extension-maintenance";
 
@@ -601,14 +601,14 @@ async function checkLockfileSync(extDir: string): Promise<{
 
   for (const [_alias, specifier] of Object.entries(imports)) {
     if (!specifier) continue;
-    // Extract the version from specifiers like "npm:zod@4.6.5" or
+    // Extract the version from specifiers like "npm:zod@4.6.7" or
     // "jsr:@swamp-club/swamp-testing@0.20260917.35"
     const versionMatch = specifier.match(/@([\d][^"]*)$/);
     if (!versionMatch) continue;
     const jsonVersion = versionMatch[1]!;
 
     // Look for this specifier in the lock's specifiers section.
-    // The lock records lines like: "npm:zod@4.6.5": "4.6.5" or
+    // The lock records lines like: "npm:zod@4.6.7": "4.6.7" or
     // "jsr:@swamp-club/swamp-testing@0.20260917.35": "0.20260917.35"
     // Also check workspace.dependencies for the bare specifier.
     const escaped = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1573,7 +1573,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.10.22.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1711,6 +1711,11 @@ export const model = {
       toVersion: "2026.10.22.1",
       description:
         "Backfill upgrade chain so existing definitions migrate instead of stranding; identity transform preserves all global arguments",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

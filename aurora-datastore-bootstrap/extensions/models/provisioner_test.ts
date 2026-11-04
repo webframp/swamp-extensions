@@ -102,7 +102,7 @@ const DEFAULT_ARGS = {
 
 Deno.test("model exports correct type and version", () => {
   assertEquals(model.type, "@webframp/aurora-datastore-bootstrap/provisioner");
-  assertEquals(model.version, "2026.10.22.3");
+  assertEquals(model.version, "2026.11.03.1");
 });
 
 Deno.test("model has provision method", () => {
@@ -479,7 +479,7 @@ Deno.test("provision encodes password in connection string", async () => {
 // the cloudflare/r2 isMarkedSensitive / sensitivePathsOf helpers.
 // ---------------------------------------------------------------------------
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 type ZodLike = {
   _def: { type: string; innerType?: ZodLike; shape?: Record<string, ZodLike> };

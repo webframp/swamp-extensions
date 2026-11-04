@@ -51,7 +51,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   canonicalActor,
   type Event,
@@ -415,7 +415,7 @@ type MethodContext = {
 /** GitLab collector model — translates raw GitLab activity into events. */
 export const model = {
   type: "@webframp/devops-measurement/collect-gitlab",
-  version: "2026.10.14.1",
+  version: "2026.11.03.1",
   upgrades: [{
     toVersion: "2026.09.15.1",
     description: "No schema changes — dependency/license maintenance bump",
@@ -428,6 +428,10 @@ export const model = {
     toVersion: "2026.10.14.1",
     description:
       "No schema changes — manifest now declares license: Apache-2.0 (SPDX)",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   globalArguments: GlobalArgsSchema,

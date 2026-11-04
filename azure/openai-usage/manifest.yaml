@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/azure/openai-usage"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.11.03.1"
 description: |
   Azure OpenAI / AI Services token usage monitoring — multi-subscription
   scanning of ProcessedPromptTokens and GeneratedTokens via Azure Monitor.

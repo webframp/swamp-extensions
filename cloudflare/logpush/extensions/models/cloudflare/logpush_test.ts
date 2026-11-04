@@ -4,7 +4,7 @@
 
 import { assertEquals, assertExists } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { model } from "./logpush.ts";
 
 // ---------------------------------------------------------------------------

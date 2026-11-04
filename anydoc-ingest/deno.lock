@@ -8,6 +8,7 @@
     "jsr:@swamp-club/swamp-testing@0.20261030.68": "0.20261030.68",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
     "npm:zod@4.6.5": "4.6.5",
+    "npm:zod@4.6.7": "4.6.7",
     "npm:zod@^4.6.7": "4.6.7"
   },
   "jsr": {

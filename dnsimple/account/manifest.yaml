@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/dnsimple/account"
 license: Apache-2.0
-version: "2026.11.03.3"
+version: "2026.11.03.4"
 description: "DNSimple Account — identity, account list, and billing charges"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

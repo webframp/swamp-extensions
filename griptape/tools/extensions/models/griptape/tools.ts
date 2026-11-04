@@ -7,7 +7,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   griptapeApi,
   griptapeApiPaginated,
@@ -176,7 +176,7 @@ const ListToolRunsSchema = z.object({
 /** Griptape Cloud Tools — hosted tools, activities, deployments, and tool runs */
 export const model = {
   type: "@webframp/griptape/tools",
-  version: "2026.10.21.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -212,6 +212,11 @@ export const model = {
       toVersion: "2026.10.21.1",
       description:
         "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

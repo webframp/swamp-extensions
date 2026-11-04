@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.14.1
 
 **Fixed:** `compute_drift` and `get_drift_velocity` failed on current swamp with

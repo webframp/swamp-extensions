@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.14.1
 
 **Fixed:** `get_non_compliant` and `get_summary` failed on current swamp with

@@ -10,7 +10,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   GetHostedZoneCommand,
   ListHostedZonesCommand,
@@ -503,7 +503,7 @@ function detectOrphan(
 /** AWS Route 53 DNS observation model — discovers hosted zones, records, health checks, and query logging configuration. */
 export const model = {
   type: "@webframp/aws/dns-observation",
-  version: "2026.10.28.1",
+  version: "2026.11.03.1",
   upgrades: [
     {
       toVersion: "2026.07.30.1",
@@ -623,6 +623,11 @@ export const model = {
         "list_records: added summary.zonesFailed (defaults to []); " +
         "zonesScanned now counts only readable zones. Additive schema " +
         "change — existing stored records remain valid via the default.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

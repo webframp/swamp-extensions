@@ -1,6 +1,11 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@std/internal@^1.0.14": "1.0.14",
+    "jsr:@std/path@^1.1.4": "1.1.6",
+    "jsr:@swamp-club/swamp-testing@0.20261030.68": "0.20261030.68",
     "npm:@aws-sdk/client-cost-explorer@3.1120.0": "3.1120.0",
     "npm:@aws-sdk/client-cost-explorer@3.1121.0": "3.1121.0",
     "npm:@aws-sdk/client-cost-explorer@3.1126.0": "3.1126.0",
@@ -13,8 +18,37 @@
     "npm:@aws-sdk/credential-providers@3.1131.0": "3.1131.0",
     "npm:@aws-sdk/credential-providers@3.1133.0": "3.1133.0",
     "npm:@aws-sdk/credential-providers@3.1139.0": "3.1139.0",
+    "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
     "npm:zod@4.4.3": "4.4.3",
-    "npm:zod@4.6.5": "4.6.5"
+    "npm:zod@4.6.5": "4.6.5",
+    "npm:zod@4.6.7": "4.6.7",
+    "npm:zod@^4.6.7": "4.6.7"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.12"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/path@1.1.6": {
+      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
+      "dependencies": [
+        "jsr:@std/internal@^1.0.14"
+      ]
+    },
+    "@swamp-club/swamp-testing@0.20261030.68": {
+      "integrity": "726e9b2f4db47720a93b30b150c8aa074f64a02436c5c961d9485b8780cf99f1",
+      "dependencies": [
+        "jsr:@std/assert",
+        "jsr:@std/path",
+        "npm:@marcbachmann/cel-js",
+        "npm:zod@^4.6.7"
+      ]
+    }
   },
   "npm": {
     "@aws-sdk/client-cost-explorer@3.1120.0": {
@@ -394,6 +428,10 @@
     "@aws/lambda-invoke-store@0.3.0": {
       "integrity": "sha512-sl4Bm6yiMNYrZKkqqDFWN0UfnWhlS8ivKxrYl+6t0gCLrqr8y3B2IqZZbFRkfaVVp7C/baApyh71P+LeE1A2sQ=="
     },
+    "@marcbachmann/cel-js@7.6.1": {
+      "integrity": "sha512-YyY8yiDU07ByKb2rJUoNgMAkYeeDvkdrONBREV2MP9siAW7yNft0KfbIoonWTIMY0fGtv8og0EhzKx3Xsi1Nmg==",
+      "bin": true
+    },
     "@smithy/core@3.35.0": {
       "integrity": "sha512-zRMhfkByhT2snNdr1si24vJitU6Cr9ix2MikUfWmkAgp4jrNP0GcKSP5YvwQ+TlI8AZXER5QOGJn3JsVtSD9/A==",
       "dependencies": [
@@ -450,6 +488,9 @@
     },
     "zod@4.6.5": {
       "integrity": "sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q=="
+    },
+    "zod@4.6.7": {
+      "integrity": "sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg=="
     }
   },
   "workspace": {

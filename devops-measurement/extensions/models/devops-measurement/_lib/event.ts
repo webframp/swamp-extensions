@@ -23,7 +23,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 /**
  * The closed set of activity kinds the system observes. The discriminator that

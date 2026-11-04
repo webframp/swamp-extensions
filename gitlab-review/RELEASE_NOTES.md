@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.22.1
 
 **Fixed:** `post_inline_review` always failed when run through swamp with

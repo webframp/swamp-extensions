@@ -12,7 +12,7 @@
  * @module
  */
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EntrySchema = z.union([
   z.string(),

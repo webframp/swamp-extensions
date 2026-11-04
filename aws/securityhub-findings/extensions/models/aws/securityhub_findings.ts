@@ -13,7 +13,7 @@
  */
 // SPDX-License-Identifier: Apache-2.0
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   type AwsSecurityFinding,
   type AwsSecurityFindingFilters,
@@ -429,7 +429,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.10.23.1",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -555,6 +555,11 @@ export const model = {
         "sortField/sortOrder overrides, and both now encode the sort in the " +
         "resource instance name so a different sort cannot silently overwrite " +
         "a prior truncated slice. No stored-attribute changes.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

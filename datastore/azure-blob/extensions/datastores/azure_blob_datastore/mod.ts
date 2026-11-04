@@ -1,7 +1,7 @@
 // ABOUTME: Azure Blob Storage datastore extension for swamp — native blob-lease
 // ABOUTME: distributed locking and ETag-conditional shard-index sync, no SDK.
 
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { type BlobAuth, BlobClient } from "./rest_client.ts";
 import {
   createBlobLock,

@@ -1,3 +1,7 @@
+## 2026.11.03.1
+
+**Changed:** Bump zod 4.6.5 → 4.6.7
+
 ## 2026.10.21.1
 
 **Changed:** `bootstrap` no longer tells you to copy the refresh token into a

@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 const EXTENSION_NAME = "@webframp/azure-blob-datastore-bootstrap";
 
@@ -255,7 +255,7 @@ async function getConnectionString(
 /** Provisioner model definition. */
 export const model = {
   type: "@webframp/azure-blob-datastore-bootstrap/provisioner",
-  version: "2026.10.22.2",
+  version: "2026.11.03.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -333,6 +333,11 @@ export const model = {
       toVersion: "2026.10.22.2",
       description:
         "Marked connectionString and datastoreConfig sensitive so swamp vaults them and persists vault references instead of plaintext. connectionString carries the storage AccountKey and datastoreConfig embeds it. No stored-key change; identity transform preserves all attributes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
