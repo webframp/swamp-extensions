@@ -45,6 +45,7 @@ fallback. That value is not redacted from swamp output and is not recommended.
 | `upload_from_url`                   | Upload file from URL         |
 | `serverless_logs_history`           | Logs history (paginated)     |
 | `list_requests_by_endpoint`         | List requests by endpoint(s) |
+| `serverless_stop_runner`            | Stop Runner                  |
 | `get_usage`                         | Usage                        |
 
 ## Development

@@ -1,3 +1,14 @@
+## 2026.11.05.1
+
+**Changed:** Regenerated from the current fal.ai OpenAPI spec. The
+`expand=openapi-3.0` option now returns an OpenAPI 3.1 schema (the query value
+keeps its original `openapi-3.0` name); the `openapi` resource field and the
+`expand` argument descriptions were updated to say so. No methods, arguments, or
+resource shapes changed.
+
+**Upgrade note:** Documentation/description text only — stored data continues to
+validate. No migration required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7
