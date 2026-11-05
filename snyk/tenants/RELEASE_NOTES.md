@@ -1,3 +1,17 @@
+## 2026.11.05.1
+
+**Added:** Regenerated from the current Snyk OpenAPI spec. New app-install
+methods `get_app_installs_for_tenant`, `create_tenant_app_install`,
+`update_tenant_app_install_secret`, and `delete_tenant_app_install_by_id`, plus
+lookup-by-key methods `get_asset_by_key_tenant` and `get_asset_id_by_key_tenant`.
+Adds matching `tenant_app_install`, `tenant_app_install_secret`,
+`get_app_installs_for_tenant`, `asset_by_key_tenant`, and
+`asset_id_by_key_tenant` resources.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

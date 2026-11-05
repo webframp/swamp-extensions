@@ -35,6 +35,8 @@ swamp model create @webframp/snyk/inventory snyk-inventory \
 | `get_filter_values_group`        | Get filter value suggestions (autocomplete) - Group scope (Early Access)  |
 | `get_group_fields_group`         | Get available group fields - Group scope (Early Access)                   |
 | `get_group_values_group`         | Get group value aggregation - Group scope (Early Access)                  |
+| `get_asset_id_by_key_group`      | Get an asset id by natural key or alias - Group scope (Early Access)      |
+| `get_asset_by_key_group`         | Look up an asset by natural key or alias - Group scope (Early Access)     |
 | `create_asset_search_group`      | Create an asset search (asynchronous) - Group scope (Early Access)        |
 | `get_asset_search_results_group` | Retrieve asset search results (asynchronous) - Group scope (Early Access) |
 | `get_asset_group`                | Get a single asset by ID - Group scope (Early Access)                     |
@@ -47,6 +49,8 @@ swamp model create @webframp/snyk/inventory snyk-inventory \
 | `get_filter_values_org`          | Get filter value suggestions (autocomplete) - Org scope (Early Access)    |
 | `get_group_fields_org`           | Get available group fields - Org scope (Early Access)                     |
 | `get_group_values_org`           | Get group value aggregation - Org scope (Early Access)                    |
+| `get_asset_id_by_key_org`        | Get an asset id by natural key or alias - Org scope (Early Access)        |
+| `get_asset_by_key_org`           | Look up an asset by natural key or alias - Org scope (Early Access)       |
 | `create_asset_search_org`        | Create an asset search (asynchronous) - Org scope (Early Access)          |
 | `get_asset_search_results_org`   | Retrieve asset search results (asynchronous) - Org scope (Early Access)   |
 | `get_asset_org`                  | Get a single asset by ID - Org scope (Early Access)                       |

@@ -9,6 +9,7 @@
 
 import { z } from "npm:zod@4.6.7";
 import {
+  dropItemSecrets,
   queryEntries,
   requireBody,
   sanitizeInstanceName,
@@ -68,6 +69,53 @@ const GetTenantSchema = z.object({
     "The time the tenant was last modified.",
   ),
   owner_id: z.string().nullish().describe("Related owner ID"),
+}).passthrough();
+
+const GetAppInstallsForTenantItemSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
+  ),
+  installed_at: z.string().nullish().describe(
+    "Timestamp at which this app was first installed at.",
+  ),
+  app_id: z.string().nullish().describe("Related app ID"),
+}).passthrough();
+
+const GetAppInstallsForTenantSchema = z.object({
+  items: z.array(GetAppInstallsForTenantItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateTenantAppInstallSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish(),
+  client_secret: z.string().meta({ sensitive: true }).nullish(),
+  app_id: z.string().nullish().describe("Related app ID"),
+}).passthrough();
+
+const UpdateTenantAppInstallSecretSchema = z.object({
+  id: z.string().nullish(),
+  type: z.string().nullish(),
+  client_id: z.string().nullish().describe(
+    "The OAuth2 client id for the app installation.",
+  ),
+  client_secret: z.string().meta({ sensitive: true }).nullish().describe(
+    "The OAuth2 client secret for the app.",
+  ),
+  installed_at: z.string().nullish().describe(
+    "Timestamp at which this app was first installed at.",
+  ),
+  app_id: z.string().nullish().describe("Related app ID"),
 }).passthrough();
 
 const GetBrokerConnectionIntegrationsItemSchema = z.object({
@@ -365,7 +413,9 @@ const CreateDeploymentCredentialSchema = z.object({
 
 const AssetsTenantItemSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -387,7 +437,7 @@ const GetFilterFieldsTenantItemSchema = z.object({
   type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.string()).nullish().describe(
+  asset_types: z.array(z.unknown()).nullish().describe(
     "List of asset types this field applies to",
   ),
   name: z.string().nullish().describe(
@@ -473,9 +523,25 @@ const GetGroupValuesTenantSchema = z.object({
   ),
 });
 
-const GetAssetSearchResultsTenantItemSchema = z.object({
+const GetAssetIdByKeyTenantSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
   type: z.string().nullish().describe("The JSON:API resource type"),
+}).passthrough();
+
+const GetAssetByKeyTenantSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
+}).passthrough();
+
+const GetAssetSearchResultsTenantItemSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -494,7 +560,9 @@ const GetAssetSearchResultsTenantSchema = z.object({
 
 const GetAssetTenantSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -641,6 +709,9 @@ const ModelsItemSchema = z.object({
   country_of_origin: z.string().nullish().describe(
     "ISO 3166-1 alpha-2 country code of the provider.",
   ),
+  deprecation_date: z.string().nullish().describe(
+    "When the model is or was deprecated by its provider. Omitted when unknown.",
+  ),
   has_risk_assessment: z.boolean().nullish().describe(
     "Whether the model has risk scores. Available regardless of entitlement.",
   ),
@@ -662,6 +733,9 @@ const ModelsItemSchema = z.object({
   provider_name: z.string().nullish(),
   release_date: z.string().nullish().describe(
     "When the model was first published upstream. Omitted when unknown.",
+  ),
+  retirement_date: z.string().nullish().describe(
+    "When the model is or was retired by its provider. Omitted when unknown.",
   ),
   risk_assessment: z.array(
     z.object({
@@ -719,6 +793,9 @@ const GetModelSchema = z.object({
   country_of_origin: z.string().nullish().describe(
     "ISO 3166-1 alpha-2 country code of the provider.",
   ),
+  deprecation_date: z.string().nullish().describe(
+    "When the model is or was deprecated by its provider. Omitted when unknown.",
+  ),
   has_risk_assessment: z.boolean().nullish().describe(
     "Whether the model has risk scores. Available regardless of entitlement.",
   ),
@@ -740,6 +817,9 @@ const GetModelSchema = z.object({
   provider_name: z.string().nullish(),
   release_date: z.string().nullish().describe(
     "When the model was first published upstream. Omitted when unknown.",
+  ),
+  retirement_date: z.string().nullish().describe(
+    "When the model is or was retired by its provider. Omitted when unknown.",
   ),
   risk_assessment: z.array(
     z.object({
@@ -808,7 +888,7 @@ const CreateTenantRoleSchema = z.object({
 /** Snyk Tenants — tenant and organization lifecycle management */
 export const model = {
   type: "@webframp/snyk/tenants",
-  version: "2026.11.03.1",
+  version: "2026.11.05.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -889,6 +969,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -901,6 +987,26 @@ export const model = {
     "tenant": {
       description: "Get a single Tenant by ID",
       schema: GetTenantSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "get_app_installs_for_tenant": {
+      description:
+        "Get a list of Snyk Apps installed for a Tenant (Early Access)",
+      schema: GetAppInstallsForTenantSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "tenant_app_install": {
+      description: "Install a Snyk App for a Tenant (Early Access)",
+      schema: CreateTenantAppInstallSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "tenant_app_install_secret": {
+      description:
+        "Manage client secret for non-interactive Snyk App installations (Early Access)",
+      schema: UpdateTenantAppInstallSecretSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -1033,6 +1139,18 @@ export const model = {
       schema: GetGroupValuesTenantSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "asset_id_by_key_tenant": {
+      description: "Get an asset id by natural key or alias (Early Access)",
+      schema: GetAssetIdByKeyTenantSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "asset_by_key_tenant": {
+      description: "Look up an asset by natural key or alias (Early Access)",
+      schema: GetAssetByKeyTenantSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "asset_search_tenant": {
       description: "Create an asset search (asynchronous) (Early Access)",
@@ -1238,6 +1356,246 @@ export const model = {
           result,
         );
         context.logger.info("Updated tenant", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_app_installs_for_tenant: {
+      description:
+        "Get a list of Snyk Apps installed for a Tenant (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        expand: z.union([z.string(), z.array(z.string())]).optional().describe(
+          "Expand relationships.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const startMs = Date.now();
+        const query = queryEntries(args, {
+          expand: { name: "expand", comma: true },
+        });
+
+        const { results, truncated } = await snykApiPaginated(
+          apiToken,
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/apps/installs`,
+          version,
+          query,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "get_app_installs_for_tenant",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} get_app_installs_for_tenant", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_tenant_app_install: {
+      description: "Install a Snyk App for a Tenant (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        data: z.object({
+          type: z.enum(["app_install"]).optional(),
+        }),
+        relationships: z.object({
+          app: z.object({
+            data: z.object({
+              id: z.unknown(),
+              type: z.enum(["app"]),
+            }),
+          }),
+        }),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>(["tenant_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await snykApi(
+          apiToken,
+          "POST",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/apps/installs`,
+          version,
+          body,
+        );
+        requireBody(result, "create_tenant_app_install");
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
+        const handle = await context.writeResource(
+          "tenant_app_install",
+          id,
+          result,
+        );
+        context.logger.info("Created tenant_app_install {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_tenant_app_install_by_id: {
+      description:
+        "Revoke app authorization for a Snyk tenant with install ID (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        install_id: z.string().describe("Install ID"),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        await snykApi(
+          apiToken,
+          "DELETE",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/apps/installs/${encodeURIComponent(String(args.install_id))}`,
+          version,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.install_id });
+        return { dataHandles: [] };
+      },
+    },
+    update_tenant_app_install_secret: {
+      description:
+        "Manage client secret for non-interactive Snyk App installations (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("Tenant ID"),
+        install_id: z.string().describe("Install ID"),
+        data: z.object({
+          attributes: z.object({
+            mode: z.enum(["replace", "create", "delete"]),
+            secret: z.string().meta({ sensitive: true }).optional().describe(
+              'Secret to delete when using `delete` mode Secret: supply it with a ${{ vault.get("<vault>", "<KEY>") }} expression, never the literal value.',
+            ),
+          }),
+          type: z.enum(["app"]),
+        }),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>(["tenant_id", "install_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await snykApi(
+          apiToken,
+          "POST",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/apps/installs/${
+            encodeURIComponent(String(args.install_id))
+          }/secrets`,
+          version,
+          body,
+        );
+        requireBody(result, "update_tenant_app_install_secret");
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const droppedSecrets = dropItemSecrets(
+          (result as { items?: unknown }).items,
+          ["client_secret"],
+        );
+        if (droppedSecrets > 0) {
+          context.logger.info(
+            "WARNING: dropped {count} secret values from array items; swamp cannot vault a field inside an array",
+            { count: droppedSecrets },
+          );
+        }
+        const handle = await context.writeResource(
+          "tenant_app_install_secret",
+          id,
+          result,
+        );
+        context.logger.info("Created tenant_app_install_secret {id}", { id });
         return { dataHandles: [handle] };
       },
     },
@@ -3218,6 +3576,109 @@ export const model = {
         context.logger.info("Found {count} get_group_values_tenant", {
           count: results.length,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_id_by_key_tenant: {
+      description: "Get an asset id by natural key or alias (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("The unique identifier of the tenant"),
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, { type: { name: "type" }, key: { name: "key" } }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/id${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_id_by_key_tenant");
+
+        const handle = await context.writeResource(
+          "asset_id_by_key_tenant",
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
+        );
+        context.logger.info("Fetched asset_id_by_key_tenant", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_by_key_tenant: {
+      description: "Look up an asset by natural key or alias (Early Access)",
+      arguments: z.object({
+        tenant_id: z.string().describe("The unique identifier of the tenant"),
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+        fields: z.string().optional().describe(
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, {
+            type: { name: "type" },
+            key: { name: "key" },
+            fields: { name: "fields" },
+          }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/tenants/${
+            encodeURIComponent(String(args.tenant_id))
+          }/inventory/assets/lookup${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_by_key_tenant");
+
+        const handle = await context.writeResource(
+          "asset_by_key_tenant",
+          sanitizeInstanceName(String(args.tenant_id)),
+          result,
+        );
+        context.logger.info("Fetched asset_by_key_tenant", {});
         return { dataHandles: [handle] };
       },
     },

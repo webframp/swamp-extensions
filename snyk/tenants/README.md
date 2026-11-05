@@ -12,6 +12,11 @@ expression; never pass the literal value. Any vault type works —
 `local_encryption`, or an extension such as `@webframp/pass`,
 `@webframp/gopass`, `@webframp/hashicorp-vault` or `@webframp/macos-keychain`.
 
+Some methods return secrets, which swamp stores in a vault (see
+[Secrets](#secrets)). Because the model declares these fields sensitive, swamp
+refuses to run any of its methods, reads included, until a vault exists
+(`swamp vault create local_encryption snyk`).
+
 ## Usage
 
 ```bash
@@ -23,64 +28,91 @@ swamp model create @webframp/snyk/tenants snyk-tenants \
   --global-arg 'apiToken=${{ vault.get("snyk", "API_TOKEN") }}'
 ```
 
+## Secrets
+
+These methods can return a secret. Swamp stores each returned value in a vault
+and the persisted resource holds a `vault.get` reference in its place. Because
+the model declares these fields sensitive, swamp refuses to run any of its
+methods, reads included, until a vault exists
+(`swamp vault create local_encryption snyk`). Snyk returns these secrets once,
+on creation or rotation, so read the value from the vault.
+
+| Method                             | Secret fields   |
+| ---------------------------------- | --------------- |
+| `create_tenant_app_install`        | `client_secret` |
+| `update_tenant_app_install_secret` | `client_secret` |
+
+These methods take a secret argument. Supply it with a
+`${{ vault.get("<vault>", "<KEY>") }}` expression, never the literal value.
+
+| Method                             | Secret arguments         |
+| ---------------------------------- | ------------------------ |
+| `update_tenant_app_install_secret` | `data.attributes.secret` |
+
 ## Methods
 
-| Method                                  | Description                                                               |
-| --------------------------------------- | ------------------------------------------------------------------------- |
-| `list_tenants`                          | Get a list of all accessible Tenants                                      |
-| `get_tenant`                            | Get a single Tenant by ID                                                 |
-| `update_tenant`                         | Update tenant                                                             |
-| `get_broker_connection_integrations`    | Get Integrations using the current Broker connection                      |
-| `create_broker_connection_integration`  | Creates Broker connection Integration Configuration                       |
-| `delete_broker_connection_integration`  | Deletes an Integration for a Broker connection                            |
-| `list_broker_deployments_for_tenant`    | List Broker deployments for tenant                                        |
-| `list_connection_contexts`              | List Connection contexts                                                  |
-| `get_connection_context`                | List Connection context                                                   |
-| `update_broker_context`                 | Updates Broker Context                                                    |
-| `delete_broker_context`                 | Deletes broker context                                                    |
-| `update_broker_context_integration`     | Updates an integration to be associated with a Broker context             |
-| `delete_broker_context_integration`     | Deletes the Broker context association with an Integration                |
-| `list_broker_deployments`               | List Broker deployments                                                   |
-| `create_broker_deployment`              | Creates Broker Deployment                                                 |
-| `update_broker_deployment`              | Updates Broker deployment                                                 |
-| `delete_broker_deployment`              | Deletes Broker deployment                                                 |
-| `list_broker_connections`               | List Broker connections                                                   |
-| `create_broker_connection`              | Creates Broker connection                                                 |
-| `delete_broker_connections`             | Deletes Broker connections                                                |
-| `get_broker_connection`                 | Get Broker connection                                                     |
-| `update_broker_connection`              | Updates Broker connection                                                 |
-| `delete_broker_connection`              | Deletes Broker connection                                                 |
-| `list_broker_orgs_for_bulk_migration`   | List organizations for bulk migration                                     |
-| `create_broker_orgs_for_bulk_migration` | Performs bulk migration integrations to universal broker                  |
-| `list_deployment_contexts`              | List Deployment contexts                                                  |
-| `create_broker_context`                 | Create broker Context                                                     |
-| `list_deployment_credentials`           | List Deployment credentials                                               |
-| `create_deployment_credential`          | Create deployment credential                                              |
-| `get_deployment_credential`             | Get Deployment credential                                                 |
-| `update_deployment_credential`          | Updates Deployment credential                                             |
-| `delete_deployment_credential`          | Deletes Deployment credential                                             |
-| `list_assets_tenant`                    | List or search all assets (synchronous) (Early Access)                    |
-| `update_assets_bulk_tenant`             | Bulk update asset attributes (Early Access)                               |
-| `get_filter_fields_tenant`              | Get available filter fields (Early Access)                                |
-| `get_filter_values_tenant`              | Get filter value suggestions (autocomplete) (Early Access)                |
-| `get_group_fields_tenant`               | Get available group fields (Early Access)                                 |
-| `get_group_values_tenant`               | Get group value aggregation (Early Access)                                |
-| `create_asset_search_tenant`            | Create an asset search (asynchronous) (Early Access)                      |
-| `get_asset_search_results_tenant`       | Retrieve asset search results (asynchronous) (Early Access)               |
-| `get_asset_tenant`                      | Get a single asset by ID (Early Access)                                   |
-| `update_asset_tenant`                   | Update asset attributes (Early Access)                                    |
-| `list_asset_projects_tenant`            | List projects for an asset (Early Access)                                 |
-| `list_asset_targets_tenant`             | List targets for an asset (Early Access)                                  |
-| `get_tenant_memberships`                | Get all memberships of the tenant (Early Access)                          |
-| `update_tenant_membership`              | Update tenant membership (Early Access)                                   |
-| `delete_tenant_membership`              | Delete an individual tenant membership for a single user. (Early Access)  |
-| `list_models`                           | List models (Early Access)                                                |
-| `get_model`                             | Get a model (Early Access)                                                |
-| `list_tenant_roles`                     | List all available roles for a given tenant (Early Access)                |
-| `create_tenant_role`                    | Create a custom tenant role for a given tenant (Early Access)             |
-| `get_tenant_role`                       | Return a specific role by its id and its tenant id. (Early Access)        |
-| `update_tenant_role`                    | Update a specific tenant role by its id and its tenant id. (Early Access) |
-| `delete_tenant_role`                    | Delete a specific tenant role by its id and its tenant id. (Early Access) |
+| Method                                  | Description                                                                    |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| `list_tenants`                          | Get a list of all accessible Tenants                                           |
+| `get_tenant`                            | Get a single Tenant by ID                                                      |
+| `update_tenant`                         | Update tenant                                                                  |
+| `get_app_installs_for_tenant`           | Get a list of Snyk Apps installed for a Tenant (Early Access)                  |
+| `create_tenant_app_install`             | Install a Snyk App for a Tenant (Early Access)                                 |
+| `delete_tenant_app_install_by_id`       | Revoke app authorization for a Snyk tenant with install ID (Early Access)      |
+| `update_tenant_app_install_secret`      | Manage client secret for non-interactive Snyk App installations (Early Access) |
+| `get_broker_connection_integrations`    | Get Integrations using the current Broker connection                           |
+| `create_broker_connection_integration`  | Creates Broker connection Integration Configuration                            |
+| `delete_broker_connection_integration`  | Deletes an Integration for a Broker connection                                 |
+| `list_broker_deployments_for_tenant`    | List Broker deployments for tenant                                             |
+| `list_connection_contexts`              | List Connection contexts                                                       |
+| `get_connection_context`                | List Connection context                                                        |
+| `update_broker_context`                 | Updates Broker Context                                                         |
+| `delete_broker_context`                 | Deletes broker context                                                         |
+| `update_broker_context_integration`     | Updates an integration to be associated with a Broker context                  |
+| `delete_broker_context_integration`     | Deletes the Broker context association with an Integration                     |
+| `list_broker_deployments`               | List Broker deployments                                                        |
+| `create_broker_deployment`              | Creates Broker Deployment                                                      |
+| `update_broker_deployment`              | Updates Broker deployment                                                      |
+| `delete_broker_deployment`              | Deletes Broker deployment                                                      |
+| `list_broker_connections`               | List Broker connections                                                        |
+| `create_broker_connection`              | Creates Broker connection                                                      |
+| `delete_broker_connections`             | Deletes Broker connections                                                     |
+| `get_broker_connection`                 | Get Broker connection                                                          |
+| `update_broker_connection`              | Updates Broker connection                                                      |
+| `delete_broker_connection`              | Deletes Broker connection                                                      |
+| `list_broker_orgs_for_bulk_migration`   | List organizations for bulk migration                                          |
+| `create_broker_orgs_for_bulk_migration` | Performs bulk migration integrations to universal broker                       |
+| `list_deployment_contexts`              | List Deployment contexts                                                       |
+| `create_broker_context`                 | Create broker Context                                                          |
+| `list_deployment_credentials`           | List Deployment credentials                                                    |
+| `create_deployment_credential`          | Create deployment credential                                                   |
+| `get_deployment_credential`             | Get Deployment credential                                                      |
+| `update_deployment_credential`          | Updates Deployment credential                                                  |
+| `delete_deployment_credential`          | Deletes Deployment credential                                                  |
+| `list_assets_tenant`                    | List or search all assets (synchronous) (Early Access)                         |
+| `update_assets_bulk_tenant`             | Bulk update asset attributes (Early Access)                                    |
+| `get_filter_fields_tenant`              | Get available filter fields (Early Access)                                     |
+| `get_filter_values_tenant`              | Get filter value suggestions (autocomplete) (Early Access)                     |
+| `get_group_fields_tenant`               | Get available group fields (Early Access)                                      |
+| `get_group_values_tenant`               | Get group value aggregation (Early Access)                                     |
+| `get_asset_id_by_key_tenant`            | Get an asset id by natural key or alias (Early Access)                         |
+| `get_asset_by_key_tenant`               | Look up an asset by natural key or alias (Early Access)                        |
+| `create_asset_search_tenant`            | Create an asset search (asynchronous) (Early Access)                           |
+| `get_asset_search_results_tenant`       | Retrieve asset search results (asynchronous) (Early Access)                    |
+| `get_asset_tenant`                      | Get a single asset by ID (Early Access)                                        |
+| `update_asset_tenant`                   | Update asset attributes (Early Access)                                         |
+| `list_asset_projects_tenant`            | List projects for an asset (Early Access)                                      |
+| `list_asset_targets_tenant`             | List targets for an asset (Early Access)                                       |
+| `get_tenant_memberships`                | Get all memberships of the tenant (Early Access)                               |
+| `update_tenant_membership`              | Update tenant membership (Early Access)                                        |
+| `delete_tenant_membership`              | Delete an individual tenant membership for a single user. (Early Access)       |
+| `list_models`                           | List models (Early Access)                                                     |
+| `get_model`                             | Get a model (Early Access)                                                     |
+| `list_tenant_roles`                     | List all available roles for a given tenant (Early Access)                     |
+| `create_tenant_role`                    | Create a custom tenant role for a given tenant (Early Access)                  |
+| `get_tenant_role`                       | Return a specific role by its id and its tenant id. (Early Access)             |
+| `update_tenant_role`                    | Update a specific tenant role by its id and its tenant id. (Early Access)      |
+| `delete_tenant_role`                    | Delete a specific tenant role by its id and its tenant id. (Early Access)      |
 
 ## Development
 
