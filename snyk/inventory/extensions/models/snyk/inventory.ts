@@ -33,7 +33,9 @@ const GlobalArgsSchema = z.object({
 
 const AssetsGroupItemSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -55,7 +57,7 @@ const GetFilterFieldsGroupItemSchema = z.object({
   type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.string()).nullish().describe(
+  asset_types: z.array(z.unknown()).nullish().describe(
     "List of asset types this field applies to",
   ),
   name: z.string().nullish().describe(
@@ -141,9 +143,25 @@ const GetGroupValuesGroupSchema = z.object({
   ),
 });
 
-const GetAssetSearchResultsGroupItemSchema = z.object({
+const GetAssetIdByKeyGroupSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
   type: z.string().nullish().describe("The JSON:API resource type"),
+}).passthrough();
+
+const GetAssetByKeyGroupSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
+}).passthrough();
+
+const GetAssetSearchResultsGroupItemSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -162,7 +180,9 @@ const GetAssetSearchResultsGroupSchema = z.object({
 
 const GetAssetGroupSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -264,7 +284,9 @@ const ListAssetTargetsGroupSchema = z.object({
 
 const AssetsOrgItemSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -286,7 +308,7 @@ const GetFilterFieldsOrgItemSchema = z.object({
   type: z.string().nullish().describe(
     "Data type of the field (string, boolean, datetime, array, object)",
   ),
-  asset_types: z.array(z.string()).nullish().describe(
+  asset_types: z.array(z.unknown()).nullish().describe(
     "List of asset types this field applies to",
   ),
   name: z.string().nullish().describe(
@@ -372,9 +394,25 @@ const GetGroupValuesOrgSchema = z.object({
   ),
 });
 
-const GetAssetSearchResultsOrgItemSchema = z.object({
+const GetAssetIdByKeyOrgSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
   type: z.string().nullish().describe("The JSON:API resource type"),
+}).passthrough();
+
+const GetAssetByKeyOrgSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
+  projects_id: z.string().nullish().describe("Related projects ID"),
+  targets_id: z.string().nullish().describe("Related targets ID"),
+}).passthrough();
+
+const GetAssetSearchResultsOrgItemSchema = z.object({
+  id: z.string().nullish().describe("The unique identifier of the asset"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -393,7 +431,9 @@ const GetAssetSearchResultsOrgSchema = z.object({
 
 const GetAssetOrgSchema = z.object({
   id: z.string().nullish().describe("The unique identifier of the asset"),
-  type: z.string().nullish().describe("The JSON:API resource type"),
+  type: z.string().nullish().describe(
+    "The JSON:API resource type of the asset",
+  ),
   projects_id: z.string().nullish().describe("Related projects ID"),
   targets_id: z.string().nullish().describe("Related targets ID"),
 }).passthrough();
@@ -500,7 +540,7 @@ const ListAssetTargetsOrgSchema = z.object({
 /** Snyk Inventory — asset discovery for packages, containers, repos, and cloud resources */
 export const model = {
   type: "@webframp/snyk/inventory",
-  version: "2026.11.03.1",
+  version: "2026.11.05.3",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -589,6 +629,24 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.05.2",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.05.3",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -598,12 +656,6 @@ export const model = {
       schema: ListAssetsGroupSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "assets_bulk_group": {
-      description: "Bulk update asset attributes - Group scope (Early Access)",
-      schema: z.object({}).passthrough(),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "get_filter_fields_group": {
       description: "Get available filter fields - Group scope (Early Access)",
@@ -629,6 +681,20 @@ export const model = {
       schema: GetGroupValuesGroupSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "asset_id_by_key_group": {
+      description:
+        "Get an asset id by natural key or alias - Group scope (Early Access)",
+      schema: GetAssetIdByKeyGroupSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "asset_by_key_group": {
+      description:
+        "Look up an asset by natural key or alias - Group scope (Early Access)",
+      schema: GetAssetByKeyGroupSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "asset_search_group": {
       description:
@@ -669,12 +735,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "assets_bulk_org": {
-      description: "Bulk update asset attributes - Org scope (Early Access)",
-      schema: z.object({}).passthrough(),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "get_filter_fields_org": {
       description: "Get available filter fields - Org scope (Early Access)",
       schema: GetFilterFieldsOrgSchema,
@@ -699,6 +759,20 @@ export const model = {
       schema: GetGroupValuesOrgSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "asset_id_by_key_org": {
+      description:
+        "Get an asset id by natural key or alias - Org scope (Early Access)",
+      schema: GetAssetIdByKeyOrgSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "asset_by_key_org": {
+      description:
+        "Look up an asset by natural key or alias - Org scope (Early Access)",
+      schema: GetAssetByKeyOrgSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "asset_search_org": {
       description:
@@ -833,7 +907,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await snykApi(
+        await snykApi(
           apiToken,
           "PATCH",
           `/groups/${
@@ -843,13 +917,11 @@ export const model = {
           body,
         );
 
-        const handle = await context.writeResource(
-          "assets_bulk_group",
-          sanitizeInstanceName(String(args.group_id)),
-          result,
+        context.logger.info(
+          "Executed update_assets_bulk_group (no content)",
+          {},
         );
-        context.logger.info("Updated assets_bulk_group", {});
-        return { dataHandles: [handle] };
+        return { dataHandles: [] };
       },
     },
     get_filter_fields_group: {
@@ -1133,6 +1205,111 @@ export const model = {
         context.logger.info("Found {count} get_group_values_group", {
           count: results.length,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_id_by_key_group: {
+      description:
+        "Get an asset id by natural key or alias - Group scope (Early Access)",
+      arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, { type: { name: "type" }, key: { name: "key" } }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/id${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_id_by_key_group");
+
+        const handle = await context.writeResource(
+          "asset_id_by_key_group",
+          sanitizeInstanceName(String(args.group_id)),
+          result,
+        );
+        context.logger.info("Fetched asset_id_by_key_group", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_by_key_group: {
+      description:
+        "Look up an asset by natural key or alias - Group scope (Early Access)",
+      arguments: z.object({
+        group_id: z.string().describe("The unique identifier of the group"),
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+        fields: z.string().optional().describe(
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, {
+            type: { name: "type" },
+            key: { name: "key" },
+            fields: { name: "fields" },
+          }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/groups/${
+            encodeURIComponent(String(args.group_id))
+          }/inventory/assets/lookup${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_by_key_group");
+
+        const handle = await context.writeResource(
+          "asset_by_key_group",
+          sanitizeInstanceName(String(args.group_id)),
+          result,
+        );
+        context.logger.info("Fetched asset_by_key_group", {});
         return { dataHandles: [handle] };
       },
     },
@@ -1591,7 +1768,7 @@ export const model = {
           if (!excludeKeys.has(k)) body[k] = v;
         }
 
-        const result = await snykApi(
+        await snykApi(
           apiToken,
           "PATCH",
           `/orgs/${encodeURIComponent(orgId)}/inventory/assets`,
@@ -1599,13 +1776,8 @@ export const model = {
           body,
         );
 
-        const handle = await context.writeResource(
-          "assets_bulk_org",
-          "updated",
-          result,
-        );
-        context.logger.info("Updated assets_bulk_org", {});
-        return { dataHandles: [handle] };
+        context.logger.info("Executed update_assets_bulk_org (no content)", {});
+        return { dataHandles: [] };
       },
     },
     get_filter_fields_org: {
@@ -1877,6 +2049,105 @@ export const model = {
         context.logger.info("Found {count} get_group_values_org", {
           count: results.length,
         });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_id_by_key_org: {
+      description:
+        "Get an asset id by natural key or alias - Org scope (Early Access)",
+      arguments: z.object({
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, orgId, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, { type: { name: "type" }, key: { name: "key" } }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/id${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_id_by_key_org");
+
+        const handle = await context.writeResource(
+          "asset_id_by_key_org",
+          "asset_id_by_key_org-current",
+          result,
+        );
+        context.logger.info("Fetched asset_id_by_key_org", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_asset_by_key_org: {
+      description:
+        "Look up an asset by natural key or alias - Org scope (Early Access)",
+      arguments: z.object({
+        type: z.string().optional().describe(
+          "JSON:API asset type to search within, such as repositories, container_images,...",
+        ),
+        key: z.string().optional().describe(
+          "Natural key or alias. A natural key match is preferred over an alias match.",
+        ),
+        fields: z.string().optional().describe(
+          "Sparse fieldsets allow clients to request only specific fields for a given...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, orgId, version } = context.globalArgs;
+        const qs = toQueryString(
+          queryEntries(args, {
+            type: { name: "type" },
+            key: { name: "key" },
+            fields: { name: "fields" },
+          }),
+        );
+        const result = await snykApi(
+          apiToken,
+          "GET",
+          `/orgs/${encodeURIComponent(orgId)}/inventory/assets/lookup${qs}`,
+          version,
+        );
+        requireBody(result, "get_asset_by_key_org");
+
+        const handle = await context.writeResource(
+          "asset_by_key_org",
+          "asset_by_key_org-current",
+          result,
+        );
+        context.logger.info("Fetched asset_by_key_org", {});
         return { dataHandles: [handle] };
       },
     },

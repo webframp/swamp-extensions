@@ -1,3 +1,14 @@
+## 2026.11.05.1
+
+**Changed:** The `aggregate_logs` action now wraps its stored instance name in
+`sanitizeInstanceName` and keys its no-`id` fallback on the resource name rather
+than the method name. `aggregate_logs` takes no path parameter, so the fallback
+remains a single stable instance — this is a consistency/hardening change, not a
+behavioral one.
+
+**Upgrade note:** No schema change; stored data continues to validate. No
+migration required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

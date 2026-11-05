@@ -77,7 +77,6 @@ Deno.test("r2 model: has expected resources", () => {
   assertExists(model.resources["list_catalogs"]);
   assertExists(model.resources["catalog_details"]);
   assertExists(model.resources["store_credentials"]);
-  assertExists(model.resources["disable_catalog"]);
   assertExists(model.resources["enable_catalog"]);
   assertExists(model.resources["maintenance_config"]);
   assertExists(model.resources["list_namespaces"]);
@@ -252,12 +251,11 @@ Deno.test({
 });
 
 Deno.test({
-  name: "r2 model: disable_catalog executes and writes resource",
+  name: "r2 model: disable_catalog executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123" };
     const { url, server } = startMockCfServer({
-      "/r2-catalog/test-id-123/disable": { result: mockData },
+      "/r2-catalog/test-id-123/disable": { result: null },
     });
     const uninstall = installFetchMock(url);
 
@@ -277,6 +275,49 @@ Deno.test({
         }
       >).disable_catalog.execute({
         "id": "fixture-123",
+        "bucket_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "r2 model: enable_catalog executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "account123_my-bucket",
+    };
+    const { url, server } = startMockCfServer({
+      "/r2-catalog/test-id-123/enable": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).enable_catalog.execute({
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "account123_my-bucket",
         "bucket_name": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 1);

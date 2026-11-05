@@ -1,3 +1,17 @@
+## 2026.11.05.1
+
+**Fixed:** `onramps_apply`, `onramps_plan`, `providers_discover` and
+`providers_discover_all` are writes whose success response carries no body (HTTP
+204). Earlier versions declared a resource with an empty schema for each and
+wrote an empty `{}` to it under a constant instance name on every call. Each
+method now issues the API call for its side effect and returns no data handles —
+it stores nothing. Their empty resource specs are gone.
+
+**Upgrade note:** The resources `onramps_apply`, `onramps_plan`,
+`providers_discover_all` and `providers_discover` are no longer declared. Any
+data earlier versions wrote under them is stale; delete it with
+`swamp data delete`.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

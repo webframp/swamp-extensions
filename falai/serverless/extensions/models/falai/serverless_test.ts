@@ -39,6 +39,7 @@ Deno.test("serverless model: has expected methods", () => {
   assertExists(model.methods.upload_from_url);
   assertExists(model.methods.serverless_logs_history);
   assertExists(model.methods.list_requests_by_endpoint);
+  assertExists(model.methods.serverless_stop_runner);
   assertExists(model.methods.get_usage);
 });
 
@@ -55,6 +56,7 @@ Deno.test("serverless model: has expected resources", () => {
   assertExists(model.resources["upload_from_url"]);
   assertExists(model.resources["serverless_logs_history"]);
   assertExists(model.resources["requests_by_endpoint"]);
+  assertExists(model.resources["serverless_stop_runner"]);
   assertExists(model.resources["get_usage"]);
 });
 
@@ -786,6 +788,56 @@ Deno.test({
         requests.some((u) => u.searchParams.get("sort_by") === "ended_at"),
         true,
         "query argument sort_by was not sent to the API",
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "serverless model: serverless_stop_runner executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockBody = { "runner_id": "f1e2d3c4-b5a6-7890-dcba-0987654321fe" };
+    const { url, server, requests } = startMockFalServer({
+      "/serverless/runners/test-id-123/stop": { body: mockBody },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token" },
+        definition: {
+          id: "test-id",
+          name: "test-serverless",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).serverless_stop_runner.execute({
+        "replace_first": "true",
+        "runner_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+
+      assertEquals(
+        requests.some((u) => u.searchParams.get("replace_first") === "true"),
+        true,
+        "query argument replace_first was not sent to the API",
       );
     } finally {
       uninstall();

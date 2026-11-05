@@ -31,6 +31,10 @@ Deno.test("tenants model: has expected methods", () => {
   assertExists(model.methods.list_tenants);
   assertExists(model.methods.get_tenant);
   assertExists(model.methods.update_tenant);
+  assertExists(model.methods.get_app_installs_for_tenant);
+  assertExists(model.methods.create_tenant_app_install);
+  assertExists(model.methods.delete_tenant_app_install_by_id);
+  assertExists(model.methods.update_tenant_app_install_secret);
   assertExists(model.methods.get_broker_connection_integrations);
   assertExists(model.methods.create_broker_connection_integration);
   assertExists(model.methods.delete_broker_connection_integration);
@@ -66,6 +70,8 @@ Deno.test("tenants model: has expected methods", () => {
   assertExists(model.methods.get_filter_values_tenant);
   assertExists(model.methods.get_group_fields_tenant);
   assertExists(model.methods.get_group_values_tenant);
+  assertExists(model.methods.get_asset_id_by_key_tenant);
+  assertExists(model.methods.get_asset_by_key_tenant);
   assertExists(model.methods.create_asset_search_tenant);
   assertExists(model.methods.get_asset_search_results_tenant);
   assertExists(model.methods.get_asset_tenant);
@@ -88,6 +94,9 @@ Deno.test("tenants model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["tenants"]);
   assertExists(model.resources["tenant"]);
+  assertExists(model.resources["get_app_installs_for_tenant"]);
+  assertExists(model.resources["tenant_app_install"]);
+  assertExists(model.resources["tenant_app_install_secret"]);
   assertExists(model.resources["get_broker_connection_integrations"]);
   assertExists(model.resources["broker_connection_integration"]);
   assertExists(model.resources["broker_deployments_for_tenant"]);
@@ -104,18 +113,18 @@ Deno.test("tenants model: has expected resources", () => {
   assertExists(model.resources["deployment_credentials"]);
   assertExists(model.resources["deployment_credential"]);
   assertExists(model.resources["assets_tenant"]);
-  assertExists(model.resources["assets_bulk_tenant"]);
   assertExists(model.resources["get_filter_fields_tenant"]);
   assertExists(model.resources["get_filter_values_tenant"]);
   assertExists(model.resources["get_group_fields_tenant"]);
   assertExists(model.resources["get_group_values_tenant"]);
+  assertExists(model.resources["asset_id_by_key_tenant"]);
+  assertExists(model.resources["asset_by_key_tenant"]);
   assertExists(model.resources["asset_search_tenant"]);
   assertExists(model.resources["get_asset_search_results_tenant"]);
   assertExists(model.resources["asset_tenant"]);
   assertExists(model.resources["asset_projects_tenant"]);
   assertExists(model.resources["asset_targets_tenant"]);
   assertExists(model.resources["get_tenant_memberships"]);
-  assertExists(model.resources["tenant_membership"]);
   assertExists(model.resources["models"]);
   assertExists(model.resources["model"]);
   assertExists(model.resources["tenant_roles"]);
@@ -234,6 +243,104 @@ function installFetchMock(mockUrl: string): () => void {
   return () => {
     globalThis.fetch = originalFetch;
   };
+}
+
+interface ZodNode {
+  _zod: {
+    def: {
+      type: string;
+      innerType?: ZodNode;
+      shape?: Record<string, ZodNode>;
+    };
+  };
+  meta(): Record<string, unknown> | undefined;
+}
+
+const ZOD_WRAPPERS = new Set(["optional", "nullable", "default"]);
+
+/** True when the field, or any wrapper level of it, is marked sensitive. */
+function markedSensitive(node: ZodNode): boolean {
+  for (let n: ZodNode | undefined = node; n;) {
+    if (n.meta()?.sensitive === true) return true;
+    n = ZOD_WRAPPERS.has(n._zod.def.type) ? n._zod.def.innerType : undefined;
+  }
+  return false;
+}
+
+/**
+ * Paths swamp moves into a vault when it writes data with this schema. Like
+ * swamp, it walks object shapes only: not arrays, not unions.
+ */
+function vaultedPaths(schema: unknown, prefix = ""): string[] {
+  let node = schema as ZodNode;
+  while (ZOD_WRAPPERS.has(node._zod.def.type) && node._zod.def.innerType) {
+    node = node._zod.def.innerType;
+  }
+  if (node._zod.def.type !== "object") return [];
+  const out: string[] = [];
+  for (const [key, field] of Object.entries(node._zod.def.shape ?? {})) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (markedSensitive(field)) out.push(path);
+    out.push(...vaultedPaths(field, path));
+  }
+  return out;
+}
+
+/**
+ * The written resource carries each secret, every one is marked sensitive on
+ * the resource schema, and after swamp's vault substitution no secret value
+ * is left in what it persists.
+ */
+function assertSecretsVaulted(
+  specName: string,
+  data: unknown,
+  fields: string[],
+): void {
+  const resources = model.resources as Record<string, { schema: unknown }>;
+  const paths = vaultedPaths(resources[specName].schema);
+  const written = data as Record<string, unknown>;
+  for (const field of fields) {
+    assertEquals(written[field], `fixture-${field}`);
+    assertEquals(
+      paths.includes(field),
+      true,
+      `${field} is not marked sensitive on ${specName}`,
+    );
+  }
+  const persisted = structuredClone(written);
+  for (const path of paths) {
+    // Swamp replaces each present, non-null value at the dot path.
+    const keys = path.split(".");
+    let parent: unknown = persisted;
+    for (const key of keys.slice(0, -1)) {
+      parent = parent !== null && typeof parent === "object"
+        ? (parent as Record<string, unknown>)[key]
+        : undefined;
+    }
+    const leaf = keys[keys.length - 1];
+    if (parent === null || typeof parent !== "object") continue;
+    const holder = parent as Record<string, unknown>;
+    if (holder[leaf] !== undefined && holder[leaf] !== null) {
+      holder[leaf] = "${{ vault.get('vault', 'key') }}";
+    }
+  }
+  const json = JSON.stringify(persisted);
+  for (const field of fields) {
+    assertEquals(json.includes(`fixture-${field}`), false);
+  }
+}
+
+/** Every secret argument of a method is marked sensitive. */
+function assertSecretArgs(methodName: string, paths: string[]): void {
+  const methods = model.methods as Record<string, { arguments: unknown }>;
+  const marked = vaultedPaths(methods[methodName].arguments);
+  for (const path of paths) {
+    assertEquals(
+      marked.includes(path),
+      true,
+      `argument ${path} of ${methodName} is not marked sensitive`,
+    );
+  }
 }
 
 Deno.test({
@@ -433,6 +540,292 @@ Deno.test({
       assertEquals(resources[0].specName, "tenant");
       assertValidResource("tenant", resources[0].data);
       assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "tenants model: get_app_installs_for_tenant fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockItem = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {
+        "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
+        "installed_at": "2024-04-30T16:07:46.230044Z",
+        "app_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /tenants/test-id-123/apps/installs": {
+        data: [mockItem],
+        isCollection: true,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_app_installs_for_tenant.execute({
+        "tenant_id": "test-id-123",
+        "expand": ["al pha", "be&ta"],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/tenants/test-id-123/apps/installs");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.get("limit"), "100");
+      assertEquals(query.getAll("expand"), ["al pha,be&ta"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "get_app_installs_for_tenant");
+      assertValidResource("get_app_installs_for_tenant", resources[0].data);
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "tenants model: create_tenant_app_install creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "new-123",
+      "type": "resource",
+      "attributes": {
+        "client_id": "test-value",
+        "client_secret": "fixture-client_secret",
+        "app_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "POST /tenants/test-id-123/apps/installs": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_tenant_app_install.execute({
+        "tenant_id": "test-id-123",
+        "data": { "type": "app_install" },
+        "relationships": { "app": { "data": { "id": null, "type": "app" } } },
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertEquals(req0.path, "/tenants/test-id-123/apps/installs");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, {
+        "data": { "type": "app_install" },
+        "relationships": { "app": { "data": { "id": null, "type": "app" } } },
+      });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "tenant_app_install");
+      assertValidResource("tenant_app_install", resources[0].data);
+      assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("tenant_app_install", resources[0].data, [
+        "client_secret",
+      ]);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "tenants model: delete_tenant_app_install_by_id executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockSnykServer({
+      "DELETE /tenants/test-id-123/apps/installs/test-id-123": { status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_tenant_app_install_by_id.execute({
+        "tenant_id": "test-id-123",
+        "install_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "DELETE");
+      assertEquals(req0.path, "/tenants/test-id-123/apps/installs/test-id-123");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      assertEquals(getWrittenResources().length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "tenants model: update_tenant_app_install_secret creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "new-123",
+      "type": "resource",
+      "attributes": {
+        "client_id": "941b423a-e0a0-4a33-a7ca-dd9e9e6bd8cf",
+        "client_secret": "fixture-client_secret",
+        "installed_at": "2024-04-30T16:07:46.230044Z",
+        "app_id": "test-value",
+      },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "POST /tenants/test-id-123/apps/installs/test-id-123/secrets": {
+        data: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_tenant_app_install_secret.execute({
+        "tenant_id": "test-id-123",
+        "install_id": "test-id-123",
+        "data": {
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
+          "type": "app",
+        },
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertEquals(
+        req0.path,
+        "/tenants/test-id-123/apps/installs/test-id-123/secrets",
+      );
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.headers["content-type"], "application/vnd.api+json");
+      assertEquals(req0.body, {
+        "data": {
+          "attributes": { "mode": "replace", "secret": "fixture-secret" },
+          "type": "app",
+        },
+      });
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "tenant_app_install_secret");
+      assertValidResource("tenant_app_install_secret", resources[0].data);
+      assertEquals(resources[0].name, "new-123");
+      assertSecretsVaulted("tenant_app_install_secret", resources[0].data, [
+        "client_secret",
+      ]);
+      assertSecretArgs("update_tenant_app_install_secret", [
+        "data.attributes.secret",
+      ]);
     } finally {
       uninstall();
       await server.shutdown();
@@ -2605,12 +2998,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tenants model: update_assets_bulk_tenant executes and writes resource",
+  name:
+    "tenants model: update_assets_bulk_tenant executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /tenants/test-id-123/inventory/assets": { data: mockData },
+      "PATCH /tenants/test-id-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -2637,7 +3030,7 @@ Deno.test({
         "tenant_id": "test-id-123",
         "data": [],
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -2649,11 +3042,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_tenant");
-      assertValidResource("assets_bulk_tenant", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -2966,6 +3355,138 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "tenants model: get_asset_id_by_key_tenant fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {},
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /tenants/test-id-123/inventory/assets/id": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_id_by_key_tenant.execute({
+        "tenant_id": "test-id-123",
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/id");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_id_by_key_tenant");
+      assertValidResource("asset_id_by_key_tenant", resources[0].data);
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "tenants model: get_asset_by_key_tenant fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": { "projects_id": "test-value", "targets_id": "test-value" },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /tenants/test-id-123/inventory/assets/lookup": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "version": "2024-10-15" },
+        definition: {
+          id: "test-id",
+          name: "test-tenants",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_by_key_tenant.execute({
+        "tenant_id": "test-id-123",
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+        "fields": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/tenants/test-id-123/inventory/assets/lookup");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(query.getAll("fields"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_by_key_tenant");
+      assertValidResource("asset_by_key_tenant", resources[0].data);
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -3528,12 +4049,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tenants model: update_tenant_membership executes and writes resource",
+  name:
+    "tenants model: update_tenant_membership executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /tenants/test-id-123/memberships/test-id-123": { data: mockData },
+      "PATCH /tenants/test-id-123/memberships/test-id-123": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -3561,7 +4082,7 @@ Deno.test({
         "membership_id": "test-id-123",
         "data": null,
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -3573,11 +4094,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "tenant_membership");
-      assertValidResource("tenant_membership", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -3655,6 +4172,7 @@ Deno.test({
         "capability_assessment": { "eci_score": 128.5 },
         "context_length": 131072,
         "country_of_origin": "US",
+        "deprecation_date": "2026-01-15T00:00:00Z",
         "has_risk_assessment": true,
         "inputs": ["text"],
         "last_updated": "2024-09-25T17:00:57Z",
@@ -3667,6 +4185,7 @@ Deno.test({
         "provider": "meta",
         "provider_name": "Meta Llama",
         "release_date": "2024-07-18T08:56:00Z",
+        "retirement_date": "2026-06-30T00:00:00Z",
         "risk_assessment": [],
         "risk_assessment_complete": true,
         "source_id": "meta-llama/Llama-3.1-8B-Instruct",
@@ -3765,6 +4284,7 @@ Deno.test({
         "capability_assessment": { "eci_score": 128.5 },
         "context_length": 131072,
         "country_of_origin": "US",
+        "deprecation_date": "2026-01-15T00:00:00Z",
         "has_risk_assessment": true,
         "inputs": ["text"],
         "last_updated": "2024-09-25T17:00:57Z",
@@ -3777,6 +4297,7 @@ Deno.test({
         "provider": "meta",
         "provider_name": "Meta Llama",
         "release_date": "2024-07-18T08:56:00Z",
+        "retirement_date": "2026-06-30T00:00:00Z",
         "risk_assessment": [],
         "risk_assessment_complete": true,
         "source_id": "meta-llama/Llama-3.1-8B-Instruct",

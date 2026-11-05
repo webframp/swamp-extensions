@@ -148,8 +148,6 @@ Deno.test("synthetics model: has expected resources", () => {
   assertExists(model.resources["poll_synthetics_test_results"]);
   assertExists(model.resources["test_file_download_url"]);
   assertExists(model.resources["test_file_multipart_presigned_urls"]);
-  assertExists(model.resources["abort_test_file_multipart_upload"]);
-  assertExists(model.resources["complete_test_file_multipart_upload"]);
   assertExists(model.resources["test_parent_suites"]);
   assertExists(model.resources["synthetics_test_latest_results"]);
   assertExists(model.resources["synthetics_test_result"]);
@@ -2542,12 +2540,12 @@ Deno.test({
 
 Deno.test({
   name:
-    "synthetics model: abort_test_file_multipart_upload creates and writes resource",
+    "synthetics model: abort_test_file_multipart_upload executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/files/multipart-upload-abort": { body: { "id": "new-123" } },
+      "/files/multipart-upload-abort": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -2578,7 +2576,7 @@ Deno.test({
         "public_id": "test-id-123",
         "name": "test-resource",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -2590,9 +2588,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "abort_test_file_multipart_upload");
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -2602,12 +2598,12 @@ Deno.test({
 
 Deno.test({
   name:
-    "synthetics model: complete_test_file_multipart_upload creates and writes resource",
+    "synthetics model: complete_test_file_multipart_upload executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/files/multipart-upload-complete": { body: { "id": "new-123" } },
+      "/files/multipart-upload-complete": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -2638,7 +2634,7 @@ Deno.test({
         "public_id": "test-id-123",
         "name": "test-resource",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -2650,12 +2646,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(
-        resources[0].specName,
-        "complete_test_file_multipart_upload",
-      );
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

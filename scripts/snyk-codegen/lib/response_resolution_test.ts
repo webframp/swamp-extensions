@@ -61,6 +61,20 @@ const SPEC = {
     "/orgs/{org_id}/things/{thing_id}/relationships/parts": {
       post: {
         operationId: "updateThingParts",
+        parameters: [
+          {
+            name: "org_id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "thing_id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
         requestBody: {
           content: {
             "application/vnd.api+json": {
@@ -125,16 +139,24 @@ Deno.test("hasResponseBody is false for a 204-only operation and true for 2xx co
   assertEquals(byId.createCreds.hasResponseBody, true);
 });
 
-Deno.test("a create that answers 204 has no requireBody guard and succeeds", async () => {
+Deno.test("a create always writes a resource, even when the spec declares 204", async () => {
   const [group] = groupOperations(SPEC, [CONFIG]);
   const methods = classifyServiceMethods(group);
   const parts = methods.find((m) => m.name === "update_thing_parts")!;
   assertEquals(parts.type, "create");
 
   const src = generateModelSource(group, methods, "2026.01.01.1");
-  // Only the create that returns content is guarded.
+  // Only the create that resolved a response body is guarded; the no-body
+  // create carries no requireBody guard. But both still WRITE a resource.
   assertEquals((src.match(/requireBody\(result,/g) ?? []).length, 1);
   assertEquals(src.includes('requireBody(result, "create_creds")'), true);
+  assertEquals(
+    src.includes('requireBody(result, "update_thing_parts")'),
+    false,
+  );
+  // The no-body create still writes its resource (a POST create returns the
+  // created entity even when the spec is incomplete).
+  assertEquals(/writeResource\("[a-z_]+", id, result\)/.test(src), true);
 
   const dir = await Deno.makeTempDir();
   const original = globalThis.fetch;
@@ -152,13 +174,25 @@ Deno.test("a create that answers 204 has no requireBody guard and succeeds", asy
         return Promise.resolve({ name });
       },
     };
-    globalThis.fetch = (() =>
-      Promise.resolve(new Response(null, { status: 204 }))) as typeof fetch;
-    await model.methods.update_thing_parts.execute(
+    let capturedMethod: string | undefined;
+    let capturedBody: unknown;
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      capturedMethod = init?.method;
+      capturedBody = init?.body ? JSON.parse(String(init.body)) : null;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+    // A create writes the created entity. The spec declared no body, so there
+    // is no requireBody guard; a 204 returns {} and the instance falls back to
+    // the "created" name. The point of the fix: a create is never silently
+    // turned into a no-op that drops the created entity.
+    const result = await model.methods.update_thing_parts.execute(
       { thing_id: "t1", data: ["a"] },
       context,
     );
-    assertEquals(written, [{ name: "created", data: {} }]);
+    assertEquals(capturedMethod, "POST");
+    assertEquals(capturedBody, { data: ["a"] });
+    assertEquals(result.dataHandles.length, 1);
+    assertEquals(written.length, 1);
 
     // An array in `data` on a non-list call keeps every item.
     written.length = 0;

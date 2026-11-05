@@ -41,17 +41,26 @@ const TeamsItemSchema = z.object({
     "Free-form markdown description/content for the team's homepage",
   ),
   handle: z.string().max(195).describe("The team's identifier"),
+  handles: z.array(z.string()).nullable().optional().describe(
+    "Collection of handles associated with the team.",
+  ),
   hidden_modules: z.array(z.string()).nullable().optional().describe(
     "Collection of hidden modules for the team",
   ),
   is_managed: z.boolean().optional().describe(
     "Whether the team is managed from an external source",
   ),
+  is_open_membership: z.boolean().optional().describe(
+    "Whether any user can join the team without an invitation.",
+  ),
   link_count: z.number().int().max(2147483647).optional().describe(
     "The number of links belonging to the team",
   ),
   modified_at: z.string().optional().describe("Modification date of the team"),
   name: z.string().max(200).describe("The name of the team"),
+  provisioned_by: z.string().optional().describe(
+    "The mechanism that created the team, such as `teams_api`, `teams_terraform`, or `teams_ui`. Omitt...",
+  ),
   summary: z.string().max(120).nullable().optional().describe(
     "A brief summary of the team, derived from the `description`",
   ),
@@ -93,17 +102,26 @@ const CreateTeamSchema = z.object({
     "Free-form markdown description/content for the team's homepage",
   ),
   handle: z.string().max(195).describe("The team's identifier"),
+  handles: z.array(z.string()).nullable().optional().describe(
+    "Collection of handles associated with the team.",
+  ),
   hidden_modules: z.array(z.string()).nullable().optional().describe(
     "Collection of hidden modules for the team",
   ),
   is_managed: z.boolean().optional().describe(
     "Whether the team is managed from an external source",
   ),
+  is_open_membership: z.boolean().optional().describe(
+    "Whether any user can join the team without an invitation.",
+  ),
   link_count: z.number().int().max(2147483647).optional().describe(
     "The number of links belonging to the team",
   ),
   modified_at: z.string().optional().describe("Modification date of the team"),
   name: z.string().max(200).describe("The name of the team"),
+  provisioned_by: z.string().optional().describe(
+    "The mechanism that created the team, such as `teams_api`, `teams_terraform`, or `teams_ui`. Omitt...",
+  ),
   summary: z.string().max(120).nullable().optional().describe(
     "A brief summary of the team, derived from the `description`",
   ),
@@ -183,7 +201,9 @@ const TeamConnectionsItemSchema = z.object({
   managed_by: z.string().optional().describe(
     "The entity that manages this team connection.",
   ),
-  source: z.string().optional().describe("The name of the external source."),
+  source: z.string().optional().describe(
+    "The name of the external source, such as `github` or `servicenow`.",
+  ),
   connected_team_id: z.string().optional().describe(
     "Related connected_team ID",
   ),
@@ -217,8 +237,8 @@ const TeamSyncItemSchema = z.object({
   selection_state: z.array(z.unknown()).optional().describe(
     "Specifies which teams or organizations to sync. When provided, synchronization is limited to the ...",
   ),
-  source: z.enum(["github"]).describe(
-    'The external source platform for team synchronization. Only "github" is supported.',
+  source: z.enum(["github", "servicenow"]).describe(
+    "The external source platform for team synchronization.",
   ),
   sync_membership: z.boolean().optional().default(false).describe(
     "Whether to sync members from the external team to the Datadog team. Defaults to `false` when not ...",
@@ -290,7 +310,7 @@ const TeamMembershipsItemSchema = z.object({
     "UUID of the User or Service Account who provisioned this team membership, or null if provisioned ...",
   ),
   role: z.enum(["admin"]).nullable().optional().describe(
-    "The user's role within the team",
+    "The user's role within the team. A value of `null` represents a regular member.",
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
@@ -319,7 +339,7 @@ const CreateTeamMembershipSchema = z.object({
     "UUID of the User or Service Account who provisioned this team membership, or null if provisioned ...",
   ),
   role: z.enum(["admin"]).nullable().optional().describe(
-    "The user's role within the team",
+    "The user's role within the team. A value of `null` represents a regular member.",
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
@@ -460,7 +480,7 @@ const UserMembershipsItemSchema = z.object({
     "UUID of the User or Service Account who provisioned this team membership, or null if provisioned ...",
   ),
   role: z.enum(["admin"]).nullable().optional().describe(
-    "The user's role within the team",
+    "The user's role within the team. A value of `null` represents a regular member.",
   ),
   team_id: z.string().optional().describe("Related team ID"),
   user_id: z.string().optional().describe("Related user ID"),
@@ -485,7 +505,7 @@ const GetUserMembershipsSchema = z.object({
 /** Datadog Teams — team management, memberships, and permissions */
 export const model = {
   type: "@webframp/datadog/teams",
-  version: "2026.11.03.1",
+  version: "2026.11.05.4",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -573,6 +593,30 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.05.2",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.05.3",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.05.4",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -623,12 +667,6 @@ export const model = {
       schema: GetTeamSyncSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
-    },
-    "sync_teams": {
-      description: "Link Teams with GitHub Teams",
-      schema: z.object({}),
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
     },
     "team_links": {
       description: "Get links for a team",
@@ -1033,7 +1071,7 @@ export const model = {
       description: "List team connections",
       arguments: z.object({
         filter_sources: z.string().optional().describe(
-          "Filter team connections by external source systems.",
+          "Filter team connections by external source systems, such as `github` or `serv...",
         ),
         filter_team_ids: z.string().optional().describe(
           "Filter team connections by Datadog team IDs.",
@@ -1123,7 +1161,9 @@ export const model = {
             connected_team: z.object({
               data: z.object({
                 id: z.string(),
-                type: z.enum(["github_team"]).default("github_team"),
+                type: z.enum(["github_team", "servicenow_team"]).default(
+                  "github_team",
+                ),
               }).optional(),
             }).optional(),
             team: z.object({
@@ -1272,7 +1312,7 @@ export const model = {
       },
     },
     sync_teams: {
-      description: "Link Teams with GitHub Teams",
+      description: "Link teams with external teams",
       arguments: z.object({
         frequency: z.unknown().optional(),
         selection_state: z.unknown().optional(),
@@ -1301,8 +1341,7 @@ export const model = {
           if (!excludeKeys.has(k)) attrs[k] = v;
         }
         const body = { data: { type: "team_sync_bulk", attributes: attrs } };
-
-        const result = await ddApi(
+        await ddApi(
           apiKey,
           appKey,
           site,
@@ -1311,12 +1350,8 @@ export const model = {
           body,
         );
 
-        const id = sanitizeInstanceName(
-          String((result as { id?: unknown }).id ?? "created"),
-        );
-        const handle = await context.writeResource("sync_teams", id, result);
-        context.logger.info("Created sync_teams {id}", { id });
-        return { dataHandles: [handle] };
+        context.logger.info("Executed sync_teams", {});
+        return { dataHandles: [] };
       },
     },
     get_team: {
@@ -1496,13 +1531,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("team_links", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "team_links",
+          sanitizeInstanceName(String(args.team_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} team_links", {
           count: results.length,
@@ -1749,13 +1788,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("team_memberships", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "team_memberships",
+          sanitizeInstanceName(String(args.team_id)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} team_memberships", {
           count: results.length,
@@ -1960,7 +2003,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_notification_rules",
-          "main",
+          sanitizeInstanceName(String(args.team_id)),
           {
             items: results,
             truncated,
@@ -2213,7 +2256,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "team_permission_settings",
-          "main",
+          sanitizeInstanceName(String(args.team_id)),
           {
             items: results,
             truncated,
@@ -2328,13 +2371,17 @@ export const model = {
           );
         }
 
-        const handle = await context.writeResource("user_memberships", "main", {
-          items: results,
-          truncated,
-          fetchedAt: new Date().toISOString(),
-          durationMs: Date.now() - startMs,
-          collectedBy: EXTENSION_NAME,
-        });
+        const handle = await context.writeResource(
+          "user_memberships",
+          sanitizeInstanceName(String(args.user_uuid)),
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
 
         context.logger.info("Found {count} user_memberships", {
           count: results.length,

@@ -35,6 +35,8 @@ Deno.test("inventory model: has expected methods", () => {
   assertExists(model.methods.get_filter_values_group);
   assertExists(model.methods.get_group_fields_group);
   assertExists(model.methods.get_group_values_group);
+  assertExists(model.methods.get_asset_id_by_key_group);
+  assertExists(model.methods.get_asset_by_key_group);
   assertExists(model.methods.create_asset_search_group);
   assertExists(model.methods.get_asset_search_results_group);
   assertExists(model.methods.get_asset_group);
@@ -47,6 +49,8 @@ Deno.test("inventory model: has expected methods", () => {
   assertExists(model.methods.get_filter_values_org);
   assertExists(model.methods.get_group_fields_org);
   assertExists(model.methods.get_group_values_org);
+  assertExists(model.methods.get_asset_id_by_key_org);
+  assertExists(model.methods.get_asset_by_key_org);
   assertExists(model.methods.create_asset_search_org);
   assertExists(model.methods.get_asset_search_results_org);
   assertExists(model.methods.get_asset_org);
@@ -58,22 +62,24 @@ Deno.test("inventory model: has expected methods", () => {
 Deno.test("inventory model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["assets_group"]);
-  assertExists(model.resources["assets_bulk_group"]);
   assertExists(model.resources["get_filter_fields_group"]);
   assertExists(model.resources["get_filter_values_group"]);
   assertExists(model.resources["get_group_fields_group"]);
   assertExists(model.resources["get_group_values_group"]);
+  assertExists(model.resources["asset_id_by_key_group"]);
+  assertExists(model.resources["asset_by_key_group"]);
   assertExists(model.resources["asset_search_group"]);
   assertExists(model.resources["get_asset_search_results_group"]);
   assertExists(model.resources["asset_group"]);
   assertExists(model.resources["asset_projects_group"]);
   assertExists(model.resources["asset_targets_group"]);
   assertExists(model.resources["assets_org"]);
-  assertExists(model.resources["assets_bulk_org"]);
   assertExists(model.resources["get_filter_fields_org"]);
   assertExists(model.resources["get_filter_values_org"]);
   assertExists(model.resources["get_group_fields_org"]);
   assertExists(model.resources["get_group_values_org"]);
+  assertExists(model.resources["asset_id_by_key_org"]);
+  assertExists(model.resources["asset_by_key_org"]);
   assertExists(model.resources["asset_search_org"]);
   assertExists(model.resources["get_asset_search_results_org"]);
   assertExists(model.resources["asset_org"]);
@@ -278,12 +284,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "inventory model: update_assets_bulk_group executes and writes resource",
+    "inventory model: update_assets_bulk_group executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /groups/test-id-123/inventory/assets": { data: mockData },
+      "PATCH /groups/test-id-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -314,7 +319,7 @@ Deno.test({
         "group_id": "test-id-123",
         "data": [],
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -326,11 +331,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_group");
-      assertValidResource("assets_bulk_group", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -659,6 +660,147 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "inventory model: get_asset_id_by_key_group fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {},
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /groups/test-id-123/inventory/assets/id": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-inventory",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_id_by_key_group.execute({
+        "group_id": "test-id-123",
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/groups/test-id-123/inventory/assets/id");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_id_by_key_group");
+      assertValidResource("asset_id_by_key_group", resources[0].data);
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory model: get_asset_by_key_group fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": { "projects_id": "test-value", "targets_id": "test-value" },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /groups/test-id-123/inventory/assets/lookup": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-inventory",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_by_key_group.execute({
+        "group_id": "test-id-123",
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+        "fields": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/groups/test-id-123/inventory/assets/lookup");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(query.getAll("fields"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_by_key_group");
+      assertValidResource("asset_by_key_group", resources[0].data);
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1237,12 +1379,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "inventory model: update_assets_bulk_org executes and writes resource",
+  name:
+    "inventory model: update_assets_bulk_org executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /orgs/test-org-123/inventory/assets": { data: mockData },
+      "PATCH /orgs/test-org-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -1270,7 +1412,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_assets_bulk_org.execute({ "data": [] }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -1282,11 +1424,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_org");
-      assertValidResource("assets_bulk_org", resources[0].data);
-      assertEquals(resources[0].name, "updated");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1607,6 +1745,144 @@ Deno.test({
       assertEquals(Array.isArray(data.items), true);
       assertEquals(data.items.length, 1);
       assertEquals(data.truncated, false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory model: get_asset_id_by_key_org fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": {},
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /orgs/test-org-123/inventory/assets/id": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-inventory",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_id_by_key_org.execute({
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/orgs/test-org-123/inventory/assets/id");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_id_by_key_org");
+      assertValidResource("asset_id_by_key_org", resources[0].data);
+      assertEquals(resources[0].name, "asset_id_by_key_org-current");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "inventory model: get_asset_by_key_org fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "id": "fixture-123",
+      "type": "resource",
+      "attributes": { "projects_id": "test-value", "targets_id": "test-value" },
+    };
+    const { url, server, requests } = startMockSnykServer({
+      "GET /orgs/test-org-123/inventory/assets/lookup": { data: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiToken": "test-token",
+          "version": "2024-10-15",
+          "orgId": "test-org-123",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-inventory",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_asset_by_key_org.execute({
+        "type": "a b&c=d",
+        "key": "a b&c=d",
+        "fields": "a b&c=d",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertEquals(req0.path, "/orgs/test-org-123/inventory/assets/lookup");
+      const query = new URLSearchParams(req0.search);
+      assertEquals(query.get("version"), "2024-10-15");
+      assertEquals(query.getAll("type"), ["a b&c=d"]);
+      assertEquals(query.getAll("key"), ["a b&c=d"]);
+      assertEquals(query.getAll("fields"), ["a b&c=d"]);
+      assertEquals(req0.headers["authorization"], "token test-token");
+      assertEquals(req0.body, null);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_by_key_org");
+      assertValidResource("asset_by_key_org", resources[0].data);
+      assertEquals(resources[0].name, "asset_by_key_org-current");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
     } finally {
       uninstall();
       await server.shutdown();

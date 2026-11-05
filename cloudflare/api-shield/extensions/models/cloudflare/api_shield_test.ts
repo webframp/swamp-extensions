@@ -109,9 +109,6 @@ Deno.test("api-shield model: has expected resources", () => {
       ],
   );
   assertExists(
-    model.resources["api_shield_settings_set_configuration_properties"],
-  );
-  assertExists(
     model
       .resources[
         "api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi"
@@ -290,12 +287,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "api-shield model: update_api_shield_settings_set_configuration_properties executes and writes resource",
+    "api-shield model: update_api_shield_settings_set_configuration_properties executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123" };
     const { url, server } = startMockCfServer({
-      "/api_gateway/configuration": { result: mockData },
+      "/api_gateway/configuration": { result: null },
     });
     const uninstall = installFetchMock(url);
 
@@ -321,14 +317,10 @@ Deno.test({
       >).update_api_shield_settings_set_configuration_properties.execute({
         "id": "fixture-123",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -380,6 +372,58 @@ Deno.test({
         }
       >).list_api_shield_api_discovery_retrieve_discovered_operations_on_a_zone
         .execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "api-shield model: patch_discovered_operations executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "3818d821-5901-4147-a474-f5f5aec1d54e": { "state": "ignored" },
+      "b17c8043-99a0-4202-b7d9-8f7cdbee02cd": { "state": "review" },
+    };
+    const { url, server } = startMockCfServer({
+      "/api_gateway/discovery/operations": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
+        definition: {
+          id: "test-id",
+          name: "test-api-shield",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).patch_discovered_operations.execute({
+        "3818d821-5901-4147-a474-f5f5aec1d54e": { "state": "ignored" },
+        "b17c8043-99a0-4202-b7d9-8f7cdbee02cd": { "state": "review" },
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

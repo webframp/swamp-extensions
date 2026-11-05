@@ -23,6 +23,7 @@ function op(httpMethod: string, path: string): GroupedOperation {
     requestBodyIsArray: false,
     isCollection: false,
     isJsonApi: false,
+    hasSuccessResponseBody: true,
     pagination: {
       style: "none",
       limitParam: "",

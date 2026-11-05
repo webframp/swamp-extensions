@@ -43,7 +43,6 @@ Deno.test("memberships model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["group_memberships"]);
   assertExists(model.resources["group_membership"]);
-  assertExists(model.resources["group_user_membership"]);
   assertExists(model.resources["org_memberships"]);
   assertExists(model.resources["org_membership"]);
 });
@@ -343,12 +342,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "memberships model: update_group_user_membership executes and writes resource",
+    "memberships model: update_group_user_membership executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /groups/test-id-123/memberships/test-id-123": { data: mockData },
+      "PATCH /groups/test-id-123/memberships/test-id-123": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -380,7 +378,7 @@ Deno.test({
         "membership_id": "test-id-123",
         "data": null,
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -392,11 +390,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "group_user_membership");
-      assertValidResource("group_user_membership", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -636,12 +630,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "memberships model: update_org_membership executes and writes resource",
+  name:
+    "memberships model: update_org_membership executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /orgs/test-org-123/memberships/test-id-123": { data: mockData },
+      "PATCH /orgs/test-org-123/memberships/test-id-123": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -672,7 +666,7 @@ Deno.test({
         "membership_id": "test-id-123",
         "data": null,
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -684,11 +678,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "org_membership");
-      assertValidResource("org_membership", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();

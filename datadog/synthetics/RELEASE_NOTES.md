@@ -1,3 +1,41 @@
+## 2026.11.05.4
+
+**Changed:** Action methods now wrap their stored instance name in
+`sanitizeInstanceName` and, when the API response omits a top-level `id`, fall
+back to the resource name rather than the method name. For actions without a
+path parameter (e.g. `delete_synthetics_suites`, `delete_synthetics_tests`) this
+is a consistency/hardening change with no behavioral effect; actions with path
+parameters now derive a collision-resistant fallback from them.
+
+**Upgrade note:** No schema change; stored data continues to validate. No
+migration required.
+
+## 2026.11.05.3
+
+**Fixed:** Path-scoped list methods (those that take a path parameter such as a
+metric name, team, or rule ID) now key their stored resource instance on that
+path parameter instead of the constant `"main"`. Previously, calling such a
+method for one scope and then another silently overwrote the first scope's
+result under the shared `"main"` instance, and the stored resource carried no
+indication of which scope it held. Each scope now writes its own instance.
+
+**Upgrade note:** Any data earlier versions wrote under the `"main"` instance
+for a path-scoped list remains there; new runs write under the scope-derived
+name. Global (unscoped) lists are unchanged. No schema change — stored data
+continues to validate.
+
+## 2026.11.05.2
+
+**Fixed:** `abort_test_file_multipart_upload` and
+`complete_test_file_multipart_upload` no longer write an empty resource under a
+constant `"created"` instance name. Both endpoints return `204 No Content`, so
+there is nothing to persist — each method now issues its call and returns no
+data handles. The `abort_test_file_multipart_upload` and
+`complete_test_file_multipart_upload` resource specs are removed.
+
+**Upgrade note:** These two methods previously stored an empty `{}` resource on
+every call; they now store nothing. No other method is affected.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

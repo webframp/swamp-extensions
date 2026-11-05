@@ -83,6 +83,29 @@ export function resourceNameOf(method: ClassifiedMethod): string {
 }
 
 /**
+ * True when a method persists a resource. Deletes never do; a create, update
+ * or action whose only success response carries no body (e.g. a 204 with no
+ * application/json schema) performs a side-effecting call but has nothing to
+ * store, so it writes no resource and declares no resource spec. A get or list
+ * always reads a body and always writes.
+ */
+export function methodWritesResource(method: ClassifiedMethod): boolean {
+  if (method.type === "delete") return false;
+  // A no-body update or action (e.g. a 204 PATCH/POST) has nothing to persist,
+  // so it writes no resource. A create is NOT included: POST creates return the
+  // created entity (HTTP 200 with `result`), and an unresolved response schema
+  // means the spec was incomplete, not that the body is empty. A create always
+  // writes, keeping its id/hash instance-naming fallback.
+  if (
+    (method.type === "update" || method.type === "action") &&
+    !method.operation.hasSuccessResponseBody
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * The schema a resource-writing method's response is emitted from. A wrapped
  * secret response becomes `{ value: <secret> }`.
  */
@@ -121,7 +144,7 @@ export function planSecrets(methods: ClassifiedMethod[]): SecretPlan {
       dropRoot: false,
       inputs: method.operation.inputSecrets ?? [],
     });
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const r = resourceNameOf(method);
     writers.set(r, [...(writers.get(r) ?? []), method]);
   }
@@ -442,7 +465,7 @@ export function generateModelSource(
   lines.push(`  resources: {`);
   const seenResources = new Set<string>();
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = method.type === "list"
       ? method.name.replace(/^list_/, "")
       : method.name.replace(/^(get|create|update|action)_/, "");
@@ -527,7 +550,7 @@ function generateResponseSchemas(
   const methodsWithResources: ClassifiedMethod[] = [];
 
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = resourceNameOf(method);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
@@ -600,7 +623,7 @@ function generateResponseSchemas(
   // For methods that share a resource name but aren't the "primary" one,
   // map them to the same schema variable
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     if (schemaNames.has(method.name)) continue;
     const resourceName = resourceNameOf(method);
     // Find the primary method for this resource
@@ -712,6 +735,12 @@ function generateExecuteBody(
     lines.push(generateListBody(method, apiPath, indent, secretPlan));
   } else if (type === "get") {
     lines.push(generateGetBody(method, apiPath, indent, secretPlan));
+  } else if (!methodWritesResource(method) && type !== "delete") {
+    // A create/update/action whose success response carries no body (a 204 or
+    // a 2xx with no JSON schema) issues the call for its side effect and
+    // persists nothing — storing an empty {} under a constant instance name
+    // would be a data bug.
+    lines.push(generateNoContentBody(method, apiPath, indent));
   } else if (type === "create") {
     lines.push(
       generateCreateBody(method, config, apiPath, indent, secretPlan),
@@ -1123,6 +1152,9 @@ function methodEmitsShortHash(
   config: ServiceConfig,
 ): boolean {
   if (method.type !== "create") return false;
+  // A no-content create uses generateNoContentBody, which never derives an
+  // instance name and so never calls shortHash.
+  if (!methodWritesResource(method)) return false;
   const { fallback, pathParams } = createInstanceSource(method, config);
   return fallback === "hash" || pathParams.length > 1;
 }
@@ -1327,6 +1359,74 @@ ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
 ${indent}    return { dataHandles: [] };`;
 }
 
+/**
+ * Generate the body for a write (create / update / action) whose success
+ * response carries no content (a 204, or a 2xx with no JSON schema). It issues
+ * the call for its side effect and persists nothing — storing an empty `{}`
+ * under a constant instance name would be a data bug. Mirrors the
+ * request-building of the create/update/action generators (array body, oneOf
+ * union body, or flat body with path/query params excluded; query string
+ * appended) but never calls writeResource and never derives an instance name.
+ */
+function generateNoContentBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const hasBody = method.operation.requestBody !== undefined;
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  const hasQueryParams = queryParamNames.length > 0;
+  const queryBuild = hasQueryParams
+    ? `\n${indent}    const queryParts: string[] = [];
+${indent}    const queryKeys = new Set(${JSON.stringify(queryParamNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && queryKeys.has(k)) queryParts.push(\`\${k}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";`
+    : "";
+  const pathSuffix = hasQueryParams ? "${qs}" : "";
+
+  // Build the request body the same way the create/action generators do, so
+  // the declared arguments and the value actually sent agree.
+  let bodySetup = "";
+  let bodyArg = "";
+  const reqBody = method.operation.requestBody;
+  if (hasBody && reqBody?.type === "array") {
+    bodySetup = `\n${indent}    const body = args.items;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && reqBody?.oneOf) {
+    bodySetup = `\n${indent}    const body = args.body;\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody && excludeNames.length > 0) {
+    bodySetup = `\n${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set(${JSON.stringify(excludeNames)});
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }\n`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (hasBody) {
+    bodyArg = `\n${indent}      args,`;
+  }
+
+  return `${bodySetup}${queryBuild}
+${indent}    await cfApi(
+${indent}      apiToken,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}${pathSuffix}\`,${bodyArg}
+${indent}    );
+${indent}
+${indent}    context.logger.info("Executed ${method.name}", {});
+${indent}    return { dataHandles: [] };`;
+}
+
 /** Generate action method body */
 function generateActionBody(
   method: ClassifiedMethod,
@@ -1433,6 +1533,9 @@ function sanitizeFieldName(name: string): string {
  *   - list ("main"), action ("<resource>-current"), delete (no resource): never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
+  // A no-content write uses generateNoContentBody, which never references
+  // sanitizeInstanceName.
+  if (!methodWritesResource(method)) return false;
   if (method.type === "create") return true;
   if (method.type === "get" || method.type === "update") {
     return method.operation.pathParams.length > 0;

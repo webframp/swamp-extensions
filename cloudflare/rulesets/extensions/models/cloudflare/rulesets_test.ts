@@ -67,26 +67,20 @@ Deno.test("rulesets model: has expected resources", () => {
   assertExists(model.resources["listaccountrulesets"]);
   assertExists(model.resources["createaccountruleset"]);
   assertExists(model.resources["getaccountentrypointruleset"]);
-  assertExists(model.resources["updateaccountentrypointruleset"]);
   assertExists(model.resources["listaccountentrypointrulesetversions"]);
   assertExists(model.resources["getaccountentrypointrulesetversion"]);
   assertExists(model.resources["getaccountruleset"]);
-  assertExists(model.resources["updateaccountruleset"]);
   assertExists(model.resources["createaccountrulesetrule"]);
-  assertExists(model.resources["updateaccountrulesetrule"]);
   assertExists(model.resources["listaccountrulesetversions"]);
   assertExists(model.resources["getaccountrulesetversion"]);
   assertExists(model.resources["listaccountrulesetversionrulesbytag"]);
   assertExists(model.resources["listzonerulesets"]);
   assertExists(model.resources["createzoneruleset"]);
   assertExists(model.resources["getzoneentrypointruleset"]);
-  assertExists(model.resources["updatezoneentrypointruleset"]);
   assertExists(model.resources["listzoneentrypointrulesetversions"]);
   assertExists(model.resources["getzoneentrypointrulesetversion"]);
   assertExists(model.resources["getzoneruleset"]);
-  assertExists(model.resources["updatezoneruleset"]);
   assertExists(model.resources["createzonerulesetrule"]);
-  assertExists(model.resources["updatezonerulesetrule"]);
   assertExists(model.resources["listzonerulesetversions"]);
   assertExists(model.resources["getzonerulesetversion"]);
   assertExists(model.resources["listzonerulesetversionrulesbytag"]);
@@ -243,13 +237,11 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "rulesets model: updateaccountentrypointruleset executes and writes resource",
+  name: "rulesets model: updateaccountentrypointruleset executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123" };
     const { url, server } = startMockCfServer({
-      "/rulesets/phases/test-id-123/entrypoint": { result: mockData },
+      "/rulesets/phases/test-id-123/entrypoint": { result: null },
     });
     const uninstall = installFetchMock(url);
 
@@ -276,14 +268,10 @@ Deno.test({
         "id": "fixture-123",
         "ruleset_phase": "test-id-123",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -324,6 +312,154 @@ Deno.test({
         context,
       );
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "rulesets model: createaccountrulesetrule creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/rulesets/test-id-123/rules": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-rulesets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).createaccountrulesetrule.execute({
+        "id": "fixture-123",
+        "ruleset_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "rulesets model: createzoneruleset creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/zones/test-id-123/rulesets": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-rulesets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).createzoneruleset.execute({
+        "id": "fixture-123",
+        "zone_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "rulesets model: createzonerulesetrule creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/zones/test-id-123/rulesets/test-id-123/rules": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-rulesets",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).createzonerulesetrule.execute({
+        "id": "fixture-123",
+        "ruleset_id": "test-id-123",
+        "zone_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

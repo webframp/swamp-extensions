@@ -82,10 +82,13 @@ Deno.test("on-call model: apiKey and appKey are marked sensitive", () => {
 
 Deno.test("on-call model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.list_on_call_escalation_policies);
   assertExists(model.methods.create_on_call_escalation_policy);
   assertExists(model.methods.get_on_call_escalation_policy);
   assertExists(model.methods.update_on_call_escalation_policy);
   assertExists(model.methods.delete_on_call_escalation_policy);
+  assertExists(model.methods.list_on_call_pages);
+  assertExists(model.methods.get_on_call_page);
   assertExists(model.methods.list_on_call_schedules);
   assertExists(model.methods.create_on_call_schedule);
   assertExists(model.methods.get_on_call_schedule);
@@ -111,7 +114,10 @@ Deno.test("on-call model: has expected methods", () => {
 
 Deno.test("on-call model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["on_call_escalation_policies"]);
   assertExists(model.resources["on_call_escalation_policy"]);
+  assertExists(model.resources["on_call_pages"]);
+  assertExists(model.resources["on_call_page"]);
   assertExists(model.resources["on_call_schedules"]);
   assertExists(model.resources["on_call_schedule"]);
   assertExists(model.resources["schedule_overrides"]);
@@ -209,6 +215,83 @@ function installFetchMock(mockUrl: string): () => void {
 
 Deno.test({
   name:
+    "on-call model: list_on_call_escalation_policies fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/on-call/escalation-policies": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "name": "On-Call Escalation Policy",
+              "resolve_page_on_policy_end": true,
+              "retries": 0,
+              "tags": ["env:prod"],
+              "steps_id": "test-value",
+              "teams_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_on_call_escalation_policies.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/on-call/escalation-policies");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "on_call_escalation_policies");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "on-call model: create_on_call_escalation_policy creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -223,6 +306,7 @@ Deno.test({
               "name": "On-Call Escalation Policy",
               "resolve_page_on_policy_end": true,
               "retries": 0,
+              "tags": ["env:prod"],
               "steps_id": "test-value",
               "teams_id": "test-value",
             },
@@ -297,6 +381,7 @@ Deno.test({
               "name": "On-Call Escalation Policy",
               "resolve_page_on_policy_end": true,
               "retries": 0,
+              "tags": ["env:prod"],
               "steps_id": "test-value",
               "teams_id": "test-value",
             },
@@ -371,6 +456,7 @@ Deno.test({
               "name": "On-Call Escalation Policy",
               "resolve_page_on_policy_end": true,
               "retries": 0,
+              "tags": ["env:prod"],
               "steps_id": "test-value",
               "teams_id": "test-value",
             },
@@ -484,6 +570,193 @@ Deno.test({
 });
 
 Deno.test({
+  name: "on-call model: list_on_call_pages fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/on-call/pages": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "acknowledged_at": "2026-01-01T10:05:00Z",
+              "closed_at": "2026-01-01T10:30:00Z",
+              "comment_count": 2,
+              "created_at": "2026-01-01T10:00:00Z",
+              "description": "Page details.",
+              "escalation_policy_uuid": "00000000-0000-0000-0000-000000000000",
+              "key": "25137717",
+              "live_call": { "call_over": null },
+              "modified_at": "2026-01-01T10:30:00Z",
+              "release_at": "2026-01-01T11:00:00Z",
+              "release_origin": "manual_snooze",
+              "responders_added_at": "2026-01-01T10:01:00Z",
+              "services": ["service-a"],
+              "status": "triggered",
+              "tags": ["service:test"],
+              "title": "Service: Test is down",
+              "urgency": "high",
+              "author_id": "test-value",
+              "closed_by_id": "test-value",
+              "jira_issue_id": "test-value",
+              "links_id": "test-value",
+              "responders_id": "test-value",
+              "scheduled_action_id": "test-value",
+              "service_now_incident_id": "test-value",
+              "target_id": "test-value",
+              "team_routing_rule_id": "test-value",
+            },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_on_call_pages.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/on-call/pages");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "on_call_pages");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "on-call model: get_on_call_page fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/pages/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": {
+              "acknowledged_at": "2026-01-01T10:05:00Z",
+              "closed_at": "2026-01-01T10:30:00Z",
+              "comment_count": 2,
+              "created_at": "2026-01-01T10:00:00Z",
+              "description": "Page details.",
+              "escalation_policy_uuid": "00000000-0000-0000-0000-000000000000",
+              "key": "25137717",
+              "live_call": { "call_over": null },
+              "modified_at": "2026-01-01T10:30:00Z",
+              "release_at": "2026-01-01T11:00:00Z",
+              "release_origin": "manual_snooze",
+              "responders_added_at": "2026-01-01T10:01:00Z",
+              "services": ["service-a"],
+              "status": "triggered",
+              "tags": ["service:test"],
+              "title": "Service: Test is down",
+              "urgency": "high",
+              "author_id": "test-value",
+              "closed_by_id": "test-value",
+              "jira_issue_id": "test-value",
+              "links_id": "test-value",
+              "responders_id": "test-value",
+              "scheduled_action_id": "test-value",
+              "service_now_incident_id": "test-value",
+              "target_id": "test-value",
+              "team_routing_rule_id": "test-value",
+            },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_on_call_page.execute({ "page_id": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/pages/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "on_call_page");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "on-call model: list_on_call_schedules fetches and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -495,6 +768,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "max_responders": 1,
               "name": "Primary On-Call",
               "tags": [],
               "time_zone": "America/New_York",
@@ -569,6 +843,7 @@ Deno.test({
             "id": "new-123",
             "type": "resource",
             "attributes": {
+              "max_responders": 1,
               "name": "Primary On-Call",
               "tags": [],
               "time_zone": "America/New_York",
@@ -642,6 +917,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "max_responders": 1,
               "name": "Primary On-Call",
               "tags": [],
               "time_zone": "America/New_York",
@@ -715,6 +991,7 @@ Deno.test({
             "id": "fixture-123",
             "type": "resource",
             "attributes": {
+              "max_responders": 1,
               "name": "Primary On-Call",
               "tags": [],
               "time_zone": "America/New_York",
@@ -1915,7 +2192,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "on-call model: create_on_call_escalation_policy surfaces API errors",
+  name: "on-call model: list_on_call_escalation_policies surfaces API errors",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
@@ -1952,10 +2229,7 @@ Deno.test({
               ctx: unknown,
             ) => Promise<{ dataHandles: unknown[] }>;
           }
-        >).create_on_call_escalation_policy.execute(
-          { "name": "test-resource" },
-          context,
-        );
+        >).list_on_call_escalation_policies.execute({}, context);
       } catch (_err) {
         threw = true;
       }

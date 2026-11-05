@@ -11,6 +11,7 @@
 
 import {
   getResourceName,
+  methodWritesResource,
   sensitiveArgNames,
   sensitiveResponsePaths,
 } from "./method_classifier.ts";
@@ -119,7 +120,7 @@ export function generateTestSource(
   const seenResources = new Set<string>();
   const uniqueResources: string[] = [];
   for (const m of methods) {
-    if (m.type === "delete") continue;
+    if (!methodWritesResource(m)) continue;
     const resourceName = getResourceName(m);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
@@ -295,6 +296,46 @@ function generateExecutionTest(
       assertExists(req0.body);`
         : ""
     }`;
+
+  // A no-content write (create/update/action with a 204/202 and no body) runs
+  // the call but persists nothing. Assert zero data handles and no resource,
+  // regardless of the underlying method type. Deletes have their own branch
+  // below (they never carry a JSON body / content-type).
+  if (method.type !== "delete" && !methodWritesResource(method)) {
+    const noContentArgs = withName(method, testArgs);
+    const noContentHasBody = method.operation.requestBody !== undefined;
+    return `Deno.test({
+  name: "${config.name} model: ${method.name} executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "${pathPattern}": { body: null, status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgsFixture())},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      const result = await ${
+      execCall(method.name, JSON.stringify(noContentArgs))
+    };
+      assertEquals(result.dataHandles.length, 0);
+
+${reqAsserts(noContentHasBody)}
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+  }
 
   if (method.type === "list") {
     const responseBody = method.operation.isJsonApi
@@ -507,6 +548,7 @@ ${reqAsserts(true)}
   const responseBody = mockResponseBody(method, fixture);
   const actionArgs = withName(method, testArgs);
   const actionHasBody = method.operation.requestBody !== undefined;
+
   return `Deno.test({
   name: "${config.name} model: ${method.name} executes and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope

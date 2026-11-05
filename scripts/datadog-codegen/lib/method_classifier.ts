@@ -70,6 +70,12 @@ export function classifyOperation(op: GroupedOperation): MethodType {
       ) {
         return "action";
       }
+      // A POST with a body but no success response body (e.g. 204 No Content,
+      // like the reorder endpoints) creates nothing to persist. Classify it as
+      // an action so the generator issues the call and writes no resource,
+      // rather than a create that would store an empty `{}` under a constant
+      // instance name.
+      if (!op.hasSuccessResponseBody) return "action";
       if (op.requestBody?.properties) return "create";
       // Array bodies (e.g., submit logs) are creates
       if (op.requestBodyIsArray) return "create";
@@ -257,7 +263,7 @@ export function generateModelSource(
   lines.push(`  resources: {`);
   const seenResources = new Set<string>();
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = getResourceName(method);
     if (seenResources.has(resourceName)) continue;
     seenResources.add(resourceName);
@@ -329,7 +335,7 @@ function generateResponseSchemas(
   const methodsWithResources: ClassifiedMethod[] = [];
 
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = getResourceName(method);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
@@ -407,7 +413,7 @@ function generateResponseSchemas(
 
   // Map secondary methods to existing schemas
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     if (schemaNames.has(method.name)) continue;
     const resourceName = getResourceName(method);
     const primary = methodsWithResources.find((m) => {
@@ -529,6 +535,11 @@ function generateMethod(
     lines.push(generateListBody(method, apiPath, indent));
   } else if (type === "get") {
     lines.push(generateGetBody(method, apiPath, indent));
+  } else if (!methodWritesResource(method) && type !== "delete") {
+    // A create/update/action whose success response has no body (e.g. a
+    // 204/202 reorder, validate, or mark-failed) issues the call and persists
+    // nothing — storing an empty {} under a constant name would be a data bug.
+    lines.push(generateNoContentBody(method, apiPath, indent));
   } else if (type === "create") {
     lines.push(generateCreateBody(method, apiPath, indent));
   } else if (type === "update") {
@@ -735,6 +746,18 @@ function generateListBody(
     .map((p) => sanitizeFieldName(p.name));
   const excludeNames = [...pathParamNames];
 
+  // A list scoped by path parameters (e.g. per-metric tag rules) must key its
+  // stored instance on those params — writing every scope to the constant
+  // "main" silently overwrites one scope's result with another's. A truly
+  // global list (no path params) keeps "main".
+  const listInstanceExpr = pathParamNames.length === 0
+    ? '"main"'
+    : pathParamNames.length === 1
+    ? `sanitizeInstanceName(String(args.${pathParamNames[0]}))`
+    : `sanitizeInstanceName([${
+      pathParamNames.map((p) => `String(args.${p})`).join(", ")
+    }].join("_"))`;
+
   // POST-list methods (search endpoints) use body-based cursor pagination
   if (method.operation.httpMethod === "post") {
     return `${indent}    const startMs = Date.now();
@@ -759,7 +782,7 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}    const handle = await context.writeResource("${resourceName}", ${listInstanceExpr}, {
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
@@ -812,7 +835,7 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}    const handle = await context.writeResource("${resourceName}", ${listInstanceExpr}, {
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
@@ -1193,6 +1216,107 @@ ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
 ${indent}    return { dataHandles: [] };`;
 }
 
+/**
+ * Generate the body for a write (create / update / action) whose success
+ * response carries no content (e.g. a 204/202 reorder, validate, or
+ * mark-failed). It issues the call for its side effect and persists nothing —
+ * storing an empty `{}` under a constant instance name would be a data bug.
+ * Mirrors the request-building of the create/action generators (JSON:API
+ * envelope, array body, or flat body; path params excluded; query string
+ * appended) but never calls writeResource.
+ */
+function generateNoContentBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+  const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const bodyType = method.operation.requestBodyType
+    ? `"${method.operation.requestBodyType}"`
+    : null;
+  const arrayBody = arrayBodyExpr(method.operation);
+
+  // Query string (path params never go on the query; everything else that is
+  // not consumed by the body does).
+  const hasQueryParams = queryParamNames.length > 0;
+  let querySetup = "";
+  let urlSuffix = "";
+  if (hasQueryParams) {
+    const paramNameMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) paramNameMap[sanitized] = p.name;
+    }
+    const hasMap = Object.keys(paramNameMap).length > 0;
+    querySetup = `${indent}    const queryParts: string[] = [];${
+      hasMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(paramNameMap)
+        };`
+        : ""
+    }
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && ${
+      JSON.stringify(queryParamNames)
+    }.includes(k)) {
+${indent}        const apiName = ${hasMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
+`;
+    urlSuffix = "${qs}";
+  }
+
+  let bodySetup = "";
+  let bodyArg = "";
+  if (arrayBody) {
+    bodyArg = `\n${indent}      ${arrayBody},`;
+  } else if (isJsonApi) {
+    bodySetup = `${indent}    const attrs: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
+${indent}    }
+${indent}    const body = { data: { ${
+      bodyType ? `type: ${bodyType}, ` : ""
+    }attributes: attrs } };
+`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (method.operation.requestBody !== undefined) {
+    bodySetup = `${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }
+`;
+    bodyArg = `\n${indent}      body,`;
+  }
+
+  return `${querySetup}${bodySetup}${indent}    await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
+${indent}    );
+${indent}
+${indent}    context.logger.info("Executed ${method.name}", {});
+${indent}    return { dataHandles: [] };`;
+}
+
 /** Generate action method body */
 function generateActionBody(
   method: ClassifiedMethod,
@@ -1270,10 +1394,30 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const id = (result as { id?: string }).id ?? "${method.name}";
+${indent}    const id = sanitizeInstanceName(
+${indent}      String((result as { id?: unknown }).id ?? ${
+    actionFallback(pathParamNames, resourceName)
+  }),
+${indent}    );
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/**
+ * Collision-resistant fallback instance name for an action whose response omits
+ * an `id`: the scoping path parameters joined (so a per-rule, per-version action
+ * keys on rule+version rather than a constant), else the resource name.
+ */
+function actionFallback(
+  pathParamNames: string[],
+  resourceName: string,
+): string {
+  if (pathParamNames.length === 0) return `"${resourceName}"`;
+  if (pathParamNames.length === 1) return `String(args.${pathParamNames[0]})`;
+  return `[${
+    pathParamNames.map((p) => `String(args.${p})`).join(", ")
+  }].join("-")`;
 }
 
 /** Build the API path with template literal substitution (URL-encoded) */
@@ -1292,6 +1436,28 @@ function sanitizeFieldName(name: string): string {
 }
 
 /**
+ * True when a method persists a resource. Deletes never do; an action whose
+ * only success response is no-content (e.g. a 204 reorder) performs a
+ * side-effecting call but has nothing to store, so it writes no resource and
+ * declares no resource spec.
+ */
+export function methodWritesResource(method: ClassifiedMethod): boolean {
+  if (method.type === "delete") return false;
+  // A no-body update or action (e.g. a 204/202 reorder, validate, mark-failed)
+  // has nothing to persist, so it writes no resource. A create is NOT included:
+  // a POST create returns the created entity, and an unresolved response schema
+  // means the spec was incomplete, not that the body is empty. A create always
+  // writes, keeping its id/hash instance-naming fallback.
+  if (
+    (method.type === "action" || method.type === "update") &&
+    !method.operation.hasSuccessResponseBody
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/**
  * True when a method's generated body references sanitizeInstanceName. This
  * MUST stay in lockstep with the body generators:
  *   - create: always (wraps the API-returned id, falling back to "created")
@@ -1300,8 +1466,16 @@ function sanitizeFieldName(name: string): string {
  *   - list, action, delete: never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
-  if (method.type === "create") return true;
-  if (method.type === "get" || method.type === "update") {
+  // A no-content write uses generateNoContentBody, which never references
+  // sanitizeInstanceName.
+  if (!methodWritesResource(method)) return false;
+  if (method.type === "create" || method.type === "action") return true;
+  // get/update key on a trailing path param; a path-scoped list keys its stored
+  // instance on its path params instead of the constant "main".
+  if (
+    method.type === "get" || method.type === "update" ||
+    method.type === "list"
+  ) {
     return method.operation.pathParams.length > 0;
   }
   return false;

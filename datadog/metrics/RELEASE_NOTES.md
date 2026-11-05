@@ -1,3 +1,44 @@
+## 2026.11.05.4
+
+**Fixed:** Path-scoped list methods (those that take a path parameter such as a
+metric name, team, or rule ID) now key their stored resource instance on that
+path parameter instead of the constant `"main"`. Previously, calling such a
+method for one scope and then another silently overwrote the first scope's
+result under the shared `"main"` instance, and the stored resource carried no
+indication of which scope it held. Each scope now writes its own instance.
+
+**Upgrade note:** Any data earlier versions wrote under the `"main"` instance
+for a path-scoped list remains there; new runs write under the scope-derived
+name. Global (unscoped) lists are unchanged. No schema change — stored data
+continues to validate.
+
+## 2026.11.05.3
+
+**Fixed:** `reorder_tag_indexing_rules` no longer writes an empty resource under
+a constant `"created"` instance name. The endpoint returns `204 No Content`, so
+there is nothing to persist — the method now issues the reorder call and returns
+no data handles, and the `reorder_tag_indexing_rules` resource spec is removed.
+The request body is also sent in the correct JSON:API envelope
+(`{data: {type: "tag_indexing_rules", attributes: {...}}}`) the endpoint expects.
+
+**Upgrade note:** `reorder_tag_indexing_rules` previously stored an empty
+`{}` resource on every call; it now stores nothing. No other method is affected.
+
+## 2026.11.05.1
+
+**Added:** Regenerated from the current Datadog OpenAPI spec. New methods for
+derived metrics (`create_derived_metric`, `get_derived_metric`,
+`update_derived_metric`, `delete_derived_metric`) and tag indexing rules
+(`list_tag_indexing_rules`, `list_tag_indexing_rules_for_metric`,
+`get_tag_indexing_rule`, `create_tag_indexing_rule`, `update_tag_indexing_rule`,
+`delete_tag_indexing_rule`, `reorder_tag_indexing_rules`), with matching
+`derived_metric`, `tag_indexing_rule`, `tag_indexing_rules`, and
+`tag_indexing_rules_for_metric` resources.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

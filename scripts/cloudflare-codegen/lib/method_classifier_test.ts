@@ -35,6 +35,7 @@ function makeOp(overrides: Partial<GroupedOperation>): GroupedOperation {
     usesCursorPagination: false,
     deprecated: false,
     tags: ["R2"],
+    hasSuccessResponseBody: true,
     ...overrides,
   };
 }

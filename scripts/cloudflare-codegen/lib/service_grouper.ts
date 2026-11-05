@@ -42,6 +42,13 @@ export interface GroupedOperation {
   requestBody?: SchemaObject;
   /** Resolved success response schema (the `result` field) */
   responseSchema?: SchemaObject;
+  /**
+   * Whether a 2xx success response actually carries an application/json body.
+   * False for 204 No Content and any 2xx with no JSON schema — a write with no
+   * response body has nothing to persist, so it must not be treated as a
+   * resource-writing create/update/action.
+   */
+  hasSuccessResponseBody: boolean;
   /** Whether the response is a collection (array) or single item */
   isCollection: boolean;
   /** Whether this endpoint uses cursor-based pagination (not page-based) */
@@ -278,10 +285,11 @@ function extractOperation(
   }
 
   // Extract response schema — look for 200/201/2xx success responses
-  const { responseSchema, isCollection } = extractResponseSchema(
-    spec,
-    operation,
-  );
+  const { responseSchema, isCollection, hasSuccessResponseBody } =
+    extractResponseSchema(
+      spec,
+      operation,
+    );
 
   const operationId = operation.operationId ??
     `${httpMethod}_${path.replace(/[^a-zA-Z0-9]/g, "_")}`;
@@ -303,6 +311,7 @@ function extractOperation(
     queryParams,
     requestBody,
     responseSchema: prepared.schema,
+    hasSuccessResponseBody,
     isCollection,
     usesCursorPagination: queryParams.some((p) => p.name === "cursor"),
     deprecated: operation.deprecated ?? false,
@@ -316,8 +325,14 @@ function extractOperation(
 function extractResponseSchema(
   spec: OpenAPISpec,
   operation: OperationObject,
-): { responseSchema?: SchemaObject; isCollection: boolean } {
-  if (!operation.responses) return { isCollection: false };
+): {
+  responseSchema?: SchemaObject;
+  isCollection: boolean;
+  hasSuccessResponseBody: boolean;
+} {
+  if (!operation.responses) {
+    return { isCollection: false, hasSuccessResponseBody: false };
+  }
 
   // Try 200, 201, then any 2xx
   const successCodes = ["200", "201"];
@@ -334,7 +349,9 @@ function extractResponseSchema(
   }
 
   if (!responseObj?.["application/json"]?.schema) {
-    return { isCollection: false };
+    // A 204 No Content, or a 2xx whose success response declares no JSON
+    // schema: there is no body to persist.
+    return { isCollection: false, hasSuccessResponseBody: false };
   }
 
   const fullResponseSchema = resolveSchema(
@@ -364,7 +381,7 @@ function extractResponseSchema(
     responseSchema = fullResponseSchema;
   }
 
-  return { responseSchema, isCollection };
+  return { responseSchema, isCollection, hasSuccessResponseBody: true };
 }
 
 /**

@@ -1,3 +1,15 @@
+## 2026.11.05.1
+
+**Added:** Regenerated from the current fal.ai OpenAPI spec. New
+`serverless_stop_runner` method (POST `/serverless/runners/{id}/stop`) to
+request a graceful stop of a serverless runner, with an optional `replace_first`
+argument to start a replacement before stopping, plus a matching
+`serverless_stop_runner` resource.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

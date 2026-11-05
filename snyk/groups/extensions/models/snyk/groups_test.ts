@@ -66,7 +66,6 @@ Deno.test("groups model: has expected resources", () => {
   assertExists(model.resources["assignments"]);
   assertExists(model.resources["secrets_rule_extensions"]);
   assertExists(model.resources["secrets_rule_extension"]);
-  assertExists(model.resources["user"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -1678,12 +1677,11 @@ Deno.test({
 });
 
 Deno.test({
-  name: "groups model: update_user executes and writes resource",
+  name: "groups model: update_user executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /groups/test-org-123/users/test-id-123": { data: mockData },
+      "PATCH /groups/test-org-123/users/test-id-123": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -1711,7 +1709,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_user.execute({ "id": "test-id-123", "data": null }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -1723,11 +1721,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "user");
-      assertValidResource("user", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
