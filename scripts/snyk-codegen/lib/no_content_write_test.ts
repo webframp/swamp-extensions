@@ -61,10 +61,8 @@ const SPEC = {
           content: {
             [JSON_API]: {
               schema: {
-                type: "object",
-                properties: {
-                  data: { type: "array", items: { type: "string" } },
-                },
+                type: "array",
+                items: { type: "string" },
               },
             },
           },

@@ -18,17 +18,19 @@ import { groupOperations } from "./service_grouper.ts";
 import type { OpenAPISpec } from "./schema_fetcher.ts";
 import type { ServiceConfig } from "../config.ts";
 
-// A 204-only POST (purge, with a request body) and a 204-only PATCH (reorder).
-// Both are writes with no response body: nothing to persist.
+// A 204-only POST to a {param} path (an action) and a 204-only PATCH (update).
+// Both are writes with no response body: nothing to persist. A POST create is
+// intentionally NOT exercised here — a create always writes, even with an
+// unresolved response schema (see methodWritesResource).
 const SPEC = {
   openapi: "3.0.0",
   info: { title: "t", version: "1" },
   components: { schemas: {} },
   paths: {
-    "/zones/{zone_id}/demo/purge": {
+    "/zones/{zone_id}/demo/rules/{rule_id}": {
       post: {
-        operationId: "demo-purge-cache",
-        summary: "Purge cache",
+        operationId: "demo-activate-rule",
+        summary: "Activate rule",
         tags: ["Demo"],
         requestBody: {
           required: true,
@@ -134,7 +136,7 @@ Deno.test("the generated no-content write test asserts zero data handles", () =>
   const src = generateTestSource(group.config, methods, "demo");
   assertStringIncludes(
     src,
-    "demo model: create_demo_purge_cache executes successfully",
+    "demo model: demo_activate_rule executes successfully",
   );
   assertStringIncludes(src, "assertEquals(result.dataHandles.length, 0);");
   assertStringIncludes(src, "assertEquals(resources.length, 0);");

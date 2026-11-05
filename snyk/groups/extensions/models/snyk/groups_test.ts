@@ -1172,7 +1172,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "groups model: create_assignments executes without writing a resource",
+  name: "groups model: create_assignments creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -1204,7 +1204,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).create_assignments.execute({ "data": null }, context);
-      assertEquals(result.dataHandles.length, 0);
+      assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -1219,7 +1219,11 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      assertEquals(getWrittenResources().length, 0);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "assignments");
+      assertValidResource("assignments", resources[0].data);
+      assertEquals(resources[0].name, "created");
     } finally {
       uninstall();
       await server.shutdown();

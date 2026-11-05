@@ -1411,12 +1411,13 @@ function sanitizeFieldName(name: string): string {
  */
 export function methodWritesResource(method: ClassifiedMethod): boolean {
   if (method.type === "delete") return false;
-  // A write with no success response body (e.g. a 204/202 reorder, validate, or
-  // mark-failed) performs a side effect but returns nothing to persist, so it
-  // writes no resource and declares no resource spec.
+  // A no-body update or action (e.g. a 204/202 reorder, validate, mark-failed)
+  // has nothing to persist, so it writes no resource. A create is NOT included:
+  // a POST create returns the created entity, and an unresolved response schema
+  // means the spec was incomplete, not that the body is empty. A create always
+  // writes, keeping its id/hash instance-naming fallback.
   if (
-    (method.type === "action" || method.type === "update" ||
-      method.type === "create") &&
+    (method.type === "action" || method.type === "update") &&
     !method.operation.hasSuccessResponseBody
   ) {
     return false;

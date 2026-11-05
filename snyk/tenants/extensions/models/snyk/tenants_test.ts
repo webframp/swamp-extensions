@@ -119,6 +119,7 @@ Deno.test("tenants model: has expected resources", () => {
   assertExists(model.resources["get_group_values_tenant"]);
   assertExists(model.resources["asset_id_by_key_tenant"]);
   assertExists(model.resources["asset_by_key_tenant"]);
+  assertExists(model.resources["asset_search_tenant"]);
   assertExists(model.resources["get_asset_search_results_tenant"]);
   assertExists(model.resources["asset_tenant"]);
   assertExists(model.resources["asset_projects_tenant"]);
@@ -3494,8 +3495,7 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "tenants model: create_asset_search_tenant executes without writing a resource",
+  name: "tenants model: create_asset_search_tenant creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -3534,7 +3534,7 @@ Deno.test({
           "type": "searches",
         },
       }, context);
-      assertEquals(result.dataHandles.length, 0);
+      assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -3556,7 +3556,11 @@ Deno.test({
         },
       });
 
-      assertEquals(getWrittenResources().length, 0);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "asset_search_tenant");
+      assertValidResource("asset_search_tenant", resources[0].data);
+      assertEquals(resources[0].name, "created");
     } finally {
       uninstall();
       await server.shutdown();

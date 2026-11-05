@@ -398,7 +398,7 @@ Deno.test("generated query args that collide with a path param reuse the path va
   assertEquals(src.includes('name: "thing-id"'), false);
 });
 
-Deno.test("a no-content create does not add a flat member to a list resource", async () => {
+Deno.test("a create writes even with no declared response body", async () => {
   const group: ServiceGroup = {
     config: CONFIG,
     operations: [
@@ -424,7 +424,8 @@ Deno.test("a no-content create does not add a flat member to a list resource", a
     ],
   };
   const methods = classifyServiceMethods(group);
-  // The no-content create writes nothing, so it is not a resource writer.
+  // A create always writes the created entity, even when the spec declares no
+  // response body (an unresolved/204 schema means the spec is incomplete).
   const create = methods.find((m) => m.name === "create_widgets")!;
   assertEquals(create.type, "create");
   const dir = await Deno.makeTempDir();
@@ -445,23 +446,22 @@ Deno.test("a no-content create does not add a flat member to a list resource", a
         .success,
       true,
     );
-    // Without the no-content create's open flat member, a bare {} no longer
-    // validates against the widgets (list-only) resource.
-    assertEquals(schema.safeParse({}).success, false);
     // The get still writes its own flat resource.
     assertEquals(
       model.resources.widget.schema.safeParse({ state: "open" }).success,
       true,
     );
-    // The no-content create issues the call but persists nothing.
+    // The create writes a resource and does not silently return empty data
+    // handles. It carries no requireBody guard because the spec declares no
+    // response body to require.
+    assertStringIncludes(src, 'writeResource("widgets"');
     assertEquals(
-      src.includes('writeResource("widgets"'),
-      true, // the list writes it
+      src.includes('requireBody(result, "create_widgets")'),
+      false,
     );
-    assertStringIncludes(src, "Executed create_widgets (no content)");
     assertEquals(
       /create_widgets[\s\S]*?return \{ dataHandles: \[\] \}/.test(src),
-      true,
+      false,
     );
   } finally {
     await Deno.remove(dir, { recursive: true });

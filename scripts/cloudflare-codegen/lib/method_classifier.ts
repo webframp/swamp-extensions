@@ -91,9 +91,13 @@ export function resourceNameOf(method: ClassifiedMethod): string {
  */
 export function methodWritesResource(method: ClassifiedMethod): boolean {
   if (method.type === "delete") return false;
+  // A no-body update or action (e.g. a 204 PATCH/POST) has nothing to persist,
+  // so it writes no resource. A create is NOT included: POST creates return the
+  // created entity (HTTP 200 with `result`), and an unresolved response schema
+  // means the spec was incomplete, not that the body is empty. A create always
+  // writes, keeping its id/hash instance-naming fallback.
   if (
-    (method.type === "create" || method.type === "update" ||
-      method.type === "action") &&
+    (method.type === "update" || method.type === "action") &&
     !method.operation.hasSuccessResponseBody
   ) {
     return false;

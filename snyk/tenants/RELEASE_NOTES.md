@@ -1,3 +1,15 @@
+## 2026.11.05.3
+
+**Fixed:** `create_asset_search_tenant` (a POST create) writes the created
+entity again. The previous version wrongly treated it as a no-content write and
+returned `{ dataHandles: [] }`, dropping the created search. A POST create
+persists the created entity; the `asset_search_tenant` resource is declared
+again. `update_assets_bulk_tenant` and `update_tenant_membership` (genuine HTTP
+204 writes) correctly remain no-write.
+
+**Upgrade note:** The `asset_search_tenant` resource is declared again; no
+stored data needs migration.
+
 ## 2026.11.05.2
 
 **Fixed:** `update_assets_bulk_tenant`, `create_asset_search_tenant`, and

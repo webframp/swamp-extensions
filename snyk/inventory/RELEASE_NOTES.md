@@ -1,3 +1,16 @@
+## 2026.11.05.3
+
+**Fixed:** `create_asset_search_group` and `create_asset_search_org` (POST
+creates) write the created entity again. The previous version wrongly treated
+them as no-content writes and returned `{ dataHandles: [] }`, dropping the
+created search. A POST create persists the created entity; the
+`asset_search_group` and `asset_search_org` resources are declared again. The
+bulk-update methods `update_assets_bulk_group` and `update_assets_bulk_org`
+(PATCH with a genuine HTTP 204) correctly remain no-write.
+
+**Upgrade note:** The two asset-search resources are declared again; no stored
+data needs migration.
+
 ## 2026.11.05.2
 
 **Fixed:** `update_assets_bulk_group`, `update_assets_bulk_org`,

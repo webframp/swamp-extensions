@@ -44,6 +44,7 @@ Deno.test("collections model: has expected resources", () => {
   assertExists(model.resources["get_collections"]);
   assertExists(model.resources["collection"]);
   assertExists(model.resources["get_projects_of_collection"]);
+  assertExists(model.resources["collection_with_projects"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -608,7 +609,7 @@ Deno.test({
 
 Deno.test({
   name:
-    "collections model: update_collection_with_projects executes without writing a resource",
+    "collections model: update_collection_with_projects creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -644,7 +645,7 @@ Deno.test({
         "collection_id": "test-id-123",
         "data": [],
       }, context);
-      assertEquals(result.dataHandles.length, 0);
+      assertEquals(result.dataHandles.length, 1);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -659,7 +660,11 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      assertEquals(getWrittenResources().length, 0);
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "collection_with_projects");
+      assertValidResource("collection_with_projects", resources[0].data);
+      assertEquals(resources[0].name, "created");
     } finally {
       uninstall();
       await server.shutdown();

@@ -1,3 +1,15 @@
+## 2026.11.05.2
+
+**Fixed:** `create_assignments` (a POST create) writes the created entity again.
+The previous version wrongly treated it as a no-content write and returned
+`{ dataHandles: [] }`, dropping the created assignment. A POST create persists
+the created entity, so the `assignments` resource is written by it again (the
+schema remains the list wrapper shared with `list_assignments`). `update_user`
+(a PATCH that genuinely returns HTTP 204) correctly remains no-write.
+
+**Upgrade note:** `create_assignments` writes again; no stored data needs
+migration.
+
 ## 2026.11.05.1
 
 **Fixed:** `create_assignments` (a POST) and `update_user` (a PATCH), whose only

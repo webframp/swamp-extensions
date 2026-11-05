@@ -76,9 +76,11 @@ export function methodWritesResource(
   },
 ): boolean {
   if (method.type === "delete") return false;
+  // A no-body update or action has nothing to persist. A create is excluded: a
+  // POST create returns the created entity, so it always writes a resource even
+  // when the response schema did not resolve.
   if (
-    method.type === "create" || method.type === "update" ||
-    method.type === "action"
+    method.type === "update" || method.type === "action"
   ) {
     return method.operation.hasResponseBody;
   }

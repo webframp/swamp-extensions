@@ -1,3 +1,20 @@
+## 2026.11.05.2
+
+**Fixed:** The four ruleset/rule CREATE methods now write the created entity
+again: `createaccountruleset`, `createaccountrulesetrule`, `createzoneruleset`,
+and `createzonerulesetrule`. The previous version wrongly treated them as
+no-content writes and returned `{ dataHandles: [] }`, silently dropping the
+created ruleset/rule ID. Cloudflare POST creates return HTTP 200 with the created
+entity in `result`; a create always persists it, naming the instance by the
+response `id` (else a scoping path param, else a request hash). The update
+methods (`updateaccountentrypointruleset`, `updateaccountruleset`,
+`updateaccountrulesetrule`, `updatezoneentrypointruleset`, `updatezoneruleset`,
+`updatezonerulesetrule`) genuinely return no body and correctly remain no-write.
+
+**Upgrade note:** The four create resources are declared again. If you ran the
+previous version, re-run the create to capture the created entity; no stored
+data needs migration.
+
 ## 2026.11.05.1
 
 **Fixed:** The ruleset and rule create/update methods are writes whose success
