@@ -1,4 +1,4 @@
-## 2026.11.05.2
+## 2026.11.05.3
 
 **Fixed:** `validate_security_monitoring_rule` no longer writes an empty
 resource under a constant `"created"` instance name. The endpoint returns

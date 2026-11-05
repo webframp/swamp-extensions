@@ -1,4 +1,4 @@
-## 2026.11.05.1
+## 2026.11.05.2
 
 **Fixed:** `abort_test_file_multipart_upload` and
 `complete_test_file_multipart_upload` no longer write an empty resource under a

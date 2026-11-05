@@ -1,9 +1,11 @@
-## 2026.11.05.2
+## 2026.11.05.3
 
 **Fixed:** `reorder_tag_indexing_rules` no longer writes an empty resource under
 a constant `"created"` instance name. The endpoint returns `204 No Content`, so
 there is nothing to persist — the method now issues the reorder call and returns
-no data handles. The `reorder_tag_indexing_rules` resource spec is removed.
+no data handles, and the `reorder_tag_indexing_rules` resource spec is removed.
+The request body is also sent in the correct JSON:API envelope
+(`{data: {type: "tag_indexing_rules", attributes: {...}}}`) the endpoint expects.
 
 **Upgrade note:** `reorder_tag_indexing_rules` previously stored an empty
 `{}` resource on every call; it now stores nothing. No other method is affected.

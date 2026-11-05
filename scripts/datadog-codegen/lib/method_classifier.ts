@@ -535,6 +535,11 @@ function generateMethod(
     lines.push(generateListBody(method, apiPath, indent));
   } else if (type === "get") {
     lines.push(generateGetBody(method, apiPath, indent));
+  } else if (!methodWritesResource(method) && type !== "delete") {
+    // A create/update/action whose success response has no body (e.g. a
+    // 204/202 reorder, validate, or mark-failed) issues the call and persists
+    // nothing — storing an empty {} under a constant name would be a data bug.
+    lines.push(generateNoContentBody(method, apiPath, indent));
   } else if (type === "create") {
     lines.push(generateCreateBody(method, apiPath, indent));
   } else if (type === "update") {
@@ -1199,6 +1204,107 @@ ${indent}    context.logger.info("Deleted resource {id}", { id: ${idRef} });
 ${indent}    return { dataHandles: [] };`;
 }
 
+/**
+ * Generate the body for a write (create / update / action) whose success
+ * response carries no content (e.g. a 204/202 reorder, validate, or
+ * mark-failed). It issues the call for its side effect and persists nothing —
+ * storing an empty `{}` under a constant instance name would be a data bug.
+ * Mirrors the request-building of the create/action generators (JSON:API
+ * envelope, array body, or flat body; path params excluded; query string
+ * appended) but never calls writeResource.
+ */
+function generateNoContentBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+  const isJsonApi = method.operation.requestBodyIsJsonApi;
+  const bodyType = method.operation.requestBodyType
+    ? `"${method.operation.requestBodyType}"`
+    : null;
+  const arrayBody = arrayBodyExpr(method.operation);
+
+  // Query string (path params never go on the query; everything else that is
+  // not consumed by the body does).
+  const hasQueryParams = queryParamNames.length > 0;
+  let querySetup = "";
+  let urlSuffix = "";
+  if (hasQueryParams) {
+    const paramNameMap: Record<string, string> = {};
+    for (const p of method.operation.queryParams) {
+      const sanitized = sanitizeFieldName(p.name);
+      if (sanitized !== p.name) paramNameMap[sanitized] = p.name;
+    }
+    const hasMap = Object.keys(paramNameMap).length > 0;
+    querySetup = `${indent}    const queryParts: string[] = [];${
+      hasMap
+        ? `\n${indent}    const paramNameMap: Record<string, string> = ${
+          JSON.stringify(paramNameMap)
+        };`
+        : ""
+    }
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && ${
+      JSON.stringify(queryParamNames)
+    }.includes(k)) {
+${indent}        const apiName = ${hasMap ? "paramNameMap[k] ?? k" : "k"};
+${indent}        queryParts.push(\`\${encodeURIComponent(apiName)}=\${encodeURIComponent(String(v))}\`);
+${indent}      }
+${indent}    }
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
+`;
+    urlSuffix = "${qs}";
+  }
+
+  let bodySetup = "";
+  let bodyArg = "";
+  if (arrayBody) {
+    bodyArg = `\n${indent}      ${arrayBody},`;
+  } else if (isJsonApi) {
+    bodySetup = `${indent}    const attrs: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) attrs[k] = v;
+${indent}    }
+${indent}    const body = { data: { ${
+      bodyType ? `type: ${bodyType}, ` : ""
+    }attributes: attrs } };
+`;
+    bodyArg = `\n${indent}      body,`;
+  } else if (method.operation.requestBody !== undefined) {
+    bodySetup = `${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }
+`;
+    bodyArg = `\n${indent}      body,`;
+  }
+
+  return `${querySetup}${bodySetup}${indent}    await ddApi(
+${indent}      apiKey,
+${indent}      appKey,
+${indent}      site,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
+${indent}    );
+${indent}
+${indent}    context.logger.info("Executed ${method.name}", {});
+${indent}    return { dataHandles: [] };`;
+}
+
 /** Generate action method body */
 function generateActionBody(
   method: ClassifiedMethod,
@@ -1208,7 +1314,6 @@ function generateActionBody(
   const resourceName = getResourceName(method);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
-  const hasResponseBody = method.operation.hasSuccessResponseBody;
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
@@ -1269,24 +1374,18 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
   }
 
   return `${bodySetup}
-${indent}    ${hasResponseBody ? "const result = " : ""}await ddApi(
+${indent}    const result = await ddApi(
 ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
-${
-    hasResponseBody
-      ? `${indent}
+${indent}
 ${indent}    const id = (result as { id?: string }).id ?? "${method.name}";
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
-${indent}    return { dataHandles: [handle] };`
-      : `${indent}
-${indent}    context.logger.info("Executed ${method.name}", {});
-${indent}    return { dataHandles: [] };`
-  }`;
+${indent}    return { dataHandles: [handle] };`;
 }
 
 /** Build the API path with template literal substitution (URL-encoded) */
@@ -1312,7 +1411,14 @@ function sanitizeFieldName(name: string): string {
  */
 export function methodWritesResource(method: ClassifiedMethod): boolean {
   if (method.type === "delete") return false;
-  if (method.type === "action" && !method.operation.hasSuccessResponseBody) {
+  // A write with no success response body (e.g. a 204/202 reorder, validate, or
+  // mark-failed) performs a side effect but returns nothing to persist, so it
+  // writes no resource and declares no resource spec.
+  if (
+    (method.type === "action" || method.type === "update" ||
+      method.type === "create") &&
+    !method.operation.hasSuccessResponseBody
+  ) {
     return false;
   }
   return true;
@@ -1327,6 +1433,9 @@ export function methodWritesResource(method: ClassifiedMethod): boolean {
  *   - list, action, delete: never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
+  // A no-content write uses generateNoContentBody, which never references
+  // sanitizeInstanceName.
+  if (!methodWritesResource(method)) return false;
   if (method.type === "create") return true;
   if (method.type === "get" || method.type === "update") {
     return method.operation.pathParams.length > 0;
