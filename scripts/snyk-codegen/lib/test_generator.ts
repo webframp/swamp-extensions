@@ -10,6 +10,7 @@
 
 import type { ClassifiedMethod } from "./method_classifier.ts";
 import {
+  methodWritesResource,
   resourceNameOf,
   secretArgumentPaths,
   secretListItemFields,
@@ -95,7 +96,7 @@ export function generateTestSource(
 
   // Resources existence tests
   const resources = methods
-    .filter((m) => m.type !== "delete")
+    .filter((m) => methodWritesResource(m))
     .map((m) => {
       return resourceNameOf(m);
     });
@@ -546,6 +547,26 @@ ${footer}`;
     return `${
       header(
         "executes successfully",
+        `    const { url, server, requests } = startMockSnykServer({
+      ${JSON.stringify(routeKey)}: { status: 204 },
+    });`,
+      )
+    }
+      const result = await ${execCall(method.name, argsStr)};
+      assertEquals(result.dataHandles.length, 0);
+
+${reqAsserts}
+
+      assertEquals(getWrittenResources().length, 0);${argSecretAsserts(method)}
+${footer}`;
+  }
+
+  if (!methodWritesResource(method)) {
+    // A write whose success response has no content (204): the method issues
+    // the call and persists nothing, mirroring DELETE. The mock answers 204.
+    return `${
+      header(
+        "executes without writing a resource",
         `    const { url, server, requests } = startMockSnykServer({
       ${JSON.stringify(routeKey)}: { status: 204 },
     });`,

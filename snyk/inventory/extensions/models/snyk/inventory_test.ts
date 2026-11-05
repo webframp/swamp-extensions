@@ -62,27 +62,23 @@ Deno.test("inventory model: has expected methods", () => {
 Deno.test("inventory model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["assets_group"]);
-  assertExists(model.resources["assets_bulk_group"]);
   assertExists(model.resources["get_filter_fields_group"]);
   assertExists(model.resources["get_filter_values_group"]);
   assertExists(model.resources["get_group_fields_group"]);
   assertExists(model.resources["get_group_values_group"]);
   assertExists(model.resources["asset_id_by_key_group"]);
   assertExists(model.resources["asset_by_key_group"]);
-  assertExists(model.resources["asset_search_group"]);
   assertExists(model.resources["get_asset_search_results_group"]);
   assertExists(model.resources["asset_group"]);
   assertExists(model.resources["asset_projects_group"]);
   assertExists(model.resources["asset_targets_group"]);
   assertExists(model.resources["assets_org"]);
-  assertExists(model.resources["assets_bulk_org"]);
   assertExists(model.resources["get_filter_fields_org"]);
   assertExists(model.resources["get_filter_values_org"]);
   assertExists(model.resources["get_group_fields_org"]);
   assertExists(model.resources["get_group_values_org"]);
   assertExists(model.resources["asset_id_by_key_org"]);
   assertExists(model.resources["asset_by_key_org"]);
-  assertExists(model.resources["asset_search_org"]);
   assertExists(model.resources["get_asset_search_results_org"]);
   assertExists(model.resources["asset_org"]);
   assertExists(model.resources["asset_projects_org"]);
@@ -286,12 +282,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "inventory model: update_assets_bulk_group executes and writes resource",
+    "inventory model: update_assets_bulk_group executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /groups/test-id-123/inventory/assets": { data: mockData },
+      "PATCH /groups/test-id-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -322,7 +317,7 @@ Deno.test({
         "group_id": "test-id-123",
         "data": [],
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -334,11 +329,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_group");
-      assertValidResource("assets_bulk_group", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -817,7 +808,7 @@ Deno.test({
 
 Deno.test({
   name:
-    "inventory model: create_asset_search_group creates and writes resource",
+    "inventory model: create_asset_search_group executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -860,7 +851,7 @@ Deno.test({
           "type": "searches",
         },
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -882,11 +873,7 @@ Deno.test({
         },
       });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "asset_search_group");
-      assertValidResource("asset_search_group", resources[0].data);
-      assertEquals(resources[0].name, "created");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1386,12 +1373,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "inventory model: update_assets_bulk_org executes and writes resource",
+  name:
+    "inventory model: update_assets_bulk_org executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /orgs/test-org-123/inventory/assets": { data: mockData },
+      "PATCH /orgs/test-org-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -1419,7 +1406,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).update_assets_bulk_org.execute({ "data": [] }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -1431,11 +1418,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_org");
-      assertValidResource("assets_bulk_org", resources[0].data);
-      assertEquals(resources[0].name, "updated");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1902,7 +1885,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "inventory model: create_asset_search_org creates and writes resource",
+  name:
+    "inventory model: create_asset_search_org executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -1944,7 +1928,7 @@ Deno.test({
           "type": "searches",
         },
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -1966,11 +1950,7 @@ Deno.test({
         },
       });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "asset_search_org");
-      assertValidResource("asset_search_org", resources[0].data);
-      assertEquals(resources[0].name, "created");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();

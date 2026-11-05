@@ -398,7 +398,7 @@ Deno.test("generated query args that collide with a path param reuse the path va
   assertEquals(src.includes('name: "thing-id"'), false);
 });
 
-Deno.test("a resource written by a list and a get/create accepts every writer's data", async () => {
+Deno.test("a no-content create does not add a flat member to a list resource", async () => {
   const group: ServiceGroup = {
     config: CONFIG,
     operations: [
@@ -424,17 +424,18 @@ Deno.test("a resource written by a list and a get/create accepts every writer's 
     ],
   };
   const methods = classifyServiceMethods(group);
+  // The no-content create writes nothing, so it is not a resource writer.
+  const create = methods.find((m) => m.name === "create_widgets")!;
+  assertEquals(create.type, "create");
   const dir = await Deno.makeTempDir();
   try {
     await Deno.mkdir(join(dir, "_lib"));
     await Deno.writeTextFile(join(dir, "_lib", "api.ts"), generateApiLib());
-    await Deno.writeTextFile(
-      join(dir, "w.ts"),
-      generateModelSource(group, methods, "2026.01.01.1"),
-    );
+    const src = generateModelSource(group, methods, "2026.01.01.1");
+    await Deno.writeTextFile(join(dir, "w.ts"), src);
     const { model } = await import(`file://${join(dir, "w.ts")}`);
     const schema = model.resources.widgets.schema;
-    // List wrapper, the empty object a 204 create stores, and a flat get.
+    // The list wrapper still validates.
     assertEquals(
       schema.safeParse({
         items: [{ state: "x" }],
@@ -444,15 +445,23 @@ Deno.test("a resource written by a list and a get/create accepts every writer's 
         .success,
       true,
     );
-    assertEquals(schema.safeParse({}).success, true);
+    // Without the no-content create's open flat member, a bare {} no longer
+    // validates against the widgets (list-only) resource.
+    assertEquals(schema.safeParse({}).success, false);
+    // The get still writes its own flat resource.
     assertEquals(
       model.resources.widget.schema.safeParse({ state: "open" }).success,
       true,
     );
-    // The flat shape keeps declared fields rather than stripping to {}.
+    // The no-content create issues the call but persists nothing.
     assertEquals(
-      schema.safeParse({ id: "1", state: "open" }).data,
-      { id: "1", state: "open" },
+      src.includes('writeResource("widgets"'),
+      true, // the list writes it
+    );
+    assertStringIncludes(src, "Executed create_widgets (no content)");
+    assertEquals(
+      /create_widgets[\s\S]*?return \{ dataHandles: \[\] \}/.test(src),
+      true,
     );
   } finally {
     await Deno.remove(dir, { recursive: true });

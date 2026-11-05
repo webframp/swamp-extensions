@@ -59,6 +59,33 @@ export function resourceNameOf(
 }
 
 /**
+ * Whether a method writes a resource. A write operation whose success response
+ * carries no body (HTTP 204, or a 2xx with no JSON schema) has nothing to
+ * persist: the server applied the change and returned an empty reply, so the
+ * only honest output is zero data handles.
+ *
+ * - `delete`: never writes (an empty 204 is its success case).
+ * - `create` / `update` / `action`: write only when the response has a body;
+ *   a no-content write would persist `{}` under a dead instance name.
+ * - `get` / `list`: always write (a GET with no body would not have been
+ *   classified as readable in the first place; a list always returns a page).
+ */
+export function methodWritesResource(
+  method: Pick<ClassifiedMethod, "type"> & {
+    operation: Pick<GroupedOperation, "hasResponseBody">;
+  },
+): boolean {
+  if (method.type === "delete") return false;
+  if (
+    method.type === "create" || method.type === "update" ||
+    method.type === "action"
+  ) {
+    return method.operation.hasResponseBody;
+  }
+  return true;
+}
+
+/**
  * Classify an operation into a swamp method type.
  */
 export function classifyOperation(op: GroupedOperation): MethodType {
@@ -272,7 +299,7 @@ export function generateModelSource(
   lines.push(`  resources: {`);
   const seenResources = new Set<string>();
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = resourceNameOf(method);
     if (seenResources.has(resourceName)) continue;
     seenResources.add(resourceName);
@@ -355,7 +382,7 @@ function generateResponseSchemas(
 
   const writersByResource = new Map<string, ClassifiedMethod[]>();
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = resourceNameOf(method);
     const writers = writersByResource.get(resourceName) ?? [];
     writers.push(method);
@@ -430,9 +457,10 @@ function generateResponseSchemas(
 
     // Wrapper first: list data matches it; flat data falls through to the
     // second member. The flat shape is all-optional, so it also tolerates the
-    // empty object a 204 writes.
-    // A non-list writer without a declared response (a 204 create) still
-    // writes an object, so it counts as a flat writer with an open shape.
+    // empty object a create/get stores when its response omits declared fields.
+    // Every writer here returns a body (no-content writes are excluded above),
+    // so a non-list writer without a declared response still writes an object
+    // and counts as a flat writer with an open shape.
     const hasFlatWriter = writers.some((m) => m.type !== "list");
     if (!flatExpr && hasFlatWriter) {
       // A writer with no declared response cannot declare a secret either.
@@ -538,6 +566,11 @@ function generateMethod(
 
   if (type === "list") {
     lines.push(generateListBody(method, apiPath, indent));
+  } else if (!methodWritesResource(method) && type !== "delete") {
+    // A write whose success response has no body: issue the call, persist
+    // nothing. Mirrors the delete body but keeps the method's own verb and
+    // request body (e.g. a 204 POST that updates a relationship).
+    lines.push(generateNoContentBody(method, apiPath, indent));
   } else if (type === "get") {
     lines.push(generateGetBody(method, apiPath, indent));
   } else if (type === "create") {
@@ -661,6 +694,7 @@ export function sensitiveTopLevelFields(schema?: SchemaObject): string[] {
  * persisted resource holds a vault reference.
  */
 export function secretResponseFields(method: ClassifiedMethod): string[] {
+  if (!methodWritesResource(method)) return [];
   if (method.type === "list" || method.type === "delete") return [];
   return sensitiveTopLevelFields(method.operation.responseSchema);
 }
@@ -980,6 +1014,60 @@ ${indent}    return { dataHandles: [handle] };`;
 }
 
 /**
+ * Generate the body for a write whose success response has no content (a 204,
+ * or a 2xx without a JSON schema). It issues the API call exactly as the
+ * create/action generators do — building the request body from the method's
+ * arguments and threading any query string — then returns no data handles.
+ * There is nothing to persist, so it derives no instance name and writes no
+ * resource. This mirrors the delete body, differing only in that it keeps the
+ * operation's verb and request body.
+ */
+function generateNoContentBody(
+  method: ClassifiedMethod,
+  apiPath: string,
+  indent: string,
+): string {
+  const httpMethod = method.operation.httpMethod.toUpperCase();
+  const hasBody = method.operation.requestBody !== undefined;
+  const pathParamNames = method.operation.pathParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const queryParamNames = method.operation.queryParams.map((p) =>
+    sanitizeFieldName(p.name)
+  );
+  const excludeNames = [...pathParamNames, ...queryParamNames];
+
+  const qsSetup = querySetup(method.operation, indent);
+  const urlSuffix = qsSetup ? "${qs}" : "";
+
+  let bodySetup = "";
+  let bodyArg = "";
+  if (hasBody) {
+    bodySetup = `${indent}    const body: Record<string, unknown> = {};
+${indent}    const excludeKeys = new Set<string>(${
+      JSON.stringify(excludeNames)
+    });
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (!excludeKeys.has(k)) body[k] = v;
+${indent}    }
+`;
+    bodyArg = `\n${indent}      body,`;
+  }
+  bodySetup += qsSetup;
+
+  return `${bodySetup}
+${indent}    await snykApi(
+${indent}      apiToken,
+${indent}      "${httpMethod}",
+${indent}      \`${apiPath}${urlSuffix}\`,
+${indent}      version,${bodyArg}
+${indent}    );
+${indent}
+${indent}    context.logger.info("Executed ${method.name} (no content)", {});
+${indent}    return { dataHandles: [] };`;
+}
+
+/**
  * True when a get/create body must reject an empty reply. Only operations the
  * spec says return content qualify: a create that answers 204 (for example a
  * relationship update) succeeds with no body, and failing it would report an
@@ -1086,6 +1174,7 @@ function sanitizeFieldName(name: string): string {
  *   - list, action, delete: never
  */
 function methodEmitsSanitize(method: ClassifiedMethod): boolean {
+  if (!methodWritesResource(method)) return false;
   if (method.type === "create") return true;
   if (method.type === "get" || method.type === "update") {
     return method.operation.pathParams.length > 0;

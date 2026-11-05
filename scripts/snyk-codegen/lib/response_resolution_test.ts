@@ -61,6 +61,20 @@ const SPEC = {
     "/orgs/{org_id}/things/{thing_id}/relationships/parts": {
       post: {
         operationId: "updateThingParts",
+        parameters: [
+          {
+            name: "org_id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+          {
+            name: "thing_id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
         requestBody: {
           content: {
             "application/vnd.api+json": {
@@ -125,7 +139,7 @@ Deno.test("hasResponseBody is false for a 204-only operation and true for 2xx co
   assertEquals(byId.createCreds.hasResponseBody, true);
 });
 
-Deno.test("a create that answers 204 has no requireBody guard and succeeds", async () => {
+Deno.test("a create that answers 204 has no requireBody guard and writes nothing", async () => {
   const [group] = groupOperations(SPEC, [CONFIG]);
   const methods = classifyServiceMethods(group);
   const parts = methods.find((m) => m.name === "update_thing_parts")!;
@@ -135,6 +149,11 @@ Deno.test("a create that answers 204 has no requireBody guard and succeeds", asy
   // Only the create that returns content is guarded.
   assertEquals((src.match(/requireBody\(result,/g) ?? []).length, 1);
   assertEquals(src.includes('requireBody(result, "create_creds")'), true);
+  // The no-content create neither requires a body nor writes a resource.
+  assertEquals(
+    src.includes('requireBody(result, "update_thing_parts")'),
+    false,
+  );
 
   const dir = await Deno.makeTempDir();
   const original = globalThis.fetch;
@@ -152,13 +171,23 @@ Deno.test("a create that answers 204 has no requireBody guard and succeeds", asy
         return Promise.resolve({ name });
       },
     };
-    globalThis.fetch = (() =>
-      Promise.resolve(new Response(null, { status: 204 }))) as typeof fetch;
-    await model.methods.update_thing_parts.execute(
+    let capturedMethod: string | undefined;
+    let capturedBody: unknown;
+    globalThis.fetch = ((_url: string, init?: RequestInit) => {
+      capturedMethod = init?.method;
+      capturedBody = init?.body ? JSON.parse(String(init.body)) : null;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }) as typeof fetch;
+    const result = await model.methods.update_thing_parts.execute(
       { thing_id: "t1", data: ["a"] },
       context,
     );
-    assertEquals(written, [{ name: "created", data: {} }]);
+    // The call still goes out with the right verb and body, but nothing is
+    // persisted: a 204 write has no resource data.
+    assertEquals(capturedMethod, "POST");
+    assertEquals(capturedBody, { data: ["a"] });
+    assertEquals(result, { dataHandles: [] });
+    assertEquals(written, []);
 
     // An array in `data` on a non-list call keeps every item.
     written.length = 0;

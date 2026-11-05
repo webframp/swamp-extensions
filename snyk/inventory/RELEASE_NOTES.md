@@ -1,3 +1,20 @@
+## 2026.11.05.2
+
+**Fixed:** `update_assets_bulk_group`, `update_assets_bulk_org`,
+`create_asset_search_group`, and `create_asset_search_org` — write operations
+whose only success response is HTTP 204 — wrote an empty resource under a dead
+instance name. A write whose success response carries no body now issues the
+API call and returns zero data handles, persisting nothing. The
+`assets_bulk_group`, `assets_bulk_org`, `asset_search_group`, and
+`asset_search_org` resources are removed.
+
+**Changed:** The four methods above now return `{ dataHandles: [] }` and no
+longer declare a resource.
+
+**Upgrade note:** Each removed resource previously held only an empty object;
+none is produced any longer. The read methods and their resources are
+unchanged, so stored data continues to validate. No migration required.
+
 ## 2026.11.05.1
 
 **Added:** Regenerated from the current Snyk OpenAPI spec. New lookup-by-key

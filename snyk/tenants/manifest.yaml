@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/snyk/tenants"
 license: Apache-2.0
-version: "2026.11.05.1"
+version: "2026.11.05.2"
 description: "Snyk Tenants — tenant and organization lifecycle management"
 repository: "https://github.com/webframp/swamp-extensions"
 models:

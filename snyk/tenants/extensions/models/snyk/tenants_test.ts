@@ -113,20 +113,17 @@ Deno.test("tenants model: has expected resources", () => {
   assertExists(model.resources["deployment_credentials"]);
   assertExists(model.resources["deployment_credential"]);
   assertExists(model.resources["assets_tenant"]);
-  assertExists(model.resources["assets_bulk_tenant"]);
   assertExists(model.resources["get_filter_fields_tenant"]);
   assertExists(model.resources["get_filter_values_tenant"]);
   assertExists(model.resources["get_group_fields_tenant"]);
   assertExists(model.resources["get_group_values_tenant"]);
   assertExists(model.resources["asset_id_by_key_tenant"]);
   assertExists(model.resources["asset_by_key_tenant"]);
-  assertExists(model.resources["asset_search_tenant"]);
   assertExists(model.resources["get_asset_search_results_tenant"]);
   assertExists(model.resources["asset_tenant"]);
   assertExists(model.resources["asset_projects_tenant"]);
   assertExists(model.resources["asset_targets_tenant"]);
   assertExists(model.resources["get_tenant_memberships"]);
-  assertExists(model.resources["tenant_membership"]);
   assertExists(model.resources["models"]);
   assertExists(model.resources["model"]);
   assertExists(model.resources["tenant_roles"]);
@@ -3000,12 +2997,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tenants model: update_assets_bulk_tenant executes and writes resource",
+  name:
+    "tenants model: update_assets_bulk_tenant executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /tenants/test-id-123/inventory/assets": { data: mockData },
+      "PATCH /tenants/test-id-123/inventory/assets": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -3032,7 +3029,7 @@ Deno.test({
         "tenant_id": "test-id-123",
         "data": [],
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -3044,11 +3041,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": [] });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "assets_bulk_tenant");
-      assertValidResource("assets_bulk_tenant", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -3501,7 +3494,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tenants model: create_asset_search_tenant creates and writes resource",
+  name:
+    "tenants model: create_asset_search_tenant executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockSnykServer({
@@ -3540,7 +3534,7 @@ Deno.test({
           "type": "searches",
         },
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -3562,11 +3556,7 @@ Deno.test({
         },
       });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "asset_search_tenant");
-      assertValidResource("asset_search_tenant", resources[0].data);
-      assertEquals(resources[0].name, "created");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -4055,12 +4045,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "tenants model: update_tenant_membership executes and writes resource",
+  name:
+    "tenants model: update_tenant_membership executes without writing a resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123", "type": "resource" };
     const { url, server, requests } = startMockSnykServer({
-      "PATCH /tenants/test-id-123/memberships/test-id-123": { data: mockData },
+      "PATCH /tenants/test-id-123/memberships/test-id-123": { status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -4088,7 +4078,7 @@ Deno.test({
         "membership_id": "test-id-123",
         "data": null,
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -4100,11 +4090,7 @@ Deno.test({
       assertEquals(req0.headers["content-type"], "application/vnd.api+json");
       assertEquals(req0.body, { "data": null });
 
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "tenant_membership");
-      assertValidResource("tenant_membership", resources[0].data);
-      assertEquals(resources[0].name, "test-id-123");
+      assertEquals(getWrittenResources().length, 0);
     } finally {
       uninstall();
       await server.shutdown();

@@ -1,3 +1,19 @@
+## 2026.11.05.2
+
+**Fixed:** `update_assets_bulk_tenant`, `create_asset_search_tenant`, and
+`update_tenant_membership` — write operations whose only success response is
+HTTP 204 — wrote an empty resource under a dead instance name. A write whose
+success response carries no body now issues the API call and returns zero data
+handles, persisting nothing. The `assets_bulk_tenant`, `asset_search_tenant`,
+and `tenant_membership` resources are removed.
+
+**Changed:** The three methods above now return `{ dataHandles: [] }` and no
+longer declare a resource.
+
+**Upgrade note:** Each removed resource previously held only an empty object;
+none is produced any longer. The read methods and their resources are
+unchanged, so stored data continues to validate. No migration required.
+
 ## 2026.11.05.1
 
 **Added:** Regenerated from the current Snyk OpenAPI spec. New app-install
