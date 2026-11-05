@@ -44,7 +44,7 @@ swamp model create @webframp/datadog/teams dd-teams \
 | `create_team_connections`        | Create team connections                         |
 | `delete_team_connections`        | Delete team connections                         |
 | `get_team_sync`                  | Get team sync configurations                    |
-| `sync_teams`                     | Link Teams with GitHub Teams                    |
+| `sync_teams`                     | Link teams with external teams                  |
 | `get_team`                       | Get a team                                      |
 | `update_team`                    | Update a team                                   |
 | `delete_team`                    | Remove a team                                   |

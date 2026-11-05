@@ -1,3 +1,13 @@
+## 2026.11.05.1
+
+**Added:** Regenerated from the current Datadog OpenAPI spec. New methods
+`get_rule_version_history` and `restore_security_monitoring_rule`, with matching
+`rule_version_history` and `restore_security_monitoring_rule` resources.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

@@ -44,7 +44,9 @@ swamp model create @webframp/datadog/security-rules dd-security-rules \
 | `update_security_monitoring_rule`                         | Update an existing rule                         |
 | `delete_security_monitoring_rule`                         | Delete an existing rule                         |
 | `convert_existing_security_monitoring_rule`               | Convert an existing rule from JSON to Terraform |
+| `restore_security_monitoring_rule`                        | Restore a rule to a historical version          |
 | `test_existing_security_monitoring_rule`                  | Test an existing rule                           |
+| `get_rule_version_history`                                | Get a rule's version history                    |
 
 ## Development
 

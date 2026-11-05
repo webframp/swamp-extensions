@@ -1,3 +1,16 @@
+## 2026.11.05.1
+
+**Changed:** Regenerated from the current Datadog OpenAPI spec. Team schemas
+gain optional `handles`, `is_open_membership`, and `provisioned_by` fields. The
+team-sync and team-connection `source`/`type` enums now accept `servicenow`
+(alongside the existing `github`) and `servicenow_team` (alongside
+`github_team`). Several field descriptions were clarified. No methods were added
+or removed.
+
+**Upgrade note:** Additive only — new fields are optional and the enum changes
+only widen the accepted set, so existing stored data continues to validate. No
+migration required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

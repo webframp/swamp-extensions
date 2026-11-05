@@ -35,11 +35,22 @@ swamp model create @webframp/datadog/metrics dd-metrics \
 | Method                               | Description                                    |
 | ------------------------------------ | ---------------------------------------------- |
 | `list_tag_configurations`            | Get a list of metrics                          |
+| `create_derived_metric`              | Create a derived metric                        |
+| `get_derived_metric`                 | Get a derived metric                           |
+| `update_derived_metric`              | Update a derived metric                        |
+| `delete_derived_metric`              | Delete a derived metric                        |
+| `list_tag_indexing_rules`            | List tag indexing rules                        |
+| `create_tag_indexing_rule`           | Create a tag indexing rule                     |
+| `reorder_tag_indexing_rules`         | Reorder tag indexing rules                     |
+| `get_tag_indexing_rule`              | Get a tag indexing rule                        |
+| `update_tag_indexing_rule`           | Update a tag indexing rule                     |
+| `delete_tag_indexing_rule`           | Delete a tag indexing rule                     |
 | `list_active_metric_configurations`  | List active tags and aggregations              |
 | `list_tags_by_metric_name`           | List tags by metric name                       |
 | `list_metric_assets`                 | Related Assets to a Metric                     |
 | `estimate_metrics_output_series`     | Tag Configuration Cardinality Estimator        |
 | `get_metric_tag_cardinality_details` | Get tag key cardinality details                |
+| `list_tag_indexing_rules_for_metric` | List tag indexing rules for a metric           |
 | `list_tag_configuration_by_name`     | List tag configuration by name                 |
 | `create_tag_configuration`           | Create a tag configuration                     |
 | `update_tag_configuration`           | Update a tag configuration                     |

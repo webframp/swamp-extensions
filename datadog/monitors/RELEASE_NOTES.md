@@ -1,3 +1,13 @@
+## 2026.11.05.1
+
+**Changed:** Regenerated from the current Datadog OpenAPI spec. The monitor
+notification rule schema gains an optional `rule_options` field (with an
+`is_threaded` boolean) reflecting the upstream addition. No methods were added
+or removed.
+
+**Upgrade note:** Additive only — the new field is optional, so existing stored
+data continues to validate. No migration required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

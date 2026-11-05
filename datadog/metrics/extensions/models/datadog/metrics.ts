@@ -41,6 +41,114 @@ const ListTagConfigurationsSchema = z.object({
   ),
 });
 
+const CreateDerivedMetricSchema = z.object({
+  id: z.string().describe("The derived metric name used as the resource ID."),
+  type: z.enum(["derived_metrics"]).optional().default("derived_metrics")
+    .describe("The derived metric resource type."),
+  definition: z.object({
+    formula: z.string(),
+    queries: z.array(z.unknown()),
+  }).describe(
+    "The definition of a derived metric as a formula over one or more queries.",
+  ),
+}).passthrough();
+
+const TagIndexingRulesItemSchema = z.object({
+  id: z.string().describe(
+    "The unique identifier (UUID) of the tag indexing rule.",
+  ),
+  type: z.enum(["tag_indexing_rules"]).optional().default("tag_indexing_rules")
+    .describe("The tag indexing rule resource type."),
+  created_at: z.string().optional().describe(
+    "Timestamp when the rule was created.",
+  ),
+  created_by_handle: z.string().optional().describe(
+    "Handle of the user who created the rule.",
+  ),
+  exclude_tags_mode: z.boolean().optional().describe(
+    "When true, the rule excludes the listed tags and indexes all others. When false (default), the ru...",
+  ),
+  ignored_metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes excluded from the rule's scope.",
+  ),
+  metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes (glob patterns) this rule applies to.",
+  ),
+  modified_at: z.string().optional().describe(
+    "Timestamp when the rule was last modified.",
+  ),
+  modified_by_handle: z.string().optional().describe(
+    "Handle of the user who last modified the rule.",
+  ),
+  name: z.string().optional().describe("Human-readable name for the rule."),
+  options: z.object({
+    data: z.unknown().optional(),
+    version: z.number().int().optional(),
+  }).optional().describe(
+    "Versioned configuration options for a tag indexing rule.",
+  ),
+  rule_order: z.number().int().optional().describe(
+    "Evaluation order within the org. Lower values are evaluated first. Assigned server-side on create...",
+  ),
+  tags: z.array(z.string()).optional().describe(
+    "Tag keys managed by this rule.",
+  ),
+}).passthrough();
+
+const ListTagIndexingRulesSchema = z.object({
+  items: z.array(TagIndexingRulesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const CreateTagIndexingRuleSchema = z.object({
+  id: z.string().describe(
+    "The unique identifier (UUID) of the tag indexing rule.",
+  ),
+  type: z.enum(["tag_indexing_rules"]).optional().default("tag_indexing_rules")
+    .describe("The tag indexing rule resource type."),
+  created_at: z.string().optional().describe(
+    "Timestamp when the rule was created.",
+  ),
+  created_by_handle: z.string().optional().describe(
+    "Handle of the user who created the rule.",
+  ),
+  exclude_tags_mode: z.boolean().optional().describe(
+    "When true, the rule excludes the listed tags and indexes all others. When false (default), the ru...",
+  ),
+  ignored_metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes excluded from the rule's scope.",
+  ),
+  metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes (glob patterns) this rule applies to.",
+  ),
+  modified_at: z.string().optional().describe(
+    "Timestamp when the rule was last modified.",
+  ),
+  modified_by_handle: z.string().optional().describe(
+    "Handle of the user who last modified the rule.",
+  ),
+  name: z.string().optional().describe("Human-readable name for the rule."),
+  options: z.object({
+    data: z.unknown().optional(),
+    version: z.number().int().optional(),
+  }).optional().describe(
+    "Versioned configuration options for a tag indexing rule.",
+  ),
+  rule_order: z.number().int().optional().describe(
+    "Evaluation order within the org. Lower values are evaluated first. Assigned server-side on create...",
+  ),
+  tags: z.array(z.string()).optional().describe(
+    "Tag keys managed by this rule.",
+  ),
+}).passthrough();
+
 const ListActiveMetricConfigurationsSchema = z.object({
   id: z.string().describe("The metric name for this resource."),
   type: z.enum(["actively_queried_configurations"]).optional().default(
@@ -112,6 +220,60 @@ const MetricTagCardinalityDetailsItemSchema = z.object({
 
 const GetMetricTagCardinalityDetailsSchema = z.object({
   items: z.array(MetricTagCardinalityDetailsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const TagIndexingRulesForMetricItemSchema = z.object({
+  id: z.string().describe(
+    "The unique identifier (UUID) of the tag indexing rule.",
+  ),
+  type: z.enum(["tag_indexing_rules"]).optional().default("tag_indexing_rules")
+    .describe("The tag indexing rule resource type."),
+  created_at: z.string().optional().describe(
+    "Timestamp when the rule was created.",
+  ),
+  created_by_handle: z.string().optional().describe(
+    "Handle of the user who created the rule.",
+  ),
+  exclude_tags_mode: z.boolean().optional().describe(
+    "When true, the rule excludes the listed tags and indexes all others. When false (default), the ru...",
+  ),
+  ignored_metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes excluded from the rule's scope.",
+  ),
+  metric_name_matches: z.array(z.string()).optional().describe(
+    "Metric name prefixes (glob patterns) this rule applies to.",
+  ),
+  modified_at: z.string().optional().describe(
+    "Timestamp when the rule was last modified.",
+  ),
+  modified_by_handle: z.string().optional().describe(
+    "Handle of the user who last modified the rule.",
+  ),
+  name: z.string().optional().describe("Human-readable name for the rule."),
+  options: z.object({
+    data: z.unknown().optional(),
+    version: z.number().int().optional(),
+  }).optional().describe(
+    "Versioned configuration options for a tag indexing rule.",
+  ),
+  rule_order: z.number().int().optional().describe(
+    "Evaluation order within the org. Lower values are evaluated first. Assigned server-side on create...",
+  ),
+  tags: z.array(z.string()).optional().describe(
+    "Tag keys managed by this rule.",
+  ),
+}).passthrough();
+
+const ListTagIndexingRulesForMetricSchema = z.object({
+  items: z.array(TagIndexingRulesForMetricItemSchema),
   truncated: z.boolean(),
   fetchedAt: z.string(),
   durationMs: z.number().optional().describe(
@@ -213,7 +375,7 @@ const SubmitMetricsSchema = z.object({
 /** Datadog Metrics — metric queries, submissions, tag configurations, and metadata */
 export const model = {
   type: "@webframp/datadog/metrics",
-  version: "2026.11.03.1",
+  version: "2026.11.05.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -295,6 +457,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -303,6 +471,30 @@ export const model = {
       schema: ListTagConfigurationsSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    "derived_metric": {
+      description: "Create a derived metric",
+      schema: CreateDerivedMetricSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "tag_indexing_rules": {
+      description: "List tag indexing rules",
+      schema: ListTagIndexingRulesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "tag_indexing_rule": {
+      description: "Create a tag indexing rule",
+      schema: CreateTagIndexingRuleSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "reorder_tag_indexing_rules": {
+      description: "Reorder tag indexing rules",
+      schema: z.object({}),
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
     },
     "list_active_metric_configurations": {
       description: "List active tags and aggregations",
@@ -331,6 +523,12 @@ export const model = {
     "metric_tag_cardinality_details": {
       description: "Get tag key cardinality details",
       schema: GetMetricTagCardinalityDetailsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "tag_indexing_rules_for_metric": {
+      description: "List tag indexing rules for a metric",
+      schema: ListTagIndexingRulesForMetricSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
@@ -395,7 +593,7 @@ export const model = {
           "Only return metrics that have been queried (true) or not queried (false) in t...",
         ),
         filter_queried_window_seconds: z.number().optional().describe(
-          "This parameter has no effect unless `filter[queried]` is also set. Only retur...",
+          "The look-back window for `filter[queried]`, in seconds. You must also set `fi...",
         ),
         filter_tags: z.string().optional().describe(
           "Only return metrics that were submitted with tags matching this expression. Y...",
@@ -410,7 +608,7 @@ export const model = {
           "Sort results by metric volume. Prefix a key with `-` for descending order. Su...",
         ),
         window_seconds: z.number().optional().describe(
-          "Only return metrics that have been actively reporting in the specified window...",
+          "Only return metrics that have been actively reporting in this window. The def...",
         ),
       }),
       execute: async (
@@ -488,6 +686,502 @@ export const model = {
           count: results.length,
         });
         return { dataHandles: [handle] };
+      },
+    },
+    create_derived_metric: {
+      description: "Create a derived metric",
+      arguments: z.object({
+        definition: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = { data: { type: "derived_metrics", attributes: attrs } };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "POST",
+          `/api/v2/metrics/derived-metrics`,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const handle = await context.writeResource(
+          "derived_metric",
+          id,
+          result,
+        );
+        context.logger.info("Created derived_metric {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_derived_metric: {
+      description: "Get a derived metric",
+      arguments: z.object({
+        metric_name: z.string().describe("The name of the metric."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "GET",
+          `/api/v2/metrics/derived-metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }`,
+        );
+
+        const handle = await context.writeResource(
+          "derived_metric",
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
+        );
+        context.logger.info("Fetched derived_metric", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_derived_metric: {
+      description: "Update a derived metric",
+      arguments: z.object({
+        metric_name: z.string().describe("The name of the metric."),
+        definition: z.unknown(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>(["metric_name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = { data: { type: "derived_metrics", attributes: attrs } };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "PUT",
+          `/api/v2/metrics/derived-metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "derived_metric",
+          sanitizeInstanceName(String(args.metric_name)),
+          result,
+        );
+        context.logger.info("Updated derived_metric", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_derived_metric: {
+      description: "Delete a derived metric",
+      arguments: z.object({
+        metric_name: z.string().describe("The name of the metric."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "DELETE",
+          `/api/v2/metrics/derived-metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.metric_name });
+        return { dataHandles: [] };
+      },
+    },
+    list_tag_indexing_rules: {
+      description: "List tag indexing rules",
+      arguments: z.object({
+        search: z.string().optional().describe(
+          "Substring filter on rule name.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const paramKey = k;
+            params[paramKey] = String(v);
+          }
+        }
+
+        const { results, truncated } = await ddApiPaginated(
+          apiKey,
+          appKey,
+          site,
+          `/api/v2/metrics/tag-indexing-rules`,
+          {
+            "style": "offset",
+            "limitParam": "page[limit]",
+            "limitDefault": 100,
+            "offsetParam": "page[offset]",
+          },
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "tag_indexing_rules",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} tag_indexing_rules", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    create_tag_indexing_rule: {
+      description: "Create a tag indexing rule",
+      arguments: z.object({
+        exclude_tags_mode: z.boolean().optional().describe(
+          "When true, the rule excludes the listed tags and indexes all others. When fal...",
+        ),
+        ignored_metric_name_matches: z.array(z.string()).optional().describe(
+          "Metric name prefixes excluded from the rule's scope.",
+        ),
+        metric_name_matches: z.array(z.string()).describe(
+          "Metric name prefixes (glob patterns) this rule applies to.",
+        ),
+        name: z.string().describe("Human-readable name for the rule."),
+        options: z.unknown().optional(),
+        tags: z.array(z.string()).optional().describe(
+          "Tag keys managed by this rule.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = {
+          data: { type: "tag_indexing_rules", attributes: attrs },
+        };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "POST",
+          `/api/v2/metrics/tag-indexing-rules`,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const handle = await context.writeResource(
+          "tag_indexing_rule",
+          id,
+          result,
+        );
+        context.logger.info("Created tag_indexing_rule {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    reorder_tag_indexing_rules: {
+      description: "Reorder tag indexing rules",
+      arguments: z.object({
+        rule_ids: z.array(z.string()).optional().describe(
+          "Ordered list of tag indexing rule UUIDs. The server assigns rule_order 1, 2, ...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>([]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = {
+          data: { type: "tag_indexing_rules", attributes: attrs },
+        };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "POST",
+          `/api/v2/metrics/tag-indexing-rules/order`,
+          body,
+        );
+
+        const id = sanitizeInstanceName(
+          String((result as { id?: unknown }).id ?? "created"),
+        );
+        const handle = await context.writeResource(
+          "reorder_tag_indexing_rules",
+          id,
+          result,
+        );
+        context.logger.info("Created reorder_tag_indexing_rules {id}", { id });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_tag_indexing_rule: {
+      description: "Get a tag indexing rule",
+      arguments: z.object({
+        id: z.string().describe("ID of the tag indexing rule."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "GET",
+          `/api/v2/metrics/tag-indexing-rules/${
+            encodeURIComponent(String(args.id))
+          }`,
+        );
+
+        const handle = await context.writeResource(
+          "tag_indexing_rule",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Fetched tag_indexing_rule", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_tag_indexing_rule: {
+      description: "Update a tag indexing rule",
+      arguments: z.object({
+        id: z.string().describe("ID of the tag indexing rule."),
+        exclude_tags_mode: z.boolean().optional().describe(
+          "When true, the rule excludes the listed tags and indexes all others.",
+        ),
+        ignored_metric_name_matches: z.array(z.string()).optional().describe(
+          "Metric name prefixes excluded from the rule's scope.",
+        ),
+        metric_name_matches: z.array(z.string()).optional().describe(
+          "Metric name prefixes (glob patterns) this rule applies to.",
+        ),
+        name: z.string().optional().describe(
+          "Human-readable name for the rule.",
+        ),
+        options: z.unknown().optional(),
+        rule_order: z.number().int().optional().describe(
+          "Desired evaluation order. Returns 409 if the value conflicts with another rul...",
+        ),
+        tags: z.array(z.string()).optional().describe(
+          "Tag keys managed by this rule.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const attrs: Record<string, unknown> = {};
+        const excludeKeys = new Set<string>(["id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) attrs[k] = v;
+        }
+        const body = {
+          data: { type: "tag_indexing_rules", attributes: attrs },
+        };
+
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "PUT",
+          `/api/v2/metrics/tag-indexing-rules/${
+            encodeURIComponent(String(args.id))
+          }`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "tag_indexing_rule",
+          sanitizeInstanceName(String(args.id)),
+          result,
+        );
+        context.logger.info("Updated tag_indexing_rule", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_tag_indexing_rule: {
+      description: "Delete a tag indexing rule",
+      arguments: z.object({
+        id: z.string().describe("ID of the tag indexing rule."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "DELETE",
+          `/api/v2/metrics/tag-indexing-rules/${
+            encodeURIComponent(String(args.id))
+          }`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.id });
+        return { dataHandles: [] };
       },
     },
     list_active_metric_configurations: {
@@ -817,6 +1511,72 @@ export const model = {
         );
 
         context.logger.info("Found {count} metric_tag_cardinality_details", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    list_tag_indexing_rules_for_metric: {
+      description: "List tag indexing rules for a metric",
+      arguments: z.object({
+        metric_name: z.string().describe("The name of the metric."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>(["metric_name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const paramKey = k;
+            params[paramKey] = String(v);
+          }
+        }
+
+        const { results, truncated } = await ddApiPaginated(
+          apiKey,
+          appKey,
+          site,
+          `/api/v2/metrics/${
+            encodeURIComponent(String(args.metric_name))
+          }/tag-indexing-rules`,
+          { "style": "none", "limitParam": "", "limitDefault": 0 },
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "tag_indexing_rules_for_metric",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} tag_indexing_rules_for_metric", {
           count: results.length,
         });
         return { dataHandles: [handle] };

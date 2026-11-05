@@ -34,10 +34,13 @@ swamp model create @webframp/datadog/on-call dd-on-call \
 
 | Method                             | Description                                       |
 | ---------------------------------- | ------------------------------------------------- |
+| `list_on_call_escalation_policies` | List On-Call escalation policies                  |
 | `create_on_call_escalation_policy` | Create On-Call escalation policy                  |
 | `get_on_call_escalation_policy`    | Get On-Call escalation policy                     |
 | `update_on_call_escalation_policy` | Update On-Call escalation policy                  |
 | `delete_on_call_escalation_policy` | Delete On-Call escalation policy                  |
+| `list_on_call_pages`               | List On-Call Pages                                |
+| `get_on_call_page`                 | Get On-Call Page                                  |
 | `list_on_call_schedules`           | List On-Call schedules                            |
 | `create_on_call_schedule`          | Create On-Call schedule                           |
 | `get_on_call_schedule`             | Get On-Call schedule                              |

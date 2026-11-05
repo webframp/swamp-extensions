@@ -94,7 +94,9 @@ Deno.test("security-rules model: has expected methods", () => {
   assertExists(model.methods.update_security_monitoring_rule);
   assertExists(model.methods.delete_security_monitoring_rule);
   assertExists(model.methods.convert_existing_security_monitoring_rule);
+  assertExists(model.methods.restore_security_monitoring_rule);
   assertExists(model.methods.test_existing_security_monitoring_rule);
+  assertExists(model.methods.get_rule_version_history);
 });
 
 Deno.test("security-rules model: has expected resources", () => {
@@ -107,7 +109,9 @@ Deno.test("security-rules model: has expected resources", () => {
   assertExists(model.resources["test_security_monitoring_rule"]);
   assertExists(model.resources["validate_security_monitoring_rule"]);
   assertExists(model.resources["convert_existing_security_monitoring_rule"]);
+  assertExists(model.resources["restore_security_monitoring_rule"]);
   assertExists(model.resources["test_existing_security_monitoring_rule"]);
+  assertExists(model.resources["rule_version_history"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -800,6 +804,65 @@ Deno.test({
 
 Deno.test({
   name:
+    "security-rules model: restore_security_monitoring_rule executes and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/restore/test-id-123": { body: { "id": "fixture-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-rules",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).restore_security_monitoring_rule.execute({
+        "rule_id": "test-id-123",
+        "version": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/restore/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "restore_security_monitoring_rule");
+      assertExists(resources[0].data);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "security-rules model: test_existing_security_monitoring_rule creates and writes resource",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
@@ -854,6 +917,79 @@ Deno.test({
         "test_existing_security_monitoring_rule",
       );
       assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "security-rules model: get_rule_version_history fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/version_history": {
+        body: {
+          "data": [{
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "count": 1, "data": {} },
+          }],
+          "meta": { "page": {} },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-security-rules",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_rule_version_history.execute(
+        { "rule_id": "test-id-123" },
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(req0.path, "/test-id-123/version_history");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "rule_version_history");
+      const data = resources[0].data as {
+        items: unknown[];
+        truncated: boolean;
+      };
+      assertEquals(Array.isArray(data.items), true);
+      assertEquals(data.items.length, 1);
+      assertEquals(typeof data.truncated, "boolean");
     } finally {
       uninstall();
       await server.shutdown();

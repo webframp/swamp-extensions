@@ -1,3 +1,14 @@
+## 2026.11.05.1
+
+**Added:** Regenerated from the current Datadog OpenAPI spec. New read methods
+`list_on_call_pages`, `get_on_call_page`, and
+`list_on_call_escalation_policies`, with matching `on_call_pages`,
+`on_call_page`, and `on_call_escalation_policies` resources.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

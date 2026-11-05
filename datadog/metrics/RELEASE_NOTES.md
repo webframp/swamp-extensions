@@ -1,3 +1,18 @@
+## 2026.11.05.1
+
+**Added:** Regenerated from the current Datadog OpenAPI spec. New methods for
+derived metrics (`create_derived_metric`, `get_derived_metric`,
+`update_derived_metric`, `delete_derived_metric`) and tag indexing rules
+(`list_tag_indexing_rules`, `list_tag_indexing_rules_for_metric`,
+`get_tag_indexing_rule`, `create_tag_indexing_rule`, `update_tag_indexing_rule`,
+`delete_tag_indexing_rule`, `reorder_tag_indexing_rules`), with matching
+`derived_metric`, `tag_indexing_rule`, `tag_indexing_rules`,
+`tag_indexing_rules_for_metric`, and `reorder_tag_indexing_rules` resources.
+
+**Upgrade note:** Additive only — existing methods, arguments, and resource
+schemas are unchanged, so stored data continues to validate. No migration
+required.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

@@ -27,6 +27,41 @@ const GlobalArgsSchema = z.object({
     .describe("Datadog site"),
 });
 
+const OnCallEscalationPoliciesItemSchema = z.object({
+  id: z.string().describe(
+    "Specifies the unique identifier of the escalation policy.",
+  ),
+  type: z.enum(["policies"]).optional().default("policies").describe(
+    "Indicates that the resource is of type `policies`.",
+  ),
+  name: z.string().min(1).describe(
+    "Specifies the name of the escalation policy.",
+  ),
+  resolve_page_on_policy_end: z.boolean().optional().describe(
+    "Indicates whether the Page is automatically resolved when the policy ends.",
+  ),
+  retries: z.number().int().min(0).max(10).optional().describe(
+    "Specifies how many times the escalation sequence is retried if there is no response.",
+  ),
+  tags: z.array(z.string()).optional().describe(
+    "A list of tags attached to the escalation policy, in `key:value` format.",
+  ),
+  steps_id: z.string().optional().describe("Related steps ID"),
+  teams_id: z.string().optional().describe("Related teams ID"),
+}).passthrough();
+
+const ListOnCallEscalationPoliciesSchema = z.object({
+  items: z.array(OnCallEscalationPoliciesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const CreateOnCallEscalationPolicySchema = z.object({
   id: z.string().describe(
     "Specifies the unique identifier of the escalation policy.",
@@ -38,19 +73,179 @@ const CreateOnCallEscalationPolicySchema = z.object({
     "Specifies the name of the escalation policy.",
   ),
   resolve_page_on_policy_end: z.boolean().optional().describe(
-    "Indicates whether the page is automatically resolved when the policy ends.",
+    "Indicates whether the Page is automatically resolved when the policy ends.",
   ),
   retries: z.number().int().min(0).max(10).optional().describe(
     "Specifies how many times the escalation sequence is retried if there is no response.",
   ),
+  tags: z.array(z.string()).optional().describe(
+    "A list of tags attached to the escalation policy, in `key:value` format.",
+  ),
   steps_id: z.string().optional().describe("Related steps ID"),
   teams_id: z.string().optional().describe("Related teams ID"),
+}).passthrough();
+
+const OnCallPagesItemSchema = z.object({
+  id: z.string().describe("The unique ID of the Page."),
+  type: z.enum(["pages"]).optional().default("pages").describe(
+    "Indicates that the resource is of type `pages`.",
+  ),
+  acknowledged_at: z.string().optional().describe(
+    "The time when the Page was first acknowledged.",
+  ),
+  closed_at: z.string().optional().describe(
+    "The time when the Page was resolved.",
+  ),
+  comment_count: z.number().int().optional().describe(
+    "The number of comments on the Page.",
+  ),
+  created_at: z.string().describe("The time when the Page was created."),
+  description: z.string().describe("A short summary of the issue or context."),
+  escalation_policy_uuid: z.string().optional().describe(
+    "The ID of the escalation policy used to route the Page.",
+  ),
+  key: z.string().describe(
+    "An alternative numeric identifier of the Page, as displayed in the Datadog UI.",
+  ),
+  live_call: z.object({
+    call_over: z.unknown().optional(),
+  }).optional().describe(
+    "Live call information for a Page triggered by a live call route.",
+  ),
+  modified_at: z.string().optional().describe(
+    "The time when the Page was last modified.",
+  ),
+  release_at: z.string().optional().describe(
+    "The time when the snooze ends. Only set while the Page is snoozed, together with `release_origin`.",
+  ),
+  release_origin: z.enum([
+    "ack_timeout",
+    "team_rules_active_hours",
+    "manual_snooze",
+  ]).optional().describe(
+    "What snoozed the Page. Only set while the Page is snoozed, together with `release_at`. `ack_timeo...",
+  ),
+  responders_added_at: z.string().optional().describe(
+    "The time when responders were first added to the Page.",
+  ),
+  services: z.array(z.string()).optional().describe(
+    "The services associated with the Page.",
+  ),
+  status: z.enum(["triggered", "acknowledged", "resolved"]).describe(
+    "The current status of the On-Call Page.",
+  ),
+  tags: z.array(z.string()).describe("Tags associated with the Page."),
+  title: z.string().describe("The title of the Page."),
+  urgency: z.enum(["low", "high"]).default("high").describe(
+    "On-Call Page urgency level.",
+  ),
+  author_id: z.string().optional().describe("Related author ID"),
+  closed_by_id: z.string().optional().describe("Related closed_by ID"),
+  jira_issue_id: z.string().optional().describe("Related jira_issue ID"),
+  links_id: z.string().optional().describe("Related links ID"),
+  responders_id: z.string().optional().describe("Related responders ID"),
+  scheduled_action_id: z.string().optional().describe(
+    "Related scheduled_action ID",
+  ),
+  service_now_incident_id: z.string().optional().describe(
+    "Related service_now_incident ID",
+  ),
+  target_id: z.string().optional().describe("Related target ID"),
+  team_routing_rule_id: z.string().optional().describe(
+    "Related team_routing_rule ID",
+  ),
+}).passthrough();
+
+const ListOnCallPagesSchema = z.object({
+  items: z.array(OnCallPagesItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
+const GetOnCallPageSchema = z.object({
+  id: z.string().describe("The unique ID of the Page."),
+  type: z.enum(["pages"]).optional().default("pages").describe(
+    "Indicates that the resource is of type `pages`.",
+  ),
+  acknowledged_at: z.string().optional().describe(
+    "The time when the Page was first acknowledged.",
+  ),
+  closed_at: z.string().optional().describe(
+    "The time when the Page was resolved.",
+  ),
+  comment_count: z.number().int().optional().describe(
+    "The number of comments on the Page.",
+  ),
+  created_at: z.string().describe("The time when the Page was created."),
+  description: z.string().describe("A short summary of the issue or context."),
+  escalation_policy_uuid: z.string().optional().describe(
+    "The ID of the escalation policy used to route the Page.",
+  ),
+  key: z.string().describe(
+    "An alternative numeric identifier of the Page, as displayed in the Datadog UI.",
+  ),
+  live_call: z.object({
+    call_over: z.unknown().optional(),
+  }).optional().describe(
+    "Live call information for a Page triggered by a live call route.",
+  ),
+  modified_at: z.string().optional().describe(
+    "The time when the Page was last modified.",
+  ),
+  release_at: z.string().optional().describe(
+    "The time when the snooze ends. Only set while the Page is snoozed, together with `release_origin`.",
+  ),
+  release_origin: z.enum([
+    "ack_timeout",
+    "team_rules_active_hours",
+    "manual_snooze",
+  ]).optional().describe(
+    "What snoozed the Page. Only set while the Page is snoozed, together with `release_at`. `ack_timeo...",
+  ),
+  responders_added_at: z.string().optional().describe(
+    "The time when responders were first added to the Page.",
+  ),
+  services: z.array(z.string()).optional().describe(
+    "The services associated with the Page.",
+  ),
+  status: z.enum(["triggered", "acknowledged", "resolved"]).describe(
+    "The current status of the On-Call Page.",
+  ),
+  tags: z.array(z.string()).describe("Tags associated with the Page."),
+  title: z.string().describe("The title of the Page."),
+  urgency: z.enum(["low", "high"]).default("high").describe(
+    "On-Call Page urgency level.",
+  ),
+  author_id: z.string().optional().describe("Related author ID"),
+  closed_by_id: z.string().optional().describe("Related closed_by ID"),
+  jira_issue_id: z.string().optional().describe("Related jira_issue ID"),
+  links_id: z.string().optional().describe("Related links ID"),
+  responders_id: z.string().optional().describe("Related responders ID"),
+  scheduled_action_id: z.string().optional().describe(
+    "Related scheduled_action ID",
+  ),
+  service_now_incident_id: z.string().optional().describe(
+    "Related service_now_incident ID",
+  ),
+  target_id: z.string().optional().describe("Related target ID"),
+  team_routing_rule_id: z.string().optional().describe(
+    "Related team_routing_rule ID",
+  ),
 }).passthrough();
 
 const OnCallSchedulesItemSchema = z.object({
   id: z.string().describe("The schedule's unique identifier."),
   type: z.enum(["schedules"]).optional().default("schedules").describe(
     "Schedules resource type.",
+  ),
+  max_responders: z.number().int().min(1).max(10).optional().describe(
+    "Maximum number of users who can be on call at the same time. The value is between 1 and the numbe...",
   ),
   name: z.string().optional().describe("A short name for the schedule."),
   tags: z.array(z.string()).optional().describe(
@@ -79,6 +274,9 @@ const CreateOnCallScheduleSchema = z.object({
   type: z.enum(["schedules"]).optional().default("schedules").describe(
     "Schedules resource type.",
   ),
+  max_responders: z.number().int().min(1).max(10).optional().describe(
+    "Maximum number of users who can be on call at the same time. The value is between 1 and the numbe...",
+  ),
   name: z.string().optional().describe("A short name for the schedule."),
   tags: z.array(z.string()).optional().describe(
     "A list of tags associated with the schedule.",
@@ -93,7 +291,7 @@ const CreateOnCallScheduleSchema = z.object({
 const ScheduleOverridesItemSchema = z.object({
   id: z.string().describe("The unique identifier of the override."),
   type: z.enum(["overrides"]).optional().default("overrides").describe(
-    "Indicates that the resource is of type 'overrides'.",
+    "Indicates that the resource is of type `overrides`.",
   ),
   end: z.string().optional().describe("The end time of the override."),
   inactive: z.boolean().optional().describe(
@@ -167,7 +365,7 @@ const UserNotificationChannelsItemSchema = z.object({
   id: z.string().describe("Unique identifier for the channel"),
   type: z.enum(["notification_channels"]).optional().default(
     "notification_channels",
-  ).describe("Indicates that the resource is of type 'notification_channels'."),
+  ).describe("Indicates that the resource is of type `notification_channels`."),
   active: z.boolean().optional().describe(
     "Whether the notification channel is currently active.",
   ),
@@ -192,7 +390,7 @@ const CreateUserNotificationChannelSchema = z.object({
   id: z.string().describe("Unique identifier for the channel"),
   type: z.enum(["notification_channels"]).optional().default(
     "notification_channels",
-  ).describe("Indicates that the resource is of type 'notification_channels'."),
+  ).describe("Indicates that the resource is of type `notification_channels`."),
   active: z.boolean().optional().describe(
     "Whether the notification channel is currently active.",
   ),
@@ -204,7 +402,7 @@ const CreateUserNotificationChannelSchema = z.object({
 const UserNotificationRulesItemSchema = z.object({
   id: z.string().describe("Unique identifier for the rule"),
   type: z.enum(["notification_rules"]).optional().default("notification_rules")
-    .describe("Indicates that the resource is of type 'notification_rules'."),
+    .describe("Indicates that the resource is of type `notification_rules`."),
   category: z.enum(["high_urgency", "low_urgency"]).optional().default(
     "high_urgency",
   ).describe("Specifies the category a notification rule will apply to"),
@@ -232,7 +430,7 @@ const ListUserNotificationRulesSchema = z.object({
 const CreateUserNotificationRuleSchema = z.object({
   id: z.string().describe("Unique identifier for the rule"),
   type: z.enum(["notification_rules"]).optional().default("notification_rules")
-    .describe("Indicates that the resource is of type 'notification_rules'."),
+    .describe("Indicates that the resource is of type `notification_rules`."),
   category: z.enum(["high_urgency", "low_urgency"]).optional().default(
     "high_urgency",
   ).describe("Specifies the category a notification rule will apply to"),
@@ -252,7 +450,7 @@ const CreateUserNotificationRuleSchema = z.object({
 /** Datadog On-Call — on-call schedules, escalation policies, and routing */
 export const model = {
   type: "@webframp/datadog/on-call",
-  version: "2026.11.03.1",
+  version: "2026.11.05.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -345,12 +543,36 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.05.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "on_call_escalation_policies": {
+      description: "List On-Call escalation policies",
+      schema: ListOnCallEscalationPoliciesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
     "on_call_escalation_policy": {
       description: "Create On-Call escalation policy",
       schema: CreateOnCallEscalationPolicySchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "on_call_pages": {
+      description: "List On-Call Pages",
+      schema: ListOnCallPagesSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    "on_call_page": {
+      description: "Get On-Call Page",
+      schema: GetOnCallPageSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -429,6 +651,103 @@ export const model = {
   },
 
   methods: {
+    list_on_call_escalation_policies: {
+      description: "List On-Call escalation policies",
+      arguments: z.object({
+        filter_query: z.string().optional().describe(
+          "Search query to filter escalation policies. Supports free-text search on the ...",
+        ),
+        filter_team_id: z.string().optional().describe(
+          "Comma-separated list of team IDs. Returns escalation policies that belong to ...",
+        ),
+        filter_user_id: z.string().optional().describe(
+          "Comma-separated list of user IDs. Returns escalation policies with a step tar...",
+        ),
+        filter_schedule_id: z.string().optional().describe(
+          "Comma-separated list of schedule IDs. Returns escalation policies with a step...",
+        ),
+        filter_tags: z.string().optional().describe(
+          "Comma-separated list of `key:value` tags. Returns escalation policies that ha...",
+        ),
+        filter_tags_any: z.string().optional().describe(
+          "Comma-separated list of `key:value` tags. Returns escalation policies that ha...",
+        ),
+        include: z.string().optional().describe(
+          "Comma-separated list of included relationships to be returned. Allowed values...",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_query": "filter[query]",
+          "filter_team_id": "filter[team_id]",
+          "filter_user_id": "filter[user_id]",
+          "filter_schedule_id": "filter[schedule_id]",
+          "filter_tags": "filter[tags]",
+          "filter_tags_any": "filter[tags_any]",
+        };
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const paramKey = paramNameMap[k] ?? k;
+            params[paramKey] = String(v);
+          }
+        }
+
+        const { results, truncated } = await ddApiPaginated(
+          apiKey,
+          appKey,
+          site,
+          `/api/v2/on-call/escalation-policies`,
+          {
+            "style": "page_number",
+            "limitParam": "page[size]",
+            "limitDefault": 50,
+            "pageParam": "page[number]",
+          },
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "on_call_escalation_policies",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} on_call_escalation_policies", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
     create_on_call_escalation_policy: {
       description: "Create On-Call escalation policy",
       arguments: z.object({
@@ -439,7 +758,7 @@ export const model = {
           "Specifies the name for the new escalation policy.",
         ),
         resolve_page_on_policy_end: z.boolean().optional().describe(
-          "Indicates whether the page is automatically resolved when the policy ends.",
+          "Indicates whether the Page is automatically resolved when the policy ends.",
         ),
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
@@ -566,7 +885,7 @@ export const model = {
           "Specifies the name of the escalation policy.",
         ),
         resolve_page_on_policy_end: z.boolean().optional().describe(
-          "Indicates whether the page is automatically resolved when the policy ends.",
+          "Indicates whether the Page is automatically resolved when the policy ends.",
         ),
         retries: z.number().int().min(0).max(10).optional().describe(
           "Specifies how many times the escalation sequence is retried if there is no re...",
@@ -649,6 +968,116 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.policy_id });
         return { dataHandles: [] };
+      },
+    },
+    list_on_call_pages: {
+      description: "List On-Call Pages",
+      arguments: z.object({
+        filter_query: z.string().optional().describe(
+          "Search query to filter Pages. Supports filters such as `status`, `urgency`, `...",
+        ),
+        sort: z.string().optional().describe(
+          "Sort Pages by the given field. Only one field is allowed.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set<string>([]);
+        const paramNameMap: Record<string, string> = {
+          "filter_query": "filter[query]",
+        };
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) {
+            const paramKey = paramNameMap[k] ?? k;
+            params[paramKey] = String(v);
+          }
+        }
+
+        const { results, truncated } = await ddApiPaginated(
+          apiKey,
+          appKey,
+          site,
+          `/api/v2/on-call/pages`,
+          {
+            "style": "page_number",
+            "limitParam": "page[size]",
+            "limitDefault": 50,
+            "pageParam": "page[number]",
+          },
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource("on_call_pages", "main", {
+          items: results,
+          truncated,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: EXTENSION_NAME,
+        });
+
+        context.logger.info("Found {count} on_call_pages", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+    get_on_call_page: {
+      description: "Get On-Call Page",
+      arguments: z.object({
+        page_id: z.string().describe("The ID of the Page, or its key."),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, appKey, site } = context.globalArgs;
+        const result = await ddApi(
+          apiKey,
+          appKey,
+          site,
+          "GET",
+          `/api/v2/on-call/pages/${encodeURIComponent(String(args.page_id))}`,
+        );
+
+        const handle = await context.writeResource(
+          "on_call_page",
+          sanitizeInstanceName(String(args.page_id)),
+          result,
+        );
+        context.logger.info("Fetched on_call_page", {});
+        return { dataHandles: [handle] };
       },
     },
     list_on_call_schedules: {
@@ -736,6 +1165,9 @@ export const model = {
         ),
         layers: z.array(z.unknown()).describe(
           "The layers of On-Call coverage that define rotation intervals and restrictions.",
+        ),
+        max_responders: z.number().int().min(1).max(10).optional().describe(
+          "Maximum number of users who can be on call at the same time. The value must b...",
         ),
         name: z.string().describe(
           "A human-readable name for the new schedule.",
@@ -860,6 +1292,9 @@ export const model = {
         ),
         layers: z.array(z.unknown()).describe(
           "The updated list of layers (rotations) for this schedule.",
+        ),
+        max_responders: z.number().int().min(1).max(10).optional().describe(
+          "Maximum number of users who can be on call at the same time. The value must b...",
         ),
         name: z.string().describe("A short name for the schedule."),
         time_zone: z.string().describe(
@@ -1316,7 +1751,7 @@ export const model = {
           "Comma-separated list of included relationships to be returned. Allowed values...",
         ),
         rules: z.array(z.unknown()).optional().describe(
-          "A list of routing rule items that define how incoming pages should be handled.",
+          "A list of routing rule items that define how incoming Pages should be handled.",
         ),
       }),
       execute: async (
