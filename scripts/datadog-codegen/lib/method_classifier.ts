@@ -746,6 +746,18 @@ function generateListBody(
     .map((p) => sanitizeFieldName(p.name));
   const excludeNames = [...pathParamNames];
 
+  // A list scoped by path parameters (e.g. per-metric tag rules) must key its
+  // stored instance on those params — writing every scope to the constant
+  // "main" silently overwrites one scope's result with another's. A truly
+  // global list (no path params) keeps "main".
+  const listInstanceExpr = pathParamNames.length === 0
+    ? '"main"'
+    : pathParamNames.length === 1
+    ? `sanitizeInstanceName(String(args.${pathParamNames[0]}))`
+    : `sanitizeInstanceName([${
+      pathParamNames.map((p) => `String(args.${p})`).join(", ")
+    }].join("_"))`;
+
   // POST-list methods (search endpoints) use body-based cursor pagination
   if (method.operation.httpMethod === "post") {
     return `${indent}    const startMs = Date.now();
@@ -770,7 +782,7 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}    const handle = await context.writeResource("${resourceName}", ${listInstanceExpr}, {
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
@@ -823,7 +835,7 @@ ${indent}    if (truncated) {
 ${indent}      context.logger.info("WARNING: results truncated at {count} (pagination cap)", { count: results.length });
 ${indent}    }
 ${indent}
-${indent}    const handle = await context.writeResource("${resourceName}", "main", {
+${indent}    const handle = await context.writeResource("${resourceName}", ${listInstanceExpr}, {
 ${indent}      items: results,
 ${indent}      truncated,
 ${indent}      fetchedAt: new Date().toISOString(),
@@ -1438,7 +1450,12 @@ function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   // sanitizeInstanceName.
   if (!methodWritesResource(method)) return false;
   if (method.type === "create") return true;
-  if (method.type === "get" || method.type === "update") {
+  // get/update key on a trailing path param; a path-scoped list keys its stored
+  // instance on its path params instead of the constant "main".
+  if (
+    method.type === "get" || method.type === "update" ||
+    method.type === "list"
+  ) {
     return method.operation.pathParams.length > 0;
   }
   return false;
