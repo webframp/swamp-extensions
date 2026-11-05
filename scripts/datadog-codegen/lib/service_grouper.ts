@@ -58,6 +58,12 @@ export interface GroupedOperation {
   requestBodyArrayWrapper?: string;
   /** Resolved success response schema */
   responseSchema?: SchemaObject;
+  /**
+   * Whether a success (2xx) response declares a JSON body. False for
+   * no-content endpoints (e.g. a POST whose only success code is 204), which
+   * return nothing to persist and so must not write a resource.
+   */
+  hasSuccessResponseBody: boolean;
   /** Whether the response is a collection (array in data) */
   isCollection: boolean;
   /** Whether this endpoint uses JSON:API format ({data, meta}) */
@@ -322,10 +328,11 @@ function extractOperation(
   }
 
   // Extract response schema and detect format
-  const { responseSchema, isCollection, isJsonApi } = extractResponseSchema(
-    spec,
-    operation,
-  );
+  const { responseSchema, isCollection, isJsonApi, hasSuccessResponseBody } =
+    extractResponseSchema(
+      spec,
+      operation,
+    );
 
   const operationId = operation.operationId ??
     `${httpMethod}_${path.replace(/[^a-zA-Z0-9]/g, "_")}`;
@@ -344,6 +351,7 @@ function extractOperation(
     requestBodyArrayWrapper,
     requestBodyType,
     responseSchema,
+    hasSuccessResponseBody,
     isCollection,
     isJsonApi,
     pagination,
@@ -368,9 +376,14 @@ function extractResponseSchema(
   responseSchema?: SchemaObject;
   isCollection: boolean;
   isJsonApi: boolean;
+  hasSuccessResponseBody: boolean;
 } {
   if (!operation.responses) {
-    return { isCollection: false, isJsonApi: false };
+    return {
+      isCollection: false,
+      isJsonApi: false,
+      hasSuccessResponseBody: false,
+    };
   }
 
   // Try 200, 201, then any 2xx
@@ -386,11 +399,21 @@ function extractResponseSchema(
   }
 
   if (!responseContent) {
-    return { isCollection: false, isJsonApi: false };
+    return {
+      isCollection: false,
+      isJsonApi: false,
+      hasSuccessResponseBody: false,
+    };
   }
 
   const rawSchema = responseContent["application/json"]?.schema;
-  if (!rawSchema) return { isCollection: false, isJsonApi: false };
+  if (!rawSchema) {
+    return {
+      isCollection: false,
+      isJsonApi: false,
+      hasSuccessResponseBody: false,
+    };
+  }
 
   const fullSchema = resolveSchema(spec, rawSchema);
 
@@ -408,13 +431,19 @@ function extractResponseSchema(
 
       if (isJsonApi) {
         const flattened = flattenJsonApiItem(spec, itemSchema);
-        return { responseSchema: flattened, isCollection: true, isJsonApi };
+        return {
+          responseSchema: flattened,
+          isCollection: true,
+          isJsonApi,
+          hasSuccessResponseBody: true,
+        };
       }
       // Flat array in data
       return {
         responseSchema: itemSchema,
         isCollection: true,
         isJsonApi: false,
+        hasSuccessResponseBody: true,
       };
     }
 
@@ -423,12 +452,18 @@ function extractResponseSchema(
       const isJsonApi = hasJsonApiShape(dataSchema);
       if (isJsonApi) {
         const flattened = flattenJsonApiItem(spec, dataSchema);
-        return { responseSchema: flattened, isCollection: false, isJsonApi };
+        return {
+          responseSchema: flattened,
+          isCollection: false,
+          isJsonApi,
+          hasSuccessResponseBody: true,
+        };
       }
       return {
         responseSchema: dataSchema,
         isCollection: false,
         isJsonApi: false,
+        hasSuccessResponseBody: true,
       };
     }
 
@@ -438,14 +473,29 @@ function extractResponseSchema(
       const isJsonApi = hasJsonApiShape(first);
       if (isJsonApi) {
         const flattened = flattenJsonApiItem(spec, first);
-        return { responseSchema: flattened, isCollection: false, isJsonApi };
+        return {
+          responseSchema: flattened,
+          isCollection: false,
+          isJsonApi,
+          hasSuccessResponseBody: true,
+        };
       }
-      return { responseSchema: first, isCollection: false, isJsonApi: false };
+      return {
+        responseSchema: first,
+        isCollection: false,
+        isJsonApi: false,
+        hasSuccessResponseBody: true,
+      };
     }
   }
 
   // No `data` top-level key — use full schema as flat response
-  return { responseSchema: fullSchema, isCollection: false, isJsonApi: false };
+  return {
+    responseSchema: fullSchema,
+    isCollection: false,
+    isJsonApi: false,
+    hasSuccessResponseBody: true,
+  };
 }
 
 /** Check if a schema has JSON:API shape (id + type + attributes) */

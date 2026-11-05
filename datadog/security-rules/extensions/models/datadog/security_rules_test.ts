@@ -107,7 +107,6 @@ Deno.test("security-rules model: has expected resources", () => {
     model.resources["convert_security_monitoring_rule_from_json_to_terraform"],
   );
   assertExists(model.resources["test_security_monitoring_rule"]);
-  assertExists(model.resources["validate_security_monitoring_rule"]);
   assertExists(model.resources["convert_existing_security_monitoring_rule"]);
   assertExists(model.resources["restore_security_monitoring_rule"]);
   assertExists(model.resources["test_existing_security_monitoring_rule"]);
@@ -501,12 +500,12 @@ Deno.test({
 
 Deno.test({
   name:
-    "security-rules model: validate_security_monitoring_rule creates and writes resource",
+    "security-rules model: validate_security_monitoring_rule executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/rules/validation": { body: { "id": "new-123" } },
+      "/rules/validation": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -536,7 +535,7 @@ Deno.test({
       >).validate_security_monitoring_rule.execute({
         "name": "test-resource",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -548,9 +547,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "validate_security_monitoring_rule");
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

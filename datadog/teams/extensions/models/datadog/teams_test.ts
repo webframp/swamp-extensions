@@ -125,7 +125,6 @@ Deno.test("teams model: has expected resources", () => {
   assertExists(model.resources["team_connections"]);
   assertExists(model.resources["create_team_connections"]);
   assertExists(model.resources["team_sync"]);
-  assertExists(model.resources["sync_teams"]);
   assertExists(model.resources["team_links"]);
   assertExists(model.resources["team_link"]);
   assertExists(model.resources["team_memberships"]);
@@ -889,12 +888,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "teams model: sync_teams creates and writes resource",
+  name: "teams model: sync_teams executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/team/sync": { body: { "id": "new-123" } },
+      "/team/sync": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -917,7 +916,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).sync_teams.execute({ "name": "test-resource" }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -929,9 +928,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "sync_teams");
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

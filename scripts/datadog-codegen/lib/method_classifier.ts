@@ -70,6 +70,12 @@ export function classifyOperation(op: GroupedOperation): MethodType {
       ) {
         return "action";
       }
+      // A POST with a body but no success response body (e.g. 204 No Content,
+      // like the reorder endpoints) creates nothing to persist. Classify it as
+      // an action so the generator issues the call and writes no resource,
+      // rather than a create that would store an empty `{}` under a constant
+      // instance name.
+      if (!op.hasSuccessResponseBody) return "action";
       if (op.requestBody?.properties) return "create";
       // Array bodies (e.g., submit logs) are creates
       if (op.requestBodyIsArray) return "create";
@@ -257,7 +263,7 @@ export function generateModelSource(
   lines.push(`  resources: {`);
   const seenResources = new Set<string>();
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = getResourceName(method);
     if (seenResources.has(resourceName)) continue;
     seenResources.add(resourceName);
@@ -329,7 +335,7 @@ function generateResponseSchemas(
   const methodsWithResources: ClassifiedMethod[] = [];
 
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     const resourceName = getResourceName(method);
     if (!seenResources.has(resourceName)) {
       seenResources.add(resourceName);
@@ -407,7 +413,7 @@ function generateResponseSchemas(
 
   // Map secondary methods to existing schemas
   for (const method of methods) {
-    if (method.type === "delete") continue;
+    if (!methodWritesResource(method)) continue;
     if (schemaNames.has(method.name)) continue;
     const resourceName = getResourceName(method);
     const primary = methodsWithResources.find((m) => {
@@ -1202,6 +1208,7 @@ function generateActionBody(
   const resourceName = getResourceName(method);
   const httpMethod = method.operation.httpMethod.toUpperCase();
   const hasBody = method.operation.requestBody !== undefined;
+  const hasResponseBody = method.operation.hasSuccessResponseBody;
   const pathParamNames = method.operation.pathParams.map((p) =>
     sanitizeFieldName(p.name)
   );
@@ -1262,18 +1269,24 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
   }
 
   return `${bodySetup}
-${indent}    const result = await ddApi(
+${indent}    ${hasResponseBody ? "const result = " : ""}await ddApi(
 ${indent}      apiKey,
 ${indent}      appKey,
 ${indent}      site,
 ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
-${indent}
+${
+    hasResponseBody
+      ? `${indent}
 ${indent}    const id = (result as { id?: string }).id ?? "${method.name}";
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
-${indent}    return { dataHandles: [handle] };`;
+${indent}    return { dataHandles: [handle] };`
+      : `${indent}
+${indent}    context.logger.info("Executed ${method.name}", {});
+${indent}    return { dataHandles: [] };`
+  }`;
 }
 
 /** Build the API path with template literal substitution (URL-encoded) */
@@ -1289,6 +1302,20 @@ function sanitizeFieldName(name: string): string {
     .replace(/_+/g, "_")
     .replace(/^_|_$/g, "")
     .replace(/^\d/, "_$&");
+}
+
+/**
+ * True when a method persists a resource. Deletes never do; an action whose
+ * only success response is no-content (e.g. a 204 reorder) performs a
+ * side-effecting call but has nothing to store, so it writes no resource and
+ * declares no resource spec.
+ */
+export function methodWritesResource(method: ClassifiedMethod): boolean {
+  if (method.type === "delete") return false;
+  if (method.type === "action" && !method.operation.hasSuccessResponseBody) {
+    return false;
+  }
+  return true;
 }
 
 /**

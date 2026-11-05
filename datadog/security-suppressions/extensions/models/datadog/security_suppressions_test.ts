@@ -99,7 +99,6 @@ Deno.test("security-suppressions model: has expected resources", () => {
   assertExists(model.resources["security_monitoring_suppression"]);
   assertExists(model.resources["suppressions_affecting_future_rule"]);
   assertExists(model.resources["suppressions_affecting_rule"]);
-  assertExists(model.resources["validate_security_monitoring_suppression"]);
   assertExists(model.resources["suppression_version_history"]);
 });
 
@@ -560,12 +559,12 @@ Deno.test({
 
 Deno.test({
   name:
-    "security-suppressions model: validate_security_monitoring_suppression creates and writes resource",
+    "security-suppressions model: validate_security_monitoring_suppression executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/suppressions/validation": { body: { "id": "new-123" } },
+      "/suppressions/validation": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -595,7 +594,7 @@ Deno.test({
       >).validate_security_monitoring_suppression.execute({
         "name": "test-resource",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -607,12 +606,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(
-        resources[0].specName,
-        "validate_security_monitoring_suppression",
-      );
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

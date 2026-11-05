@@ -1,3 +1,13 @@
+## 2026.11.05.2
+
+**Fixed:** `sync_teams` no longer writes an empty resource under a constant
+`"created"` instance name. The endpoint returns no content on success, so there
+is nothing to persist — the method now issues the link call and returns no data
+handles. The `sync_teams` resource spec is removed.
+
+**Upgrade note:** `sync_teams` previously stored an empty `{}` resource on every
+call; it now stores nothing. No other method is affected.
+
 ## 2026.11.05.1
 
 **Changed:** Regenerated from the current Datadog OpenAPI spec. Team schemas

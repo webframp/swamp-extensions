@@ -115,7 +115,6 @@ Deno.test("metrics model: has expected resources", () => {
   assertExists(model.resources["derived_metric"]);
   assertExists(model.resources["tag_indexing_rules"]);
   assertExists(model.resources["tag_indexing_rule"]);
-  assertExists(model.resources["reorder_tag_indexing_rules"]);
   assertExists(model.resources["list_active_metric_configurations"]);
   assertExists(model.resources["tags_by_metric_name"]);
   assertExists(model.resources["list_metric_assets"]);
@@ -685,12 +684,12 @@ Deno.test({
 });
 
 Deno.test({
-  name: "metrics model: reorder_tag_indexing_rules creates and writes resource",
+  name: "metrics model: reorder_tag_indexing_rules executes successfully",
   // sanitizeResources: false — Deno.serve() listener outlives test scope
   sanitizeResources: false,
   fn: async () => {
     const { url, server, requests } = startMockDdServer({
-      "/tag-indexing-rules/order": { body: { "id": "new-123" } },
+      "/tag-indexing-rules/order": { body: null, status: 204 },
     });
     const uninstall = installFetchMock(url);
 
@@ -721,7 +720,7 @@ Deno.test({
         { "name": "test-resource" },
         context,
       );
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       assertEquals(requests.length, 1);
       const req0 = requests[0];
@@ -733,9 +732,7 @@ Deno.test({
       assertExists(req0.body);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      assertEquals(resources[0].specName, "reorder_tag_indexing_rules");
-      assertEquals(resources[0].name, "new-123");
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

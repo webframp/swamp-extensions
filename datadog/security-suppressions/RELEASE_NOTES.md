@@ -1,3 +1,15 @@
+## 2026.11.05.1
+
+**Fixed:** `validate_security_monitoring_suppression` no longer writes an empty
+resource under a constant `"created"` instance name. The endpoint returns
+`204 No Content`, so there is nothing to persist — the method now issues the
+validation call and returns no data handles. The
+`validate_security_monitoring_suppression` resource spec is removed.
+
+**Upgrade note:** `validate_security_monitoring_suppression` previously stored
+an empty `{}` resource on every call; it now stores nothing. No other method is
+affected.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

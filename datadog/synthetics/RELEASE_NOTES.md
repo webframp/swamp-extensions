@@ -1,3 +1,15 @@
+## 2026.11.05.1
+
+**Fixed:** `abort_test_file_multipart_upload` and
+`complete_test_file_multipart_upload` no longer write an empty resource under a
+constant `"created"` instance name. Both endpoints return `204 No Content`, so
+there is nothing to persist — each method now issues its call and returns no
+data handles. The `abort_test_file_multipart_upload` and
+`complete_test_file_multipart_upload` resource specs are removed.
+
+**Upgrade note:** These two methods previously stored an empty `{}` resource on
+every call; they now store nothing. No other method is affected.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

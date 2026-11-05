@@ -1,3 +1,13 @@
+## 2026.11.05.2
+
+**Fixed:** `reorder_tag_indexing_rules` no longer writes an empty resource under
+a constant `"created"` instance name. The endpoint returns `204 No Content`, so
+there is nothing to persist — the method now issues the reorder call and returns
+no data handles. The `reorder_tag_indexing_rules` resource spec is removed.
+
+**Upgrade note:** `reorder_tag_indexing_rules` previously stored an empty
+`{}` resource on every call; it now stores nothing. No other method is affected.
+
 ## 2026.11.05.1
 
 **Added:** Regenerated from the current Datadog OpenAPI spec. New methods for
@@ -6,8 +16,8 @@ derived metrics (`create_derived_metric`, `get_derived_metric`,
 (`list_tag_indexing_rules`, `list_tag_indexing_rules_for_metric`,
 `get_tag_indexing_rule`, `create_tag_indexing_rule`, `update_tag_indexing_rule`,
 `delete_tag_indexing_rule`, `reorder_tag_indexing_rules`), with matching
-`derived_metric`, `tag_indexing_rule`, `tag_indexing_rules`,
-`tag_indexing_rules_for_metric`, and `reorder_tag_indexing_rules` resources.
+`derived_metric`, `tag_indexing_rule`, `tag_indexing_rules`, and
+`tag_indexing_rules_for_metric` resources.
 
 **Upgrade note:** Additive only — existing methods, arguments, and resource
 schemas are unchanged, so stored data continues to validate. No migration

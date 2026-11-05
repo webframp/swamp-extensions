@@ -1,3 +1,14 @@
+## 2026.11.05.2
+
+**Fixed:** `validate_security_monitoring_rule` no longer writes an empty
+resource under a constant `"created"` instance name. The endpoint returns
+`204 No Content`, so there is nothing to persist — the method now issues the
+validation call and returns no data handles. The
+`validate_security_monitoring_rule` resource spec is removed.
+
+**Upgrade note:** `validate_security_monitoring_rule` previously stored an empty
+`{}` resource on every call; it now stores nothing. No other method is affected.
+
 ## 2026.11.05.1
 
 **Added:** Regenerated from the current Datadog OpenAPI spec. New methods
