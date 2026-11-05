@@ -150,7 +150,21 @@ export function generateTestSource(
   // assertions (zero vs one data handle), so they must not dedup together.
   const testedTypes = new Set<string>();
   for (const method of methods) {
-    const key = `${method.type}:${methodWritesResource(method)}`;
+    // Creates differ in how they name the written instance (response id, a
+    // scoping path param, or a request hash); a single "create" test would not
+    // exercise a path-param fallback create. Key creates on their instance
+    // source so each distinct naming path gets its own execution test.
+    let key = `${method.type}:${methodWritesResource(method)}`;
+    if (method.type === "create" && methodWritesResource(method)) {
+      const src = createInstanceSource(method, config);
+      // Distinguish by the instance-naming path: whether a response id is used,
+      // the fallback kind, and the specific scoping path params (a zone-scoped
+      // create falls back to zone_id, a rule create to ruleset_id — different
+      // code paths that each deserve a test).
+      key += `:${src.idFields.length > 0 ? "id" : "noid"}:${src.fallback}:${
+        src.pathParams.join(",")
+      }`;
+    }
     if (testedTypes.has(key)) continue;
     testedTypes.add(key);
     lines.push(generateExecutionTest(config, method));
