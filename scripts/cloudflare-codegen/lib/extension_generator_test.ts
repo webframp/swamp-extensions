@@ -423,6 +423,7 @@ function readmeMethod(
       usesCursorPagination: false,
       deprecated: false,
       tags: [],
+      hasSuccessResponseBody: true,
       ...op,
     },
   };

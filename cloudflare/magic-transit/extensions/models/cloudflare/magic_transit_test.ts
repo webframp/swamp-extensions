@@ -242,11 +242,7 @@ Deno.test("magic-transit model: has expected resources", () => {
   assertExists(model.resources["catalog_syncs_refresh"]);
   assertExists(model.resources["onramps_mwan_addr_space_read"]);
   assertExists(model.resources["onramps_read"]);
-  assertExists(model.resources["onramps_apply"]);
-  assertExists(model.resources["onramps_plan"]);
-  assertExists(model.resources["providers_discover_all"]);
   assertExists(model.resources["providers_read"]);
-  assertExists(model.resources["providers_discover"]);
   assertExists(model.resources["providers_initial_setup"]);
   assertExists(model.resources["resources_catalog_policy_preview"]);
   assertExists(model.resources["resources_catalog_read"]);
@@ -709,6 +705,49 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "magic-transit model: onramps_apply executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "/magic/cloud/onramps/test-id-123/apply": { result: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-magic-transit",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).onramps_apply.execute({
+        "id": "fixture-123",
+        "onramp_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

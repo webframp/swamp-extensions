@@ -27,6 +27,7 @@ function makeOp(overrides: Partial<GroupedOperation> = {}): GroupedOperation {
     usesCursorPagination: false,
     deprecated: false,
     tags: ["Access"],
+    hasSuccessResponseBody: true,
     ...overrides,
   };
 }

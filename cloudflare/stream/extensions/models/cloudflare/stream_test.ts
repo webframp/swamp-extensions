@@ -93,9 +93,6 @@ Deno.test("stream model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["videos"]);
   assertExists(
-    model.resources["stream_videos_initiate_video_uploads_using_tus"],
-  );
-  assertExists(
     model
       .resources[
         "stream_video_clipping_clip_videos_given_a_start_and_end_time"
@@ -286,12 +283,11 @@ Deno.test({
 
 Deno.test({
   name:
-    "stream model: stream_videos_initiate_video_uploads_using_tus executes and writes resource",
+    "stream model: stream_videos_initiate_video_uploads_using_tus executes successfully",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "id": "fixture-123" };
     const { url, server } = startMockCfServer({
-      "/stream": { result: mockData },
+      "/stream": { result: null },
     });
     const uninstall = installFetchMock(url);
 
@@ -317,14 +313,10 @@ Deno.test({
       >).stream_videos_initiate_video_uploads_using_tus.execute({
         "id": "fixture-123",
       }, context);
-      assertEquals(result.dataHandles.length, 1);
+      assertEquals(result.dataHandles.length, 0);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -440,6 +432,56 @@ Deno.test({
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
       assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "stream model: create_signing_keys executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "created": null, "id": null, "jwk": null, "pem": null };
+    const { url, server } = startMockCfServer({
+      "/stream/keys": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_signing_keys.execute({
+        "created": null,
+        "id": null,
+        "jwk": null,
+        "pem": null,
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();

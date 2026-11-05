@@ -116,9 +116,6 @@ Deno.test("gateway model: has expected resources", () => {
     model.resources["zero_trust_certificates_zero_trust_certificate_details"],
   );
   assertExists(
-    model.resources["zero_trust_certificates_activate_zero_trust_certificate"],
-  );
-  assertExists(
     model
       .resources["zero_trust_certificates_deactivate_zero_trust_certificate"],
   );
@@ -535,6 +532,50 @@ Deno.test({
         "certificate_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "gateway model: zero_trust_certificates_activate_zero_trust_certificate executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "/gateway/certificates/test-id-123/activate": { result: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-gateway",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).zero_trust_certificates_activate_zero_trust_certificate.execute({
+        "id": "fixture-123",
+        "certificate_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

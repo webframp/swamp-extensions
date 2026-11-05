@@ -12,6 +12,7 @@ import {
   type ClassifiedMethod,
   createInstanceSource,
   type MethodSecretPlan,
+  methodWritesResource,
   planSecrets,
   resourceNameOf,
 } from "./method_classifier.ts";
@@ -52,7 +53,7 @@ export function generateTestSource(
   const plan = planSecrets(methods);
   const secretMethods = methods.filter((m) => {
     const entry = plan.methods.get(m.name);
-    return entry !== undefined && m.type !== "delete" &&
+    return entry !== undefined && methodWritesResource(m) &&
       (entry.vaulted.length > 0 || entry.strip.length > 0 || entry.dropRoot);
   });
   if (secretMethods.length > 0) {
@@ -111,9 +112,10 @@ export function generateTestSource(
   lines.push(`});`);
   lines.push(``);
 
-  // Resources existence tests
+  // Resources existence tests — must match the model's resource generation
+  // logic (a no-content write declares no resource spec).
   const resources = methods
-    .filter((m) => m.type !== "delete")
+    .filter((m) => methodWritesResource(m))
     .map((m) => {
       if (m.type === "list") return m.name.replace(/^list_/, "");
       return m.name.replace(/^(get|create|update|action)_/, "");
@@ -142,11 +144,15 @@ export function generateTestSource(
   lines.push(generateMockServer(config));
   lines.push(``);
 
-  // Generate one execution test per method type (list, get, create, etc.)
+  // Generate one execution test per method "shape": the method type, split by
+  // whether the method writes a resource. A no-content action and a
+  // body-returning action share the type "action" but need different
+  // assertions (zero vs one data handle), so they must not dedup together.
   const testedTypes = new Set<string>();
   for (const method of methods) {
-    if (testedTypes.has(method.type)) continue;
-    testedTypes.add(method.type);
+    const key = `${method.type}:${methodWritesResource(method)}`;
+    if (testedTypes.has(key)) continue;
+    testedTypes.add(key);
     lines.push(generateExecutionTest(config, method));
     lines.push(``);
   }
@@ -486,6 +492,42 @@ function generateExecutionTest(
   const pathPattern = extractPathPattern(method.operation.path, config.scope);
   // Build args that include path param values matching the mock pattern
   const testArgs = buildTestArgs(method);
+
+  // A no-content write (create/update/action whose success response has no
+  // body) issues the call but persists nothing. Assert zero data handles and
+  // no written resource, regardless of the underlying method type. Deletes
+  // have their own branch below.
+  if (method.type !== "delete" && !methodWritesResource(method)) {
+    const noContentArgs = buildFinalTestArgs(method, fixture);
+    return `Deno.test({
+  name: "${config.name} model: ${method.name} executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "${pathPattern}": { result: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: ${JSON.stringify(globalArgs)},
+        definition: { id: "test-id", name: "test-${config.name}", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<string, { execute: (args: Record<string, unknown>, ctx: unknown) => Promise<{ dataHandles: unknown[] }> }>).${method.name}.execute(${
+      JSON.stringify(noContentArgs)
+    }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});`;
+  }
 
   if (method.type === "list") {
     // List methods: may have path params (e.g., list keys in a namespace)

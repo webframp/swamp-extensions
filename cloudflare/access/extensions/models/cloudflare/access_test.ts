@@ -161,8 +161,6 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["access_app_policies"]);
   assertExists(model.resources["an_access_policy"]);
   assertExists(model.resources["access_policies_convert_reusable"]);
-  assertExists(model.resources["access_applications_revoke_service_tokens"]);
-  assertExists(model.resources["access_application_settings"]);
   assertExists(model.resources["access_applications_test_access_policies"]);
   assertExists(model.resources["list"]);
   assertExists(model.resources["mtls_certificates"]);
@@ -170,7 +168,6 @@ Deno.test("access model: has expected resources", () => {
     model.resources["access_mtls_authentication_add_an_mtls_certificate"],
   );
   assertExists(model.resources["mtls_certificates_hostname_settings"]);
-  assertExists(model.resources["an_mtls_certificate_settings"]);
   assertExists(model.resources["an_mtls_certificate"]);
   assertExists(model.resources["custom_pages"]);
   assertExists(model.resources["a_custom_page"]);
@@ -907,6 +904,94 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: access_applications_revoke_service_tokens executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "/access/apps/test-id-123/revoke_tokens": { result: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).access_applications_revoke_service_tokens.execute({
+        "id": "fixture-123",
+        "app_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: update_access_application_settings executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "/access/apps/test-id-123/settings": { result: null },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_access_application_settings.execute({
+        "id": "fixture-123",
+        "app_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

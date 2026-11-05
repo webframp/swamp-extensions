@@ -1,3 +1,18 @@
+## 2026.11.05.1
+
+**Fixed:** The ruleset and rule create/update methods are writes whose success
+response carries no body (HTTP 204). Earlier versions declared a resource with an
+empty schema for each and wrote an empty `{}` (or a dead instance name) on every
+call. Each method now issues the API call for its side effect and returns no data
+handles — it stores nothing. Their empty resource specs are gone. Affected:
+`createaccountruleset`, `updateaccountentrypointruleset`, `updateaccountruleset`,
+`createaccountrulesetrule`, `updateaccountrulesetrule`, `createzoneruleset`,
+`updatezoneentrypointruleset`, `updatezoneruleset`, `createzonerulesetrule` and
+`updatezonerulesetrule`.
+
+**Upgrade note:** The matching resources are no longer declared. Any data earlier
+versions wrote under them is stale; delete it with `swamp data delete`.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

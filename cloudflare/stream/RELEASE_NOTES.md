@@ -1,3 +1,17 @@
+## 2026.11.05.1
+
+**Fixed:** `stream_videos_initiate_video_uploads_using_tus` is a write whose
+success response carries no body (HTTP 204). Earlier versions declared a
+resource with an empty schema and wrote an empty `{}` to it under a constant
+instance name on every call. The method now issues the API call for its side
+effect and returns no data handles — it stores nothing. The empty resource spec
+is gone.
+
+**Upgrade note:** The
+`stream_videos_initiate_video_uploads_using_tus` resource is no longer declared.
+Any data earlier versions wrote under it is stale; delete it with
+`swamp data delete`.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7
