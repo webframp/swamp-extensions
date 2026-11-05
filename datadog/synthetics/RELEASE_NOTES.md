@@ -1,3 +1,15 @@
+## 2026.11.05.4
+
+**Changed:** Action methods now wrap their stored instance name in
+`sanitizeInstanceName` and, when the API response omits a top-level `id`, fall
+back to the resource name rather than the method name. For actions without a
+path parameter (e.g. `delete_synthetics_suites`, `delete_synthetics_tests`) this
+is a consistency/hardening change with no behavioral effect; actions with path
+parameters now derive a collision-resistant fallback from them.
+
+**Upgrade note:** No schema change; stored data continues to validate. No
+migration required.
+
 ## 2026.11.05.3
 
 **Fixed:** Path-scoped list methods (those that take a path parameter such as a

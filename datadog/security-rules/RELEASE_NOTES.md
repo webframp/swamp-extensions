@@ -1,3 +1,14 @@
+## 2026.11.05.5
+
+**Fixed:** `restore_security_monitoring_rule`, when the API response omits a
+top-level `id`, now falls back to a collision-resistant instance name derived
+from its path parameters (`rule_id`-`version`) instead of the constant method
+name, and wraps the result in `sanitizeInstanceName`. Previously, restores of
+different rules could collide on one instance when no `id` came back.
+
+**Upgrade note:** No schema change; stored data continues to validate. No
+migration required.
+
 ## 2026.11.05.4
 
 **Fixed:** Path-scoped list methods (those that take a path parameter such as a

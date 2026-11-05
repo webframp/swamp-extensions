@@ -1394,10 +1394,30 @@ ${indent}      "${httpMethod}",
 ${indent}      \`${apiPath}${urlSuffix}\`,${bodyArg}
 ${indent}    );
 ${indent}
-${indent}    const id = (result as { id?: string }).id ?? "${method.name}";
+${indent}    const id = sanitizeInstanceName(
+${indent}      String((result as { id?: unknown }).id ?? ${
+    actionFallback(pathParamNames, resourceName)
+  }),
+${indent}    );
 ${indent}    const handle = await context.writeResource("${resourceName}", id, result ?? {});
 ${indent}    context.logger.info("Executed ${method.name}", {});
 ${indent}    return { dataHandles: [handle] };`;
+}
+
+/**
+ * Collision-resistant fallback instance name for an action whose response omits
+ * an `id`: the scoping path parameters joined (so a per-rule, per-version action
+ * keys on rule+version rather than a constant), else the resource name.
+ */
+function actionFallback(
+  pathParamNames: string[],
+  resourceName: string,
+): string {
+  if (pathParamNames.length === 0) return `"${resourceName}"`;
+  if (pathParamNames.length === 1) return `String(args.${pathParamNames[0]})`;
+  return `[${
+    pathParamNames.map((p) => `String(args.${p})`).join(", ")
+  }].join("-")`;
 }
 
 /** Build the API path with template literal substitution (URL-encoded) */
@@ -1449,7 +1469,7 @@ function methodEmitsSanitize(method: ClassifiedMethod): boolean {
   // A no-content write uses generateNoContentBody, which never references
   // sanitizeInstanceName.
   if (!methodWritesResource(method)) return false;
-  if (method.type === "create") return true;
+  if (method.type === "create" || method.type === "action") return true;
   // get/update key on a trailing path param; a path-scoped list keys its stored
   // instance on its path params instead of the constant "main".
   if (
