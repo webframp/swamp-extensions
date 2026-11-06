@@ -178,6 +178,8 @@ Deno.test({
           "duration_estimate": 1,
           "pinned": false,
         },
+        "retires_at": "2026-12-01T08:00:00.000Z",
+        "replacement": "fal-ai/flux/dev",
         "openapi": { "openapi": "test-value" },
         "enterprise_status": "ready",
       }],
