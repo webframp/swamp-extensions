@@ -80,7 +80,7 @@ const GlobalArgsSchema = z.object({
   adminPrincipal: z
     .string()
     .min(1)
-    .regex(/^(user|group):[\w.|@-]+$/, {
+    .regex(/^(user|group):[\w.@-]+$/, {
       message: "Must be `user:<id>` or `group:<name>`.",
     })
     .describe(
@@ -135,6 +135,10 @@ const GlobalArgsSchema = z.object({
   tokenVault: z
     .string()
     .min(1)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, {
+      message: "Vault name must be lowercase alphanumeric with hyphens or " +
+        "underscores (it is interpolated into remote shell commands).",
+    })
     .describe(
       "Name of a vault both the operator and (after promotion) the " +
         "orchestrator can read. Minted server/worker/dashboard tokens land " +
@@ -155,7 +159,9 @@ const GlobalArgsSchema = z.object({
     .meta({ sensitive: true })
     .describe(
       "Tailnet auth key, as a vault expression. Used for `tailscale up` on " +
-        "the orchestrator and workers. Never pass a literal key.",
+        "the orchestrator and workers; delivered via the TS_AUTHKEY " +
+        "environment variable so it never appears in argv. Never pass a " +
+        "literal key.",
     ),
   magicDnsName: z
     .string()
@@ -432,8 +438,14 @@ async function sshRunStdinEnv(
   await w.write(new TextEncoder().encode(stdinValue));
   await w.close();
   let killed = false;
-  const kill = setTimeout(() => {
+  // Match sshRun's semantics: SIGTERM at timeoutSec, SIGKILL 2s later.
+  const term = setTimeout(() => {
     killed = true;
+    try {
+      child.kill("SIGTERM");
+    } catch { /* already exited */ }
+  }, timeoutSec * 1000);
+  const kill = setTimeout(() => {
     try {
       child.kill("SIGKILL");
     } catch { /* already exited */ }
@@ -442,6 +454,7 @@ async function sshRunStdinEnv(
   try {
     out = await child.output();
   } finally {
+    clearTimeout(term);
     clearTimeout(kill);
   }
   const MAX = 2 * 1024 * 1024;
@@ -589,6 +602,18 @@ async function fetchExistingVmNames(
     }
   }
   return names;
+}
+
+/** Validate a tailnet auth key before it is delivered to a remote host. */
+export function assertTailnetAuthKey(key: string | undefined): string {
+  if (!key || !/^tskey-[a-zA-Z0-9_-]+$/.test(key)) {
+    throw new Error(
+      "tailnetAuthKey is missing or malformed: expected a value matching " +
+        "tskey-[a-zA-Z0-9_-]+. Pass it as a vault expression, e.g. " +
+        '${{ vault.get("tailscale", "AUTH_KEY") }}.',
+    );
+  }
+  return key;
 }
 
 /** Resource lifetime defaults shared across this model's resources. */
@@ -767,16 +792,29 @@ export const model = {
         const httpsHost = sshHost;
 
         // 2. Join the tailnet (orchestrator: MagicDNS off — reaches serve via
-        //    loopback). Then install Deno + swamp.
-        await sshRunChecked(
+        //    loopback). The auth key is delivered over stdin into TS_AUTHKEY so
+        //    it never appears in argv or /proc. Then install Deno + swamp.
+        const orchAuthKey = assertTailnetAuthKey(g.tailnetAuthKey);
+        const tailnetUpOrch = await sshRunStdinEnv(
           sshHost,
+          orchAuthKey,
           `curl -fsSL https://tailscale.com/install.sh | sh && ` +
             `sudo systemctl start tailscaled && ` +
-            `sudo tailscale up --authkey="${g.tailnetAuthKey}" ` +
+            `export TS_AUTHKEY="$(cat)" && ` +
+            `sudo --preserve-env=TS_AUTHKEY tailscale up ` +
             `--hostname="${g.orchestratorName}" --accept-dns=false`,
           120,
-          "tailscale up (orchestrator)",
         );
+        if (tailnetUpOrch.code !== 0) {
+          throw new Error(
+            `tailscale up (orchestrator) failed (exit ${tailnetUpOrch.code}): ` +
+              `${
+                redactSecrets(
+                  (tailnetUpOrch.stderr || tailnetUpOrch.stdout).trim(),
+                ) || "(no output)"
+              }`,
+          );
+        }
         await sshRunChecked(
           sshHost,
           `curl -fsSL https://swamp-club.com/install.sh | sh`,
@@ -962,6 +1000,7 @@ export const model = {
         // Sync the fleet once so the loop can skip VMs already created on a
         // prior partial run (create is not idempotent).
         const existingVms = await fetchExistingVmNames(ctx, g.exeToken);
+        const workerAuthKey = assertTailnetAuthKey(g.tailnetAuthKey);
 
         for (let i = 1; i <= g.workerCount; i++) {
           const suffix = String(i).padStart(2, "0");
@@ -999,16 +1038,28 @@ export const model = {
           const sshHost = `${workerName}.exe.xyz`;
 
           // Join tailnet with MagicDNS ON (workers must resolve the
-          // orchestrator's .ts.net name), install deps.
-          await sshRunChecked(
+          // orchestrator's .ts.net name). Auth key delivered over stdin into
+          // TS_AUTHKEY so it never appears in argv or /proc. Then install deps.
+          const tailnetUpWorker = await sshRunStdinEnv(
             sshHost,
+            workerAuthKey,
             `curl -fsSL https://tailscale.com/install.sh | sh && ` +
               `sudo systemctl start tailscaled && ` +
-              `sudo tailscale up --authkey="${g.tailnetAuthKey}" ` +
+              `export TS_AUTHKEY="$(cat)" && ` +
+              `sudo --preserve-env=TS_AUTHKEY tailscale up ` +
               `--hostname="${workerName}" --accept-dns=true`,
             120,
-            `tailscale up (${workerName})`,
           );
+          if (tailnetUpWorker.code !== 0) {
+            throw new Error(
+              `tailscale up (${workerName}) failed ` +
+                `(exit ${tailnetUpWorker.code}): ${
+                  redactSecrets(
+                    (tailnetUpWorker.stderr || tailnetUpWorker.stdout).trim(),
+                  ) || "(no output)"
+                }`,
+            );
+          }
           await sshRunChecked(
             sshHost,
             `curl -fsSL https://swamp-club.com/install.sh | sh`,

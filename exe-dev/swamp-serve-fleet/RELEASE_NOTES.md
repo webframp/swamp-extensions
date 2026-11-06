@@ -37,3 +37,11 @@ Initial release.
   secret instead of failing on a duplicate name, and the remaining steps
   (tailscale join, installs, daemon enable, proxy wiring) are self-asserting. A
   re-run after a partial failure converges rather than erroring.
+
+### Security
+
+- `adminPrincipal` and `tokenVault` are format-constrained to reject shell
+  metacharacters before they are interpolated into remote SSH commands.
+- `tailnetAuthKey` is format-validated (`tskey-…`) and delivered to
+  `tailscale up` over SSH stdin into `TS_AUTHKEY` (`sudo --preserve-env`), so it
+  never appears in argv or the remote `/proc` table.

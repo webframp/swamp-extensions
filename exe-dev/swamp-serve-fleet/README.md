@@ -122,7 +122,13 @@ VMs.
 ## Security
 
 - `exeToken` and `tailnetAuthKey` are sensitive global arguments — pass vault
-  references, never literals.
+  references, never literals. `tailnetAuthKey` is format-validated (`tskey-…`)
+  and delivered to the `tailscale up` command over SSH stdin into `TS_AUTHKEY`
+  (via `sudo --preserve-env`), so it never appears in argv or the remote `/proc`
+  table.
+- `adminPrincipal` and `tokenVault` are format-constrained so a value with shell
+  metacharacters cannot be injected into the remote commands they are
+  interpolated into.
 - The provisioner stores token names, principals, and URLs. It never stores
   token values, and redacts token-shaped and `tskey-` strings from captured
   output.
