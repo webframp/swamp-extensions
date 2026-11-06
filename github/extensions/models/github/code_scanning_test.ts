@@ -1481,3 +1481,70 @@ Deno.test("bulk dismiss does not stop for a per-alert failure such as a missing 
     gh.restore();
   }
 });
+
+Deno.test("idempotency keys are capped so a marker name can never exceed a file name limit", () => {
+  const schema = methods.reopen_code_scanning_alert.arguments;
+  const parse = (idempotencyKey: string) =>
+    schema.safeParse({ repo: REPO, number: 1, idempotencyKey }).success;
+  assert(parse("k".repeat(64)));
+  assertEquals(parse("k".repeat(65)), false);
+  // Longest legitimate marker name stays far below the 255-byte limit.
+  const longestRepo = `${"o".repeat(39)}/${"r".repeat(100)}`;
+  const name = `${encodeURIComponent(longestRepo)}~dismiss~999999~${
+    "k".repeat(64)
+  }`;
+  assert(new TextEncoder().encode(name).length < 255, String(name.length));
+});
+
+Deno.test("owner/name case does not split a repo's instances or defeat the prune", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context } = harness;
+  const { deleted } = withStore(harness);
+  let snapshot = [rawAlert(2), rawAlert(1)];
+  const gh = mockGh(() => ({ stdout: snapshot }));
+  try {
+    await methods.list_code_scanning_alerts.execute(
+      { repo: "Webframp/Swamp-Extensions", maxAlerts: 1000 },
+      context as never,
+    );
+    snapshot = [rawAlert(1)];
+    await methods.list_code_scanning_alerts.execute(
+      { repo: "webframp/swamp-extensions", maxAlerts: 1000 },
+      context as never,
+    );
+    // Alert 2 belonged to the same repo under a different spelling.
+    assertEquals(deleted, [`${encodeURIComponent(REPO)}~alert~2`]);
+    const names = harness.getWrittenResources().map((w) => w.name);
+    assertEquals(
+      names.every((n) => n.startsWith(`${encodeURIComponent(REPO)}~`)),
+      true,
+      names.join(", "),
+    );
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("a differently cased repo reuses the same dismissal marker", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const gh = mockGh(patchResponder());
+  try {
+    const args = {
+      number: 10,
+      reason: "used_in_tests" as const,
+      comment: "Test fixture",
+      idempotencyKey: "case-1",
+    };
+    await methods.dismiss_code_scanning_alert.execute(
+      { ...args, repo: "Webframp/Swamp-Extensions" },
+      context as never,
+    );
+    await methods.dismiss_code_scanning_alert.execute(
+      { ...args, repo: "webframp/swamp-extensions" },
+      context as never,
+    );
+    assertEquals(gh.calls.length, 1);
+  } finally {
+    gh.restore();
+  }
+});

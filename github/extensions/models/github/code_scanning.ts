@@ -18,9 +18,11 @@ const repo = z.string().regex(/^[\w.-]+\/[\w.-]+$/).refine(
 );
 /**
  * Idempotency key. No ":" (invalid in Windows paths, and instance names become
- * directory names) and no trailing "." (also invalid on Windows).
+ * directory names) and no trailing "." (also invalid on Windows). At most 64
+ * characters: the key is part of an instance name, and an over-long name would
+ * let the PATCH succeed and then fail to record its marker.
  */
-const idempotencyKey = z.string().min(1).regex(
+const idempotencyKey = z.string().min(1).max(64).regex(
   /^[A-Za-z0-9._-]+$/,
   "must contain only alphanumerics, dot, underscore, or hyphen",
 ).refine((k) => !k.endsWith("."), "must not end with a dot");
@@ -99,7 +101,8 @@ type RawAlert = {
   };
 };
 
-const key = (slug: string) => encodeURIComponent(slug);
+/** GitHub treats owner/name case-insensitively, so names are built from the lowercase slug. */
+const key = (slug: string) => encodeURIComponent(slug.toLowerCase());
 
 /**
  * Instance names. Names from every spec share one storage namespace, so they
@@ -472,7 +475,8 @@ export const extension = {
         );
         const stale = stored.filter((record) => {
           const attrs = record.attributes as { repo?: string; number?: number };
-          return attrs.repo === args.repo && !current.has(attrs.number ?? -1);
+          return attrs.repo?.toLowerCase() === args.repo.toLowerCase() &&
+            !current.has(attrs.number ?? -1);
         }).map((record) => record.name);
         const pruneFailures: string[] = [];
         for (const name of stale) {

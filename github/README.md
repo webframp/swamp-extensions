@@ -139,8 +139,9 @@ list retries. Every remaining alert's `snapshotId` equals the summary's.
 separate `alert-detail` instance name, so it never overwrites the list snapshot.
 Instance names are `<owner%2Frepo>~<kind>~<number>[~<key>]`; `~` cannot appear
 in a repo slug or an idempotency key, so names from different repos or kinds
-cannot collide. Idempotency keys may contain letters, digits, `.`, `_`, and `-`
-(no `:`, no trailing `.`).
+cannot collide. Names use the lowercase repo slug, since GitHub treats
+`owner/name` case-insensitively. Idempotency keys may contain letters, digits,
+`.`, `_`, and `-` (no `:`, no trailing `.`) and are at most 64 characters.
 
 `dismiss_code_scanning_alert` and `reopen_code_scanning_alert` write their
 idempotency marker only after GitHub confirms the new state, so a failed or
