@@ -26,6 +26,10 @@ concurrency:
   group: promote-${{ inputs.extension }}-${{ inputs.version }}
   cancel-in-progress: false
 
+# Deny by default: the one job declares exactly the scope it needs. A future
+# job added without its own block inherits nothing rather than the repo default.
+permissions: {}
+
 jobs:
   promote:
     name: Promote ${{ inputs.extension }}@${{ inputs.version }} → ${{ inputs.channel }}

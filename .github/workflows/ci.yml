@@ -29,6 +29,13 @@ concurrency:
 env:
   DENO_VERSION: "2.9.8"
 
+# Least privilege by default: every job inherits read-only access to repo
+# contents unless it declares its own block. The jobs that need more
+# (quality-gate, adversarial-review, ci-security-review, dispatch-publish)
+# override this with a job-level permissions block.
+permissions:
+  contents: read
+
 jobs:
   discover:
     # Derive the extension matrix from the filesystem. On pull requests, scope
