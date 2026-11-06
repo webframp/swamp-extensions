@@ -16,10 +16,14 @@ const repo = z.string().regex(/^[\w.-]+\/[\w.-]+$/).refine(
   (slug) => slug.split("/").every((part) => part !== "." && part !== ".."),
   "owner and name must not be . or ..",
 );
+/**
+ * Idempotency key. No ":" (invalid in Windows paths, and instance names become
+ * directory names) and no trailing "." (also invalid on Windows).
+ */
 const idempotencyKey = z.string().min(1).regex(
-  /^[A-Za-z0-9._:-]+$/,
-  "must contain only alphanumerics, dot, underscore, colon, or hyphen",
-);
+  /^[A-Za-z0-9._-]+$/,
+  "must contain only alphanumerics, dot, underscore, or hyphen",
+).refine((k) => !k.endsWith("."), "must not end with a dot");
 /**
  * Caller-facing reason -> the exact string the REST API accepts. The API
  * rejects anything else with a 422, and its values contain spaces and an
@@ -49,6 +53,11 @@ const MAX_PAGES = Math.ceil((MAX_ALERTS_CEILING + 1) / PAGE_SIZE);
 type Ctx = {
   readResource: (name: string) => Promise<Record<string, unknown> | null>;
   deleteResource: (name: string) => Promise<void>;
+  readModelData: (
+    modelName: string,
+    specName?: string,
+  ) => Promise<{ name: string; attributes: unknown }[]>;
+  definition: { name: string };
   writeResource: (
     spec: string,
     name: string,
@@ -89,6 +98,27 @@ type RawAlert = {
 };
 
 const key = (slug: string) => encodeURIComponent(slug);
+
+/**
+ * Instance names. Names from every spec share one storage namespace, so they
+ * must never collide across repos or kinds. "~" separates the parts: the
+ * encoded repo slug ([A-Za-z0-9_.-] and "%2F"), the kind, the alert number
+ * (digits), and the idempotency key can never contain it, so no two
+ * (repo, kind, number, key) tuples produce the same name.
+ */
+const names = {
+  alert: (slug: string, n: number) => `${key(slug)}~alert~${n}`,
+  detail: (slug: string, n: number) => `${key(slug)}~alert-detail~${n}`,
+  summary: (slug: string) => `${key(slug)}~summary`,
+  dismiss: (slug: string, n: number, idem: string) =>
+    `${key(slug)}~dismiss~${n}~${idem}`,
+  reopen: (slug: string, n: number, idem: string) =>
+    `${key(slug)}~reopen~${n}~${idem}`,
+};
+
+/** True when a gh failure says GitHub is throttling this client. */
+const isRateLimited = (message: string) =>
+  /rate limit|HTTP 429|abuse detection/i.test(message);
 
 /** Redact fields whose values are caller-supplied free text before they reach an error message. */
 const REDACTED_FIELDS = ["dismissed_comment="];
@@ -224,9 +254,11 @@ async function dismissOne(
 ): Promise<{ name: string }> {
   // The alert number is part of the marker so a reused key cannot make a
   // different alert look already dismissed.
-  const resourceName = `${
-    key(args.repo)
-  }-dismiss-${args.number}-${args.idempotencyKey}`;
+  const resourceName = names.dismiss(
+    args.repo,
+    args.number,
+    args.idempotencyKey,
+  );
   const existing = await context.readResource(resourceName);
   if (existing) {
     return (await existingHandle(context, resourceName, existing))
@@ -304,8 +336,10 @@ export const extension = {
         if (args.tool) params.set("tool_name", args.tool);
         if (args.ref) params.set("ref", args.ref);
 
-        // Fetch one item past maxAlerts so `truncated` is exact, not a guess.
-        const collected: RawAlert[] = [];
+        // Page offsets shift while alerts change, so one alert can appear on
+        // two pages. Key by number so a repeat is counted once, and fetch one
+        // unique item past maxAlerts so `truncated` is exact, not a guess.
+        const unique = new Map<number, RawAlert>();
         for (let page = 1; page <= MAX_PAGES; page++) {
           params.set("page", String(page));
           const batch = await ghApi([
@@ -316,25 +350,21 @@ export const extension = {
               `Unexpected code-scanning response for ${args.repo}: expected an array`,
             );
           }
-          collected.push(...(batch as RawAlert[]));
-          if (batch.length < PAGE_SIZE || collected.length > args.maxAlerts) {
-            break;
+          for (const raw of batch as RawAlert[]) {
+            if (!Number.isInteger(raw?.number)) {
+              throw new Error(
+                `Unexpected code-scanning response for ${args.repo}: alert without an integer number`,
+              );
+            }
+            if (!unique.has(raw.number)) unique.set(raw.number, raw);
           }
+          if (batch.length < PAGE_SIZE || unique.size > args.maxAlerts) break;
         }
+        const collected = [...unique.values()];
         const truncated = collected.length > args.maxAlerts;
         const alerts = collected.slice(0, args.maxAlerts);
-        for (const raw of alerts) {
-          if (!Number.isInteger(raw?.number)) {
-            throw new Error(
-              `Unexpected code-scanning response for ${args.repo}: alert without an integer number`,
-            );
-          }
-        }
 
-        const summaryName = `${key(args.repo)}-summary`;
-        const previous = await context.readResource(summaryName) as
-          | { alertNumbers?: number[] }
-          | null;
+        const summaryName = names.summary(args.repo);
 
         const fetchedAt = new Date().toISOString();
         const rows = alerts.map((raw) => toAlert(args.repo, raw, fetchedAt));
@@ -343,7 +373,7 @@ export const extension = {
           handles.push(
             await context.writeResource(
               "codeScanningAlert",
-              `${key(args.repo)}-alert-${row.number}`,
+              names.alert(args.repo, row.number),
               row,
             ),
           );
@@ -376,15 +406,28 @@ export const extension = {
             },
           ),
         );
-        // The newest snapshot replaces the previous one wholesale. Drop the
-        // instances only the previous snapshot listed (a fixed or filtered-out
-        // alert), so findBySpec never returns an alert from a stale snapshot.
+        // The newest snapshot replaces every earlier one for this repo.
+        // Enumerate what is actually stored instead of trusting the last
+        // summary: a run that died after writing some alerts but before its
+        // summary would otherwise leave instances no later run could find.
         const current = new Set(rows.map((r) => r.number));
-        const pruned = (previous?.alertNumbers ?? []).filter((n) =>
-          !current.has(n)
+        const stored = await context.readModelData(
+          context.definition.name,
+          "codeScanningAlert",
         );
-        for (const n of pruned) {
-          await context.deleteResource(`${key(args.repo)}-alert-${n}`);
+        const stale = stored.filter((record) => {
+          const attrs = record.attributes as { repo?: string; number?: number };
+          return attrs.repo === args.repo && !current.has(attrs.number ?? -1);
+        }).map((record) => record.name);
+        const pruneFailures: string[] = [];
+        for (const name of stale) {
+          try {
+            await context.deleteResource(name);
+          } catch (error) {
+            pruneFailures.push(
+              `${name}: ${String((error as Error)?.message ?? error)}`,
+            );
+          }
         }
         context.logger.info(
           "list_code_scanning_alerts: {total} alerts for {repo} (truncated={truncated}, pruned={pruned})",
@@ -392,9 +435,17 @@ export const extension = {
             total: rows.length,
             repo: args.repo,
             truncated,
-            pruned: pruned.length,
+            pruned: stale.length - pruneFailures.length,
           },
         );
+        if (pruneFailures.length > 0) {
+          // The snapshot is committed; the next run finds these again.
+          throw new Error(
+            `Snapshot written, but ${pruneFailures.length} superseded alert(s) could not be deleted (the next list retries):\n${
+              pruneFailures.join("\n")
+            }`,
+          );
+        }
         return { dataHandles: handles };
       },
     },
@@ -419,7 +470,7 @@ export const extension = {
         // storage namespace across specs, so equal names would overwrite.
         const handle = await context.writeResource(
           "codeScanningAlertDetail",
-          `${key(args.repo)}-alert-detail-${args.number}`,
+          names.detail(args.repo, args.number),
           {
             repo: args.repo,
             number: args.number,
@@ -481,7 +532,7 @@ export const extension = {
         // the same call again skips them and retries only the failures.
         const handles: { name: string }[] = [];
         const failures: string[] = [];
-        for (const number of args.numbers) {
+        for (const [index, number] of args.numbers.entries()) {
           try {
             handles.push(
               await dismissOne(context, {
@@ -493,7 +544,21 @@ export const extension = {
               }),
             );
           } catch (error) {
-            failures.push(`#${number}: ${(error as Error).message.trim()}`);
+            const message = String((error as Error)?.message ?? error).trim();
+            failures.push(`#${number}: ${message}`);
+            if (isRateLimited(message)) {
+              // Every further request would hit the same wall; stop and say
+              // which alerts were never attempted.
+              const skipped = args.numbers.slice(index + 1);
+              if (skipped.length > 0) {
+                failures.push(
+                  `not attempted because GitHub is rate limiting: ${
+                    skipped.map((n) => `#${n}`).join(", ")
+                  }`,
+                );
+              }
+              break;
+            }
           }
         }
         context.logger.info(
@@ -506,7 +571,7 @@ export const extension = {
         );
         if (failures.length > 0) {
           throw new Error(
-            `${failures.length} of ${args.numbers.length} alerts failed (${handles.length} dismissed and recorded; rerun the same call to retry only the failures):\n${
+            `${failures.length} problem(s) in ${args.numbers.length} alerts (${handles.length} dismissed and recorded; rerun the same call to retry the rest):\n${
               failures.join("\n")
             }`,
           );
@@ -525,9 +590,11 @@ export const extension = {
         args: { repo: string; number: number; idempotencyKey: string },
         context: Ctx,
       ) => {
-        const resourceName = `${
-          key(args.repo)
-        }-reopen-${args.number}-${args.idempotencyKey}`;
+        const resourceName = names.reopen(
+          args.repo,
+          args.number,
+          args.idempotencyKey,
+        );
         const existing = await context.readResource(resourceName);
         if (existing) {
           return await existingHandle(context, resourceName, existing);

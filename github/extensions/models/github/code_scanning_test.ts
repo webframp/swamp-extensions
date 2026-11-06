@@ -15,6 +15,8 @@ type Responder = (argv: string[], call: number) => {
   success?: boolean;
   stdout?: unknown;
   stderr?: string;
+  /** Make the subprocess promise reject with this (possibly non-Error) value. */
+  reject?: unknown;
 };
 
 /** Replace Deno.Command with a stub that records argv; returns calls + restore. */
@@ -30,6 +32,7 @@ function mockGh(responder: Responder) {
     output() {
       calls.push(this.#args);
       const r = responder(this.#args, calls.length);
+      if (r.reject !== undefined) return Promise.reject(r.reject);
       return Promise.resolve({
         success: r.success ?? true,
         stdout: new TextEncoder().encode(
@@ -108,10 +111,10 @@ Deno.test("list writes one instance per alert and the summary last", async () =>
     assertEquals(
       written.map((w) => w.name),
       [
-        `${encodeURIComponent(REPO)}-alert-3`,
-        `${encodeURIComponent(REPO)}-alert-2`,
-        `${encodeURIComponent(REPO)}-alert-1`,
-        `${encodeURIComponent(REPO)}-summary`,
+        `${encodeURIComponent(REPO)}~alert~3`,
+        `${encodeURIComponent(REPO)}~alert~2`,
+        `${encodeURIComponent(REPO)}~alert~1`,
+        `${encodeURIComponent(REPO)}~summary`,
       ],
     );
     assertEquals(result.dataHandles.length, 4);
@@ -303,7 +306,7 @@ Deno.test("get stores the full alert under a per-repo, per-number name", async (
     assertEquals(written.length, 1);
     assertEquals(
       written[0].name,
-      `${encodeURIComponent(REPO)}-alert-detail-42`,
+      `${encodeURIComponent(REPO)}~alert-detail~42`,
     );
     assertEquals(gh.calls[0], [
       "api",
@@ -355,7 +358,7 @@ Deno.test("dismiss sends a PATCH with raw -f fields and records evidence", async
     assertEquals(written.length, 1);
     assertEquals(
       written[0].name,
-      `${encodeURIComponent(REPO)}-dismiss-7-dismiss-7`,
+      `${encodeURIComponent(REPO)}~dismiss~7~dismiss-7`,
     );
     const data = written[0].data as {
       action: string;
@@ -601,7 +604,7 @@ Deno.test("reopen sends state=open and is idempotent per alert and key", async (
     const written = getWrittenResources();
     assertEquals(
       written[0].name,
-      `${encodeURIComponent(REPO)}-reopen-7-reopen-7`,
+      `${encodeURIComponent(REPO)}~reopen~7~reopen-7`,
     );
     assertEquals(
       (written[0].data as { action: string }).action,
@@ -778,15 +781,41 @@ Deno.test("list and get never share an instance name across specs", async () => 
   }
 });
 
-Deno.test("a second snapshot prunes alerts the first listed and the second did not", async () => {
-  const { context } = createModelTestContext({ globalArgs: {} });
+/**
+ * Give a test context a working fake store: readModelData returns the latest
+ * live write per instance name for a spec, and deleteResource removes one.
+ * The harness provides neither deletion nor a readable store.
+ */
+function withStore(
+  harness: ReturnType<typeof createModelTestContext>,
+  failDeleteFor: Set<string> = new Set(),
+) {
   const deleted: string[] = [];
-  (context as unknown as Record<string, unknown>).deleteResource = (
-    name: string,
-  ) => {
+  const deletedAt = new Map<string, number>();
+  const c = harness.context as unknown as Record<string, unknown>;
+  c.readModelData = (_model: string, spec?: string) => {
+    const written = harness.getWrittenResources();
+    const latest = new Map<string, { name: string; attributes: unknown }>();
+    written.forEach((w, index) => {
+      if ((w as { specName?: string }).specName !== spec) return;
+      if (index < (deletedAt.get(w.name) ?? 0)) return;
+      latest.set(w.name, { name: w.name, attributes: w.data });
+    });
+    return Promise.resolve([...latest.values()]);
+  };
+  c.deleteResource = (name: string) => {
+    if (failDeleteFor.has(name)) return Promise.reject(new Error("disk busy"));
     deleted.push(name);
+    deletedAt.set(name, harness.getWrittenResources().length);
     return Promise.resolve();
   };
+  return { deleted };
+}
+
+Deno.test("a second snapshot prunes alerts the first listed and the second did not", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context } = harness;
+  const { deleted } = withStore(harness);
   let snapshot = [rawAlert(3), rawAlert(2), rawAlert(1)];
   const gh = mockGh(() => ({ stdout: snapshot }));
   try {
@@ -800,10 +829,133 @@ Deno.test("a second snapshot prunes alerts the first listed and the second did n
     // Alert 3 is fixed and a new alert 4 appears between runs.
     snapshot = [rawAlert(4), rawAlert(2), rawAlert(1)];
     await run();
-    assertEquals(deleted, [`${encodeURIComponent(REPO)}-alert-3`]);
+    assertEquals(deleted, [`${encodeURIComponent(REPO)}~alert~3`]);
     // Nothing changed: nothing further is pruned.
     await run();
     assertEquals(deleted.length, 1);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("prune finds orphans left by a run that died before writing its summary", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context } = harness;
+  const { deleted } = withStore(harness);
+  const gh = mockGh(() => ({ stdout: [rawAlert(1)] }));
+  try {
+    const stored = (repo: string, number: number) => ({
+      repo,
+      number,
+      snapshotId: "2026-11-05T00:00:00Z",
+    });
+    // Alert 9 was written by a crashed run: no summary ever listed it.
+    await context.writeResource(
+      "codeScanningAlert",
+      `${encodeURIComponent(REPO)}~alert~9`,
+      stored(REPO, 9),
+    );
+    // Another repo's alert in the same model must be left alone.
+    await context.writeResource(
+      "codeScanningAlert",
+      `${encodeURIComponent("other/repo")}~alert~5`,
+      stored("other/repo", 5),
+    );
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 1000 },
+      context as never,
+    );
+    assertEquals(deleted, [`${encodeURIComponent(REPO)}~alert~9`]);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("a failed prune delete keeps the snapshot, attempts the rest, and the next run retries", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context } = harness;
+  const name = (n: number) => `${encodeURIComponent(REPO)}~alert~${n}`;
+  const failing = new Set([name(8)]);
+  const { deleted } = withStore(harness, failing);
+  const gh = mockGh(() => ({ stdout: [rawAlert(1)] }));
+  try {
+    for (const n of [8, 9]) {
+      await context.writeResource("codeScanningAlert", name(n), {
+        repo: REPO,
+        number: n,
+      });
+    }
+    await assertRejects(
+      () =>
+        methods.list_code_scanning_alerts.execute(
+          { repo: REPO, maxAlerts: 1000 },
+          context as never,
+        ),
+      Error,
+      "Snapshot written, but 1 superseded alert(s) could not be deleted",
+    );
+    // The snapshot itself was committed, and 9 was still pruned after 8 failed.
+    assert(
+      harness.getWrittenResources().some((w) => w.name.endsWith("~summary")),
+    );
+    assertEquals(deleted, [name(9)]);
+    failing.clear();
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 1000 },
+      context as never,
+    );
+    assertEquals(deleted, [name(9), name(8)]);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("list counts an alert repeated across pages once", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const page1 = Array.from({ length: 100 }, (_, i) => rawAlert(150 - i)); // 150..51
+  // A new alert shifted row 51 onto page 2 as well.
+  const page2 = [
+    rawAlert(51),
+    ...Array.from({ length: 49 }, (_, i) => rawAlert(50 - i)),
+  ];
+  const gh = mockGh((_argv, call) => ({ stdout: call === 1 ? page1 : page2 }));
+  try {
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 1000 },
+      context as never,
+    );
+    const summary = getWrittenResources().at(-1)!.data as {
+      total: number;
+      alertNumbers: number[];
+    };
+    assertEquals(summary.total, 149);
+    assertEquals(new Set(summary.alertNumbers).size, 149);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("a repeated row does not push the count past maxAlerts and fake a truncation", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const page1 = Array.from({ length: 100 }, (_, i) => rawAlert(100 - i));
+  const gh = mockGh((_argv, call) => ({
+    stdout: call === 1 ? page1 : [rawAlert(1), rawAlert(2)], // both already seen
+  }));
+  try {
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 100 },
+      context as never,
+    );
+    const summary = getWrittenResources().at(-1)!.data as {
+      total: number;
+      truncated: boolean;
+    };
+    assertEquals(summary.total, 100);
+    assertEquals(summary.truncated, false);
   } finally {
     gh.restore();
   }
@@ -849,11 +1001,11 @@ Deno.test("every written record conforms to its declared resource schema", async
       context as never,
     );
     const specOf = (name: string) =>
-      name.endsWith("-summary")
+      name.endsWith("~summary")
         ? "codeScanningSummary"
-        : name.includes("-alert-detail-")
+        : name.includes("~alert-detail~")
         ? "codeScanningAlertDetail"
-        : name.includes("-alert-")
+        : name.includes("~alert~")
         ? "codeScanningAlert"
         : "triageAction";
     const written = getWrittenResources();
@@ -909,7 +1061,7 @@ Deno.test("bulk dismiss makes one PATCH per alert and records one marker each", 
     assertEquals(
       written.map((w) => w.name),
       [10, 11, 12].map((n) =>
-        `${encodeURIComponent(REPO)}-dismiss-${n}-bulk-a`
+        `${encodeURIComponent(REPO)}~dismiss~${n}~bulk-a`
       ),
     );
     for (const call of gh.calls) {
@@ -934,14 +1086,14 @@ Deno.test("bulk dismiss continues past a failure, keeps successes, then reports 
           context as never,
         ),
       Error,
-      "1 of 3 alerts failed (2 dismissed and recorded",
+      "1 problem(s) in 3 alerts (2 dismissed and recorded",
     );
     assert(error.message.includes("#11: "));
     assert(error.message.includes("HTTP 502 for 11"));
     assertEquals(gh.calls.length, 3); // 12 was still attempted after 11 failed
     assertEquals(getWrittenResources().map((w) => w.name), [
-      `${encodeURIComponent(REPO)}-dismiss-10-bulk-a`,
-      `${encodeURIComponent(REPO)}-dismiss-12-bulk-a`,
+      `${encodeURIComponent(REPO)}~dismiss~10~bulk-a`,
+      `${encodeURIComponent(REPO)}~dismiss~12~bulk-a`,
     ]);
     assertEquals(error.message.includes("Test fixture"), false); // redacted
   } finally {
@@ -1026,4 +1178,110 @@ Deno.test("bulk dismiss rejects empty, duplicate, oversized, and invalid number 
     schema.safeParse({ ...bulkArgs, number: 1 }).success,
     false,
   );
+});
+
+Deno.test("bulk dismiss stops at a rate limit and names the alerts it never attempted", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const gh = mockGh((argv) => {
+    const n = Number(
+      argv.find((a) => a.includes("/alerts/"))?.split("/").pop(),
+    );
+    return n === 11
+      ? { success: false, stderr: "gh: API rate limit exceeded (HTTP 403)" }
+      : { stdout: rawAlert(n, { state: "dismissed" }) };
+  });
+  try {
+    const error = await assertRejects(
+      () =>
+        methods.dismiss_code_scanning_alerts.execute(
+          { ...bulkArgs, numbers: [10, 11, 12, 13] },
+          context as never,
+        ),
+      Error,
+      "not attempted because GitHub is rate limiting: #12, #13",
+    );
+    assert(error.message.includes("1 dismissed and recorded"));
+    assertEquals(gh.calls.length, 2); // 12 and 13 never reached GitHub
+    assertEquals(getWrittenResources().length, 1);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("bulk dismiss reports a non-Error rejection and keeps going", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const gh = mockGh((argv) => {
+    const n = Number(
+      argv.find((a) => a.includes("/alerts/"))?.split("/").pop(),
+    );
+    return n === 10
+      ? { reject: "spawn exploded" }
+      : { stdout: rawAlert(n, { state: "dismissed" }) };
+  });
+  try {
+    const error = await assertRejects(
+      () =>
+        methods.dismiss_code_scanning_alerts.execute(
+          bulkArgs,
+          context as never,
+        ),
+      Error,
+      "#10: spawn exploded",
+    );
+    assert(error.message.includes("2 dismissed and recorded"));
+    assertEquals(getWrittenResources().length, 2);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("idempotency keys exclude characters that are invalid in Windows file names", () => {
+  const schema = methods.reopen_code_scanning_alert.arguments;
+  const parse = (idempotencyKey: string) =>
+    schema.safeParse({ repo: REPO, number: 1, idempotencyKey }).success;
+  assert(parse("dismiss-42"));
+  assert(parse("run_2026.11.06"));
+  assertEquals(parse("dismiss:42"), false);
+  assertEquals(parse("trailing."), false);
+  assertEquals(parse("a b"), false);
+  assertEquals(parse("a~b"), false); // "~" separates name parts
+  assertEquals(parse(""), false);
+});
+
+Deno.test("a repo whose name imitates another kind of instance cannot collide with it", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const gh = mockGh((argv) =>
+    argv.includes("PATCH")
+      ? { stdout: rawAlert(3, { state: "dismissed" }) }
+      : { stdout: [] }
+  );
+  try {
+    // Repo "a/b-dismiss-3" writes its summary; repo "a/b" then dismisses #3
+    // under the key "summary". With "-" separators these were the same name.
+    await methods.list_code_scanning_alerts.execute(
+      { repo: "a/b-dismiss-3", maxAlerts: 1000 },
+      context as never,
+    );
+    await methods.dismiss_code_scanning_alert.execute(
+      {
+        repo: "a/b",
+        number: 3,
+        reason: "wont_fix",
+        comment: "c",
+        idempotencyKey: "summary",
+      },
+      context as never,
+    );
+    assertEquals(gh.calls.filter((c) => c.includes("PATCH")).length, 1);
+    const names = getWrittenResources().map((w) => w.name);
+    assertEquals(new Set(names).size, names.length, names.join(", "));
+  } finally {
+    gh.restore();
+  }
 });
