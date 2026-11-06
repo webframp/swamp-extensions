@@ -49,6 +49,11 @@ function mockGh(responder: Responder) {
   };
 }
 
+/** The `page` query parameter of a recorded `gh api repos/.../alerts?...` call. */
+function pageOf(argv: string[]): number {
+  return Number(new URL(`https://x/${argv[1]}`).searchParams.get("page"));
+}
+
 function rawAlert(n: number, over: Record<string, unknown> = {}) {
   return {
     number: n,
@@ -128,7 +133,7 @@ Deno.test("list writes one instance per alert and the summary last", async () =>
     assertEquals(first.snapshotId, summary.snapshotId);
     assertEquals(first.path, "a/b_test.ts");
     assertEquals(first.securitySeverityLevel, "high");
-    assertEquals(gh.calls.length, 1);
+    assertEquals(gh.calls.length, 2);
   } finally {
     gh.restore();
   }
@@ -140,7 +145,7 @@ Deno.test("list paginates and passes filters to the API query", async () => {
   });
   const page1 = Array.from({ length: 100 }, (_, i) => rawAlert(150 - i));
   const page2 = Array.from({ length: 50 }, (_, i) => rawAlert(50 - i));
-  const gh = mockGh((_argv, call) => ({ stdout: call === 1 ? page1 : page2 }));
+  const gh = mockGh((argv) => ({ stdout: pageOf(argv) === 1 ? page1 : page2 }));
   try {
     await methods.list_code_scanning_alerts.execute(
       {
@@ -153,7 +158,7 @@ Deno.test("list paginates and passes filters to the API query", async () => {
       },
       context as never,
     );
-    assertEquals(gh.calls.length, 2);
+    assertEquals(gh.calls.length, 4);
     const url = new URL(`https://x/${gh.calls[0][1]}`);
     assertEquals(gh.calls[0][0], "api");
     assertEquals(url.pathname, `/repos/${REPO}/code-scanning/alerts`);
@@ -626,7 +631,9 @@ Deno.test("idempotencyKey rejects characters that could break marker names", () 
 });
 
 Deno.test("every caller-facing dismiss reason maps to a string the API accepts", async () => {
-  // The exact membership list GitHub returns in its 422 for an invalid value.
+  // The exact membership list GitHub returned in its HTTP 422 for an invalid
+  // dismissed_reason, captured from the live API on 2026-11-06. It is the
+  // source of truth for these strings, not something derived from the code.
   const apiAccepts = [
     "false positive",
     "won't fix",
@@ -920,7 +927,7 @@ Deno.test("list counts an alert repeated across pages once", async () => {
     rawAlert(51),
     ...Array.from({ length: 49 }, (_, i) => rawAlert(50 - i)),
   ];
-  const gh = mockGh((_argv, call) => ({ stdout: call === 1 ? page1 : page2 }));
+  const gh = mockGh((argv) => ({ stdout: pageOf(argv) === 1 ? page1 : page2 }));
   try {
     await methods.list_code_scanning_alerts.execute(
       { repo: REPO, maxAlerts: 1000 },
@@ -942,8 +949,8 @@ Deno.test("a repeated row does not push the count past maxAlerts and fake a trun
     globalArgs: {},
   });
   const page1 = Array.from({ length: 100 }, (_, i) => rawAlert(100 - i));
-  const gh = mockGh((_argv, call) => ({
-    stdout: call === 1 ? page1 : [rawAlert(1), rawAlert(2)], // both already seen
+  const gh = mockGh((argv) => ({
+    stdout: pageOf(argv) === 1 ? page1 : [rawAlert(1), rawAlert(2)], // both already seen
   }));
   try {
     await methods.list_code_scanning_alerts.execute(
@@ -1043,6 +1050,7 @@ const bulkArgs = {
   reason: "used_in_tests" as const,
   comment: "Test fixture",
   idempotencyKey: "bulk-a",
+  pauseMs: 0,
 };
 
 Deno.test("bulk dismiss makes one PATCH per alert and records one marker each", async () => {
@@ -1281,6 +1289,194 @@ Deno.test("a repo whose name imitates another kind of instance cannot collide wi
     assertEquals(gh.calls.filter((c) => c.includes("PATCH")).length, 1);
     const names = getWrittenResources().map((w) => w.name);
     assertEquals(new Set(names).size, names.length, names.join(", "));
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("a pass that skipped an alert is not trusted, and its stored instance survives the prune", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context, getWrittenResources } = harness;
+  const { deleted } = withStore(harness);
+  const name5 = `${encodeURIComponent(REPO)}~alert~5`;
+  await context.writeResource("codeScanningAlert", name5, {
+    repo: REPO,
+    number: 5,
+  });
+  const full = [rawAlert(7), rawAlert(6), rawAlert(5), rawAlert(4)];
+  // Pass 1: alert 5 fell off the page boundary while the list shifted.
+  const gh = mockGh((_argv, call) => ({
+    stdout: call === 1 ? [rawAlert(7), rawAlert(6), rawAlert(4)] : full,
+  }));
+  try {
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 1000 },
+      context as never,
+    );
+    assertEquals(gh.calls.length, 3); // pass 1 differed, passes 2 and 3 agreed
+    const summary = getWrittenResources().at(-1)!.data as {
+      alertNumbers: number[];
+    };
+    assertEquals(summary.alertNumbers, [7, 6, 5, 4]);
+    assertEquals(deleted, []); // 5 was never wrongly pruned
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("a list that never settles writes nothing and deletes nothing", async () => {
+  const harness = createModelTestContext({ globalArgs: {} });
+  const { context } = harness;
+  const { deleted } = withStore(harness);
+  const gh = mockGh((_argv, call) => ({
+    stdout: Array.from({ length: call }, (_, i) => rawAlert(i + 1)),
+  }));
+  try {
+    await context.writeResource(
+      "codeScanningAlert",
+      `${encodeURIComponent(REPO)}~alert~99`,
+      { repo: REPO, number: 99 },
+    );
+    const before = harness.getWrittenResources().length;
+    await assertRejects(
+      () =>
+        methods.list_code_scanning_alerts.execute(
+          { repo: REPO, maxAlerts: 1000 },
+          context as never,
+        ),
+      Error,
+      "kept changing across 3 reads",
+    );
+    assertEquals(harness.getWrittenResources().length, before);
+    assertEquals(deleted, []);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("list is truncated when the page cap ends the read on a full page", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  // Every page repeats the same 100 rows, so unique rows never pass maxAlerts
+  // but the cap (11 pages) still ends the read with more pages available.
+  const same = Array.from({ length: 100 }, (_, i) => rawAlert(100 - i));
+  const gh = mockGh(() => ({ stdout: same }));
+  try {
+    await methods.list_code_scanning_alerts.execute(
+      { repo: REPO, maxAlerts: 1000 },
+      context as never,
+    );
+    const summary = getWrittenResources().at(-1)!.data as {
+      total: number;
+      truncated: boolean;
+    };
+    assertEquals(summary.total, 100);
+    assertEquals(summary.truncated, true);
+    assertEquals(gh.calls.length, 22); // two stable passes of 11 pages
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("reusing an idempotency key with a different reason or comment is refused", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const gh = mockGh(patchResponder());
+  try {
+    const first = {
+      repo: REPO,
+      number: 10,
+      reason: "used_in_tests" as const,
+      comment: "Test fixture",
+      idempotencyKey: "reuse-1",
+    };
+    await methods.dismiss_code_scanning_alert.execute(first, context as never);
+    for (
+      const changed of [
+        { ...first, comment: "A different rationale" },
+        { ...first, reason: "wont_fix" as const },
+      ]
+    ) {
+      await assertRejects(
+        () =>
+          methods.dismiss_code_scanning_alert.execute(
+            changed,
+            context as never,
+          ),
+        Error,
+        'idempotencyKey "reuse-1" was already used for alert #10 with a different reason or comment',
+      );
+    }
+    assertEquals(gh.calls.length, 1);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("bulk dismiss pauses between real requests but not past skipped alerts", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const gh = mockGh(patchResponder());
+  try {
+    const args = { ...bulkArgs, pauseMs: 150 };
+    let start = performance.now();
+    await methods.dismiss_code_scanning_alerts.execute(args, context as never);
+    // Three real PATCHes: a pause after the first and second, none after the last.
+    assert(performance.now() - start >= 280, "expected two pauses");
+    start = performance.now();
+    await methods.dismiss_code_scanning_alerts.execute(args, context as never);
+    assertEquals(gh.calls.length, 3); // the rerun skipped all three
+    assert(performance.now() - start < 150, "skipped alerts must not pause");
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("bulk dismiss stops on an authorization failure instead of repeating it", async () => {
+  const { context, getWrittenResources } = createModelTestContext({
+    globalArgs: {},
+  });
+  const gh = mockGh(() => ({
+    success: false,
+    stderr: "gh: Bad credentials (HTTP 401)",
+  }));
+  try {
+    await assertRejects(
+      () =>
+        methods.dismiss_code_scanning_alerts.execute(
+          bulkArgs,
+          context as never,
+        ),
+      Error,
+      "not attempted because GitHub rejected the credentials or permissions: #11, #12",
+    );
+    assertEquals(gh.calls.length, 1);
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    gh.restore();
+  }
+});
+
+Deno.test("bulk dismiss does not stop for a per-alert failure such as a missing alert", async () => {
+  const { context } = createModelTestContext({ globalArgs: {} });
+  const gh = mockGh((argv) => {
+    const n = Number(
+      argv.find((a) => a.includes("/alerts/"))?.split("/").pop(),
+    );
+    return n === 10
+      ? { success: false, stderr: "gh: Not Found (HTTP 404)" }
+      : { stdout: rawAlert(n, { state: "dismissed" }) };
+  });
+  try {
+    await assertRejects(
+      () =>
+        methods.dismiss_code_scanning_alerts.execute(
+          bulkArgs,
+          context as never,
+        ),
+      Error,
+      "2 dismissed and recorded",
+    );
+    assertEquals(gh.calls.length, 3);
   } finally {
     gh.restore();
   }

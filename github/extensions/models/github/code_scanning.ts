@@ -49,6 +49,8 @@ const MAX_ALERTS_CEILING = 1000;
 const MAX_BULK_DISMISS = 200;
 /** One page beyond the ceiling is enough to prove truncation. */
 const MAX_PAGES = Math.ceil((MAX_ALERTS_CEILING + 1) / PAGE_SIZE);
+/** Reads of the alert list allowed before giving up on a stable result. */
+const MAX_PASSES = 3;
 
 type Ctx = {
   readResource: (name: string) => Promise<Record<string, unknown> | null>;
@@ -119,6 +121,10 @@ const names = {
 /** True when a gh failure says GitHub is throttling this client. */
 const isRateLimited = (message: string) =>
   /rate limit|HTTP 429|abuse detection/i.test(message);
+
+/** True when a gh failure says the token itself is not allowed, which no retry on another alert can fix. */
+const isAuthFailure = (message: string) =>
+  /HTTP 401|HTTP 403|Bad credentials|Resource not accessible/i.test(message);
 
 /** Redact fields whose values are caller-supplied free text before they reach an error message. */
 const REDACTED_FIELDS = ["dismissed_comment="];
@@ -251,7 +257,7 @@ async function dismissOne(
     comment: string;
     idempotencyKey: string;
   },
-): Promise<{ name: string }> {
+): Promise<{ handle: { name: string }; patched: boolean }> {
   // The alert number is part of the marker so a reused key cannot make a
   // different alert look already dismissed.
   const resourceName = names.dismiss(
@@ -261,8 +267,22 @@ async function dismissOne(
   );
   const existing = await context.readResource(resourceName);
   if (existing) {
-    return (await existingHandle(context, resourceName, existing))
-      .dataHandles[0];
+    // A key names one operation. Replaying it with another reason or comment
+    // would silently keep the old outcome, so refuse instead of guessing.
+    const prior = (existing.result ?? {}) as {
+      reason?: string;
+      comment?: string;
+    };
+    if (prior.reason !== args.reason || prior.comment !== args.comment) {
+      throw new Error(
+        `idempotencyKey "${args.idempotencyKey}" was already used for alert #${args.number} with a different reason or comment; use a new key`,
+      );
+    }
+    return {
+      handle:
+        (await existingHandle(context, resourceName, existing)).dataHandles[0],
+      patched: false,
+    };
   }
   // -f (raw string), never -F: -F expands "@file" values, so a comment
   // beginning with "@" would read a local file.
@@ -278,7 +298,7 @@ async function dismissOne(
     `dismissed_comment=${args.comment}`,
   ]);
   assertAlertState(result, args.number, "dismissed");
-  return await context.writeResource("triageAction", resourceName, {
+  const handle = await context.writeResource("triageAction", resourceName, {
     repo: args.repo,
     action: "dismiss_code_scanning_alert",
     target: args.number,
@@ -291,7 +311,47 @@ async function dismissOne(
     },
     recordedAt: new Date().toISOString(),
   });
+  return { handle, patched: true };
 }
+
+/**
+ * One pass over the alert list. An alert repeated across pages (rows shifted
+ * by a new alert) is counted once. Fetches one unique item past `maxAlerts`
+ * so `truncated` is exact; `capped` means the page cap ended the read on a
+ * full page, so more alerts may exist.
+ */
+async function fetchAlerts(
+  slug: string,
+  base: URLSearchParams,
+  maxAlerts: number,
+): Promise<{ unique: Map<number, RawAlert>; capped: boolean }> {
+  const params = new URLSearchParams(base);
+  const unique = new Map<number, RawAlert>();
+  let capped = false;
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    params.set("page", String(page));
+    const batch = await ghApi([`repos/${slug}/code-scanning/alerts?${params}`]);
+    if (!Array.isArray(batch)) {
+      throw new Error(
+        `Unexpected code-scanning response for ${slug}: expected an array`,
+      );
+    }
+    for (const raw of batch as RawAlert[]) {
+      if (!Number.isInteger(raw?.number)) {
+        throw new Error(
+          `Unexpected code-scanning response for ${slug}: alert without an integer number`,
+        );
+      }
+      if (!unique.has(raw.number)) unique.set(raw.number, raw);
+    }
+    if (batch.length < PAGE_SIZE || unique.size > maxAlerts) break;
+    if (page === MAX_PAGES) capped = true;
+  }
+  return { unique, capped };
+}
+
+const sameKeys = (a: Map<number, unknown>, b: Map<number, unknown>) =>
+  a.size === b.size && [...a.keys()].every((k) => b.has(k));
 
 /** Code-scanning triage augmentation for `@webframp/github`. */
 export const extension = {
@@ -330,38 +390,33 @@ export const extension = {
         },
         context: Ctx,
       ) => {
-        const params = new URLSearchParams({ per_page: String(PAGE_SIZE) });
-        if (args.state) params.set("state", args.state);
-        if (args.severity) params.set("severity", args.severity);
-        if (args.tool) params.set("tool_name", args.tool);
-        if (args.ref) params.set("ref", args.ref);
+        const base = new URLSearchParams({ per_page: String(PAGE_SIZE) });
+        if (args.state) base.set("state", args.state);
+        if (args.severity) base.set("severity", args.severity);
+        if (args.tool) base.set("tool_name", args.tool);
+        if (args.ref) base.set("ref", args.ref);
 
-        // Page offsets shift while alerts change, so one alert can appear on
-        // two pages. Key by number so a repeat is counted once, and fetch one
-        // unique item past maxAlerts so `truncated` is exact, not a guess.
-        const unique = new Map<number, RawAlert>();
-        for (let page = 1; page <= MAX_PAGES; page++) {
-          params.set("page", String(page));
-          const batch = await ghApi([
-            `repos/${args.repo}/code-scanning/alerts?${params}`,
-          ]);
-          if (!Array.isArray(batch)) {
-            throw new Error(
-              `Unexpected code-scanning response for ${args.repo}: expected an array`,
-            );
-          }
-          for (const raw of batch as RawAlert[]) {
-            if (!Number.isInteger(raw?.number)) {
-              throw new Error(
-                `Unexpected code-scanning response for ${args.repo}: alert without an integer number`,
-              );
-            }
-            if (!unique.has(raw.number)) unique.set(raw.number, raw);
-          }
-          if (batch.length < PAGE_SIZE || unique.size > args.maxAlerts) break;
+        // GitHub pages this live list by offset with no snapshot isolation, so
+        // an alert fixed mid-read shifts later rows up and one still-open
+        // alert can be skipped; the prune below would then delete its stored
+        // instance. Read until two consecutive passes return the same set, so
+        // a pass that skipped an alert is never trusted.
+        let previousPass = await fetchAlerts(args.repo, base, args.maxAlerts);
+        let pass = previousPass;
+        let stable = false;
+        for (let attempt = 1; attempt < MAX_PASSES && !stable; attempt++) {
+          pass = await fetchAlerts(args.repo, base, args.maxAlerts);
+          stable = sameKeys(previousPass.unique, pass.unique);
+          previousPass = pass;
         }
-        const collected = [...unique.values()];
-        const truncated = collected.length > args.maxAlerts;
+        if (!stable) {
+          throw new Error(
+            `Code-scanning alerts for ${args.repo} kept changing across ${MAX_PASSES} reads, so no snapshot was written; try again`,
+          );
+        }
+        const collected = [...pass.unique.values()];
+        // Also truncated when the page cap ended the read on a full page.
+        const truncated = collected.length > args.maxAlerts || pass.capped;
         const alerts = collected.slice(0, args.maxAlerts);
 
         const summaryName = names.summary(args.repo);
@@ -500,7 +555,7 @@ export const extension = {
           idempotencyKey: string;
         },
         context: Ctx,
-      ) => ({ dataHandles: [await dismissOne(context, args)] }),
+      ) => ({ dataHandles: [(await dismissOne(context, args)).handle] }),
     },
     dismiss_code_scanning_alerts: {
       description:
@@ -516,6 +571,9 @@ export const extension = {
         reason: dismissReason,
         comment: z.string().min(1).max(MAX_DISMISS_COMMENT),
         idempotencyKey,
+        pauseMs: z.number().int().min(0).max(10000).default(1000).describe(
+          "Pause between consecutive dismissals; GitHub asks for about a second between mutating requests",
+        ),
       }).strict(),
       execute: async (
         args: {
@@ -524,35 +582,46 @@ export const extension = {
           reason: keyof typeof DISMISS_REASONS;
           comment: string;
           idempotencyKey: string;
+          pauseMs: number;
         },
         context: Ctx,
       ) => {
         // One lock acquisition for the whole batch. A failure on one alert
         // does not stop the rest; every success keeps its marker, so running
-        // the same call again skips them and retries only the failures.
+        // the same call again skips them and retries only what is left.
         const handles: { name: string }[] = [];
         const failures: string[] = [];
         for (const [index, number] of args.numbers.entries()) {
           try {
-            handles.push(
-              await dismissOne(context, {
-                repo: args.repo,
-                number,
-                reason: args.reason,
-                comment: args.comment,
-                idempotencyKey: args.idempotencyKey,
-              }),
-            );
+            const { handle, patched } = await dismissOne(context, {
+              repo: args.repo,
+              number,
+              reason: args.reason,
+              comment: args.comment,
+              idempotencyKey: args.idempotencyKey,
+            });
+            handles.push(handle);
+            // Only a real PATCH counts toward GitHub's request pacing.
+            if (
+              patched && args.pauseMs > 0 && index < args.numbers.length - 1
+            ) {
+              await new Promise((resolve) => setTimeout(resolve, args.pauseMs));
+            }
           } catch (error) {
             const message = String((error as Error)?.message ?? error).trim();
             failures.push(`#${number}: ${message}`);
-            if (isRateLimited(message)) {
-              // Every further request would hit the same wall; stop and say
-              // which alerts were never attempted.
+            // A throttled or unauthorized client fails every remaining alert
+            // the same way; stop instead of sending up to 199 more requests.
+            const stopReason = isRateLimited(message)
+              ? "GitHub is rate limiting"
+              : isAuthFailure(message)
+              ? "GitHub rejected the credentials or permissions"
+              : null;
+            if (stopReason) {
               const skipped = args.numbers.slice(index + 1);
               if (skipped.length > 0) {
                 failures.push(
-                  `not attempted because GitHub is rate limiting: ${
+                  `not attempted because ${stopReason}: ${
                     skipped.map((n) => `#${n}`).join(", ")
                   }`,
                 );

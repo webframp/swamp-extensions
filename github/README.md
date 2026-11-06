@@ -108,21 +108,32 @@ swamp model method run github dismiss_code_scanning_alerts \
 `dismiss_code_scanning_alerts` attempts every alert even when one fails, keeps
 the marker of each success, and then fails the step listing the problems. Run
 the identical call again to retry only the rest: alerts already dismissed under
-the same key are skipped without calling GitHub. If GitHub reports rate
-limiting, it stops at once and lists the alerts it never attempted. It shares
-markers with `dismiss_code_scanning_alert`, so the two can be mixed.
+the same key are skipped without calling GitHub. It stops at once, listing the
+alerts it never attempted, when GitHub reports rate limiting or rejects the
+credentials or permissions, since every further alert would fail the same way.
+It waits `pauseMs` (default 1000) after each real dismissal, because GitHub asks
+for about a second between mutating requests; skipped alerts cost no pause. It
+shares markers with `dismiss_code_scanning_alert`, so the two can be mixed.
+
+A key names one operation. Reusing a key for the same alert with a different
+`reason` or `comment` fails instead of silently returning the earlier result;
+use a new key for a new decision.
 
 `list_code_scanning_alerts` is a fan-out method: it writes one
 `codeScanningAlert` instance per alert and one `codeScanningSummary`. Read the
 summary before trusting a count: `truncated: true` means more than `maxAlerts`
-alerts matched. Each new snapshot replaces every earlier one for the repo: it
-lists what is stored and deletes each alert the new snapshot does not contain
-(fixed, or outside the new filter), including leftovers from a run that died
-partway. If a delete fails, the snapshot is kept, the method reports the
-failure, and the next list retries. Every remaining alert's `snapshotId` equals
-the summary's. A snapshot is not atomic: GitHub pages a live list, so an alert
-that changes state while the pages are fetched can be missed until the next
-list. An alert that appears on two pages is counted once.
+alerts matched, or the 11-page read limit ended the read on a full page. GitHub
+pages this list by offset with no snapshot isolation, so an alert changing state
+mid-read can shift rows and hide a still-open alert. The method therefore reads
+the list until two consecutive passes agree (so each list costs at least two
+reads), and fails without writing anything if three passes never settle. An
+alert that appears on two pages is counted once.
+
+Each new snapshot replaces every earlier one for the repo: it lists what is
+stored and deletes each alert the new snapshot does not contain (fixed, or
+outside the new filter), including leftovers from a run that died partway. If a
+delete fails, the snapshot is kept, the method reports the failure, and the next
+list retries. Every remaining alert's `snapshotId` equals the summary's.
 
 `get_code_scanning_alert` stores its result as `codeScanningAlertDetail` under a
 separate `alert-detail` instance name, so it never overwrites the list snapshot.
