@@ -58,6 +58,13 @@ Initial release.
 - `promote` accepts `migrateVaults` as an array or a JSON-array string (the
   shape a workflow string input passes), parsing and re-validating each element
   against the vault-name constraint.
+- The token reveal→`vault put` pipelines run under `set -o pipefail`, so a `jq`
+  parse failure fails the step instead of silently piping an empty token into
+  `vault put` (which would surface later as a misleading "empty value" error in
+  `enroll_worker`).
+- `datastoreConfig` is validated as a JSON object at the schema level, so a
+  malformed blob is rejected early with a clear error rather than reaching
+  `swamp datastore setup`.
 - The `swamp install` steps cap their remote output (`pipefail` + `tail -c`) so
   a verbose installer cannot grow the provisioner's capture buffer without
   bound.

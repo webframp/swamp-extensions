@@ -100,6 +100,15 @@ const GlobalArgsSchema = z.object({
   datastoreConfig: z
     .string()
     .min(2)
+    .refine((v) => {
+      try {
+        const parsed = JSON.parse(v);
+        return typeof parsed === "object" && parsed !== null &&
+          !Array.isArray(parsed);
+      } catch {
+        return false;
+      }
+    }, { message: "datastoreConfig must be a JSON object." })
     .describe(
       "JSON config for `swamp datastore setup extension <type> --config`, " +
         'e.g. {"bucket":"my-swamp","region":"us-east-1"}. Required.',
@@ -724,7 +733,7 @@ export function buildEnsureAccessTokenCmd(opts: {
     `swamp access token rotate ${name}; else ` +
     `swamp access token mint ${name} --principal ${principal} ` +
     `--duration ${duration}; fi`;
-  return `${mintOrRotate} && ` +
+  return `set -o pipefail && ${mintOrRotate} && ` +
     `swamp access token reveal ${name} --yes --json | jq -re .token | ` +
     `swamp vault put ${vault} ${key} --yes`;
 }
@@ -742,7 +751,8 @@ export function buildEnsureWorkerTokenCmd(opts: {
   key: string;
 }): string {
   const { name, duration, maxEnrollments, vault, key } = opts;
-  const recreate = `if swamp worker token list --json | jq -e ` +
+  const recreate = `set -o pipefail && ` +
+    `if swamp worker token list --json | jq -e ` +
     `'.[]?|select(.name=="${name}")' >/dev/null 2>&1; then ` +
     `swamp worker token revoke ${name} || true; fi && ` +
     `swamp worker token create ${name} --duration ${duration} ` +

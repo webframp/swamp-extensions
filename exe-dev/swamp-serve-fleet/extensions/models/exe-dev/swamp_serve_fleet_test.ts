@@ -132,6 +132,7 @@ Deno.test("buildEnsureAccessTokenCmd rotates an existing token, else mints", () 
   });
   // Existence branch rotates (no duplicate-mint error on re-run)...
   assertStringIncludes(cmd, "access token list --json");
+  assertStringIncludes(cmd, "set -o pipefail");
   assertStringIncludes(cmd, `jq -e '.[]?|select(.name=="swamp-serve-worker")'`);
   assertStringIncludes(cmd, "access token rotate swamp-serve-worker");
   // ...otherwise mints with principal + duration.
@@ -156,6 +157,7 @@ Deno.test("buildEnsureWorkerTokenCmd revokes-then-recreates an existing token", 
     key: "enroll-token-swamp-workers",
   });
   assertStringIncludes(cmd, "worker token list --json");
+  assertStringIncludes(cmd, "set -o pipefail");
   assertStringIncludes(cmd, `jq -e '.[]?|select(.name=="swamp-workers")'`);
   assertStringIncludes(cmd, "worker token revoke swamp-workers");
   assertStringIncludes(
@@ -217,6 +219,26 @@ Deno.test("assertHostname accepts a MagicDNS name, rejects injection", () => {
     assertHostname("evil.ts.net; systemctl stop tailscaled", "magicDnsName")
   );
   assertThrows(() => assertHostname("has space.ts.net", "magicDnsName"));
+});
+
+Deno.test("datastoreConfig must be a JSON object", () => {
+  const schema = model.globalArguments;
+  const base = { adminPrincipal: "user:a", tokenVault: "v" };
+  assertEquals(
+    schema.safeParse({ ...base, datastoreConfig: "not json" }).success,
+    false,
+  );
+  assertEquals(
+    schema.safeParse({ ...base, datastoreConfig: "[1,2]" }).success,
+    false,
+  );
+  assertEquals(
+    schema.safeParse({
+      ...base,
+      datastoreConfig: '{"bucket":"b","region":"us-east-1"}',
+    }).success,
+    true,
+  );
 });
 
 Deno.test("normalizeMigrateVaults parses JSON strings and rejects injection", () => {
