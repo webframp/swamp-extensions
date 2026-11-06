@@ -108,13 +108,13 @@ Deno.test("buildServeFlags trusted-hosts lists each name with and without port",
 
 Deno.test("redactSecrets masks exe tokens, server tokens, and tailnet keys", () => {
   const s = redactSecrets(
-    "token exe1.abcdef123456 and devsecops-worker.AbCdEfGh12345678XYZ " +
-      "and tskey-auth-k1LongKeyValue123",
+    "token exe1.FAKEfake123456 and fake-worker.FAKEfake12345678XYZ " +
+      "and tskey-FAKE-not-a-real-key",
   );
   assertStringIncludes(s, "[REDACTED]");
-  assertEquals(/exe1\.abcdef/.test(s), false);
-  assertEquals(/AbCdEfGh12345678XYZ/.test(s), false);
-  assertEquals(/tskey-auth/.test(s), false);
+  assertEquals(/exe1\.FAKEfake/.test(s), false);
+  assertEquals(/FAKEfake12345678XYZ/.test(s), false);
+  assertEquals(/tskey-FAKE/.test(s), false);
 });
 
 Deno.test("redactSecrets leaves ordinary output intact", () => {
@@ -202,8 +202,8 @@ Deno.test("tokenVault regex rejects names with shell metacharacters", () => {
 
 Deno.test("assertTailnetAuthKey accepts tskey, rejects injection", () => {
   assertEquals(
-    assertTailnetAuthKey("tskey-auth-k1AbC_de-f2"),
-    "tskey-auth-k1AbC_de-f2",
+    assertTailnetAuthKey("tskey-NOT-A-REAL-KEY-test-fixture-only"),
+    "tskey-NOT-A-REAL-KEY-test-fixture-only",
   );
   assertThrows(() => assertTailnetAuthKey("tskey-auth-k1$(whoami)"));
   assertThrows(() => assertTailnetAuthKey("not-a-key"));
