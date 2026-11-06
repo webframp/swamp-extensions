@@ -40,8 +40,13 @@ Initial release.
 
 ### Security
 
-- `adminPrincipal` and `tokenVault` are format-constrained to reject shell
-  metacharacters before they are interpolated into remote SSH commands.
+- `adminPrincipal`, `tokenVault`, `datastoreType`, `magicDnsName`, and
+  `clubApiKeyPath` are format-constrained to reject shell metacharacters before
+  they are interpolated into remote SSH (or local `promote`) commands; a
+  runtime-resolved `magicDnsName` is validated before use.
 - `tailnetAuthKey` is format-validated (`tskey-…`) and delivered to
   `tailscale up` over SSH stdin into `TS_AUTHKEY` (`sudo --preserve-env`), so it
   never appears in argv or the remote `/proc` table.
+- The secret-stdin SSH helpers arm their SIGTERM/SIGKILL timeouts before writing
+  stdin, so a remote process that exits without reading stdin cannot hang the
+  call on a full pipe buffer.

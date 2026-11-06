@@ -126,9 +126,11 @@ VMs.
   and delivered to the `tailscale up` command over SSH stdin into `TS_AUTHKEY`
   (via `sudo --preserve-env`), so it never appears in argv or the remote `/proc`
   table.
-- `adminPrincipal` and `tokenVault` are format-constrained so a value with shell
-  metacharacters cannot be injected into the remote commands they are
-  interpolated into.
+- `adminPrincipal`, `tokenVault`, `datastoreType`, `magicDnsName`, and
+  `clubApiKeyPath` are format-constrained so a value with shell metacharacters
+  cannot be injected into the remote (or local `promote`) commands they are
+  interpolated into. A `magicDnsName` read from the VM at runtime is validated
+  before use.
 - The provisioner stores token names, principals, and URLs. It never stores
   token values, and redacts token-shaped and `tskey-` strings from captured
   output.

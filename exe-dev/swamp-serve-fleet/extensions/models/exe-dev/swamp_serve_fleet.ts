@@ -88,6 +88,10 @@ const GlobalArgsSchema = z.object({
     ),
   datastoreType: z
     .string()
+    .regex(/^@?[a-z0-9][a-z0-9./@-]*$/, {
+      message: "datastoreType must be a swamp extension name (lowercase " +
+        "alphanumeric with ./@- ); it is interpolated into a shell command.",
+    })
     .default("@swamp/s3-datastore")
     .describe(
       "Shared datastore extension `promote` switches the repo to, e.g. " +
@@ -165,6 +169,11 @@ const GlobalArgsSchema = z.object({
     ),
   magicDnsName: z
     .string()
+    .regex(/^[a-z0-9][a-z0-9.-]+$/, {
+      message:
+        "magicDnsName must be a hostname (lowercase alphanumeric, dots, " +
+        "hyphens); it is interpolated into remote shell commands.",
+    })
     .optional()
     .describe(
       "Orchestrator MagicDNS name (e.g. `swamp-serve.tailnet.ts.net`). " +
@@ -173,6 +182,11 @@ const GlobalArgsSchema = z.object({
     ),
   clubApiKeyPath: z
     .string()
+    .regex(/^[A-Za-z0-9~][\w./~-]*$/, {
+      message:
+        "clubApiKeyPath must be a plain filesystem path (no spaces or shell " +
+        "metacharacters); it is interpolated into remote shell commands.",
+    })
     .default("~/.config/swamp/club-api-key")
     .describe(
       "Path on the orchestrator VM to the swamp-club API key file passed to " +
@@ -434,10 +448,10 @@ async function sshRunStdinEnv(
     stderr: "piped",
   });
   const child = cmd.spawn();
-  const w = child.stdin.getWriter();
-  await w.write(new TextEncoder().encode(stdinValue));
-  await w.close();
   let killed = false;
+  // Arm the timeouts BEFORE writing stdin: if the remote process exits early
+  // without reading stdin, the write can block on a full pipe buffer, so the
+  // timers must already be running to guarantee the call cannot hang forever.
   // Match sshRun's semantics: SIGTERM at timeoutSec, SIGKILL 2s later.
   const term = setTimeout(() => {
     killed = true;
@@ -450,6 +464,13 @@ async function sshRunStdinEnv(
       child.kill("SIGKILL");
     } catch { /* already exited */ }
   }, (timeoutSec + 2) * 1000);
+  // The stdin write may reject if the process already exited; that is not
+  // fatal — the exit code and output below carry the real outcome.
+  try {
+    const w = child.stdin.getWriter();
+    await w.write(new TextEncoder().encode(stdinValue));
+    await w.close();
+  } catch { /* process exited before consuming stdin */ }
   let out: Deno.CommandOutput;
   try {
     out = await child.output();
@@ -494,20 +515,30 @@ async function sshWriteSecretFile(
     stderr: "piped",
   });
   const child = cmd.spawn();
-  const w = child.stdin.getWriter();
-  await w.write(new TextEncoder().encode(secret));
-  await w.close();
   let killed = false;
-  const kill = setTimeout(() => {
+  // Arm the timeout before writing stdin so an early-exiting remote process
+  // (which would block the pipe write) cannot hang the call forever.
+  const term = setTimeout(() => {
     killed = true;
+    try {
+      child.kill("SIGTERM");
+    } catch { /* already exited */ }
+  }, timeoutSec * 1000);
+  const kill = setTimeout(() => {
     try {
       child.kill("SIGKILL");
     } catch { /* already exited */ }
   }, (timeoutSec + 2) * 1000);
+  try {
+    const w = child.stdin.getWriter();
+    await w.write(new TextEncoder().encode(secret));
+    await w.close();
+  } catch { /* process exited before consuming stdin */ }
   let out: Deno.CommandOutput;
   try {
     out = await child.output();
   } finally {
+    clearTimeout(term);
     clearTimeout(kill);
   }
   if (killed || out.code !== 0) {
@@ -602,6 +633,17 @@ async function fetchExistingVmNames(
     }
   }
   return names;
+}
+
+/** Validate a hostname before it is interpolated into a remote shell command. */
+export function assertHostname(value: string, label: string): string {
+  if (!/^[a-z0-9][a-z0-9.-]+$/.test(value)) {
+    throw new Error(
+      `${label} "${value}" is not a valid hostname (lowercase alphanumeric, ` +
+        `dots, hyphens). Refusing to interpolate it into a shell command.`,
+    );
+  }
+  return value;
 }
 
 /** Validate a tailnet auth key before it is delivered to a remote host. */
@@ -844,6 +886,9 @@ export const model = {
             );
           }
         }
+        // Validate the resolved name (whether operator-supplied or read from
+        // the VM) before it flows into serveUrl and the serve flag set.
+        assertHostname(magicDnsName, "magicDnsName");
 
         const serveUrl = `wss://${magicDnsName}:${g.workerPort}`;
         const loopbackUrl = `ws://127.0.0.1:${g.loopbackPort}`;

