@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/github"
 license: Apache-2.0
-version: "2026.11.03.1"
+version: "2026.11.06.1"
 description: |
   Query GitHub data using the gh CLI for repository, PR, issue, release, and workflow visibility.
 
@@ -55,10 +55,16 @@ description: |
   - **retry_workflow_run** - Retry an approved workflow run
   - **watch_pr_checks** - Bounded-poll a PR's status checks to completion
   - **merge_pull_request** - Post an approved merge comment and poll until merged
+  - **list_code_scanning_alerts** - Snapshot code-scanning alerts, one resource per alert plus a summary
+  - **get_code_scanning_alert** - Retrieve one code-scanning alert with full rule detail
+  - **dismiss_code_scanning_alert** - Dismiss one approved alert with a reason and comment
+  - **dismiss_code_scanning_alerts** - Dismiss many approved alerts in one call; rerun to retry only failures
+  - **reopen_code_scanning_alert** - Reopen one approved dismissed alert
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - github/repos.ts
   - github/triage.ts
+  - github/code_scanning.ts
 labels:
   - api
   - devops

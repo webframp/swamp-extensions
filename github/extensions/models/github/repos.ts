@@ -257,7 +257,7 @@ type ModelContext = {
 /** GitHub model definition exposing repository query methods. */
 export const model = {
   type: "@webframp/github",
-  version: "2026.11.03.1",
+  version: "2026.11.06.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -359,6 +359,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.06.1",
+      description:
+        "Additive: code-scanning alert triage methods and codeScanningAlert, codeScanningSummary, codeScanningAlertDetail resources",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -418,6 +424,69 @@ export const model = {
         fetchedAt: z.string(),
       }),
       lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    codeScanningAlert: {
+      description:
+        "One code-scanning alert from a snapshot; match snapshotId to the codeScanningSummary to drop stale instances",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        state: z.string(),
+        snapshotId: z.string(),
+        ruleId: z.string(),
+        ruleSeverity: z.string().nullable(),
+        securitySeverityLevel: z.string().nullable(),
+        description: z.string(),
+        tool: z.string().nullable(),
+        ref: z.string().nullable(),
+        path: z.string().nullable(),
+        startLine: z.number().nullable(),
+        endLine: z.number().nullable(),
+        dismissedReason: z.string().nullable(),
+        dismissedComment: z.string().nullable(),
+        dismissedAt: z.string().nullable(),
+        dismissedBy: z.string().nullable(),
+        fixedAt: z.string().nullable(),
+        htmlUrl: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+      }),
+      lifetime: "1h" as const,
+      garbageCollection: 3,
+    },
+    codeScanningSummary: {
+      description:
+        "Completeness record for a code-scanning snapshot: filters, totals, and whether the alert set was truncated",
+      schema: z.object({
+        repo: repoArg(),
+        snapshotId: z.string(),
+        fetchedAt: z.string(),
+        filters: z.object({
+          state: z.string().nullable(),
+          severity: z.string().nullable(),
+          tool: z.string().nullable(),
+          ref: z.string().nullable(),
+        }),
+        maxAlerts: z.number(),
+        total: z.number(),
+        truncated: z.boolean(),
+        alertNumbers: z.array(z.number()),
+        countsByRule: z.record(z.string(), z.number()),
+        countsBySeverity: z.record(z.string(), z.number()),
+      }),
+      lifetime: "1h" as const,
+      garbageCollection: 10,
+    },
+    codeScanningAlertDetail: {
+      description: "Full code-scanning alert detail for one triage decision",
+      schema: z.object({
+        repo: repoArg(),
+        number: z.number(),
+        context: z.unknown(),
+        fetchedAt: z.string(),
+      }),
+      lifetime: "30m" as const,
       garbageCollection: 10,
     },
     triageAction: {

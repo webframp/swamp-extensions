@@ -72,6 +72,60 @@ swamp model method run github list_workflows --input repo=octocat/Hello-World
 | `list_issues`    | List issues for a repository with optional state filter          |
 | `list_releases`  | List releases for a repository                                   |
 | `list_workflows` | List recent workflow runs for a repository                       |
+| `list_code_scanning_alerts` | Snapshot code-scanning alerts as one resource per alert plus a summary |
+| `get_code_scanning_alert` | Retrieve one code-scanning alert with full rule detail |
+| `dismiss_code_scanning_alert` | Dismiss one alert with a reason and comment (idempotent) |
+| `dismiss_code_scanning_alerts` | Dismiss up to 200 alerts with one reason and comment; rerun to retry only failures |
+| `reopen_code_scanning_alert` | Reopen one dismissed alert (idempotent) |
+
+## Code-scanning triage
+
+Token scope: `gh` needs the `security_events` scope (or `repo` on a private
+repository) to read alerts, and write access to dismiss or reopen them.
+
+```bash
+# Snapshot open alerts (omit state for every state)
+swamp model method run github list_code_scanning_alerts \
+  --input repo=owner/name --input state=open --input severity=high
+
+# One alert's full rule text and help
+swamp model method run github get_code_scanning_alert \
+  --input repo=owner/name --input number=42
+
+# Dismiss: reason is false_positive, wont_fix, used_in_tests, or mitigated;
+# the comment is at most 280 characters
+swamp model method run github dismiss_code_scanning_alert \
+  --input repo=owner/name --input number=42 --input reason=used_in_tests \
+  --input comment="Test fixture, not shipped" --input idempotencyKey=dismiss-42
+
+# Dismiss many alerts with one reason and comment (one call, one lock)
+swamp model method run github dismiss_code_scanning_alerts \
+  --input repo=owner/name --input 'numbers=[41,42,43]' \
+  --input reason=used_in_tests --input comment="Test fixtures, not shipped" \
+  --input idempotencyKey=dismiss-batch-1
+```
+
+`dismiss_code_scanning_alerts` attempts every alert even when one fails, keeps
+the marker of each success, and then fails the step listing the alerts that
+failed. Run the identical call again to retry only those: alerts already
+dismissed under the same key are skipped without calling GitHub. It shares
+markers with `dismiss_code_scanning_alert`, so the two can be mixed.
+
+`list_code_scanning_alerts` is a fan-out method: it writes one
+`codeScanningAlert` instance per alert and one `codeScanningSummary`. Read the
+summary before trusting a count: `truncated: true` means more than `maxAlerts`
+alerts matched. Each new snapshot replaces the previous one, so an alert the
+last snapshot listed and this one did not (fixed, or outside the new filter) is
+deleted. Every remaining alert's `snapshotId` equals the summary's.
+
+`get_code_scanning_alert` stores its result as `codeScanningAlertDetail` under a
+separate `-alert-detail-<n>` name, so it never overwrites the list snapshot.
+
+`dismiss_code_scanning_alert` and `reopen_code_scanning_alert` write their
+idempotency marker only after GitHub confirms the new state, so a failed or
+unconfirmed call can be retried with the same key. The marker is scoped to the
+alert number plus the key, so one key reused across several alerts dismisses
+each of them once.
 
 ## Troubleshooting
 

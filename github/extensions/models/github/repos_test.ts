@@ -32,6 +32,9 @@ Deno.test("model has all expected methods", () => {
 Deno.test("model has all expected resources", () => {
   const resourceNames = Object.keys(model.resources);
   assertEquals(resourceNames.sort(), [
+    "codeScanningAlert",
+    "codeScanningAlertDetail",
+    "codeScanningSummary",
     "issues",
     "pull_requests",
     "releases",
