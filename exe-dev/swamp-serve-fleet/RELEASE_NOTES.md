@@ -49,8 +49,18 @@ Initial release.
   never appears in argv or the remote `/proc` table.
 - `promote` and `cutover` build their `swamp datastore`/`vault` commands as
   explicit argv (no `sh -c`), so config blobs, vault names, and backend types
-  are passed as individual arguments and cannot inject a command. `vaultType`
-  and each `migrateVaults` element are additionally format-constrained.
+  are passed as individual arguments and cannot inject a command.
+- `cutover` tolerates an already-claimed datastore on a re-run and always
+  records its result: if `datastore claim` succeeds but the serve restart fails,
+  the resource is still written with `serveRestarted: false` and a
+  `restartError`, so a partial cutover is recoverable rather than leaving the
+  store claimed, serve down, and no record.
+- `promote` accepts `migrateVaults` as an array or a JSON-array string (the
+  shape a workflow string input passes), parsing and re-validating each element
+  against the vault-name constraint.
+- The `swamp install` steps cap their remote output (`pipefail` + `tail -c`) so
+  a verbose installer cannot grow the provisioner's capture buffer without
+  bound.
 - `provision_orchestrator` and `enroll_worker` pin swamp's bundled Deno to
   `denoVersion` (`deno upgrade --version`) after install, so the configured
   version is actually honored on the fleet rather than being metadata only.

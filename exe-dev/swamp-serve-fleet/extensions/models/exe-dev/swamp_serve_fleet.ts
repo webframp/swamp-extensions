@@ -280,6 +280,11 @@ const CutoverSchema = z.object({
   managedConfigOutput: z.string(),
   claimOutput: z.string(),
   serveRestarted: z.boolean(),
+  restartError: z.string().nullable().describe(
+    "Error from the serve restart when the datastore was claimed but serve " +
+      "did not come back up; null on success. The operator restarts serve " +
+      "manually in that case.",
+  ),
   dryRun: z.boolean(),
   collectedBy: z.string().optional(),
 });
@@ -636,6 +641,43 @@ async function fetchExistingVmNames(
   return names;
 }
 
+/** Vault names are interpolated into commands; constrain their shape. */
+const VAULT_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
+
+/**
+ * Normalize a migrateVaults input (array, or a JSON-array string passed by a
+ * workflow) into a validated string[]. Rejects any element that is not a safe
+ * vault name, closing the shell-injection path and the string/array mismatch
+ * between the workflow input and the method schema.
+ */
+export function normalizeMigrateVaults(input: string[] | string): string[] {
+  let arr: unknown = input;
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (trimmed === "") return [];
+    try {
+      arr = JSON.parse(trimmed);
+    } catch {
+      throw new Error(
+        `migrateVaults string must be a JSON array (e.g. '["gitlab"]'), ` +
+          `got: ${trimmed}`,
+      );
+    }
+  }
+  if (!Array.isArray(arr)) {
+    throw new Error("migrateVaults must be an array or a JSON-array string.");
+  }
+  return arr.map((v) => {
+    if (typeof v !== "string" || !VAULT_NAME_RE.test(v)) {
+      throw new Error(
+        `Invalid vault name ${JSON.stringify(v)}: must be lowercase ` +
+          `alphanumeric with hyphens or underscores.`,
+      );
+    }
+    return v;
+  });
+}
+
 /** Validate a hostname before it is interpolated into a remote shell command. */
 export function assertHostname(value: string, label: string): string {
   if (!/^[a-z0-9][a-z0-9.-]+$/.test(value)) {
@@ -860,7 +902,9 @@ export const model = {
         }
         await sshRunChecked(
           sshHost,
-          `curl -fsSL https://swamp-club.com/install.sh | sh`,
+          `set -o pipefail; ` +
+            `curl -fsSL https://swamp-club.com/install.sh | sh 2>&1 | ` +
+            `tail -c 100000`,
           120,
           "swamp install",
         );
@@ -1116,7 +1160,9 @@ export const model = {
           }
           await sshRunChecked(
             sshHost,
-            `curl -fsSL https://swamp-club.com/install.sh | sh`,
+            `set -o pipefail; ` +
+              `curl -fsSL https://swamp-club.com/install.sh | sh 2>&1 | ` +
+              `tail -c 100000`,
             120,
             `swamp install (${workerName})`,
           );
@@ -1294,16 +1340,12 @@ export const model = {
         "reversible; runs before the cutover approval gate.",
       arguments: z.object({
         migrateVaults: z
-          .array(
-            z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, {
-              message:
-                "Vault name must be lowercase alphanumeric with hyphens or " +
-                "underscores; it is interpolated into a shell command.",
-            }),
-          )
+          .union([z.array(z.string()), z.string()])
           .default([])
           .describe(
-            "Vault names to migrate to vaultType. Empty = migrate none.",
+            "Vault names to migrate to vaultType, as an array or a JSON-array " +
+              "string (e.g. '[\"gitlab\"]' from a workflow input). Empty = " +
+              "migrate none.",
           ),
         vaultType: z
           .string()
@@ -1324,14 +1366,15 @@ export const model = {
       }),
       execute: async (
         args: {
-          migrateVaults: string[];
+          migrateVaults: string[] | string;
           vaultType?: string;
           vaultConfig?: string;
         },
         ctx: ProvisionerContext,
       ) => {
         const g = ctx.globalArgs;
-        if (args.migrateVaults.length > 0 && !args.vaultType) {
+        const migrateVaults = normalizeMigrateVaults(args.migrateVaults);
+        if (migrateVaults.length > 0 && !args.vaultType) {
           throw new Error(
             "vaultType is required when migrateVaults is non-empty.",
           );
@@ -1353,7 +1396,7 @@ export const model = {
         const setupOut = await runLocal(setupArgv, "datastore setup");
 
         const migrated: string[] = [];
-        for (const vault of args.migrateVaults) {
+        for (const vault of migrateVaults) {
           const migrateArgv = [
             "swamp",
             "vault",
@@ -1412,6 +1455,7 @@ export const model = {
         let managedConfigOutput = "";
         let claimOutput = "";
         let serveRestarted = false;
+        let restartError: string | undefined;
 
         if (args.dryRun) {
           managedConfigOutput = "DRY RUN: swamp datastore config migrate";
@@ -1424,20 +1468,42 @@ export const model = {
               "datastore config migrate",
             )).slice(0, 2000),
           );
+          // `claim` is the irreversible step. On a re-run after a partial
+          // failure the store may already be claimed; tolerate that instead of
+          // failing the whole method so the restart can still be retried.
+          const claimRes = await runLocalResult(
+            ["swamp", "datastore", "claim", "--address", claimAddress],
+          );
           claimOutput = redactSecrets(
-            (await runLocal(
-              ["swamp", "datastore", "claim", "--address", claimAddress],
-              "datastore claim",
-            )).slice(0, 2000),
+            (claimRes.stdout + claimRes.stderr).slice(0, 2000),
           );
-          await sshRunChecked(
-            orch.sshHost,
-            `export XDG_RUNTIME_DIR="/run/user/$(id -u)" && ` +
-              `systemctl --user restart swamp-serve.service`,
-            120,
-            "restart serve",
-          );
-          serveRestarted = true;
+          if (claimRes.code !== 0 && !/already\s+claim/i.test(claimOutput)) {
+            throw new Error(`datastore claim failed: ${claimOutput}`);
+          }
+          // Restart serve so it re-hydrates and reloads the vault registry.
+          // A restart failure must NOT lose the cutover record: the datastore
+          // is already claimed, so persist the resource with
+          // serveRestarted=false and an error the operator can act on.
+          try {
+            await sshRunChecked(
+              orch.sshHost,
+              `export XDG_RUNTIME_DIR="/run/user/$(id -u)" && ` +
+                `systemctl --user restart swamp-serve.service`,
+              120,
+              "restart serve",
+            );
+            serveRestarted = true;
+          } catch (err) {
+            restartError = redactSecrets(
+              err instanceof Error ? err.message : String(err),
+            );
+            ctx.logger.warn(
+              "Datastore is claimed but the serve restart failed: {error}. " +
+                "Restart serve manually: systemctl --user restart " +
+                "swamp-serve.service",
+              { error: restartError },
+            );
+          }
         }
 
         await ctx.writeResource("cutover", g.orchestratorName, {
@@ -1446,6 +1512,7 @@ export const model = {
           managedConfigOutput,
           claimOutput,
           serveRestarted,
+          restartError: restartError ?? null,
           dryRun: args.dryRun,
           collectedBy: EXTENSION_NAME,
         });
@@ -1547,6 +1614,29 @@ async function runLocal(args: string[], label: string): Promise<string> {
     );
   }
   return dec.decode(out.stdout);
+}
+
+/**
+ * Run a local command and return its exit code and output without throwing, so
+ * the caller can treat a non-zero exit as data (e.g. an already-claimed
+ * datastore on a cutover re-run).
+ */
+async function runLocalResult(
+  args: string[],
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  // swamp-quality-ignore deno-command
+  const cmd = new Deno.Command(args[0], {
+    args: args.slice(1),
+    stdout: "piped",
+    stderr: "piped",
+  });
+  const out = await cmd.output();
+  const dec = new TextDecoder();
+  return {
+    code: out.code,
+    stdout: dec.decode(out.stdout),
+    stderr: dec.decode(out.stderr),
+  };
 }
 
 interface ProvisionerContext {
