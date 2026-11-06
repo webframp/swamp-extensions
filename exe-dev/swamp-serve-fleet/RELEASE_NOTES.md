@@ -65,6 +65,9 @@ Initial release.
 - `datastoreConfig` is validated as a JSON object at the schema level, so a
   malformed blob is rejected early with a clear error rather than reaching
   `swamp datastore setup`.
+- `teardown` checks both VM-destroy `runModel` results (and passes `modelType`
+  explicitly) instead of discarding them, so a failed destroy raises an error
+  naming the still-running VMs rather than exiting clean while VMs keep billing.
 - The `swamp install` steps cap their remote output (`pipefail` + `tail -c`) so
   a verbose installer cannot grow the provisioner's capture buffer without
   bound.

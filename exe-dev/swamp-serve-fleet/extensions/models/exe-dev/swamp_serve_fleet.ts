@@ -412,11 +412,9 @@ async function readVaultSecret(
   key: string,
   label: string,
 ): Promise<string> {
-  // The vault read subcommand name is assembled to run on the remote host.
-  const readCmd = ["swamp", "vault", "read" + "-secret"].join(" ");
   const out = await sshRunChecked(
     sshHost,
-    `${readCmd} ${vault} ${key} --force --json`,
+    `swamp vault read-secret ${vault} ${key} --force --json`,
     30,
     label,
   );
@@ -1584,19 +1582,35 @@ export const model = {
             60,
           );
           if (args.destroyVms) {
-            await ctx.runModel!({
+            const destroyRes = await ctx.runModel!({
               definition: `${workerName}-vm`,
+              modelType: "@webframp/exe-dev/vm",
+              name: `${workerName}-vm`,
               method: "destroy",
               arguments: { token: g.exeToken, name: workerName },
             });
+            if (!destroyRes.ok) {
+              throw new Error(
+                `Worker ${workerName} VM destroy failed (VMs may still be ` +
+                  `running and billing): ${destroyRes.error.message}`,
+              );
+            }
           }
         }
         if (args.destroyVms) {
-          await ctx.runModel!({
+          const destroyRes = await ctx.runModel!({
             definition: `${g.orchestratorName}-vm`,
+            modelType: "@webframp/exe-dev/vm",
+            name: `${g.orchestratorName}-vm`,
             method: "destroy",
             arguments: { token: g.exeToken, name: g.orchestratorName },
           });
+          if (!destroyRes.ok) {
+            throw new Error(
+              `Orchestrator VM destroy failed (VM may still be running and ` +
+                `billing): ${destroyRes.error.message}`,
+            );
+          }
         }
       },
     },
