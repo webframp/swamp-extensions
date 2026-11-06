@@ -1,0 +1,115 @@
+id: 3f2b9c7a-1d4e-4a6b-8c3f-9e2a7b5d6c10
+name: "@webframp/bootstrap-swamp-serve-fleet"
+description: |
+  Stand up a complete swamp serve orchestrator + worker fleet on exe.dev from
+  the operator's local workstation, promote local data into the shared
+  datastore, pause for an operator approval, then cut over to team mode
+  (serve owns the datastore).
+
+  The provisioner behavior `swamp-serve-fleet` (type
+  @webframp/exe-dev/swamp-serve-fleet) must be pre-created with its global
+  arguments wired (orchestratorName, adminPrincipal, datastoreConfig,
+  tokenVault, exeToken, tailnetAuthKey, ...).
+version: 1
+autoResume: true
+tags:
+  extension: "@webframp/exe-dev/swamp-serve-fleet"
+  category: "infrastructure"
+inputs:
+  properties:
+    migrate_vaults:
+      type: string
+      description: >-
+        JSON array of vault names to migrate during promote, e.g.
+        '["gitlab","anthropic"]'. Empty migrates none.
+      default: "[]"
+    vault_type:
+      type: string
+      description: Target vault backend for migrated vaults, e.g. "@zts/aws-ssm".
+      default: ""
+    vault_config:
+      type: string
+      description: JSON config forwarded to `swamp vault migrate --config`.
+      default: ""
+jobs:
+  - name: bootstrap
+    description: Create the orchestrator and worker VMs and enable the daemons.
+    steps:
+      - name: provision-orchestrator
+        description: Create the orchestrator VM, enable serve, expose it.
+        task:
+          type: model_method
+          modelIdOrName: swamp-serve-fleet
+          methodName: provision_orchestrator
+        dependsOn: []
+      - name: enroll-workers
+        description: Create and enroll the worker VMs.
+        task:
+          type: model_method
+          modelIdOrName: swamp-serve-fleet
+          methodName: enroll_worker
+        dependsOn:
+          - step: provision-orchestrator
+            condition:
+              type: succeeded
+      - name: verify-fleet
+        description: Probe /ready and `swamp worker list`.
+        task:
+          type: model_method
+          modelIdOrName: swamp-serve-fleet
+          methodName: verify
+        dependsOn:
+          - step: enroll-workers
+            condition:
+              type: succeeded
+
+  - name: promote
+    description: Move local data to the shared datastore and migrate vaults.
+    dependsOn:
+      - job: bootstrap
+        condition:
+          type: succeeded
+    steps:
+      - name: promote-data
+        description: datastore setup + vault migrate (safe, reversible).
+        task:
+          type: model_method
+          modelIdOrName: swamp-serve-fleet
+          methodName: promote
+          inputs:
+            migrateVaults: ${{ inputs.migrate_vaults }}
+            vaultType: ${{ inputs.vault_type }}
+            vaultConfig: ${{ inputs.vault_config }}
+        dependsOn: []
+
+  - name: cutover
+    description: Operator confirms, then serve claims the datastore (team mode).
+    dependsOn:
+      - job: promote
+        condition:
+          type: succeeded
+    steps:
+      - name: approve-cutover
+        description: >-
+          Operator confirms the running, data-promoted fleet is correct before
+          serve claims the datastore. This is the one irreversible step.
+        task:
+          type: approval
+          message: >-
+            The orchestrator and workers are running and local data has been
+            promoted to the shared datastore. Approve to let serve CLAIM the
+            datastore (team mode) and restart serve. This step is hard to
+            reverse. Reject to stop with the fleet running on local ownership.
+        dependsOn: []
+      - name: claim-datastore
+        description: datastore config migrate + claim + restart serve.
+        task:
+          type: model_method
+          modelIdOrName: swamp-serve-fleet
+          methodName: cutover
+          inputs:
+            dryRun: false
+        dependsOn:
+          - step: approve-cutover
+            condition:
+              type: succeeded

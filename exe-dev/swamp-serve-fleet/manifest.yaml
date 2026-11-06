@@ -1,0 +1,87 @@
+manifestVersion: 1
+name: "@webframp/exe-dev/swamp-serve-fleet"
+license: Apache-2.0
+version: "2026.11.05.1"
+description: |
+  One-shot bootstrap for a `swamp serve` orchestrator + remote worker fleet on
+  exe.dev, run from an operator's local workstation. Creates the orchestrator
+  VM and workers, joins them to a tailnet, installs a pinned Deno + swamp,
+  mints the serve/worker/dashboard tokens into a vault, enables serve and the
+  workers as systemd user daemons, exposes serve through `tailscale serve` and
+  the exe.dev HTTPS proxy, promotes the operator's local swamp data into a
+  shared datastore, and — after an operator approval — claims the datastore for
+  serve (team mode).
+
+  This generalizes the reference deployment documented in the webframp
+  `devsecops` repo. Every site-specific value (names, admin principal,
+  datastore, vaults, ports) is an input with a generic default. No confidential
+  values are baked in.
+
+  ## Architecture (no reverse proxy)
+
+  Serve binds plain HTTP on loopback. Two native proxies terminate TLS on their
+  own side: the exe.dev HTTPS proxy fronts the browser dashboard; `tailscale
+  serve` fronts the workers. Putting a reverse proxy in the middle forces Host
+  rewriting, Origin spoofing, CORS for the dashboard's crossorigin assets, and
+  hand-wired WebSocket upgrades — all avoided by binding plain and letting each
+  platform's proxy do TLS.
+
+  ## Prerequisites
+
+  - An exe.dev account and an API token in a vault (the
+    `@webframp/exe-dev/vm` `setup` method mints it).
+  - A tailnet with the exe.dev catalog integration configured, and a tailnet
+    auth key in a vault.
+  - Credentials in the default chain for the chosen shared datastore
+    (S3/GCS/...).
+
+  ## Phases
+
+  1. `provision_orchestrator` — orchestrator VM, serve daemon, proxies, tokens.
+  2. `enroll_worker` — worker VMs enrolled under the placement label.
+  3. `verify` — `/ready` + `swamp worker list`.
+  4. `promote` — local data into the shared datastore; vault migration.
+  5. operator approval gate.
+  6. `cutover` — `datastore claim` + restart serve (team mode).
+
+  ## Running
+
+  ```bash
+  swamp extension pull @webframp/exe-dev/swamp-serve-fleet
+
+  swamp behavior create @webframp/exe-dev/swamp-serve-fleet swamp-serve-fleet
+  # edit the behavior and wire its global arguments:
+  #   adminPrincipal, datastoreConfig, tokenVault,
+  #   exeToken:       ${{ vault.get("exe-dev", "API_TOKEN") }}
+  #   tailnetAuthKey: ${{ vault.get("tailscale", "AUTH_KEY") }}
+
+  swamp workflow run @webframp/bootstrap-swamp-serve-fleet \
+    --input migrate_vaults='["gitlab"]' --input vault_type=@zts/aws-ssm
+  # the run suspends at the approval gate; approve to cut over:
+  swamp workflow approve @webframp/bootstrap-swamp-serve-fleet --run <id>
+  ```
+
+  See the bundled README for the full configuration shape and gotchas.
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - exe-dev/swamp_serve_fleet.ts
+workflows:
+  - bootstrap-swamp-serve-fleet.yaml
+dependencies:
+  - "@webframp/exe-dev/vm@2026.11.03.1"
+additionalFiles:
+  - README.md
+  - LICENSE.md
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+labels:
+  - exe-dev
+  - swamp-serve
+  - worker
+  - fleet
+  - bootstrap
+  - tailscale
+  - infrastructure
