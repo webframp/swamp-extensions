@@ -1278,13 +1278,24 @@ export const model = {
         "reversible; runs before the cutover approval gate.",
       arguments: z.object({
         migrateVaults: z
-          .array(z.string())
+          .array(
+            z.string().regex(/^[a-z0-9][a-z0-9_-]*$/, {
+              message:
+                "Vault name must be lowercase alphanumeric with hyphens or " +
+                "underscores; it is interpolated into a shell command.",
+            }),
+          )
           .default([])
           .describe(
             "Vault names to migrate to vaultType. Empty = migrate none.",
           ),
         vaultType: z
           .string()
+          .regex(/^@?[a-z0-9][a-z0-9./@-]*$/, {
+            message:
+              "vaultType must be a swamp vault extension name (lowercase " +
+              "alphanumeric with ./@-); it is interpolated into a shell command.",
+          })
           .optional()
           .describe(
             "Target vault backend, e.g. `@zts/aws-ssm`. Required if " +
@@ -1310,31 +1321,34 @@ export const model = {
           );
         }
 
-        const nsFlag = g.namespace ? ` --namespace ${g.namespace}` : "";
-        const setupCmd = `swamp datastore setup extension ${g.datastoreType}` +
-          nsFlag +
-          ` --config ${JSON.stringify(g.datastoreConfig)}`;
+        // Build commands as explicit argv (no `sh -c`): config blobs and
+        // vault/type names are passed as individual arguments, never spliced
+        // into a shell string, so none of them can inject a command.
+        const setupArgv = [
+          "swamp",
+          "datastore",
+          "setup",
+          "extension",
+          g.datastoreType,
+        ];
+        if (g.namespace) setupArgv.push("--namespace", g.namespace);
+        setupArgv.push("--config", g.datastoreConfig);
 
-        const setupOut = await runLocal(
-          ["sh", "-c", setupCmd],
-          "datastore setup",
-        );
+        const setupOut = await runLocal(setupArgv, "datastore setup");
 
         const migrated: string[] = [];
         for (const vault of args.migrateVaults) {
-          const cfgFlag = args.vaultConfig
-            ? ` --config ${JSON.stringify(args.vaultConfig)}`
-            : "";
-          await runLocal(
-            [
-              "sh",
-              "-c",
-              `swamp vault migrate ${vault} --to-type ${args.vaultType}` +
-              cfgFlag +
-              ` --force`,
-            ],
-            `vault migrate ${vault}`,
-          );
+          const migrateArgv = [
+            "swamp",
+            "vault",
+            "migrate",
+            vault,
+            "--to-type",
+            args.vaultType as string,
+          ];
+          if (args.vaultConfig) migrateArgv.push("--config", args.vaultConfig);
+          migrateArgv.push("--force");
+          await runLocal(migrateArgv, `vault migrate ${vault}`);
           migrated.push(vault);
         }
 
@@ -1390,17 +1404,13 @@ export const model = {
         } else {
           managedConfigOutput = redactSecrets(
             (await runLocal(
-              ["sh", "-c", "swamp datastore config migrate"],
+              ["swamp", "datastore", "config", "migrate"],
               "datastore config migrate",
             )).slice(0, 2000),
           );
           claimOutput = redactSecrets(
             (await runLocal(
-              [
-                "sh",
-                "-c",
-                `swamp datastore claim --address ${claimAddress}`,
-              ],
+              ["swamp", "datastore", "claim", "--address", claimAddress],
               "datastore claim",
             )).slice(0, 2000),
           );

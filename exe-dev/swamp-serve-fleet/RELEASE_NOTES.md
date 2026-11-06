@@ -47,6 +47,10 @@ Initial release.
 - `tailnetAuthKey` is format-validated (`tskey-…`) and delivered to
   `tailscale up` over SSH stdin into `TS_AUTHKEY` (`sudo --preserve-env`), so it
   never appears in argv or the remote `/proc` table.
+- `promote` and `cutover` build their `swamp datastore`/`vault` commands as
+  explicit argv (no `sh -c`), so config blobs, vault names, and backend types
+  are passed as individual arguments and cannot inject a command. `vaultType`
+  and each `migrateVaults` element are additionally format-constrained.
 - The secret-stdin SSH helpers arm their SIGTERM/SIGKILL timeouts before writing
   stdin, so a remote process that exits without reading stdin cannot hang the
   call on a full pipe buffer.
