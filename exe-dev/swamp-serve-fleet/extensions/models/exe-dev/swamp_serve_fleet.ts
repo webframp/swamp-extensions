@@ -549,8 +549,97 @@ export function buildServeFlags(args: {
   ];
 }
 
+/**
+ * Return the set of VM names that already exist in the exe.dev account. Syncs
+ * the fleet via `@webframp/exe-dev/vm` once and reads the snapshot, so a
+ * re-run after a partial failure can skip VMs already created (create is not
+ * idempotent — exe.dev `new` errors on a duplicate name). Call once per method
+ * and reuse the set across a worker loop.
+ */
+async function fetchExistingVmNames(
+  ctx: ProvisionerContext,
+  exeToken: string | undefined,
+): Promise<Set<string>> {
+  const syncRes = await ctx.runModel!({
+    definition: "swamp-serve-fleet-vm-sync",
+    modelType: "@webframp/exe-dev/vm",
+    name: "swamp-serve-fleet-vm-sync",
+    method: "sync",
+    arguments: { token: exeToken },
+  });
+  if (!syncRes.ok) {
+    // A sync failure is not proof of absence; surface it rather than risk a
+    // duplicate-create error masking the real problem.
+    throw new Error(
+      `Could not sync exe.dev fleet to check existing VMs: ` +
+        syncRes.error.message,
+    );
+  }
+  const rows = await ctx.queryData!(
+    `modelName == "swamp-serve-fleet-vm-sync" && isLatest == true`,
+  );
+  const names = new Set<string>();
+  for (const row of rows) {
+    const vms = (row?.content as { vms?: Array<{ vmName?: string }> } | null)
+      ?.vms;
+    if (Array.isArray(vms)) {
+      for (const v of vms) {
+        if (v.vmName) names.add(v.vmName);
+      }
+    }
+  }
+  return names;
+}
+
 /** Resource lifetime defaults shared across this model's resources. */
 const INFINITE = "infinite" as const;
+
+/**
+ * Build an idempotent remote command that ensures a server-access token named
+ * `name` exists with a fresh secret, then copies its plaintext into
+ * `vault`/`key`. If the token already exists (prior partial run), it is
+ * rotated (revoke + re-mint, same name and principal) rather than minted, so a
+ * re-run never fails on a duplicate name. The plaintext stays in the pipe.
+ */
+export function buildEnsureAccessTokenCmd(opts: {
+  name: string;
+  principal: string;
+  duration: string;
+  vault: string;
+  key: string;
+}): string {
+  const { name, principal, duration, vault, key } = opts;
+  const mintOrRotate = `if swamp access token list --json | jq -e ` +
+    `'.[]?|select(.name=="${name}")' >/dev/null 2>&1; then ` +
+    `swamp access token rotate ${name}; else ` +
+    `swamp access token mint ${name} --principal ${principal} ` +
+    `--duration ${duration}; fi`;
+  return `${mintOrRotate} && ` +
+    `swamp access token reveal ${name} --yes --json | jq -re .token | ` +
+    `swamp vault put ${vault} ${key} --yes`;
+}
+
+/**
+ * Build an idempotent remote command that ensures a worker-enrollment token
+ * named `name` exists with a fresh secret, then copies it into `vault`/`key`.
+ * Worker tokens have no rotate, so an existing one is revoked and re-created.
+ */
+export function buildEnsureWorkerTokenCmd(opts: {
+  name: string;
+  duration: string;
+  maxEnrollments: number;
+  vault: string;
+  key: string;
+}): string {
+  const { name, duration, maxEnrollments, vault, key } = opts;
+  const recreate = `if swamp worker token list --json | jq -e ` +
+    `'.[]?|select(.name=="${name}")' >/dev/null 2>&1; then ` +
+    `swamp worker token revoke ${name} || true; fi && ` +
+    `swamp worker token create ${name} --duration ${duration} ` +
+    `--max-enrollments ${maxEnrollments} --json | jq -re .token | ` +
+    `swamp vault put ${vault} ${key} --yes`;
+  return recreate;
+}
 
 // =============================================================================
 // Model
@@ -643,26 +732,35 @@ export const model = {
         assertVmName(g.orchestratorName);
         const started = Date.now();
 
-        // 1. Create the orchestrator VM via the exe-dev/vm model.
-        const createRes = await ctx.runModel!({
-          definition: `${g.orchestratorName}-vm`,
-          modelType: "@webframp/exe-dev/vm",
-          name: `${g.orchestratorName}-vm`,
-          method: "create",
-          arguments: {
-            token: g.exeToken,
-            name: g.orchestratorName,
-            cpu: args.cpu,
-            memory: args.memory,
-            disk: args.disk,
-            comment: "swamp serve orchestrator",
-            tags: ["swamp-serve", "swamp-fleet"],
-          },
-        });
-        if (!createRes.ok) {
-          throw new Error(
-            `Orchestrator VM create failed: ${createRes.error.message}`,
+        // 1. Create the orchestrator VM via the exe-dev/vm model, unless it
+        //    already exists (idempotent re-run after a partial failure).
+        const existingVms = await fetchExistingVmNames(ctx, g.exeToken);
+        if (existingVms.has(g.orchestratorName)) {
+          ctx.logger.info(
+            "Orchestrator VM {name} already exists; skipping create.",
+            { name: g.orchestratorName },
           );
+        } else {
+          const createRes = await ctx.runModel!({
+            definition: `${g.orchestratorName}-vm`,
+            modelType: "@webframp/exe-dev/vm",
+            name: `${g.orchestratorName}-vm`,
+            method: "create",
+            arguments: {
+              token: g.exeToken,
+              name: g.orchestratorName,
+              cpu: args.cpu,
+              memory: args.memory,
+              disk: args.disk,
+              comment: "swamp serve orchestrator",
+              tags: ["swamp-serve", "swamp-fleet"],
+            },
+          });
+          if (!createRes.ok) {
+            throw new Error(
+              `Orchestrator VM create failed: ${createRes.error.message}`,
+            );
+          }
         }
 
         const sshHost = `${g.orchestratorName}.exe.xyz`;
@@ -728,31 +826,37 @@ export const model = {
 
         await sshRunChecked(
           sshHost,
-          `swamp access token mint ${serverTokenName} ` +
-            `--principal ${g.adminPrincipal} --duration ${args.tokenDuration} && ` +
-            `swamp access token reveal ${serverTokenName} --yes --json | ` +
-            `jq -re .token | ` +
-            `swamp vault put ${g.tokenVault} ${serverTokenKey} --yes`,
+          buildEnsureAccessTokenCmd({
+            name: serverTokenName,
+            principal: g.adminPrincipal,
+            duration: args.tokenDuration,
+            vault: g.tokenVault,
+            key: serverTokenKey,
+          }),
           60,
           "mint + vault server access token",
         );
         await sshRunChecked(
           sshHost,
-          `swamp worker token create ${enrollTokenName} ` +
-            `--duration ${args.tokenDuration} ` +
-            `--max-enrollments ${args.maxEnrollments} --json | ` +
-            `jq -re .token | ` +
-            `swamp vault put ${g.tokenVault} ${enrollTokenKey} --yes`,
+          buildEnsureWorkerTokenCmd({
+            name: enrollTokenName,
+            duration: args.tokenDuration,
+            maxEnrollments: args.maxEnrollments,
+            vault: g.tokenVault,
+            key: enrollTokenKey,
+          }),
           60,
           "create + vault worker enrollment token",
         );
         await sshRunChecked(
           sshHost,
-          `swamp access token mint ${dashboardTokenName} ` +
-            `--principal ${g.adminPrincipal} --duration ${args.tokenDuration} && ` +
-            `swamp access token reveal ${dashboardTokenName} --yes --json | ` +
-            `jq -re .token | ` +
-            `swamp vault put ${g.tokenVault} ${dashboardTokenKey} --yes`,
+          buildEnsureAccessTokenCmd({
+            name: dashboardTokenName,
+            principal: g.adminPrincipal,
+            duration: args.tokenDuration,
+            vault: g.tokenVault,
+            key: dashboardTokenKey,
+          }),
           60,
           "mint + vault dashboard token",
         );
@@ -855,30 +959,41 @@ export const model = {
 
         const sandboxDir = `~/swamp-${g.workerNamePrefix}-worker`;
 
+        // Sync the fleet once so the loop can skip VMs already created on a
+        // prior partial run (create is not idempotent).
+        const existingVms = await fetchExistingVmNames(ctx, g.exeToken);
+
         for (let i = 1; i <= g.workerCount; i++) {
           const suffix = String(i).padStart(2, "0");
           const workerName = `${g.workerNamePrefix}-${suffix}`;
           assertVmName(workerName);
 
-          const createRes = await ctx.runModel!({
-            definition: `${workerName}-vm`,
-            modelType: "@webframp/exe-dev/vm",
-            name: `${workerName}-vm`,
-            method: "create",
-            arguments: {
-              token: g.exeToken,
-              name: workerName,
-              cpu: args.cpu,
-              memory: args.memory,
-              disk: args.disk,
-              comment: "swamp worker",
-              tags: ["swamp-worker", "swamp-fleet"],
-            },
-          });
-          if (!createRes.ok) {
-            throw new Error(
-              `Worker ${workerName} VM create failed: ${createRes.error.message}`,
+          if (existingVms.has(workerName)) {
+            ctx.logger.info(
+              "Worker VM {name} already exists; skipping create.",
+              { name: workerName },
             );
+          } else {
+            const createRes = await ctx.runModel!({
+              definition: `${workerName}-vm`,
+              modelType: "@webframp/exe-dev/vm",
+              name: `${workerName}-vm`,
+              method: "create",
+              arguments: {
+                token: g.exeToken,
+                name: workerName,
+                cpu: args.cpu,
+                memory: args.memory,
+                disk: args.disk,
+                comment: "swamp worker",
+                tags: ["swamp-worker", "swamp-fleet"],
+              },
+            });
+            if (!createRes.ok) {
+              throw new Error(
+                `Worker ${workerName} VM create failed: ${createRes.error.message}`,
+              );
+            }
           }
 
           const sshHost = `${workerName}.exe.xyz`;
@@ -1324,6 +1439,9 @@ interface ProvisionerContext {
     data: Record<string, unknown>,
   ) => Promise<{ name: string }>;
   readResource?: (name: string) => Promise<Record<string, unknown> | null>;
+  queryData?: (
+    predicate: string,
+  ) => Promise<Array<{ content?: unknown }>>;
   runModel?: (opts: {
     definition?: string;
     modelType?: string;

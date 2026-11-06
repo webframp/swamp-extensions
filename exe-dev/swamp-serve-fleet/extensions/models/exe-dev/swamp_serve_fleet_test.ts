@@ -1,5 +1,11 @@
 import { assertEquals, assertStringIncludes } from "@std/assert";
-import { buildServeFlags, model, redactSecrets } from "./swamp_serve_fleet.ts";
+import {
+  buildEnsureAccessTokenCmd,
+  buildEnsureWorkerTokenCmd,
+  buildServeFlags,
+  model,
+  redactSecrets,
+} from "./swamp_serve_fleet.ts";
 
 Deno.test("model metadata is well-formed", () => {
   assertEquals(model.type, "@webframp/exe-dev/swamp-serve-fleet");
@@ -111,4 +117,50 @@ Deno.test("redactSecrets masks exe tokens, server tokens, and tailnet keys", () 
 Deno.test("redactSecrets leaves ordinary output intact", () => {
   const s = redactSecrets("worker list: 2 workers online, /ready 200");
   assertEquals(s, "worker list: 2 workers online, /ready 200");
+});
+
+Deno.test("buildEnsureAccessTokenCmd rotates an existing token, else mints", () => {
+  const cmd = buildEnsureAccessTokenCmd({
+    name: "swamp-serve-worker",
+    principal: "user:alice",
+    duration: "30d",
+    vault: "exe-dev",
+    key: "server-token-swamp-serve-worker",
+  });
+  // Existence branch rotates (no duplicate-mint error on re-run)...
+  assertStringIncludes(cmd, "access token list --json");
+  assertStringIncludes(cmd, `jq -e '.[]?|select(.name=="swamp-serve-worker")'`);
+  assertStringIncludes(cmd, "access token rotate swamp-serve-worker");
+  // ...otherwise mints with principal + duration.
+  assertStringIncludes(
+    cmd,
+    "access token mint swamp-serve-worker --principal user:alice --duration 30d",
+  );
+  // And always copies plaintext into the named vault key via reveal→put.
+  assertStringIncludes(cmd, "access token reveal swamp-serve-worker --yes");
+  assertStringIncludes(
+    cmd,
+    "swamp vault put exe-dev server-token-swamp-serve-worker --yes",
+  );
+});
+
+Deno.test("buildEnsureWorkerTokenCmd revokes-then-recreates an existing token", () => {
+  const cmd = buildEnsureWorkerTokenCmd({
+    name: "swamp-workers",
+    duration: "30d",
+    maxEnrollments: 10,
+    vault: "exe-dev",
+    key: "enroll-token-swamp-workers",
+  });
+  assertStringIncludes(cmd, "worker token list --json");
+  assertStringIncludes(cmd, `jq -e '.[]?|select(.name=="swamp-workers")'`);
+  assertStringIncludes(cmd, "worker token revoke swamp-workers");
+  assertStringIncludes(
+    cmd,
+    "worker token create swamp-workers --duration 30d --max-enrollments 10",
+  );
+  assertStringIncludes(
+    cmd,
+    "swamp vault put exe-dev enroll-token-swamp-workers --yes",
+  );
 });
