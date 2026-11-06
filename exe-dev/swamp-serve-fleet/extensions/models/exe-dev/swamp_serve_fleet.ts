@@ -164,8 +164,9 @@ const GlobalArgsSchema = z.object({
     .describe(
       "Tailnet auth key, as a vault expression. Used for `tailscale up` on " +
         "the orchestrator and workers; delivered via the TS_AUTHKEY " +
-        "environment variable so it never appears in argv. Never pass a " +
-        "literal key.",
+        "environment variable so it never appears in argv. Must be a " +
+        "reusable key — the orchestrator and every worker authenticate with " +
+        "it. Never pass a literal key.",
     ),
   magicDnsName: z
     .string()
@@ -863,6 +864,14 @@ export const model = {
           120,
           "swamp install",
         );
+        // Pin swamp's bundled Deno to the configured version so an extension's
+        // ABI requirement is honored (denoVersion is otherwise only metadata).
+        await sshRunChecked(
+          sshHost,
+          `"$HOME/.swamp/deno/deno" upgrade --version ${g.denoVersion}`,
+          120,
+          "pin deno version (orchestrator)",
+        );
 
         // 3. Resolve the MagicDNS name if not supplied.
         let magicDnsName = g.magicDnsName ?? "";
@@ -1110,6 +1119,13 @@ export const model = {
             `curl -fsSL https://swamp-club.com/install.sh | sh`,
             120,
             `swamp install (${workerName})`,
+          );
+          // Pin swamp's bundled Deno to the configured version (see orchestrator).
+          await sshRunChecked(
+            sshHost,
+            `"$HOME/.swamp/deno/deno" upgrade --version ${g.denoVersion}`,
+            120,
+            `pin deno version (${workerName})`,
           );
 
           // Deliver tokens WITHOUT the worker trusting the orchestrator: the

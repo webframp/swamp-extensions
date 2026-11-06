@@ -34,7 +34,8 @@ proxy do TLS avoids all of it.
   `setup` method mints one:
   `swamp behavior run exe-dev setup --input vaultName=exe-dev --input secretKey=API_TOKEN`.
 - A tailnet with the exe.dev catalog integration configured, and a tailnet auth
-  key in a vault.
+  key in a vault. The key must be **reusable** (not single-use) — the
+  orchestrator and every worker authenticate with the same key.
 - Credentials in the default chain for the shared datastore you promote to
   (S3/GCS/…).
 

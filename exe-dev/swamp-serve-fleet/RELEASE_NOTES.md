@@ -51,6 +51,9 @@ Initial release.
   explicit argv (no `sh -c`), so config blobs, vault names, and backend types
   are passed as individual arguments and cannot inject a command. `vaultType`
   and each `migrateVaults` element are additionally format-constrained.
+- `provision_orchestrator` and `enroll_worker` pin swamp's bundled Deno to
+  `denoVersion` (`deno upgrade --version`) after install, so the configured
+  version is actually honored on the fleet rather than being metadata only.
 - The secret-stdin SSH helpers arm their SIGTERM/SIGKILL timeouts before writing
   stdin, so a remote process that exits without reading stdin cannot hang the
   call on a full pipe buffer.
