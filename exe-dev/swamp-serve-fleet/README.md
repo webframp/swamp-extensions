@@ -115,9 +115,9 @@ VMs.
   back for enrollment; resources record token names only; captured output is
   redacted.
 - **Re-runs converge.** `provision_orchestrator` and `enroll_worker` skip
-  creating a VM that already exists and rotate/recreate an existing token
-  rather than failing on a duplicate name, so a re-run after a partial failure
-  finishes the job instead of erroring.
+  creating a VM that already exists and rotate/recreate an existing token rather
+  than failing on a duplicate name, so a re-run after a partial failure finishes
+  the job instead of erroring.
 
 ## Security
 

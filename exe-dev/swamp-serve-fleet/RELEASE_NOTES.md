@@ -32,8 +32,8 @@ Initial release.
 - `provision_orchestrator` keeps the exe.dev HTTPS proxy private
   (`share set-private`) so the dashboard is never left publicly reachable.
 - `provision_orchestrator` and `enroll_worker` are idempotent: VM creation is
-  skipped when a VM of that name already exists (the fleet is synced and
-  checked first), token provisioning rotates/recreates an existing token with a
-  fresh secret instead of failing on a duplicate name, and the remaining steps
+  skipped when a VM of that name already exists (the fleet is synced and checked
+  first), token provisioning rotates/recreates an existing token with a fresh
+  secret instead of failing on a duplicate name, and the remaining steps
   (tailscale join, installs, daemon enable, proxy wiring) are self-asserting. A
   re-run after a partial failure converges rather than erroring.
