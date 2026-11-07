@@ -113,7 +113,7 @@ function secretArgsSection(
   // argument flagged for a credential nested inside it is an object.
   const direct =
     rows.flatMap(([name, args]) =>
-      args.filter(isSensitiveFieldName).map((a) => [name, a] as const)
+      args.filter((a) => isSensitiveFieldName(a)).map((a) => [name, a] as const)
     )[0];
   const nested = [
     ...new Set(

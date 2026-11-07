@@ -1,0 +1,21 @@
+manifestVersion: 1
+name: "@webframp/griptape/retrievers"
+license: Apache-2.0
+version: "2026.11.07.1"
+description: "Griptape Cloud Retrievers — retrievers, retriever components, and libraries"
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - griptape/retrievers.ts
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - griptape
+  - retrievers
+  - rag
+  - libraries

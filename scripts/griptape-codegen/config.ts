@@ -68,16 +68,22 @@ export interface ServiceConfig {
   excludePaths?: string[];
   /** Labels for the manifest. */
   labels: string[];
+  /**
+   * Whether a bare top-level `value` field is a credential. Defaults to true:
+   * the secrets family stores its secret there, and over-redacting is the safe
+   * failure. Set false where `value` is ordinary data (tag values), otherwise
+   * the field is vaulted and the real value is lost to readers.
+   */
+  valueIsSecret?: boolean;
 }
 
 /**
- * Master service registry — tier 1.
+ * Master service registry.
  *
- * The codegen produces only the families listed here; unlisted paths are
- * silently skipped. The registry is additive: admin/billing surface
- * (organizations, billing, credits, licenses, invites, usage, sessions) is
- * deliberately excluded from tier 1 and can be added later without touching the
- * generator.
+ * The codegen produces only the families listed here. Every other API family
+ * must appear in DECLINED_FAMILIES with a reason; an unclassified family fails
+ * `generate` and `bump -- --check`. Adding a family is a registry entry —
+ * nothing in the generator changes.
  *
  * Order affects only README rendering, not generation.
  */
@@ -86,7 +92,7 @@ export const SERVICES: ServiceConfig[] = [
     name: "threads",
     description:
       "Griptape Cloud Threads — conversation threads and their messages",
-    pathPrefixes: ["/api/threads"],
+    pathPrefixes: ["/api/threads", "/api/messages"],
     labels: ["griptape", "threads", "conversation", "ai"],
   },
   {
@@ -156,7 +162,91 @@ export const SERVICES: ServiceConfig[] = [
     pathPrefixes: ["/api/models"],
     labels: ["griptape", "models", "llm", "configuration"],
   },
+  {
+    name: "retrievers",
+    description:
+      "Griptape Cloud Retrievers — retrievers, retriever components, and libraries",
+    pathPrefixes: [
+      "/api/retrievers",
+      "/api/retriever-components",
+      "/api/libraries",
+    ],
+    labels: ["griptape", "retrievers", "rag", "libraries"],
+  },
+  {
+    name: "integrations",
+    description:
+      "Griptape Cloud Integrations — integrations and their outbound connections",
+    pathPrefixes: ["/api/integrations", "/api/connections"],
+    labels: ["griptape", "integrations", "connections"],
+  },
+  {
+    name: "tags",
+    description: "Griptape Cloud Tags — tag profiles and tag listings",
+    pathPrefixes: ["/api/tag-profiles", "/api/tags"],
+    labels: ["griptape", "tags", "governance"],
+    valueIsSecret: false,
+  },
+  {
+    name: "import-export",
+    description: "Griptape Cloud Import/Export — import jobs and export jobs",
+    pathPrefixes: ["/api/import-jobs", "/api/export-jobs"],
+    labels: ["griptape", "import", "export", "jobs"],
+  },
+  {
+    name: "observability",
+    description:
+      "Griptape Cloud Observability — dashboards, platform config, events, and deployments",
+    pathPrefixes: [
+      "/api/dashboards",
+      "/api/config",
+      "/api/events",
+      "/api/deployments",
+    ],
+    labels: ["griptape", "observability", "dashboards", "events"],
+  },
 ];
+
+/**
+ * Top-level API families (first two path segments) that are deliberately NOT
+ * generated, each with the reason.
+ *
+ * Every family in the spec must be claimed by a SERVICES entry or listed here.
+ * `deno task generate` and `deno task bump -- --check` fail on a family that is
+ * neither, so a new upstream family forces an explicit claim-or-decline
+ * decision instead of silently going uncovered.
+ */
+export const DECLINED_FAMILIES: Record<string, string> = {
+  // Administration, billing, and entitlement — out of scope since tier 1.
+  "/api/organizations": "administration",
+  "/api/users": "administration",
+  "/api/invites": "administration",
+  "/api/api-keys":
+    "administration; key management returns one-time credentials",
+  "/api/licenses": "billing/entitlement",
+  "/api/license-groups": "billing/entitlement",
+  "/api/license-info": "billing/entitlement",
+  "/api/entitlement-policies": "billing/entitlement",
+  "/api/managed-policies": "billing/entitlement",
+  "/api/billing": "billing",
+  "/api/credits": "billing",
+  "/api/budgets": "billing",
+  "/api/budget-alerts": "billing",
+  "/api/budget-checks": "billing",
+  "/api/spend": "billing",
+  "/api/spend-exports": "billing",
+  "/api/usage": "billing",
+  // Runtime/session plumbing, not managed resources.
+  "/api/sessions": "runtime session plumbing",
+  "/api/session-pools": "runtime session plumbing",
+  "/api/session-release": "runtime session plumbing",
+  "/api/session-renew": "runtime session plumbing",
+  "/api/engines":
+    "Griptape Nodes engine self-registration (PUT of engine runtime state)",
+  // Billable invocation rather than managed state.
+  "/api/chat":
+    "stateless billable LLM invocation; requires inline tools and output schema",
+};
 
 /** Get today's CalVer version. */
 export function calver(): string {

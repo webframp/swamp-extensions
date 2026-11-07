@@ -23,7 +23,11 @@ import type {
   SchemaObject,
 } from "./schema_fetcher.ts";
 import { resolveRef, resolveSchema } from "./schema_fetcher.ts";
-import { scanSensitive, type SensitiveTree } from "./sensitive.ts";
+import {
+  scanSensitive,
+  type SensitiveOptions,
+  type SensitiveTree,
+} from "./sensitive.ts";
 import type { ServiceConfig } from "../config.ts";
 
 /** A single API operation grouped into a service. */
@@ -59,6 +63,12 @@ export interface GroupedOperation {
   listItemsKey?: string;
   /** Whether this endpoint is deprecated. */
   deprecated: boolean;
+  /**
+   * False when the owning service opted out of treating a bare top-level
+   * `value` as a credential (see ServiceConfig.valueIsSecret). Absent means
+   * the conservative default: `value` is a credential.
+   */
+  valueIsSecret?: false;
   /** Tags from the OpenAPI spec. */
   tags: string[];
   /**
@@ -118,6 +128,7 @@ export function groupOperations(
         path,
         operation,
         pathLevelParams,
+        { valueIsSecret: service.valueIsSecret },
       );
       if (grouped) group.operations.push(grouped);
     }
@@ -229,6 +240,11 @@ export interface UncoveredFamily {
   operations: number;
 }
 
+/** An unclaimed family that is deliberately declined, with the reason. */
+export interface DeclinedFamily extends UncoveredFamily {
+  reason: string;
+}
+
 /** An operation inside a claimed family that the generator drops. */
 export interface SkippedOperation {
   service: string;
@@ -239,19 +255,23 @@ export interface SkippedOperation {
 }
 
 export interface CoverageReport {
-  uncovered: UncoveredFamily[];
+  /** Families neither claimed by a service nor declined: unresolved drift. */
+  unknown: UncoveredFamily[];
+  /** Families deliberately not generated. */
+  declined: DeclinedFamily[];
   skipped: SkippedOperation[];
 }
 
 /**
  * Report what the generator does NOT emit from this spec, so upstream drift
  * (a new endpoint family, an endpoint turning deprecated or streaming) is
- * visible on every run instead of silently shrinking or failing to grow
- * coverage. Pass the full registry, not a `--service` subset.
+ * visible on every run. Pass the full registry, not a `--service` subset.
+ * `declined` maps family -> reason for families knowingly left out.
  */
 export function reportCoverage(
   spec: OpenAPISpec,
   services: ServiceConfig[],
+  declined: Record<string, string> = {},
 ): CoverageReport {
   const families = new Map<string, UncoveredFamily>();
   const skipped: SkippedOperation[] = [];
@@ -290,12 +310,56 @@ export function reportCoverage(
     }
   }
 
+  const sorted = [...families.values()].sort((a, b) =>
+    a.family.localeCompare(b.family)
+  );
   return {
-    uncovered: [...families.values()].sort((a, b) =>
-      a.family.localeCompare(b.family)
-    ),
+    unknown: sorted.filter((f) => !(f.family in declined)),
+    declined: sorted.filter((f) => f.family in declined).map((f) => ({
+      ...f,
+      reason: declined[f.family],
+    })),
     skipped,
   };
+}
+
+/** Human-readable report lines, shared by `generate` and `bump`. */
+export function formatCoverage(report: CoverageReport): string[] {
+  const lines = [
+    `🔍 Not generated: ${report.declined.length} declined families, ` +
+    `${report.unknown.length} UNCLASSIFIED families, ` +
+    `${report.skipped.length} skipped operations`,
+  ];
+  for (const f of report.unknown) {
+    lines.push(
+      `   ❓ UNCLASSIFIED ${f.family} (${f.operations} operations, ${f.paths} paths)`,
+    );
+  }
+  for (const f of report.declined) {
+    lines.push(`   • declined ${f.family} — ${f.reason}`);
+  }
+  for (const s of report.skipped) {
+    lines.push(
+      `   • skipped [${s.service}] ${s.httpMethod.toUpperCase()} ${s.path} — ${s.reason}`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * Throw when the spec contains an API family that is neither claimed by a
+ * service nor declined, naming each so the fix is an explicit registry entry.
+ */
+export function assertAllFamiliesClassified(report: CoverageReport): void {
+  if (report.unknown.length === 0) return;
+  const list = report.unknown
+    .map((f) => `  • ${f.family} (${f.operations} operations)`)
+    .join("\n");
+  throw new Error(
+    `Unclassified API families in the spec:\n${list}\n` +
+      `Claim each in SERVICES or decline it with a reason in ` +
+      `DECLINED_FAMILIES (config.ts).`,
+  );
 }
 
 /** Extract a single operation into our intermediate form. */
@@ -305,6 +369,7 @@ function extractOperation(
   path: string,
   operation: OperationObject,
   pathLevelParams: ParameterObject[],
+  sensitiveOpts?: SensitiveOptions,
 ): GroupedOperation | null {
   if (skipReason(spec, operation) !== null) return null;
 
@@ -340,12 +405,13 @@ function extractOperation(
   const sensitiveBodyFields = sensitiveRequestFields(
     spec,
     operation.requestBody?.content?.["application/json"]?.schema,
+    sensitiveOpts,
   );
 
   // A credential in the response must land somewhere swamp can vault it. A
   // path through an array or record cannot be marked for swamp's resource
   // walk, so fail generation rather than emit a model that persists it.
-  const responseScan = scanSensitive(spec, responseSchema);
+  const responseScan = scanSensitive(spec, responseSchema, sensitiveOpts);
   if (responseScan.unreachable.length > 0) {
     throw new Error(
       `${operationId}: response carries credential field(s) ` +
@@ -371,6 +437,7 @@ function extractOperation(
     isCollection,
     listItemsKey,
     deprecated: operation.deprecated ?? false,
+    ...(sensitiveOpts?.valueIsSecret === false ? { valueIsSecret: false } : {}),
     tags: operation.tags ?? [],
     ...(sensitiveBodyFields.length > 0 ? { sensitiveBodyFields } : {}),
     ...(sensitiveResponse ? { sensitiveResponse } : {}),
@@ -386,10 +453,11 @@ function extractOperation(
 export function sensitiveRequestFields(
   spec: OpenAPISpec,
   schema: SchemaObject | undefined,
+  opts?: SensitiveOptions,
 ): string[] {
   if (!schema) return [];
   const resolved = resolveSchema(spec, schema);
-  const { tree, unreachable } = scanSensitive(spec, schema);
+  const { tree, unreachable } = scanSensitive(spec, schema, opts);
   if (resolved.type === "array" && resolved.items) {
     return unreachable.length > 0 ? ["items"] : [];
   }

@@ -32,6 +32,9 @@ Deno.test("threads model: has globalArguments with apiKey", () => {
 
 Deno.test("threads model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.get_message);
+  assertExists(model.methods.update_message);
+  assertExists(model.methods.delete_message);
   assertExists(model.methods.list_threads);
   assertExists(model.methods.create_thread);
   assertExists(model.methods.get_thread);
@@ -43,10 +46,10 @@ Deno.test("threads model: has expected methods", () => {
 
 Deno.test("threads model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["message"]);
   assertExists(model.resources["threads"]);
   assertExists(model.resources["thread"]);
   assertExists(model.resources["messages"]);
-  assertExists(model.resources["message"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -273,6 +276,99 @@ function resourceSchema(specName: string): SchemaLike {
 // ---------------------------------------------------------------------------
 // Per-method execution tests
 // ---------------------------------------------------------------------------
+
+Deno.test({
+  name:
+    "threads model: get_message sends the expected request and writes the resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const fixture = {
+      "created_at": "2024-01-01T00:00:00Z",
+      "created_by": "test-value",
+      "index": 1,
+      "input": "test-value",
+      "message_id": "test-value",
+      "metadata": null,
+      "output": "test-value",
+      "thread_id": "test-value",
+      "updated_at": "2024-01-01T00:00:00Z",
+    };
+    await withMockApi({
+      "GET /api/messages/test-id-123": { json: fixture },
+    }, async ({ run, requests, written }) => {
+      const result = await run("get_message", { "message_id": "test-id-123" });
+      assertEquals(result.dataHandles.length, 1);
+      assertRequest(requests, {
+        method: "GET",
+        pathname: "/api/messages/test-id-123",
+        query: {},
+      });
+      assertWritten(written(), "message", "test-id-123", fixture);
+    });
+  },
+});
+
+Deno.test({
+  name:
+    "threads model: update_message sends the expected request and writes the resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const fixture = {
+      "created_at": "2024-01-01T00:00:00Z",
+      "created_by": "test-value",
+      "index": 1,
+      "input": "test-value",
+      "message_id": "test-value",
+      "metadata": null,
+      "output": "test-value",
+      "thread_id": "test-value",
+      "updated_at": "2024-01-01T00:00:00Z",
+    };
+    await withMockApi({
+      "PATCH /api/messages/test-id-123": { json: fixture },
+    }, async ({ run, requests, written }) => {
+      const result = await run("update_message", {
+        "input": "test-value",
+        "metadata": null,
+        "output": "test-value",
+        "message_id": "test-id-123",
+      });
+      assertEquals(result.dataHandles.length, 1);
+      assertRequest(requests, {
+        method: "PATCH",
+        pathname: "/api/messages/test-id-123",
+        query: {},
+        body: {
+          "input": "test-value",
+          "metadata": null,
+          "output": "test-value",
+        },
+      });
+      assertWritten(written(), "message", "test-id-123", fixture);
+    });
+  },
+});
+
+Deno.test({
+  name: "threads model: delete_message sends the expected request",
+  sanitizeResources: false,
+  fn: async () => {
+    await withMockApi({
+      "DELETE /api/messages/test-id-123": { status: 204 },
+    }, async ({ run, requests, written }) => {
+      const result = await run("delete_message", {
+        "message_id": "test-id-123",
+      });
+      assertEquals(result.dataHandles.length, 0);
+      assertEquals(written().length, 0);
+      assertRequest(requests, {
+        method: "DELETE",
+        pathname: "/api/messages/test-id-123",
+        query: {},
+      });
+    });
+  },
+});
 
 Deno.test({
   name:
@@ -546,6 +642,18 @@ Deno.test({
 // ---------------------------------------------------------------------------
 
 Deno.test("threads model: response schemas tolerate unexpected data", () => {
+  // message: empty entity (every field absent) still validates.
+  assertEquals(resourceSchema("message").safeParse({}).success, true);
+  // message: unknown keys are preserved, not stripped or rejected.
+  {
+    const parsed = resourceSchema("message").safeParse({ unexpected_field: 1 });
+    assertEquals(parsed.success, true);
+    // A plain z.object would also succeed, but would strip the key.
+    assertEquals(
+      JSON.stringify(parsed.data).includes("unexpected_field"),
+      true,
+    );
+  }
   // threads: empty entity (every field absent) still validates.
   assertEquals(
     resourceSchema("threads").safeParse({
@@ -604,18 +712,6 @@ Deno.test("threads model: response schemas tolerate unexpected data", () => {
       true,
     );
   }
-  // message: empty entity (every field absent) still validates.
-  assertEquals(resourceSchema("message").safeParse({}).success, true);
-  // message: unknown keys are preserved, not stripped or rejected.
-  {
-    const parsed = resourceSchema("message").safeParse({ unexpected_field: 1 });
-    assertEquals(parsed.success, true);
-    // A plain z.object would also succeed, but would strip the key.
-    assertEquals(
-      JSON.stringify(parsed.data).includes("unexpected_field"),
-      true,
-    );
-  }
 });
 
 Deno.test({
@@ -623,16 +719,16 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "GET /api/threads/test-id-123": {
+      "GET /api/messages/test-id-123": {
         status: 500,
         json: { message: "boom" },
       },
     }, async ({ run }) => {
       const err = await assertRejects(
-        () => run("get_thread", { "thread_id": "test-id-123" }),
+        () => run("get_message", { "message_id": "test-id-123" }),
         Error,
       );
-      assertStringIncludes(err.message, "GET /api/threads/test-id-123");
+      assertStringIncludes(err.message, "GET /api/messages/test-id-123");
       assertStringIncludes(err.message, "500");
       assertStringIncludes(err.message, "boom");
     });
@@ -644,14 +740,14 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "GET /api/threads/test-id-123": { raw: "<html>not json</html>" },
+      "GET /api/messages/test-id-123": { raw: "<html>not json</html>" },
     }, async ({ run }) => {
       const err = await assertRejects(
-        () => run("get_thread", { "thread_id": "test-id-123" }),
+        () => run("get_message", { "message_id": "test-id-123" }),
         Error,
       );
       assertStringIncludes(err.message, "malformed JSON");
-      assertStringIncludes(err.message, "GET /api/threads/test-id-123");
+      assertStringIncludes(err.message, "GET /api/messages/test-id-123");
       assertStringIncludes(err.message, "HTTP 200");
     });
   },
@@ -662,9 +758,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "GET /api/threads/test-id-123": { status: 202, raw: "" },
+      "GET /api/messages/test-id-123": { status: 202, raw: "" },
     }, async ({ run, written }) => {
-      const result = await run("get_thread", { "thread_id": "test-id-123" });
+      const result = await run("get_message", { "message_id": "test-id-123" });
       assertEquals(result.dataHandles.length, 0);
       assertEquals(written().length, 0);
     });
@@ -672,17 +768,17 @@ Deno.test({
 });
 
 Deno.test({
-  name: "threads model: create_thread tolerates an empty 202 response",
+  name: "threads model: update_message tolerates an empty 202 response",
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "POST /api/threads": { status: 202, raw: "" },
+      "PATCH /api/messages/test-id-123": { status: 202, raw: "" },
     }, async ({ run, written }) => {
-      const result = await run("create_thread", {
-        "alias": "test-value",
-        "messages": [null],
+      const result = await run("update_message", {
+        "input": "test-value",
         "metadata": null,
-        "name": "test-value",
+        "output": "test-value",
+        "message_id": "test-id-123",
       });
       assertEquals(result.dataHandles.length, 0);
       assertEquals(written().length, 0);
@@ -695,14 +791,14 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "GET /api/threads/test-id-123": { delayMs: 500, json: {} },
+      "GET /api/messages/test-id-123": { delayMs: 500, json: {} },
     }, async ({ run }) => {
       const err = await assertRejects(
-        () => run("get_thread", { "thread_id": "test-id-123" }),
+        () => run("get_message", { "message_id": "test-id-123" }),
         Error,
       );
       assertStringIncludes(err.message, "timed out after 50ms");
-      assertStringIncludes(err.message, "GET /api/threads/test-id-123");
+      assertStringIncludes(err.message, "GET /api/messages/test-id-123");
     }, { timeoutMs: "50" });
   },
 });
@@ -712,10 +808,10 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     await withMockApi({
-      "GET /api/threads/test-id-123": { json: {} },
+      "GET /api/messages/test-id-123": { json: {} },
     }, async ({ run }) => {
       const err = await assertRejects(
-        () => run("get_thread", { "thread_id": "test-id-123" }),
+        () => run("get_message", { "message_id": "test-id-123" }),
         Error,
       );
       assertStringIncludes(err.message, "GT_CLOUD_TIMEOUT_MS");
@@ -728,24 +824,23 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const fixture = {
-      "alias": "test-value",
       "created_at": "2024-01-01T00:00:00Z",
       "created_by": "test-value",
-      "message_count": 1,
-      "messages_length": 1,
+      "index": 1,
+      "input": "test-value",
+      "message_id": "test-value",
       "metadata": null,
-      "name": "test-value",
-      "organization_id": "test-value",
+      "output": "test-value",
       "thread_id": "test-value",
       "updated_at": "2024-01-01T00:00:00Z",
     };
     await withMockApi({
-      "GET /api/threads/test-id-123": [
+      "GET /api/messages/test-id-123": [
         { status: 429, headers: { "Retry-After": "0" }, json: {} },
         { json: fixture },
       ],
     }, async ({ run, requests }) => {
-      const result = await run("get_thread", { "thread_id": "test-id-123" });
+      const result = await run("get_message", { "message_id": "test-id-123" });
       assertEquals(result.dataHandles.length, 1);
       assertEquals(requests.length, 2);
     });

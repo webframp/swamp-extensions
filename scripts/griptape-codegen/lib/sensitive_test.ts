@@ -130,6 +130,30 @@ Deno.test("scanSensitive: a top-level value is a credential (Secrets)", () => {
   assertEquals(tree, { value: true });
 });
 
+Deno.test("scanSensitive: valueIsSecret=false leaves a top-level value as data (Tags)", () => {
+  const schema = {
+    type: "object" as const,
+    properties: {
+      key: { type: "string" as const },
+      value: { type: "string" as const },
+      api_key: { type: "string" as const },
+    },
+  };
+  // Default stays conservative.
+  assertEquals(scanSensitive(spec, schema).tree, {
+    value: true,
+    api_key: true,
+  });
+  // Opt-out spares only `value`; genuine credentials are still flagged.
+  assertEquals(
+    scanSensitive(spec, schema, { valueIsSecret: false }).tree,
+    { api_key: true },
+  );
+  assertEquals(sensitiveRequestFields(spec, schema, { valueIsSecret: false }), [
+    "api_key",
+  ]);
+});
+
 Deno.test("scanSensitive: terminates on circular refs", () => {
   assertEquals(scanSensitive(spec, ref("Looped")).tree, {});
 });

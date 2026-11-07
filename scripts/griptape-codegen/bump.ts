@@ -14,15 +14,32 @@
  * @module
  */
 
-import { SPEC_SHA256 } from "./config.ts";
+import { DECLINED_FAMILIES, SERVICES, SPEC_SHA256 } from "./config.ts";
 import { fetchSpecText } from "./lib/schema_fetcher.ts";
+import type { OpenAPISpec } from "./lib/schema_fetcher.ts";
+import {
+  assertAllFamiliesClassified,
+  formatCoverage,
+  reportCoverage,
+} from "./lib/service_grouper.ts";
+import { parse as parseYaml } from "@std/yaml";
 
 const CONFIG_PATH = new URL("./config.ts", import.meta.url).pathname;
+
+/** Coverage of a fetched spec body against the registry and declined list. */
+function coverageOf(text: string) {
+  const spec = parseYaml(text) as unknown as OpenAPISpec;
+  return reportCoverage(spec, SERVICES, DECLINED_FAMILIES);
+}
 
 async function updateSpec(): Promise<void> {
   console.log(`📥 Fetching Griptape Cloud OpenAPI spec (unpinned)...`);
   // expectedHash=null: we are establishing a new pin, so do not verify.
-  const { hash } = await fetchSpecText(null);
+  const { hash, text } = await fetchSpecText(null);
+
+  // Always show coverage: a re-pin is when new families appear. Unclassified
+  // families are reported, not fatal here — classifying them is the next step.
+  for (const line of formatCoverage(coverageOf(text))) console.log(line);
 
   if (hash === SPEC_SHA256) {
     console.log(`✓ Spec unchanged. Pin already at ${hash}.`);
@@ -53,9 +70,17 @@ async function updateSpec(): Promise<void> {
 
 async function checkSpec(): Promise<void> {
   console.log(`🔎 Checking pinned spec against upstream...`);
-  const { hash } = await fetchSpecText(null);
+  const { hash, text } = await fetchSpecText(null);
   if (hash === SPEC_SHA256) {
     console.log(`✓ Pin matches upstream (${hash}).`);
+    const coverage = coverageOf(text);
+    for (const line of formatCoverage(coverage)) console.log(line);
+    try {
+      assertAllFamiliesClassified(coverage);
+    } catch (err) {
+      console.error(`\n❌ ${(err as Error).message}`);
+      Deno.exit(1);
+    }
     return;
   }
   console.error(

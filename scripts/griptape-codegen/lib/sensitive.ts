@@ -53,8 +53,22 @@ const EXACT_SENSITIVE = new Set([
  * `bot_token_secret_ref` (an id, not the secret) are left alone. camelCase,
  * kebab-case and snake_case spellings are treated alike.
  */
-export function isSensitiveFieldName(name: string): boolean {
+/** Knobs for credential detection that vary by service. */
+export interface SensitiveOptions {
+  /**
+   * Whether a bare top-level `value` field is a credential. Defaults to true
+   * (the conservative choice; it is how the secrets family is stored). A
+   * service whose `value` is ordinary data, such as tag values, opts out.
+   */
+  valueIsSecret?: boolean;
+}
+
+export function isSensitiveFieldName(
+  name: string,
+  opts?: SensitiveOptions,
+): boolean {
   const n = toSnake(name);
+  if (n === "value" && opts?.valueIsSecret === false) return false;
   if (EXACT_SENSITIVE.has(n)) return true;
   return /_(token|secret|password|api_key|apikey|private_key|secret_access_key)$/
     .test(n);
@@ -142,6 +156,7 @@ function scanObject(
   depth: number,
   path: string,
   unreachable: string[],
+  opts?: SensitiveOptions,
 ): SensitiveTree {
   const tree: SensitiveTree = {};
   if (depth > MAX_DEPTH) return tree;
@@ -154,7 +169,7 @@ function scanObject(
   ) {
     const here = path ? `${path}.${name}` : name;
     const sensitive = depth === 0
-      ? isSensitiveFieldName(name)
+      ? isSensitiveFieldName(name, opts)
       : isNestedSensitiveFieldName(name);
     if (sensitive) {
       tree[name] = true;
@@ -179,11 +194,20 @@ function scanObject(
         depth + 1,
         `${here}${marker}`,
         unreachable,
+        opts,
       );
       unreachable.push(...flatten(sub, `${here}${marker}`));
       continue;
     }
-    const sub = scanObject(spec, prop, d.visited, depth + 1, here, unreachable);
+    const sub = scanObject(
+      spec,
+      prop,
+      d.visited,
+      depth + 1,
+      here,
+      unreachable,
+      opts,
+    );
     if (Object.keys(sub).length > 0) {
       const existing = tree[name];
       tree[name] = existing && existing !== true
@@ -208,6 +232,7 @@ function mergeTrees(a: SensitiveTree, b: SensitiveTree): SensitiveTree {
 export function scanSensitive(
   spec: OpenAPISpec,
   schema: SchemaObject | undefined,
+  opts?: SensitiveOptions,
 ): SensitiveScan {
   const unreachable: string[] = [];
   if (!schema) return { tree: {}, unreachable };
@@ -229,7 +254,7 @@ export function scanSensitive(
     }
     return { tree: {}, unreachable };
   }
-  const tree = scanObject(spec, d.schema, d.visited, 0, "", unreachable);
+  const tree = scanObject(spec, d.schema, d.visited, 0, "", unreachable, opts);
   return { tree, unreachable };
 }
 
