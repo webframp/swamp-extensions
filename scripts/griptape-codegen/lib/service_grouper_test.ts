@@ -6,6 +6,8 @@ import { assertEquals } from "@std/assert";
 import {
   extractResponseSchema,
   groupOperations,
+  reportCoverage,
+  skipReason,
   withTemplatePlaceholders,
 } from "./service_grouper.ts";
 import type { OpenAPISpec, OperationObject } from "./schema_fetcher.ts";
@@ -280,3 +282,106 @@ function getOp(operationId: string): OperationObject {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// skipReason / reportCoverage
+// ---------------------------------------------------------------------------
+
+const emptySpec = {
+  openapi: "3.1.0",
+  info: { title: "t", version: "1" },
+  paths: {},
+  components: { schemas: {} },
+} as unknown as OpenAPISpec;
+
+Deno.test("skipReason: names each reason a matched operation is dropped", () => {
+  assertEquals(skipReason(emptySpec, getOp("GetThing")), null);
+  assertEquals(
+    skipReason(emptySpec, { ...getOp("GetThing"), deprecated: true }),
+    "deprecated",
+  );
+  assertEquals(
+    skipReason(emptySpec, {
+      ...getOp("StreamEvents"),
+      responses: {
+        "200": { description: "ok", content: { "text/event-stream": {} } },
+      },
+    } as unknown as OperationObject),
+    "non-JSON response",
+  );
+  assertEquals(
+    skipReason(emptySpec, {
+      ...getOp("Upload"),
+      requestBody: {
+        content: { "multipart/form-data": { schema: { type: "object" } } },
+      },
+    } as unknown as OperationObject),
+    "non-JSON request body",
+  );
+});
+
+Deno.test("reportCoverage: lists unclaimed families and skipped operations", () => {
+  const services: ServiceConfig[] = [
+    {
+      name: "threads",
+      description: "",
+      pathPrefixes: ["/api/threads"],
+      labels: [],
+    },
+  ];
+  const spec = {
+    ...emptySpec,
+    paths: {
+      "/api/threads": { get: listOp("ListThreads") },
+      "/api/threads/{thread_id}": {
+        get: { ...getOp("GetThread"), deprecated: true },
+      },
+      // Unclaimed family: 2 paths, 3 operations.
+      "/api/retrievers": { get: listOp("ListRetrievers"), post: getOp("Make") },
+      "/api/retrievers/{id}": { get: getOp("GetRetriever") },
+      // Path item with no operations must not break the count.
+      "/api/empty/{id}": { parameters: [] },
+      // Segment boundary: "/api/threadsX" is not "/api/threads".
+      "/api/threadsX": { get: getOp("Other") },
+    },
+  } as unknown as OpenAPISpec;
+
+  const report = reportCoverage(spec, services);
+
+  assertEquals(report.uncovered, [
+    { family: "/api/empty", paths: 1, operations: 0 },
+    { family: "/api/retrievers", paths: 2, operations: 3 },
+    { family: "/api/threadsX", paths: 1, operations: 1 },
+  ]);
+  assertEquals(report.skipped.map((s) => [s.operationId, s.reason]), [
+    ["GetThread", "deprecated"],
+  ]);
+});
+
+Deno.test("reportCoverage: agrees with groupOperations on what is generated", () => {
+  const services: ServiceConfig[] = [
+    {
+      name: "threads",
+      description: "",
+      pathPrefixes: ["/api/threads"],
+      labels: [],
+    },
+  ];
+  const spec = {
+    ...emptySpec,
+    paths: {
+      "/api/threads": { get: listOp("ListThreads") },
+      "/api/threads/{thread_id}": {
+        get: { ...getOp("GetThread"), deprecated: true },
+        delete: getOp("DeleteThread"),
+      },
+    },
+  } as unknown as OpenAPISpec;
+
+  const generated = groupOperations(spec, services)
+    .flatMap((g) => g.operations).length;
+  const report = reportCoverage(spec, services);
+  // 3 operations total = generated + skipped; none unclaimed.
+  assertEquals(generated + report.skipped.length, 3);
+  assertEquals(report.uncovered.length, 0);
+});

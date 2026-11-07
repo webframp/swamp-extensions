@@ -12,7 +12,7 @@
 
 import { OUTPUT_BASE, SERVICES } from "./config.ts";
 import { fetchSchema } from "./lib/schema_fetcher.ts";
-import { groupOperations } from "./lib/service_grouper.ts";
+import { groupOperations, reportCoverage } from "./lib/service_grouper.ts";
 import {
   classifyServiceMethods,
   generateModelSource,
@@ -135,6 +135,24 @@ async function main() {
   for (const group of groups) {
     console.log(
       `   • ${group.config.name}: ${group.operations.length} operations`,
+    );
+  }
+  console.log(``);
+
+  // Always report what is NOT generated, against the full registry (not the
+  // --service subset), so upstream drift is never silent.
+  const coverage = reportCoverage(spec, SERVICES);
+  console.log(
+    `🔍 Not generated: ${coverage.uncovered.length} unclaimed API families, ${coverage.skipped.length} skipped operations`,
+  );
+  for (const f of coverage.uncovered) {
+    console.log(
+      `   • unclaimed ${f.family} (${f.operations} operations, ${f.paths} paths)`,
+    );
+  }
+  for (const s of coverage.skipped) {
+    console.log(
+      `   • skipped [${s.service}] ${s.httpMethod.toUpperCase()} ${s.path} — ${s.reason}`,
     );
   }
   console.log(``);

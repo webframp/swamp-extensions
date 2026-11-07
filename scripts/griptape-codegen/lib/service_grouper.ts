@@ -183,6 +183,121 @@ export function withTemplatePlaceholders(
   return result;
 }
 
+/** Resolve a $ref on the requestBody itself before content-type checks. */
+function withResolvedRequestBody(
+  spec: OpenAPISpec,
+  operation: OperationObject,
+): OperationObject {
+  if (!operation.requestBody) return operation;
+  const rawRb = operation.requestBody as unknown as Record<string, unknown>;
+  if (typeof rawRb.$ref !== "string") return operation;
+  return {
+    ...operation,
+    requestBody: resolveRef(spec, rawRb.$ref) as unknown as RequestBodyObject,
+  };
+}
+
+/**
+ * Why a matched operation is not generated, or null when it is generated.
+ *
+ * - deprecated: the spec marks the endpoint deprecated.
+ * - non-JSON response: SSE event streams and binary downloads need
+ *   hand-written implementations.
+ * - non-JSON request body: multipart/octet-stream cannot be expressed by the
+ *   generated JSON serialization.
+ *
+ * Shared by extractOperation and reportCoverage so the report cannot disagree
+ * with what the generator actually emits.
+ */
+export function skipReason(
+  spec: OpenAPISpec,
+  operation: OperationObject,
+): string | null {
+  if (operation.deprecated) return "deprecated";
+  if (hasNonJsonSuccessResponse(operation)) return "non-JSON response";
+  if (hasNonJsonRequestBody(withResolvedRequestBody(spec, operation))) {
+    return "non-JSON request body";
+  }
+  return null;
+}
+
+/** An API family (first two path segments) no service claims. */
+export interface UncoveredFamily {
+  /** e.g. "/api/retrievers". */
+  family: string;
+  paths: number;
+  operations: number;
+}
+
+/** An operation inside a claimed family that the generator drops. */
+export interface SkippedOperation {
+  service: string;
+  httpMethod: string;
+  path: string;
+  operationId: string;
+  reason: string;
+}
+
+export interface CoverageReport {
+  uncovered: UncoveredFamily[];
+  skipped: SkippedOperation[];
+}
+
+/**
+ * Report what the generator does NOT emit from this spec, so upstream drift
+ * (a new endpoint family, an endpoint turning deprecated or streaming) is
+ * visible on every run instead of silently shrinking or failing to grow
+ * coverage. Pass the full registry, not a `--service` subset.
+ */
+export function reportCoverage(
+  spec: OpenAPISpec,
+  services: ServiceConfig[],
+): CoverageReport {
+  const families = new Map<string, UncoveredFamily>();
+  const skipped: SkippedOperation[] = [];
+
+  for (const [path, pathItem] of Object.entries(spec.paths)) {
+    if (!pathItem) continue;
+    const service = findService(path, services);
+
+    let entry: UncoveredFamily | undefined;
+    if (!service) {
+      const family = path.split("/").slice(0, 3).join("/");
+      entry = families.get(family) ?? { family, paths: 0, operations: 0 };
+      entry.paths++;
+      families.set(family, entry);
+    }
+
+    for (const method of HTTP_METHODS) {
+      const operation = pathItem[method] as OperationObject | undefined;
+      if (!operation || typeof operation !== "object") continue;
+
+      if (entry) {
+        entry.operations++;
+        continue;
+      }
+
+      const reason = skipReason(spec, operation);
+      if (reason) {
+        skipped.push({
+          service: service!.name,
+          httpMethod: method,
+          path,
+          operationId: operation.operationId ?? `${method} ${path}`,
+          reason,
+        });
+      }
+    }
+  }
+
+  return {
+    uncovered: [...families.values()].sort((a, b) =>
+      a.family.localeCompare(b.family)
+    ),
+    skipped,
+  };
+}
+
 /** Extract a single operation into our intermediate form. */
 function extractOperation(
   spec: OpenAPISpec,
@@ -191,29 +306,9 @@ function extractOperation(
   operation: OperationObject,
   pathLevelParams: ParameterObject[],
 ): GroupedOperation | null {
-  if (operation.deprecated) return null;
+  if (skipReason(spec, operation) !== null) return null;
 
-  // Skip endpoints whose success response is non-JSON (SSE event streams,
-  // binary asset downloads). These need hand-written implementations.
-  if (hasNonJsonSuccessResponse(operation)) return null;
-
-  // Resolve a $ref on the requestBody itself before content-type checks.
-  if (operation.requestBody) {
-    const rawRb = operation.requestBody as unknown as Record<string, unknown>;
-    if (typeof rawRb.$ref === "string") {
-      operation = {
-        ...operation,
-        requestBody: resolveRef(
-          spec,
-          rawRb.$ref,
-        ) as unknown as RequestBodyObject,
-      };
-    }
-  }
-
-  // Skip endpoints whose request body is exclusively non-JSON (multipart,
-  // octet-stream). cfApi-style JSON serialization cannot express these.
-  if (hasNonJsonRequestBody(operation)) return null;
+  operation = withResolvedRequestBody(spec, operation);
 
   const declaredParams = [
     ...pathLevelParams,
