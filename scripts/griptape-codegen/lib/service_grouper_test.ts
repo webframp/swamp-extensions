@@ -4,7 +4,9 @@
 
 import { assertEquals } from "@std/assert";
 import {
+  assertAllFamiliesClassified,
   extractResponseSchema,
+  formatCoverage,
   groupOperations,
   reportCoverage,
   skipReason,
@@ -348,7 +350,7 @@ Deno.test("reportCoverage: lists unclaimed families and skipped operations", () 
 
   const report = reportCoverage(spec, services);
 
-  assertEquals(report.uncovered, [
+  assertEquals(report.unknown, [
     { family: "/api/empty", paths: 1, operations: 0 },
     { family: "/api/retrievers", paths: 2, operations: 3 },
     { family: "/api/threadsX", paths: 1, operations: 1 },
@@ -383,5 +385,76 @@ Deno.test("reportCoverage: agrees with groupOperations on what is generated", ()
   const report = reportCoverage(spec, services);
   // 3 operations total = generated + skipped; none unclaimed.
   assertEquals(generated + report.skipped.length, 3);
-  assertEquals(report.uncovered.length, 0);
+  assertEquals(report.unknown.length, 0);
+  assertEquals(report.declined.length, 0);
+});
+
+Deno.test("reportCoverage: declined families carry their reason and are not unknown", () => {
+  const services: ServiceConfig[] = [
+    {
+      name: "threads",
+      description: "",
+      pathPrefixes: ["/api/threads"],
+      labels: [],
+    },
+  ];
+  const spec = {
+    ...emptySpec,
+    paths: {
+      "/api/threads": { get: listOp("ListThreads") },
+      "/api/billing": { get: getOp("GetBilling") },
+      "/api/retrievers": { get: listOp("ListRetrievers") },
+    },
+  } as unknown as OpenAPISpec;
+
+  const report = reportCoverage(spec, services, {
+    "/api/billing": "billing",
+  });
+
+  assertEquals(report.declined.map((d) => [d.family, d.reason]), [
+    ["/api/billing", "billing"],
+  ]);
+  assertEquals(report.unknown.map((u) => u.family), ["/api/retrievers"]);
+});
+
+Deno.test("assertAllFamiliesClassified: names every unclassified family", () => {
+  const clean = { unknown: [], declined: [], skipped: [] };
+  assertAllFamiliesClassified(clean); // does not throw
+
+  let message = "";
+  try {
+    assertAllFamiliesClassified({
+      ...clean,
+      unknown: [
+        { family: "/api/new-thing", paths: 1, operations: 2 },
+        { family: "/api/other", paths: 1, operations: 1 },
+      ],
+    });
+  } catch (err) {
+    message = (err as Error).message;
+  }
+  assertEquals(message.includes("/api/new-thing"), true);
+  assertEquals(message.includes("/api/other"), true);
+  assertEquals(message.includes("DECLINED_FAMILIES"), true);
+});
+
+Deno.test("formatCoverage: flags unclassified families distinctly from declined", () => {
+  const lines = formatCoverage({
+    unknown: [{ family: "/api/new-thing", paths: 1, operations: 2 }],
+    declined: [{
+      family: "/api/billing",
+      paths: 1,
+      operations: 1,
+      reason: "billing",
+    }],
+    skipped: [],
+  });
+  assertEquals(
+    lines.some((l) => l.includes("UNCLASSIFIED /api/new-thing")),
+    true,
+  );
+  assertEquals(
+    lines.some((l) => l.includes("declined /api/billing — billing")),
+    true,
+  );
 });

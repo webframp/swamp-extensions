@@ -29,6 +29,18 @@ const GlobalArgsSchema = z.object({
   ).optional(),
 });
 
+const GetMessageSchema = z.looseObject({
+  created_at: z.string().nullish(),
+  created_by: z.string().nullish(),
+  index: z.number().nullish(),
+  input: z.string().nullish(),
+  message_id: z.string().nullish(),
+  metadata: z.unknown().nullish(),
+  output: z.string().nullish(),
+  thread_id: z.string().nullish(),
+  updated_at: z.string().nullish(),
+});
+
 const ThreadsItemSchema = z.looseObject({
   alias: z.string().nullish(),
   created_at: z.string().nullish(),
@@ -91,18 +103,6 @@ const ListMessagesSchema = z.object({
   ),
 });
 
-const CreateMessageSchema = z.looseObject({
-  created_at: z.string().nullish(),
-  created_by: z.string().nullish(),
-  index: z.number().nullish(),
-  input: z.string().nullish(),
-  message_id: z.string().nullish(),
-  metadata: z.unknown().nullish(),
-  output: z.string().nullish(),
-  thread_id: z.string().nullish(),
-  updated_at: z.string().nullish(),
-});
-
 // =============================================================================
 // Model Definition
 // =============================================================================
@@ -110,7 +110,7 @@ const CreateMessageSchema = z.looseObject({
 /** Griptape Cloud Threads — conversation threads and their messages */
 export const model = {
   type: "@webframp/griptape/threads",
-  version: "2026.11.03.1",
+  version: "2026.11.07.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -153,9 +153,21 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.07.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "message": {
+      description: "get operation",
+      schema: GetMessageSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "threads": {
       description: "list operation",
       schema: ListThreadsSchema,
@@ -174,15 +186,136 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 10,
     },
-    "message": {
-      description: "create operation",
-      schema: CreateMessageSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
   },
 
   methods: {
+    get_message: {
+      description: "get operation",
+      arguments: z.object({
+        message_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, baseUrl } = context.globalArgs;
+
+        const result = await griptapeApi<Record<string, unknown>>(
+          apiKey,
+          "GET",
+          `/api/messages/${encodeURIComponent(String(args.message_id))}`,
+          undefined,
+          baseUrl,
+        );
+
+        if (result === undefined || result === null) {
+          context.logger.info("message not found (no content)", {});
+          return { dataHandles: [] };
+        }
+
+        const handle = await context.writeResource(
+          "message",
+          sanitizeInstanceName(String(args.message_id)),
+          result,
+        );
+        context.logger.info("Fetched message", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_message: {
+      description: "update operation",
+      arguments: z.object({
+        message_id: z.string(),
+        input: z.string().optional(),
+        metadata: z.unknown().optional(),
+        output: z.string().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, baseUrl } = context.globalArgs;
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["message_id"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await griptapeApi<Record<string, unknown>>(
+          apiKey,
+          "PATCH",
+          `/api/messages/${encodeURIComponent(String(args.message_id))}`,
+          body,
+          baseUrl,
+        );
+
+        // A 204 No Content (or empty body) yields undefined; nothing to persist.
+        if (result === undefined || result === null) {
+          context.logger.info("Updated message (no content)", {});
+          return { dataHandles: [] };
+        }
+
+        const handle = await context.writeResource(
+          "message",
+          sanitizeInstanceName(String(args.message_id)),
+          result,
+        );
+        context.logger.info("Updated message", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    delete_message: {
+      description: "delete operation",
+      arguments: z.object({
+        message_id: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiKey, baseUrl } = context.globalArgs;
+        await griptapeApi<Record<string, unknown>>(
+          apiKey,
+          "DELETE",
+          `/api/messages/${encodeURIComponent(String(args.message_id))}`,
+          undefined,
+          baseUrl,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.message_id });
+        return { dataHandles: [] };
+      },
+    },
     list_threads: {
       description: "list operation",
       arguments: z.object({

@@ -617,13 +617,14 @@ ${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : 
  */
 export function sensitiveArgNames(op: GroupedOperation): string[] {
   const names = new Set<string>(op.sensitiveBodyFields ?? []);
+  const opts = { valueIsSecret: op.valueIsSecret };
   for (const p of op.queryParams) {
     const n = sanitizeFieldName(p.name);
-    if (isSensitiveFieldName(n)) names.add(n);
+    if (isSensitiveFieldName(n, opts)) names.add(n);
   }
   for (const name of Object.keys(op.requestBody?.properties ?? {})) {
     const n = sanitizeFieldName(name);
-    if (isSensitiveFieldName(n)) names.add(n);
+    if (isSensitiveFieldName(n, opts)) names.add(n);
   }
   // A path parameter shadows a same-named query/body field in the schema.
   for (const p of op.pathParams) names.delete(sanitizeFieldName(p.name));

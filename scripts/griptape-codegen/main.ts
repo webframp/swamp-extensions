@@ -10,9 +10,14 @@
  * @module
  */
 
-import { OUTPUT_BASE, SERVICES } from "./config.ts";
+import { DECLINED_FAMILIES, OUTPUT_BASE, SERVICES } from "./config.ts";
 import { fetchSchema } from "./lib/schema_fetcher.ts";
-import { groupOperations, reportCoverage } from "./lib/service_grouper.ts";
+import {
+  assertAllFamiliesClassified,
+  formatCoverage,
+  groupOperations,
+  reportCoverage,
+} from "./lib/service_grouper.ts";
 import {
   classifyServiceMethods,
   generateModelSource,
@@ -141,21 +146,11 @@ async function main() {
 
   // Always report what is NOT generated, against the full registry (not the
   // --service subset), so upstream drift is never silent.
-  const coverage = reportCoverage(spec, SERVICES);
-  console.log(
-    `🔍 Not generated: ${coverage.uncovered.length} unclaimed API families, ${coverage.skipped.length} skipped operations`,
-  );
-  for (const f of coverage.uncovered) {
-    console.log(
-      `   • unclaimed ${f.family} (${f.operations} operations, ${f.paths} paths)`,
-    );
-  }
-  for (const s of coverage.skipped) {
-    console.log(
-      `   • skipped [${s.service}] ${s.httpMethod.toUpperCase()} ${s.path} — ${s.reason}`,
-    );
-  }
+  const coverage = reportCoverage(spec, SERVICES, DECLINED_FAMILIES);
+  for (const line of formatCoverage(coverage)) console.log(line);
   console.log(``);
+  // An unclassified family stops generation before anything is written.
+  assertAllFamiliesClassified(coverage);
 
   if (groups.length === 0) {
     console.log(`⚠️  No operations matched the configured path prefixes.`);

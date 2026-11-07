@@ -1,18 +1,9 @@
-## 2026.11.03.1
+## 2026.11.07.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Added:** Message-level methods for the `/api/messages/{message_id}` endpoints
+(get, update, and delete a single message by ID), which previously had no
+extension coverage. Existing methods, arguments, and resource schemas are
+unchanged.
 
-## 2026.10.21.1
-
-**Changed:** The README now opens with a Credentials section. Store the key with
-`swamp vault put griptape API_KEY` and set `apiKey` to
-`${{ vault.get("griptape", "API_KEY") }}`. The previous example passed a
-placeholder literal (`apiKey=GRIPTAPE_CLOUD_API_KEY`).
-
-**Changed:** The `apiKey` description and the missing-key error now point to the
-vault. The `GT_CLOUD_API_KEY` environment variable is still read when `apiKey`
-is unset, but it is now documented as a discouraged fallback because swamp does
-not redact it. Key resolution is unchanged.
-
-**Upgrade note:** Documentation and message text only. No schema or behavioral
-changes.
+**Upgrade note:** Additive only; stored data continues to validate. No migration
+required.

@@ -30,6 +30,9 @@ argument overrides `GT_CLOUD_BASE_URL` and the built-in default
 
 | Method           | Description      |
 | ---------------- | ---------------- |
+| `get_message`    | get operation    |
+| `update_message` | update operation |
+| `delete_message` | delete operation |
 | `list_threads`   | list operation   |
 | `create_thread`  | create operation |
 | `get_thread`     | get operation    |

@@ -106,6 +106,11 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/griptape/buckets`](griptape/buckets/) | Griptape Cloud Buckets — asset buckets and their stored assets | None (uses fetch) |
 | [`@webframp/griptape/secrets`](griptape/secrets/) | Griptape Cloud Secrets — organization secret management | None (uses fetch) |
 | [`@webframp/griptape/models`](griptape/models/) | Griptape Cloud Models — model configurations and provider auth configs | None (uses fetch) |
+| [`@webframp/griptape/retrievers`](griptape/retrievers/) | Griptape Cloud Retrievers — retrievers, retriever components, and libraries | None (uses fetch) |
+| [`@webframp/griptape/integrations`](griptape/integrations/) | Griptape Cloud Integrations — integrations and their outbound connections | None (uses fetch) |
+| [`@webframp/griptape/tags`](griptape/tags/) | Griptape Cloud Tags — tag profiles and tag listings | None (uses fetch) |
+| [`@webframp/griptape/import-export`](griptape/import-export/) | Griptape Cloud Import/Export — import jobs and export jobs | None (uses fetch) |
+| [`@webframp/griptape/observability`](griptape/observability/) | Griptape Cloud Observability — dashboards, platform config, events, and deployments | None (uses fetch) |
 | [`@webframp/gitlab-review`](gitlab-review/) | AI-assisted GitLab merge request code review (GraphQL + REST) with a human approval gate and draft/edit/post workflow | None (uses fetch) |
 | [`@webframp/reddit/moderation`](reddit/) | Reddit moderation API wrapper — modqueue inspection, reports, mod action logs, and actions (approve, remove, ban, modmail, flair) | None (uses fetch) |
 | [`@webframp/discourse`](discourse/) | Queries Discourse forums — categories, topics, and search via the public REST API | None (uses fetch) |
@@ -310,6 +315,11 @@ swamp extension pull @webframp/griptape/data-connectors
 swamp extension pull @webframp/griptape/buckets
 swamp extension pull @webframp/griptape/secrets
 swamp extension pull @webframp/griptape/models
+swamp extension pull @webframp/griptape/retrievers
+swamp extension pull @webframp/griptape/integrations
+swamp extension pull @webframp/griptape/tags
+swamp extension pull @webframp/griptape/import-export
+swamp extension pull @webframp/griptape/observability
 
 # GCP extensions
 swamp extension pull @webframp/gcp/vertex-usage
