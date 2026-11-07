@@ -10,6 +10,10 @@ concurrency:
   group: merge-${{ github.event.issue.number }}
   cancel-in-progress: false
 
+# Deny by default: the one job declares exactly the scope it needs. A future
+# job added without its own block inherits nothing rather than the repo default.
+permissions: {}
+
 jobs:
   merge:
     name: Merge PR

@@ -22,10 +22,23 @@ concurrency:
   group: publish-${{ github.event.workflow_run.head_branch || 'main' }}
   cancel-in-progress: false
 
+# Least privilege by default: jobs inherit read-only access to repo contents
+# unless they declare their own block. detect-changes widens it to add
+# actions: read, and the publish job declares its own contents: write.
+permissions:
+  contents: read
+
 jobs:
   detect-changes:
     name: Detect changed extensions
     runs-on: ubuntu-latest
+    # actions: read is required by "Check a dispatched commit", which lists
+    # ci.yml runs for the dispatched sha (GET /actions/workflows/{id}/runs).
+    # Without it that call returns 403, the step fails closed, and no
+    # extension reaches the publish matrix.
+    permissions:
+      contents: read
+      actions: read
     # Only run when CI succeeded
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
