@@ -73,9 +73,10 @@ async function checkSpec(): Promise<void> {
   const { hash, text } = await fetchSpecText(null);
   if (hash === SPEC_SHA256) {
     console.log(`✓ Pin matches upstream (${hash}).`);
-    for (const line of formatCoverage(coverageOf(text))) console.log(line);
+    const coverage = coverageOf(text);
+    for (const line of formatCoverage(coverage)) console.log(line);
     try {
-      assertAllFamiliesClassified(coverageOf(text));
+      assertAllFamiliesClassified(coverage);
     } catch (err) {
       console.error(`\n❌ ${(err as Error).message}`);
       Deno.exit(1);
