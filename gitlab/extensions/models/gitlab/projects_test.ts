@@ -8396,3 +8396,68 @@ Deno.test("convert_work_item_type treats a case-only type difference as already 
     m.restore();
   }
 });
+
+Deno.test("every authenticated client request refuses redirects instead of forwarding the token", async () => {
+  const original = globalThis.fetch;
+  const cases: Array<[string, string, Record<string, unknown>]> = [
+    ["list_projects", "graphql", {}],
+    ["get_snippet", "get instance", { id: 1 }],
+    ["get_snippet", "get project", { id: 1, project: "g/p" }],
+    ["list_snippets", "list instance", {}],
+    ["list_snippets", "list project", { project: "g/p" }],
+    ["create_snippet", "post instance", {
+      title: "t",
+      files: [{ filePath: "a", content: "c" }],
+      visibility: "private",
+      description: "",
+    }],
+    ["create_snippet", "post project", {
+      title: "t",
+      files: [{ filePath: "a", content: "c" }],
+      visibility: "private",
+      description: "",
+      project: "g/p",
+    }],
+    ["update_snippet", "put instance", { id: 1, title: "t" }],
+    ["update_snippet", "put project", { id: 1, title: "t", project: "g/p" }],
+    ["delete_snippet", "delete instance", { id: 1 }],
+    ["delete_snippet", "delete project", { id: 1, project: "g/p" }],
+    ["get_job_log", "project text", { project: "g/p", jobId: 1 }],
+  ];
+  try {
+    for (const [method, label, args] of cases) {
+      const seen: Array<{ url: string; redirect?: RequestRedirect }> = [];
+      globalThis.fetch = (
+        input: string | URL | Request,
+        init?: RequestInit,
+      ) => {
+        const url = typeof input === "string"
+          ? input
+          : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+        seen.push({ url, redirect: init?.redirect });
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://idp.example.com/login" },
+          }),
+        );
+      };
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await assertRejects(
+        () => (model.methods as any)[method].execute(args, context as any),
+        Error,
+        "unexpected redirect",
+        label,
+      );
+      assertEquals(seen.length, 1, label);
+      assertEquals(seen[0].redirect, "manual", label);
+      assertEquals(seen[0].url.includes("idp.example.com"), false, label);
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});

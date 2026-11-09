@@ -1293,13 +1293,34 @@ const SnippetDeletedSchema = z.object({
 // GraphQL Client
 // =============================================================================
 
+/**
+ * fetch for authenticated GitLab requests. Deno strips only Authorization on
+ * a cross-origin redirect, so a followed redirect (SSO front proxy, hostile
+ * or compromised instance) would forward PRIVATE-TOKEN to another origin.
+ * GitLab API endpoints used here do not redirect, so a 3xx is an error.
+ */
+async function apiFetch(url: string, init: RequestInit): Promise<Response> {
+  const resp = await fetch(url, { ...init, redirect: "manual" });
+  if (resp.status >= 300 && resp.status < 400) {
+    await resp.body?.cancel();
+    throw new Error(
+      `GitLab ${
+        init.method ?? "GET"
+      } ${url}: unexpected redirect (${resp.status}) to ${
+        resp.headers.get("location") ?? "unknown location"
+      } — refusing to follow it with the access token`,
+    );
+  }
+  return resp;
+}
+
 async function graphqlRequest(
   host: string,
   token: string,
   query: string,
   variables?: Record<string, unknown>,
 ): Promise<any> {
-  const resp = await fetch(`https://${host}/api/graphql`, {
+  const resp = await apiFetch(`https://${host}/api/graphql`, {
     method: "POST",
     headers: {
       "PRIVATE-TOKEN": token,
@@ -2154,7 +2175,7 @@ class GitLabClient {
     if (params) {
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     }
-    const resp = await fetch(url.toString(), { headers: this.headers() });
+    const resp = await apiFetch(url.toString(), { headers: this.headers() });
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(
@@ -2173,7 +2194,7 @@ class GitLabClient {
     path: string,
     body: Record<string, unknown>,
   ): Promise<any> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       method: "PUT",
       headers: this.headers(),
       body: JSON.stringify(body),
@@ -2190,7 +2211,7 @@ class GitLabClient {
     path: string,
     body: Record<string, unknown> = {},
   ): Promise<any> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),
@@ -2204,7 +2225,7 @@ class GitLabClient {
 
   /** GET a project endpoint returning raw text (e.g. a job trace, not JSON). */
   async getProjectText(project: string, path: string): Promise<string> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       headers: this.headers(),
     });
     if (!resp.ok) {
@@ -2232,7 +2253,7 @@ class GitLabClient {
     path: string,
     maxBytes: number,
   ): Promise<{ text: string; truncated: boolean } | null> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       headers: this.headers(),
     });
     if (resp.status === 404) return null;
@@ -2274,9 +2295,12 @@ class GitLabClient {
     bodySnippet: string;
   }> {
     const url = `${this.projectUrl(project)}${path}`;
+    // Diagnostic probe: report a redirect's status rather than follow it or
+    // throw, and never forward the token across origins.
     const resp = await fetch(url, {
       method: "OPTIONS",
       headers: this.headers(),
+      redirect: "manual",
     });
     const body = await resp.text();
     return {
@@ -2290,7 +2314,7 @@ class GitLabClient {
 
   /** GET a single JSON resource scoped to a project (not a list — no pagination handling). */
   async get(project: string, path: string): Promise<any> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       headers: this.headers(),
     });
     if (!resp.ok) {
@@ -2302,7 +2326,7 @@ class GitLabClient {
 
   /** DELETE a project-scoped endpoint. GitLab returns 204 with no body on success. */
   async del(project: string, path: string): Promise<void> {
-    const resp = await fetch(`${this.projectUrl(project)}${path}`, {
+    const resp = await apiFetch(`${this.projectUrl(project)}${path}`, {
       method: "DELETE",
       headers: this.headers(),
     });
@@ -2321,7 +2345,7 @@ class GitLabClient {
    * this client reads.
    */
   async getInstance(path: string): Promise<any> {
-    const resp = await fetch(`${this.baseUrl}${path}`, {
+    const resp = await apiFetch(`${this.baseUrl}${path}`, {
       headers: this.headers(),
     });
     if (!resp.ok) {
@@ -2340,7 +2364,7 @@ class GitLabClient {
     if (params) {
       for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     }
-    const resp = await fetch(url.toString(), { headers: this.headers() });
+    const resp = await apiFetch(url.toString(), { headers: this.headers() });
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(`GitLab GET ${path}: ${resp.status} ${body}`);
@@ -2357,7 +2381,7 @@ class GitLabClient {
     path: string,
     body: Record<string, unknown> = {},
   ): Promise<any> {
-    const resp = await fetch(`${this.baseUrl}${path}`, {
+    const resp = await apiFetch(`${this.baseUrl}${path}`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(body),
@@ -2374,7 +2398,7 @@ class GitLabClient {
     path: string,
     body: Record<string, unknown>,
   ): Promise<any> {
-    const resp = await fetch(`${this.baseUrl}${path}`, {
+    const resp = await apiFetch(`${this.baseUrl}${path}`, {
       method: "PUT",
       headers: this.headers(),
       body: JSON.stringify(body),
@@ -2388,7 +2412,7 @@ class GitLabClient {
 
   /** Instance-level DELETE. GitLab returns 204 with no body on success. */
   async deleteInstance(path: string): Promise<void> {
-    const resp = await fetch(`${this.baseUrl}${path}`, {
+    const resp = await apiFetch(`${this.baseUrl}${path}`, {
       method: "DELETE",
       headers: this.headers(),
     });
@@ -2412,21 +2436,7 @@ class GitLabClient {
     maxBytes: number,
   ): Promise<{ text: string; truncated: boolean } | null> {
     const url = `${this.baseUrl}${path}`;
-    // Deno strips only Authorization on a cross-origin redirect, so a
-    // followed redirect (SSO front proxy, hostile instance) would forward
-    // PRIVATE-TOKEN to another origin. Raw endpoints never redirect.
-    const resp = await fetch(url, {
-      headers: this.headers(),
-      redirect: "manual",
-    });
-    if (resp.status >= 300 && resp.status < 400) {
-      await resp.body?.cancel();
-      throw new Error(
-        `GitLab GET ${path}: unexpected redirect (${resp.status}) to ${
-          resp.headers.get("location") ?? "unknown location"
-        } — refusing to follow it with the access token`,
-      );
-    }
+    const resp = await apiFetch(url, { headers: this.headers() });
     if (resp.status === 404) return null;
     if (!resp.ok) {
       const text = await resp.text();
