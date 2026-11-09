@@ -8423,6 +8423,11 @@ Deno.test("every authenticated client request refuses redirects instead of forwa
     ["delete_snippet", "delete instance", { id: 1 }],
     ["delete_snippet", "delete project", { id: 1, project: "g/p" }],
     ["get_job_log", "project text", { project: "g/p", jobId: 1 }],
+    ["get_file", "project text or null", {
+      project: "g/p",
+      filePath: "a.txt",
+      ref: "main",
+    }],
   ];
   try {
     for (const [method, label, args] of cases) {
@@ -8457,6 +8462,69 @@ Deno.test("every authenticated client request refuses redirects instead of forwa
       assertEquals(seen[0].redirect, "manual", label);
       assertEquals(seen[0].url.includes("idp.example.com"), false, label);
     }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("redirect errors omit the Location query string and hint at moved projects", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 301,
+        headers: {
+          location:
+            "https://git.example.org/api/v4/projects/new%2Fpath/snippets/1?state=SECRET&code=SECRET2#frag",
+        },
+      }),
+    );
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const err = await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 1, project: "old/path", includeContent: false },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect (301)",
+    );
+    assertEquals(err.message.includes("SECRET"), false);
+    assertEquals(err.message.includes("projects/new%2Fpath/snippets/1"), true);
+    assertEquals(err.message.includes("moved or renamed"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("check_mr_merge_endpoint reports a redirect status without following it", async () => {
+  const original = globalThis.fetch;
+  const seen: Array<RequestRedirect | undefined> = [];
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    seen.push(init?.redirect);
+    return Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://idp.example.com/login" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.check_mr_merge_endpoint.execute(
+      { project: "group/proj", iid: 12 },
+      context as any,
+    );
+    const d = getWrittenResources().find((r) =>
+      r.specName === "mrMergeEndpointCheck"
+    )!.data as any;
+    assertEquals(d.status, 302);
+    assertEquals(seen, ["manual"]);
   } finally {
     globalThis.fetch = original;
   }

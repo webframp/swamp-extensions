@@ -15,7 +15,10 @@ string would also be rejected). The raw read no longer follows redirects, so
 the token cannot be forwarded to another origin; a redirect is an error.
 Every other authenticated request the model makes (REST and GraphQL) now
 does the same: a 3xx response fails with an error naming the `Location`
-instead of being followed with `PRIVATE-TOKEN` attached. The `OPTIONS`
+instead of being followed with `PRIVATE-TOKEN` attached (the error shows the
+`Location` origin and path only, not its query string). A project that was
+moved or renamed used to be reached through GitLab's redirect; it now fails,
+and you need to update the `project` argument to the new path. The `OPTIONS`
 diagnostic probe reports the redirect status without following it.
 `get_snippet` rejects `project` and `filePath` values containing `.` or `..`
 segments. The size cap, binary check and secret redaction are unchanged.

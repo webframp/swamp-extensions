@@ -1294,6 +1294,21 @@ const SnippetDeletedSchema = z.object({
 // =============================================================================
 
 /**
+ * Origin and path of a redirect Location, without query or fragment: an SSO
+ * redirect can carry a signed state or code in the query string, and the
+ * error text ends up in logs.
+ */
+function redirectTarget(location: string | null, base: string): string {
+  if (!location) return "unknown location";
+  try {
+    const u = new URL(location, base);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return "unparseable location";
+  }
+}
+
+/**
  * fetch for authenticated GitLab requests. Deno strips only Authorization on
  * a cross-origin redirect, so a followed redirect (SSO front proxy, hostile
  * or compromised instance) would forward PRIVATE-TOKEN to another origin.
@@ -1307,8 +1322,8 @@ async function apiFetch(url: string, init: RequestInit): Promise<Response> {
       `GitLab ${
         init.method ?? "GET"
       } ${url}: unexpected redirect (${resp.status}) to ${
-        resp.headers.get("location") ?? "unknown location"
-      } — refusing to follow it with the access token`,
+        redirectTarget(resp.headers.get("location"), url)
+      } — refusing to follow it with the access token. If the project was moved or renamed, update the project argument to its new path.`,
     );
   }
   return resp;
