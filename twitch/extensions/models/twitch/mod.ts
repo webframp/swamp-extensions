@@ -150,7 +150,7 @@ const UserSchema = z.object({
   login: z.string(),
   displayName: z.string(),
   accountCreatedAt: z.string(),
-  accountAgeDays: z.number(),
+  accountAgeDays: z.number().finite(),
   profileImageUrl: z.string(),
   broadcasterType: z.string(),
   fetchedAt: z.string(),
@@ -241,7 +241,7 @@ const UserModerationContextSchema = z.object({
   ban: BanEntrySchema.nullable(),
   availability: z.object({
     profile: z.literal(true),
-    chatterStatus: z.literal(true),
+    chatterStatus: z.boolean(),
     banStatus: z.boolean(),
   }),
   fetchedAt: z.string(),
@@ -584,15 +584,21 @@ export const model = {
         }
 
         const rawUser = userResponse.data[0];
-        const createdDate = new Date(rawUser.created_at);
+        const accountAgeDays = Math.floor(
+          (Date.now() - new Date(rawUser.created_at).getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+        if (!Number.isFinite(accountAgeDays)) {
+          throw new Error(
+            `Twitch returned an invalid created_at for ${args.login}: ${rawUser.created_at}`,
+          );
+        }
         const user: z.infer<typeof UserSchema> = {
           userId: rawUser.id,
           login: rawUser.login,
           displayName: rawUser.display_name,
           accountCreatedAt: rawUser.created_at,
-          accountAgeDays: Math.floor(
-            (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24),
-          ),
+          accountAgeDays,
           profileImageUrl: rawUser.profile_image_url,
           broadcasterType: rawUser.broadcaster_type,
           fetchedAt: new Date().toISOString(),
@@ -605,9 +611,9 @@ export const model = {
           user_name: string;
         }>(
           creds,
-          `/chat/chatters?broadcaster_id=${broadcasterId}&moderator_id=${
-            encodeURIComponent(moderatorId)
-          }&first=100`,
+          `/chat/chatters?broadcaster_id=${
+            encodeURIComponent(broadcasterId)
+          }&moderator_id=${encodeURIComponent(moderatorId)}&first=1000`,
         );
         const isCurrentChatter = chatterResponse.pagination?.cursor
           ? null
@@ -645,7 +651,7 @@ export const model = {
 
         const handle = await context.writeResource(
           "user-moderation-context",
-          args.login,
+          user.login,
           {
             channel,
             user,
@@ -653,7 +659,7 @@ export const model = {
             ban,
             availability: {
               profile: true,
-              chatterStatus: true,
+              chatterStatus: isCurrentChatter !== null,
               banStatus: hasBroadcasterAuth,
             },
             fetchedAt: new Date().toISOString(),

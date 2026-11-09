@@ -124,7 +124,7 @@ jobs:
     steps:
       - name: discord
         description: Send rankings and the human-review flag to a Discord webhook
-        guard: '${{ inputs.postToDiscord == true }}'
+        guard: '${{ inputs.postToDiscord == true && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers) && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.moderationRisk) && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.ruleAdherence) && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.disruption) && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.recommendedAction) && has(data.latest(inputs.jevModel, "evaluation-character-" + inputs.username).attributes.answers.humanReview) }}'
         task:
           type: model_method
           modelIdOrName: ${{ inputs.discordModel }}

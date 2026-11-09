@@ -29,6 +29,7 @@ interface WorkflowReportContext {
   repoDir: string;
   logger: {
     info: (msg: string, props: Record<string, unknown>) => void;
+    warn?: (msg: string, props: Record<string, unknown>) => void;
   };
 }
 
@@ -86,7 +87,17 @@ export const report = {
           string,
           unknown
         >;
-      } catch {
+      } catch (error) {
+        context.logger.warn?.(
+          "Failed to read {dataName} v{version} for {modelType}/{modelId}: {error}",
+          {
+            dataName,
+            version,
+            modelType,
+            modelId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
         return null;
       }
     }
