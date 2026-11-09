@@ -7130,7 +7130,7 @@ Deno.test("get_snippet redacts fetched content for common credential patterns, m
         ),
       );
     }
-    if (url === "https://git.example.org/-/snippets/11/raw") {
+    if (url === "https://git.example.org/api/v4/snippets/11/raw") {
       return Promise.resolve(
         new Response(rawContent, {
           status: 200,
@@ -7158,15 +7158,16 @@ Deno.test("get_snippet redacts fetched content for common credential patterns, m
   }
 });
 
-Deno.test("get_snippet refuses to fetch raw content from a host other than the configured GitLab instance", async () => {
+Deno.test("get_snippet never fetches the raw_url, even when it names another host", async () => {
   const original = globalThis.fetch;
-  let externalHostCalled = false;
+  const fetched: string[] = [];
   globalThis.fetch = (input: string | URL | Request) => {
     const url = typeof input === "string"
       ? input
       : input instanceof URL
       ? input.toString()
       : (input as Request).url;
+    fetched.push(url);
     if (url.endsWith("/api/v4/snippets/15")) {
       return Promise.resolve(
         new Response(
@@ -7175,9 +7176,6 @@ Deno.test("get_snippet refuses to fetch raw content from a host other than the c
             title: "malicious-raw-url",
             visibility: "private",
             web_url: "https://git.example.org/-/snippets/15",
-            // A compromised/MITM'd API response (or a malicious self-hosted
-            // instance) can name any host here — the client must refuse to
-            // send the PRIVATE-TOKEN header anywhere but its own host.
             raw_url: "https://attacker.example.com/capture",
             project_id: null,
             files: [{ path: "a.txt" }],
@@ -7187,11 +7185,159 @@ Deno.test("get_snippet refuses to fetch raw content from a host other than the c
         ),
       );
     }
-    if (url === "https://attacker.example.com/capture") {
-      externalHostCalled = true;
-      return Promise.resolve(new Response("stolen", { status: 200 }));
+    if (url === "https://git.example.org/api/v4/snippets/15/raw") {
+      return Promise.resolve(
+        new Response("hello", {
+          status: 200,
+          headers: { "content-type": "text/plain" },
+        }),
+      );
     }
     return Promise.resolve(new Response("nope", { status: 404 }));
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      { id: 15, includeContent: true },
+      context as any,
+    );
+    assertEquals((getWrittenResources()[0].data as any).content, "hello");
+    assertEquals(
+      fetched.some((u) => new URL(u).host === "attacker.example.com"),
+      false,
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet throws when the raw endpoint answers with the SSO sign-in page", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    if (url.endsWith("/api/v4/snippets/16")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 16,
+            title: "sso",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/16",
+            raw_url: "https://git.example.org/-/snippets/16/raw",
+            project_id: null,
+            files: [{ path: "a.txt" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(
+        '<!DOCTYPE html><form action="/users/auth/openid_connect" method="post"></form>',
+        {
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        },
+      ),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 16, includeContent: true },
+          context as any,
+        ),
+      Error,
+      "sign-in page",
+    );
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet refuses to follow a redirect, so the token never reaches another origin", async () => {
+  const original = globalThis.fetch;
+  const seen: Array<{ url: string; redirect?: RequestRedirect }> = [];
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    seen.push({ url, redirect: init?.redirect });
+    if (url.endsWith("/api/v4/snippets/18")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 18,
+            title: "r",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/18",
+            raw_url: "https://git.example.org/-/snippets/18/raw",
+            project_id: null,
+            files: [{ path: "a.txt" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://idp.example.com/login" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 18, includeContent: true },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect",
+    );
+    const rawCall = seen.find((c) => c.url.endsWith("/snippets/18/raw"))!;
+    assertEquals(rawCall.redirect, "manual");
+    assertEquals(
+      seen.some((c) => new URL(c.url).host === "idp.example.com"),
+      false,
+    );
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet rejects . and .. segments before sending any request", async () => {
+  const original = globalThis.fetch;
+  const fetched: string[] = [];
+  globalThis.fetch = (input: string | URL | Request) => {
+    fetched.push(
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? input.toString()
+        : (input as Request).url,
+    );
+    return Promise.resolve(new Response("{}", { status: 200 }));
   };
   try {
     const { context } = createModelTestContext({
@@ -7200,19 +7346,80 @@ Deno.test("get_snippet refuses to fetch raw content from a host other than the c
     await assertRejects(
       () =>
         model.methods.get_snippet.execute(
-          { id: 15, includeContent: true },
+          { id: 19, project: "..", includeContent: false },
           context as any,
         ),
       Error,
-      "refusing to fetch from external host",
+      "path segments",
     );
-    assertEquals(externalHostCalled, false);
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 19, includeContent: false, filePath: "../x" },
+          context as any,
+        ),
+      Error,
+      "path segments",
+    );
+    assertEquals(fetched, []);
   } finally {
     globalThis.fetch = original;
   }
 });
 
-Deno.test("get_snippet fetches a specific file's content via its raw_url when filePath is given", async () => {
+Deno.test("get_snippet reads a project snippet file with the ref taken from raw_url, even when the project path contains /raw/", async () => {
+  const pid = encodeURIComponent("raw/proj");
+  const restore = mockFetch({
+    [`GET /api/v4/projects/${pid}/snippets/17`]: {
+      status: 200,
+      body: {
+        id: 17,
+        title: "p",
+        visibility: "private",
+        web_url: "https://git.example.org/raw/proj/-/snippets/17",
+        raw_url: "https://git.example.org/raw/proj/-/snippets/17/raw",
+        project_id: 5,
+        files: [{
+          path: "dir/a b.txt",
+          raw_url:
+            "https://git.example.org/raw/proj/-/snippets/17/raw/feature%2Fx/dir/a%20b.txt",
+        }],
+        created_at: "2026-09-21T00:00:00Z",
+      },
+    },
+    [
+      `GET /api/v4/projects/${pid}/snippets/17/files/${
+        encodeURIComponent("feature/x")
+      }/${encodeURIComponent("dir/a b.txt")}/raw`
+    ]: {
+      status: 200,
+      body: "file text",
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_snippet.execute(
+      {
+        id: 17,
+        project: "raw/proj",
+        includeContent: false,
+        filePath: "dir/a b.txt",
+      },
+      context as any,
+    );
+    // mockFetch JSON-encodes bodies, so the text arrives quoted.
+    assertEquals(
+      (getWrittenResources()[0].data as any).content,
+      '"file text"',
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_snippet fetches a specific file's content via the API raw endpoint when filePath is given", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = (input: string | URL | Request) => {
     const url = typeof input === "string"
@@ -7233,13 +7440,11 @@ Deno.test("get_snippet fetches a specific file's content via its raw_url when fi
             files: [
               {
                 path: "a.txt",
-                raw_url:
-                  "https://git.example.org/-/snippets/12/files/main/a.txt/raw",
+                raw_url: "https://git.example.org/-/snippets/12/raw/main/a.txt",
               },
               {
                 path: "b.txt",
-                raw_url:
-                  "https://git.example.org/-/snippets/12/files/main/b.txt/raw",
+                raw_url: "https://git.example.org/-/snippets/12/raw/main/b.txt",
               },
             ],
             created_at: "2026-09-21T00:00:00Z",
@@ -7249,7 +7454,8 @@ Deno.test("get_snippet fetches a specific file's content via its raw_url when fi
       );
     }
     if (
-      url === "https://git.example.org/-/snippets/12/files/main/b.txt/raw"
+      url ===
+        "https://git.example.org/api/v4/snippets/12/files/main/b.txt/raw"
     ) {
       return Promise.resolve(
         new Response("content of b", {
@@ -7260,7 +7466,7 @@ Deno.test("get_snippet fetches a specific file's content via its raw_url when fi
     }
     // The whole-snippet raw_url should NOT be hit when filePath resolves
     // to a specific file's own raw_url.
-    if (url === "https://git.example.org/-/snippets/12/raw") {
+    if (url === "https://git.example.org/api/v4/snippets/12/raw") {
       return Promise.resolve(
         new Response("WRONG FILE", { status: 200 }),
       );
@@ -7303,8 +7509,7 @@ Deno.test("get_snippet throws instead of silently falling back to the whole-snip
             files: [
               {
                 path: "a.txt",
-                raw_url:
-                  "https://git.example.org/-/snippets/13/files/main/a.txt/raw",
+                raw_url: "https://git.example.org/-/snippets/13/raw/main/a.txt",
               },
             ],
             created_at: "2026-09-21T00:00:00Z",
@@ -7317,7 +7522,7 @@ Deno.test("get_snippet throws instead of silently falling back to the whole-snip
     // filePath miss, this would be hit and the bug would go undetected —
     // fail the test loudly instead by returning content that would only
     // ever be seen if the fallback bug is present.
-    if (url === "https://git.example.org/-/snippets/13/raw") {
+    if (url === "https://git.example.org/api/v4/snippets/13/raw") {
       return Promise.resolve(
         new Response("WRONG FILE — should never be fetched", {
           status: 200,
@@ -8192,5 +8397,171 @@ Deno.test("convert_work_item_type treats a case-only type difference as already 
     assertEquals(m.bodies().length, 1);
   } finally {
     m.restore();
+  }
+});
+
+Deno.test("every authenticated client request refuses redirects instead of forwarding the token", async () => {
+  const original = globalThis.fetch;
+  const cases: Array<[string, string, Record<string, unknown>]> = [
+    ["list_projects", "graphql", {}],
+    ["get_snippet", "get instance", { id: 1 }],
+    ["get_snippet", "get project", { id: 1, project: "g/p" }],
+    ["list_snippets", "list instance", {}],
+    ["list_snippets", "list project", { project: "g/p" }],
+    ["create_snippet", "post instance", {
+      title: "t",
+      files: [{ filePath: "a", content: "c" }],
+      visibility: "private",
+      description: "",
+    }],
+    ["create_snippet", "post project", {
+      title: "t",
+      files: [{ filePath: "a", content: "c" }],
+      visibility: "private",
+      description: "",
+      project: "g/p",
+    }],
+    ["update_snippet", "put instance", { id: 1, title: "t" }],
+    ["update_snippet", "put project", { id: 1, title: "t", project: "g/p" }],
+    ["delete_snippet", "delete instance", { id: 1 }],
+    ["delete_snippet", "delete project", { id: 1, project: "g/p" }],
+    ["get_job_log", "project text", { project: "g/p", jobId: 1 }],
+    ["get_file", "project text or null", {
+      project: "g/p",
+      filePath: "a.txt",
+      ref: "main",
+    }],
+  ];
+  try {
+    for (const [method, label, args] of cases) {
+      const seen: Array<{ url: string; redirect?: RequestRedirect }> = [];
+      globalThis.fetch = (
+        input: string | URL | Request,
+        init?: RequestInit,
+      ) => {
+        const url = typeof input === "string"
+          ? input
+          : input instanceof URL
+          ? input.toString()
+          : (input as Request).url;
+        seen.push({ url, redirect: init?.redirect });
+        return Promise.resolve(
+          new Response(null, {
+            status: 302,
+            headers: { location: "https://idp.example.com/login" },
+          }),
+        );
+      };
+      const { context } = createModelTestContext({
+        globalArgs: TEST_GLOBAL_ARGS,
+      });
+      await assertRejects(
+        () => (model.methods as any)[method].execute(args, context as any),
+        Error,
+        "unexpected redirect",
+        label,
+      );
+      assertEquals(seen.length, 1, label);
+      assertEquals(seen[0].redirect, "manual", label);
+      assertEquals(
+        new URL(seen[0].url).host === "idp.example.com",
+        false,
+        label,
+      );
+    }
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("redirect errors omit the Location query string and hint at moved projects", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 301,
+        headers: {
+          location:
+            "https://git.example.org/api/v4/projects/new%2Fpath/snippets/1?state=SECRET&code=SECRET2#frag",
+        },
+      }),
+    );
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const err = await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 1, project: "old/path", includeContent: false },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect (301)",
+    );
+    assertEquals(err.message.includes("SECRET"), false);
+    assertEquals(err.message.includes("projects/new%2Fpath/snippets/1"), true);
+    assertEquals(err.message.includes("moved or renamed"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("check_mr_merge_endpoint reports a redirect status without following it", async () => {
+  const original = globalThis.fetch;
+  const seen: Array<RequestRedirect | undefined> = [];
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    seen.push(init?.redirect);
+    return Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://idp.example.com/login" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.check_mr_merge_endpoint.execute(
+      { project: "group/proj", iid: 12 },
+      context as any,
+    );
+    const d = getWrittenResources().find((r) =>
+      r.specName === "mrMergeEndpointCheck"
+    )!.data as any;
+    assertEquals(d.status, 302);
+    assertEquals(seen, ["manual"]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("redirect errors do not echo an opaque-origin Location", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "data:text/html,alert(1)" },
+      }),
+    );
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const err = await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 1, includeContent: false },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect (302)",
+    );
+    assertEquals(err.message.includes("alert"), false);
+    assertEquals(err.message.includes("unsupported location"), true);
+  } finally {
+    globalThis.fetch = original;
   }
 });

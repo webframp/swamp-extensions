@@ -1,17 +1,30 @@
-## 2026.11.03.1
+## 2026.11.09.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Fixed:** `get_snippet` with `includeContent` or `filePath` returned the HTML
+sign-in page as the snippet's `content` on a GitLab instance behind SSO, and
+reported success. It fetched the snippet's `raw_url`, a web route that ignores
+the `PRIVATE-TOKEN` header. It now reads content through the API raw endpoints
+(`/snippets/:id/raw`, `/snippets/:id/files/:ref/:file_path/raw`, and their
+`/projects/:id/...` forms), which accept the token. Reported and diagnosed by
+@acameron17 in #549.
 
-## 2026.10.21.3
+**Changed:** A raw response that is an HTML sign-in page now fails with an
+error instead of being stored as content (detected by the `/users/auth/`
+marker in an HTML response; an HTML snippet file that itself contains that
+string would also be rejected). The raw read no longer follows redirects, so
+the token cannot be forwarded to another origin; a redirect is an error.
+Every other authenticated request the model makes (REST and GraphQL) now
+does the same: a 3xx response fails with an error naming the `Location`
+instead of being followed with `PRIVATE-TOKEN` attached (the error shows the
+`Location` origin and path only, not its query string). A project that was
+moved or renamed used to be reached through GitLab's redirect; it now fails,
+and you need to update the `project` argument to the new path. The `OPTIONS`
+diagnostic probe reports the redirect status without following it.
+`get_snippet` rejects `project` and `filePath` values containing `.` or `..`
+segments. The size cap, binary check and secret redaction are unchanged.
+`get_snippet` no longer needs the snippet's
+`raw_url` and no longer fetches it, so the external-host refusal for `raw_url`
+is gone; requests only ever go to the configured host.
 
-**Fixed:** The README told you to store the token with a `vault set` subcommand
-that swamp does not have, passing the token on the command line where it would
-land in shell history. It now creates the vault if needed and stores the token
-with `swamp vault put gitlab TOKEN`, which prompts for the value. The registry
-Quick Start shows the same steps.
-
-**Changed:** The `token` global argument description now says to supply it as
-`${{ vault.get("gitlab", "TOKEN") }}` and never as a literal.
-
-**Upgrade note:** No schema or behavioral changes. The model version moves to
-2026.10.21.3 with an identity upgrade.
+**Upgrade note:** No schema changes. The model version moves to 2026.11.09.1 with an
+identity upgrade.
