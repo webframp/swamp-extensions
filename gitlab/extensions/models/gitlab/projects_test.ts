@@ -7205,7 +7205,7 @@ Deno.test("get_snippet never fetches the raw_url, even when it names another hos
     );
     assertEquals((getWrittenResources()[0].data as any).content, "hello");
     assertEquals(
-      fetched.some((u) => u.includes("attacker.example.com")),
+      fetched.some((u) => new URL(u).host === "attacker.example.com"),
       false,
     );
   } finally {
@@ -7316,7 +7316,10 @@ Deno.test("get_snippet refuses to follow a redirect, so the token never reaches 
     );
     const rawCall = seen.find((c) => c.url.endsWith("/snippets/18/raw"))!;
     assertEquals(rawCall.redirect, "manual");
-    assertEquals(seen.some((c) => c.url.includes("idp.example.com")), false);
+    assertEquals(
+      seen.some((c) => new URL(c.url).host === "idp.example.com"),
+      false,
+    );
     assertEquals(getWrittenResources().length, 0);
   } finally {
     globalThis.fetch = original;
@@ -8460,7 +8463,11 @@ Deno.test("every authenticated client request refuses redirects instead of forwa
       );
       assertEquals(seen.length, 1, label);
       assertEquals(seen[0].redirect, "manual", label);
-      assertEquals(seen[0].url.includes("idp.example.com"), false, label);
+      assertEquals(
+        new URL(seen[0].url).host === "idp.example.com",
+        false,
+        label,
+      );
     }
   } finally {
     globalThis.fetch = original;
