@@ -2412,7 +2412,21 @@ class GitLabClient {
     maxBytes: number,
   ): Promise<{ text: string; truncated: boolean } | null> {
     const url = `${this.baseUrl}${path}`;
-    const resp = await fetch(url, { headers: this.headers() });
+    // Deno strips only Authorization on a cross-origin redirect, so a
+    // followed redirect (SSO front proxy, hostile instance) would forward
+    // PRIVATE-TOKEN to another origin. Raw endpoints never redirect.
+    const resp = await fetch(url, {
+      headers: this.headers(),
+      redirect: "manual",
+    });
+    if (resp.status >= 300 && resp.status < 400) {
+      await resp.body?.cancel();
+      throw new Error(
+        `GitLab GET ${path}: unexpected redirect (${resp.status}) to ${
+          resp.headers.get("location") ?? "unknown location"
+        } — refusing to follow it with the access token`,
+      );
+    }
     if (resp.status === 404) return null;
     if (!resp.ok) {
       const text = await resp.text();
@@ -2454,6 +2468,10 @@ class GitLabClient {
  * named "raw" earlier in the path cannot be mistaken for the marker. Falls
  * back to HEAD when the URL is absent or does not end in the file path.
  */
+function hasDotSegment(value: string): boolean {
+  return value.split("/").some((seg) => seg === "." || seg === "..");
+}
+
 function snippetFileRef(rawUrl: unknown, filePath: string): string {
   if (typeof rawUrl !== "string") return "HEAD";
   let tail: string;
@@ -2466,9 +2484,12 @@ function snippetFileRef(rawUrl: unknown, filePath: string): string {
     return "HEAD";
   }
   const suffix = `/${filePath}`;
-  return tail.length > suffix.length && tail.endsWith(suffix)
+  const ref = tail.length > suffix.length && tail.endsWith(suffix)
     ? tail.slice(0, -suffix.length)
     : "HEAD";
+  // encodeURIComponent leaves "." and ".." intact, and URL parsing would
+  // collapse them into a different API path.
+  return hasDotSegment(ref) ? "HEAD" : ref;
 }
 
 /**
@@ -7507,6 +7528,14 @@ export const model = {
         let contentTruncated: boolean | undefined;
         const wantContent = args.includeContent || args.filePath !== undefined;
         if (wantContent) {
+          if (
+            (args.project !== undefined && hasDotSegment(args.project)) ||
+            (args.filePath !== undefined && hasDotSegment(args.filePath))
+          ) {
+            throw new Error(
+              "get_snippet: project and filePath must not contain . or .. path segments",
+            );
+          }
           const base = args.project
             ? `/projects/${
               encodeURIComponent(args.project)

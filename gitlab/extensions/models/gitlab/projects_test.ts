@@ -7267,6 +7267,116 @@ Deno.test("get_snippet throws when the raw endpoint answers with the SSO sign-in
   }
 });
 
+Deno.test("get_snippet refuses to follow a redirect, so the token never reaches another origin", async () => {
+  const original = globalThis.fetch;
+  const seen: Array<{ url: string; redirect?: RequestRedirect }> = [];
+  globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    seen.push({ url, redirect: init?.redirect });
+    if (url.endsWith("/api/v4/snippets/18")) {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            id: 18,
+            title: "r",
+            visibility: "private",
+            web_url: "https://git.example.org/-/snippets/18",
+            raw_url: "https://git.example.org/-/snippets/18/raw",
+            project_id: null,
+            files: [{ path: "a.txt" }],
+            created_at: "2026-09-21T00:00:00Z",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://idp.example.com/login" },
+      }),
+    );
+  };
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 18, includeContent: true },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect",
+    );
+    const rawCall = seen.find((c) => c.url.endsWith("/snippets/18/raw"))!;
+    assertEquals(rawCall.redirect, "manual");
+    assertEquals(seen.some((c) => c.url.includes("idp.example.com")), false);
+    assertEquals(getWrittenResources().length, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("get_snippet rejects . and .. segments in project and filePath", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (input: string | URL | Request) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : (input as Request).url;
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({
+          id: 19,
+          title: "d",
+          visibility: "private",
+          web_url: "",
+          raw_url: "",
+          project_id: null,
+          files: [{ path: "../x" }],
+          created_at: "2026-09-21T00:00:00Z",
+        }),
+        {
+          status: url.includes("/snippets/19") ? 200 : 404,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 19, project: "..", includeContent: true },
+          context as any,
+        ),
+      Error,
+      "path segments",
+    );
+    await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 19, includeContent: false, filePath: "../x" },
+          context as any,
+        ),
+      Error,
+      "path segments",
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
 Deno.test("get_snippet reads a project snippet file with the ref taken from raw_url, even when the project path contains /raw/", async () => {
   const pid = encodeURIComponent("raw/proj");
   const restore = mockFetch({
