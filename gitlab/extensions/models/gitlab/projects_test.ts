@@ -8529,3 +8529,32 @@ Deno.test("check_mr_merge_endpoint reports a redirect status without following i
     globalThis.fetch = original;
   }
 });
+
+Deno.test("redirect errors do not echo an opaque-origin Location", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = () =>
+    Promise.resolve(
+      new Response(null, {
+        status: 302,
+        headers: { location: "data:text/html,alert(1)" },
+      }),
+    );
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const err = await assertRejects(
+      () =>
+        model.methods.get_snippet.execute(
+          { id: 1, includeContent: false },
+          context as any,
+        ),
+      Error,
+      "unexpected redirect (302)",
+    );
+    assertEquals(err.message.includes("alert"), false);
+    assertEquals(err.message.includes("unsupported location"), true);
+  } finally {
+    globalThis.fetch = original;
+  }
+});

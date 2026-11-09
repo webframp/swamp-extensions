@@ -1302,6 +1302,7 @@ function redirectTarget(location: string | null, base: string): string {
   if (!location) return "unknown location";
   try {
     const u = new URL(location, base);
+    if (u.origin === "null") return "unsupported location";
     return `${u.origin}${u.pathname}`;
   } catch {
     return "unparseable location";
