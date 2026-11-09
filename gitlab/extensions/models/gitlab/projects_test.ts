@@ -7323,32 +7323,18 @@ Deno.test("get_snippet refuses to follow a redirect, so the token never reaches 
   }
 });
 
-Deno.test("get_snippet rejects . and .. segments in project and filePath", async () => {
+Deno.test("get_snippet rejects . and .. segments before sending any request", async () => {
   const original = globalThis.fetch;
+  const fetched: string[] = [];
   globalThis.fetch = (input: string | URL | Request) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-      ? input.toString()
-      : (input as Request).url;
-    return Promise.resolve(
-      new Response(
-        JSON.stringify({
-          id: 19,
-          title: "d",
-          visibility: "private",
-          web_url: "",
-          raw_url: "",
-          project_id: null,
-          files: [{ path: "../x" }],
-          created_at: "2026-09-21T00:00:00Z",
-        }),
-        {
-          status: url.includes("/snippets/19") ? 200 : 404,
-          headers: { "content-type": "application/json" },
-        },
-      ),
+    fetched.push(
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+        ? input.toString()
+        : (input as Request).url,
     );
+    return Promise.resolve(new Response("{}", { status: 200 }));
   };
   try {
     const { context } = createModelTestContext({
@@ -7357,7 +7343,7 @@ Deno.test("get_snippet rejects . and .. segments in project and filePath", async
     await assertRejects(
       () =>
         model.methods.get_snippet.execute(
-          { id: 19, project: "..", includeContent: true },
+          { id: 19, project: "..", includeContent: false },
           context as any,
         ),
       Error,
@@ -7372,6 +7358,7 @@ Deno.test("get_snippet rejects . and .. segments in project and filePath", async
       Error,
       "path segments",
     );
+    assertEquals(fetched, []);
   } finally {
     globalThis.fetch = original;
   }

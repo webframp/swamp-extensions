@@ -7515,6 +7515,14 @@ export const model = {
         },
         ctx: ModelContext,
       ) => {
+        if (
+          (args.project !== undefined && hasDotSegment(args.project)) ||
+          (args.filePath !== undefined && hasDotSegment(args.filePath))
+        ) {
+          throw new Error(
+            "get_snippet: project and filePath must not contain . or .. path segments",
+          );
+        }
         const startMs = Date.now();
         const client = new GitLabClient(
           ctx.globalArgs.host,
@@ -7528,14 +7536,6 @@ export const model = {
         let contentTruncated: boolean | undefined;
         const wantContent = args.includeContent || args.filePath !== undefined;
         if (wantContent) {
-          if (
-            (args.project !== undefined && hasDotSegment(args.project)) ||
-            (args.filePath !== undefined && hasDotSegment(args.filePath))
-          ) {
-            throw new Error(
-              "get_snippet: project and filePath must not contain . or .. path segments",
-            );
-          }
           const base = args.project
             ? `/projects/${
               encodeURIComponent(args.project)
