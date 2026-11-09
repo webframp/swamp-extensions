@@ -2399,39 +2399,45 @@ class GitLabClient {
   }
 
   /**
-   * GET raw text content from an absolute URL (e.g. a snippet's `raw_url`,
-   * which GitLab returns fully-qualified), with the same size-cap and
-   * binary-rejection handling as getProjectTextOrNull. Unlike that method,
-   * the URL is used as-is rather than built from a project + path, since
-   * snippet raw URLs already point at the exact resource (instance or
-   * project-scoped) and re-deriving that path from parts would risk
-   * mismatching the ref GitLab actually used to generate the URL.
+   * GET raw text content from an API path under the instance's `/api/v4`
+   * base (e.g. `/snippets/:id/raw`), with the same size-cap and
+   * binary-rejection handling as getProjectTextOrNull. Only API raw
+   * endpoints are usable: a snippet's `raw_url` is a web route that ignores
+   * the PRIVATE-TOKEN header and, on an SSO instance, answers 200 with the
+   * sign-in page. Building the URL from the configured base also means the
+   * token can only ever be sent to the configured host.
    */
   async getRawTextOrNull(
-    url: string,
+    path: string,
     maxBytes: number,
   ): Promise<{ text: string; truncated: boolean } | null> {
-    // raw_url is attacker-influenceable (a compromised/MITM'd GitLab
-    // response could point it anywhere), and it's about to be fetched with
-    // the PRIVATE-TOKEN header attached — refuse to send that credential to
-    // any host other than the one this client was configured for.
-    const parsedHost = new URL(url).host;
-    const expectedHost = new URL(this.baseUrl).host;
-    if (parsedHost !== expectedHost) {
-      throw new Error(
-        `getRawTextOrNull: refusing to fetch from external host ${parsedHost} (expected ${expectedHost})`,
-      );
-    }
+    const url = `${this.baseUrl}${path}`;
     const resp = await fetch(url, { headers: this.headers() });
     if (resp.status === 404) return null;
     if (!resp.ok) {
       const text = await resp.text();
-      throw new Error(`GitLab GET ${url}: ${resp.status} ${text}`);
+      throw new Error(`GitLab GET ${path}: ${resp.status} ${text}`);
+    }
+    if (
+      (resp.headers.get("content-type") ?? "").toLowerCase().includes(
+        "text/html",
+      )
+    ) {
+      // A raw endpoint serves file text; HTML carrying the sign-in markers
+      // is the web login page, never file content. Any other HTML is a
+      // legitimate HTML file and falls through to the normal read.
+      const sniff = await readBoundedBytes(resp.clone(), 64 * 1024);
+      const head = new TextDecoder().decode(sniff.bytes);
+      if (head.includes("/users/auth/")) {
+        throw new Error(
+          `GitLab GET ${path}: received an HTML sign-in page instead of file content — the token was not accepted for this request`,
+        );
+      }
     }
     const { bytes, truncated } = await readBoundedBytes(resp, maxBytes);
     if (isBinaryContent(bytes)) {
       throw new Error(
-        `GitLab GET ${url}: binary content detected — get_snippet only supports text/code files`,
+        `GitLab GET ${path}: binary content detected — get_snippet only supports text/code files`,
       );
     }
     const text = truncated
@@ -2439,6 +2445,30 @@ class GitLabClient {
       : new TextDecoder().decode(bytes);
     return { text, truncated };
   }
+}
+
+/**
+ * The git ref a snippet file's `raw_url` was generated for. The snippet JSON
+ * has no ref field; it is the segment between `/raw/` and the file path in
+ * `files[].raw_url`. Anchored after `/-/snippets/<id>` so a group or project
+ * named "raw" earlier in the path cannot be mistaken for the marker. Falls
+ * back to HEAD when the URL is absent or does not end in the file path.
+ */
+function snippetFileRef(rawUrl: unknown, filePath: string): string {
+  if (typeof rawUrl !== "string") return "HEAD";
+  let tail: string;
+  try {
+    const pathname = new URL(rawUrl).pathname;
+    const m = /\/-\/snippets\/\d+\/raw\/(.+)$/.exec(pathname);
+    if (!m) return "HEAD";
+    tail = decodeURIComponent(m[1]);
+  } catch {
+    return "HEAD";
+  }
+  const suffix = `/${filePath}`;
+  return tail.length > suffix.length && tail.endsWith(suffix)
+    ? tail.slice(0, -suffix.length)
+    : "HEAD";
 }
 
 /**
@@ -2716,7 +2746,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.11.03.1",
+  version: "2026.11.09.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -2949,6 +2979,12 @@ export const model = {
     {
       toVersion: "2026.11.03.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.09.1",
+      description:
+        "get_snippet now reads content through the API raw endpoints; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -7471,10 +7507,15 @@ export const model = {
         let contentTruncated: boolean | undefined;
         const wantContent = args.includeContent || args.filePath !== undefined;
         if (wantContent) {
-          let targetRawUrl: string = raw.raw_url ?? "";
+          const base = args.project
+            ? `/projects/${
+              encodeURIComponent(args.project)
+            }/snippets/${args.id}`
+            : `/snippets/${args.id}`;
+          let rawPath = `${base}/raw`;
           if (args.filePath !== undefined) {
             // A filePath was explicitly requested — resolving to the
-            // whole-snippet raw_url on a miss (typo, renamed file, or a
+            // whole-snippet raw content on a miss (typo, renamed file, or a
             // files[] the API didn't return) would silently serve the
             // wrong file's content mislabeled as the requested one. Fail
             // loudly instead.
@@ -7483,7 +7524,7 @@ export const model = {
                 f.path === args.filePath || f.file_path === args.filePath
               )
               : undefined;
-            if (!match?.raw_url) {
+            if (!match) {
               throw new Error(
                 `get_snippet: file ${args.filePath} not found in snippet ${args.id} (available: ${
                   Array.isArray(raw.files)
@@ -7494,20 +7535,18 @@ export const model = {
                 })`,
               );
             }
-            targetRawUrl = match.raw_url;
-          }
-          if (!targetRawUrl) {
-            throw new Error(
-              `get_snippet: no raw_url available for snippet ${args.id}`,
-            );
+            const filePath: string = match.path ?? match.file_path;
+            rawPath = `${base}/files/${
+              encodeURIComponent(snippetFileRef(match.raw_url, filePath))
+            }/${encodeURIComponent(filePath)}/raw`;
           }
           const result = await client.getRawTextOrNull(
-            targetRawUrl,
+            rawPath,
             MAX_FILE_BYTES + 4,
           );
           if (result === null) {
             throw new Error(
-              `get_snippet: raw content not found for snippet ${args.id} at ${targetRawUrl}`,
+              `get_snippet: raw content not found for snippet ${args.id} at ${rawPath}`,
             );
           }
           const redacted = redactSecrets(result.text);
