@@ -1,6 +1,7 @@
 // ABOUTME: Hand-rolled mock Azure Blob Storage REST server for tests — covers
-// ABOUTME: PUT/GET blob with conditional headers, ?comp=lease, ?comp=metadata,
-// ABOUTME: and ?comp=list — no signature verification (auth is tested separately).
+// ABOUTME: PUT/GET/DELETE blob with conditional headers and lease checks,
+// ABOUTME: ?comp=lease, ?comp=metadata, and ?comp=list — no signature
+// ABOUTME: verification (auth is tested separately).
 
 interface MockBlob {
   content: Uint8Array;
@@ -121,6 +122,28 @@ export function createMockAzureServer(): MockAzureServer {
       return new Response(null, { status: 200, headers });
     }
 
+    if (req.method === "DELETE" && !comp && !restype) {
+      const blob = blobs.get(blobKey);
+      if (!blob) return new Response(null, { status: 404 });
+      const supplied = req.headers.get("x-ms-lease-id");
+      if (blob.leaseState === "leased") {
+        // A leased blob cannot be deleted without its lease ID.
+        if (supplied !== blob.leaseId) {
+          return new Response(
+            supplied ? "LeaseIdMismatchWithBlobOperation" : "LeaseIdMissing",
+            { status: 412 },
+          );
+        }
+      } else if (supplied) {
+        // A lease ID against a blob with no lease is refused, not ignored.
+        return new Response("LeaseNotPresentWithBlobOperation", {
+          status: 412,
+        });
+      }
+      blobs.delete(blobKey);
+      return new Response(null, { status: 202 });
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       const blob = blobs.get(blobKey);
       if (!blob) return new Response(null, { status: 404 });
@@ -142,10 +165,31 @@ export function createMockAzureServer(): MockAzureServer {
     if (req.method === "PUT" && !comp && !restype) {
       const blobKey = decodeURIComponent(url.pathname);
       const existing = blobs.get(blobKey);
+      // Azure refuses a write to a leased blob unless the request carries the
+      // matching lease ID, and checks that before the conditional headers.
+      if (existing?.leaseState === "leased") {
+        const supplied = req.headers.get("x-ms-lease-id");
+        if (!supplied) {
+          return new Response("LeaseIdMissing", {
+            status: 412,
+            headers: { "x-ms-error-code": "LeaseIdMissing" },
+          });
+        }
+        if (supplied !== existing.leaseId) {
+          return new Response("LeaseIdMismatchWithBlobOperation", {
+            status: 412,
+            headers: { "x-ms-error-code": "LeaseIdMismatchWithBlobOperation" },
+          });
+        }
+      }
       const ifMatch = req.headers.get("if-match");
       const ifNoneMatch = req.headers.get("if-none-match");
       if (ifNoneMatch === "*" && existing) {
-        return new Response("BlobAlreadyExists", { status: 412 });
+        // Real Azure answers a create-if-absent collision with 409, not 412.
+        return new Response("BlobAlreadyExists", {
+          status: 409,
+          headers: { "x-ms-error-code": "BlobAlreadyExists" },
+        });
       }
       if (ifMatch && (!existing || existing.etag !== ifMatch)) {
         return new Response("ConditionNotMet", { status: 412 });

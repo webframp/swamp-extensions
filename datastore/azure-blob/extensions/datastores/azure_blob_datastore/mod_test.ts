@@ -135,6 +135,309 @@ Deno.test("lock acquire/inspect/release round-trip", async () => {
   });
 });
 
+Deno.test("a lock path can be acquired again after release (blob deleted on release)", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const opts = { ttlMs: 15_000, retryIntervalMs: 50, maxWaitMs: 1_000 };
+    const first = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/reuse",
+      opts,
+    );
+    await first.acquire();
+    await first.release();
+    // release() deletes the lock blob so _locks/ does not accumulate orphans.
+    assertEquals(mock.blobs.size, 0);
+    const second = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/reuse",
+      opts,
+    );
+    await second.acquire();
+    assertExists(await second.inspect());
+    await second.release();
+    await second.acquire();
+    await second.release();
+  });
+});
+
+/** Wraps the (already mock-redirected) fetch so `beforeLeaseAcquire` runs
+ * ahead of every lease-acquire request, simulating a concurrent release()
+ * deleting the lock blob between ensureBlobExists() and the lease request. */
+function beforeEachLeaseAcquire(hook: () => void): () => void {
+  const inner = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    if (
+      url.searchParams.get("comp") === "lease" &&
+      headers.get("x-ms-lease-action") === "acquire"
+    ) hook();
+    return inner(input, init);
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = inner;
+  };
+}
+
+Deno.test("acquire re-creates the lock blob when it is deleted before the lease request", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    let deletions = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      if (deletions++ === 0) mock.blobs.clear();
+    });
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/gone", {
+        ttlMs: 15_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 1_000,
+      });
+      await lock.acquire();
+      assertExists(await lock.inspect());
+      await lock.release();
+    } finally {
+      restore();
+    }
+    assertEquals(deletions, 2, "one 404, then one successful retry");
+  });
+});
+
+Deno.test("acquire gives up after 5 consecutive blob re-creations", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    let leaseRequests = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      leaseRequests++;
+      mock.blobs.clear();
+    });
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/loop", {
+        ttlMs: 15_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 5_000,
+      });
+      await assertRejects(() => lock.acquire(), Error, "(404)");
+    } finally {
+      restore();
+    }
+    assertEquals(leaseRequests, 6, "initial attempt plus 5 re-creations");
+  });
+});
+
+Deno.test("a lease conflict resets the re-creation budget so patient waiters do not fail early", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    let n = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      n++;
+      const key = [...mock.blobs.keys()][0];
+      if (n <= 5) {
+        mock.blobs.clear(); // five consecutive 404s: budget exhausted
+      } else if (n === 6) {
+        // Blob exists again; a foreign holder owns the lease -> 409 -> reset.
+        mock.blobs.get(key)!.leaseState = "leased";
+        mock.blobs.get(key)!.leaseId = "foreign";
+      } else if (n === 7) {
+        // Handover: foreign holder deletes the blob. Without the reset this
+        // would be the 6th 404 and acquire() would throw.
+        mock.blobs.clear();
+      }
+    });
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/budget", {
+        ttlMs: 15_000,
+        retryIntervalMs: 20,
+        maxWaitMs: 5_000,
+      });
+      await lock.acquire();
+      assertExists(await lock.inspect());
+      await lock.release();
+    } finally {
+      restore();
+    }
+    assertEquals(n, 8);
+  });
+});
+
+Deno.test("a waiting holder takes over when the first releases and deletes the lock blob", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const opts = { ttlMs: 15_000, retryIntervalMs: 20, maxWaitMs: 5_000 };
+    const first = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/hand",
+      opts,
+    );
+    const second = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/hand",
+      opts,
+    );
+    await first.acquire();
+    const waiting = second.acquire();
+    await new Promise((r) => setTimeout(r, 100));
+    assertEquals(mock.blobs.size, 1);
+    await first.release();
+    await waiting;
+    const info = await second.inspect();
+    assertExists(info);
+    assertEquals(await first.heartbeat(), false);
+    await second.release();
+    assertEquals(mock.blobs.size, 0);
+  });
+});
+
+Deno.test("forceRelease with a stale lease ID leaves an unleased blob alone and returns false", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const opts = { ttlMs: 15_000, retryIntervalMs: 20, maxWaitMs: 1_000 };
+    const holder = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/stale",
+      opts,
+    );
+    await holder.acquire();
+    const nonce = (await holder.inspect())!.nonce!;
+    // Lease lapses on Azure's side; the blob stays, unleased.
+    const key = [...mock.blobs.keys()][0];
+    mock.blobs.get(key)!.leaseState = "available";
+    mock.blobs.get(key)!.leaseId = undefined;
+    const admin = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/stale",
+      opts,
+    );
+    assertEquals(await admin.forceRelease(nonce), false);
+    assertEquals(
+      mock.blobs.size,
+      1,
+      "a blob nobody leases must not be deleted",
+    );
+  });
+});
+
+Deno.test("release falls back to a plain lease release when the blob delete is refused", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const inner = globalThis.fetch;
+    // A SAS token without delete permission answers DELETE with 403.
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        return Promise.resolve(
+          new Response("AuthorizationFailure", { status: 403 }),
+        );
+      }
+      return inner(input, init);
+    }) as typeof fetch;
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const opts = { ttlMs: 15_000, retryIntervalMs: 20, maxWaitMs: 300 };
+      const first = createBlobLock(
+        client,
+        container,
+        "swamp",
+        "/test/nodel",
+        opts,
+      );
+      await first.acquire();
+      await first.release();
+      assertEquals(mock.blobs.size, 1, "blob stays when delete is refused");
+      // The lease must be free: a second holder acquires without waiting.
+      const second = createBlobLock(
+        client,
+        container,
+        "swamp",
+        "/test/nodel",
+        opts,
+      );
+      await second.acquire();
+      await second.release();
+    } finally {
+      globalThis.fetch = inner;
+    }
+  });
+});
+
+Deno.test("acquire still fails on a 409 that is not BlobAlreadyExists", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response("<Code>ContainerBeingDeleted</Code>", {
+        status: 409,
+        headers: { "x-ms-error-code": "ContainerBeingDeleted" },
+      }),
+    )) as typeof fetch;
+  try {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const lock = createBlobLock(client, "swamp-datastore", "swamp", "/test/x", {
+      ttlMs: 15_000,
+      retryIntervalMs: 50,
+      maxWaitMs: 500,
+    });
+    await assertRejects(
+      () => lock.acquire(),
+      Error,
+      "Failed to create lock blob",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("withLock releases even when the callback throws", async () => {
   await withMockServer(async ({ container }) => {
     const client = BlobClient.fromAuth({

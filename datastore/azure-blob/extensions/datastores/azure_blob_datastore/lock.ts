@@ -2,7 +2,11 @@
 // ABOUTME: doubles as the fencing-token nonce; Azure enforces compare-and-swap
 // ABOUTME: server-side, so this implementation is simpler than a hand-rolled CAS.
 
-import type { BlobClient, BlobResponse } from "./rest_client.ts";
+import {
+  type BlobClient,
+  type BlobResponse,
+  isBlobAlreadyExists,
+} from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
 import { Attr, detached, recordRetry, withSpan } from "./_lib/tracing.ts";
 
@@ -32,6 +36,11 @@ export interface DistributedLock {
   forceRelease(expectedNonce: string): Promise<boolean>;
 }
 
+// How many consecutive times one acquire() will re-create a lock blob that
+// vanished between ensureBlobExists() and the lease request (a concurrent
+// release() deleting it). Bounded so a hostile or looping deleter cannot
+// spin us; reset whenever a lease conflict proves the blob exists.
+const MAX_BLOB_RECREATES = 5;
 const MIN_LEASE_SECONDS = 15;
 const MAX_LEASE_SECONDS = 60;
 
@@ -117,13 +126,48 @@ async function ensureBlobExists(
         body: new Uint8Array(0),
       }),
   );
-  // 201 Created, or 412 Precondition Failed (If-None-Match: * means "already
-  // exists" — NOT 409, which Azure reserves for lease conflicts) are both fine.
-  if (resp.status !== 201 && resp.status !== 412) {
-    const message = new TextDecoder().decode(resp.body);
-    throw new Error(
-      `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
+  // 201 Created is the first-use case. An existing blob is the steady state —
+  // release() frees the lease but leaves the blob — and Azure reports a
+  // create-if-absent collision (If-None-Match: *) as 409 BlobAlreadyExists.
+  // 412 is tolerated too. Other 409s (e.g. ContainerBeingDeleted) stay fatal.
+  if (resp.status === 201 || resp.status === 412 || isBlobAlreadyExists(resp)) {
+    return;
+  }
+  const message = new TextDecoder().decode(resp.body);
+  throw new Error(
+    `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
+  );
+}
+
+/**
+ * Releases the lease and deletes the lock blob in one atomic request: Azure
+ * accepts Delete Blob carrying the lease ID and drops the lease with the
+ * blob, so there is no window in which the lease is free but the blob still
+ * exists (which would hand every waiter a 404 at its lease request). Returns
+ * true when the blob was deleted. Any other outcome (refused by a SAS without
+ * delete permission, already gone, lease no longer ours, transport failure)
+ * returns false and the caller falls back to a plain lease release.
+ */
+async function deleteLockBlobWithLease(
+  client: BlobClient,
+  path: string,
+  leaseId: string,
+): Promise<boolean> {
+  try {
+    const resp = await requestWithContext(
+      "deleteLockBlob",
+      path,
+      () =>
+        client.request({
+          op: "deleteLockBlob",
+          method: "DELETE",
+          path,
+          headers: { "x-ms-lease-id": leaseId },
+        }),
     );
+    return resp.status === 202;
+  } catch {
+    return false;
   }
 }
 
@@ -187,6 +231,7 @@ export function createBlobLock(
       const start = Date.now();
       let attempt = 0;
       let contended = false;
+      let recreates = 0;
 
       while (Date.now() - start < maxWaitMs) {
         if (signal?.aborted) {
@@ -211,7 +256,9 @@ export function createBlobLock(
             // set, so acquire() can be retried) and don't strand the lease we
             // just took on Azure — best-effort release it back.
             try {
-              await leaseAction(client, path, "release", acquiredId);
+              if (!(await deleteLockBlobWithLease(client, path, acquiredId))) {
+                await leaseAction(client, path, "release", acquiredId);
+              }
             } catch {
               // Ignore — the lease will expire via its fixed duration anyway.
             }
@@ -236,6 +283,13 @@ export function createBlobLock(
           });
           return;
         }
+        if (resp.status === 404 && recreates < MAX_BLOB_RECREATES) {
+          // The previous holder's release() deleted the blob after our
+          // ensureBlobExists(). Re-create it and retry the lease.
+          recreates++;
+          await ensureBlobExists(client, path);
+          continue;
+        }
         if (resp.status !== 409) {
           const message = new TextDecoder().decode(resp.body);
           throw new Error(
@@ -243,6 +297,10 @@ export function createBlobLock(
           );
         }
         contended = true;
+        // Real contention means the blob exists, so only consecutive 404s
+        // count against the re-create budget. Without this reset a patient
+        // waiter would burn it across handovers and fail before maxWaitMs.
+        recreates = 0;
         // 409 LeaseAlreadyPresent — another holder has a live lease. Backoff and
         // retry. Cap at 1.5^4 (≈5x) so all 5 graduated tiers are distinct —
         // capping lower would collapse most of them to the same flat value.
@@ -295,7 +353,9 @@ export function createBlobLock(
         const releaseId = leaseId;
         leaseId = undefined;
         try {
-          await leaseAction(client, path, "release", releaseId);
+          if (!(await deleteLockBlobWithLease(client, path, releaseId))) {
+            await leaseAction(client, path, "release", releaseId);
+          }
         } catch {
           // Already released/expired, or connection lost — lease will expire via its fixed duration
         }
@@ -369,8 +429,18 @@ export function createBlobLock(
       return await withSpan("azure-blob-datastore lock forceRelease", {
         [Attr.LOCK_KEY]: key,
       }, async () => {
-        const resp = await leaseAction(client, path, "release", expectedNonce);
-        if (resp.status !== 200) return false;
+        if (!(await deleteLockBlobWithLease(client, path, expectedNonce))) {
+          const resp = await leaseAction(
+            client,
+            path,
+            "release",
+            expectedNonce,
+          );
+          // 404: a delete we could not confirm (transport error, or a retried
+          // 5xx that had already committed) removed the blob. The lock is not
+          // held, which is what the caller asked for.
+          if (resp.status !== 200 && resp.status !== 404) return false;
+        }
         // If this instance itself held that lease, clear its local state too —
         // otherwise a subsequent acquire() on this same object would wrongly
         // throw "already acquired" even though the lease is now free on Azure.

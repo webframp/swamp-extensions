@@ -386,3 +386,25 @@ Deno.test("encodeBlobName preserves characters existing blob names use", () => {
   const preserved = "data/m/i/snap@1:a.b-c_d~e+(f),g;h=i!j$k&l'm*n[o]p.json";
   assertEquals(encodeBlobName(preserved), preserved);
 });
+
+Deno.test("concurrent first pushes to an empty store both succeed when the create race returns 409 BlobAlreadyExists", async () => {
+  await withHarness(async ({ client }) => {
+    const dirs = [await Deno.makeTempDir(), await Deno.makeTempDir()];
+    try {
+      const pushes = dirs.map(async (dir, i) => {
+        const relPath = `data/model/instance/racer-${i}.json`;
+        await Deno.mkdir(`${dir}/data/model/instance`, { recursive: true });
+        await Deno.writeFile(
+          `${dir}/${relPath}`,
+          new TextEncoder().encode(`racer ${i}`),
+        );
+        const svc = sync(client, dir);
+        await svc.markDirty({ relPath });
+        return await svc.pushChanged();
+      });
+      assertEquals(await Promise.all(pushes), [1, 1]);
+    } finally {
+      for (const dir of dirs) await Deno.remove(dir, { recursive: true });
+    }
+  });
+});

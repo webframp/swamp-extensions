@@ -1,3 +1,34 @@
+## 2026.11.10.3
+
+**Fixed:** Every lock path worked exactly once, then failed permanently with
+`Failed to create lock blob ... (409): BlobAlreadyExists`. `release()` frees the
+lease but leaves the lock blob, and Azure answers the next create-if-absent
+(`If-None-Match: *`) with 409 `BlobAlreadyExists`, which the lock code only
+accepted as 412. It now treats 409 `BlobAlreadyExists` as the normal
+"blob already exists" case and proceeds to acquire the lease. Other 409
+responses (for example `ContainerBeingDeleted`) still fail. Reported by
+@NeilHanlon in #556.
+
+**Fixed:** The same misclassification affected the shard index and
+`commit_seq` writes. When two writers raced to create the first shard or
+`commit_seq` blob, the loser got 409 `BlobAlreadyExists` and the push threw
+instead of re-reading and retrying. Both now retry on it like an ETag conflict.
+
+**Changed:** `release()` and `forceRelease()` now delete the lock blob in the
+same request that releases the lease (Delete Blob with the lease ID), so
+`_locks/` no longer accumulates one orphan per lock key and there is no moment
+where the lease is free but the blob still exists. If that delete is refused
+(for example a SAS token without delete permission, or a lease that is no
+longer yours), they fall back to a plain lease release, which leaves the blob
+as before. A waiter whose lock blob is deleted between its existence check and
+its lease request re-creates it and retries, up to 5 consecutive times; any
+lease conflict resets that count, so waiting out a long queue is unaffected.
+Storage accounts with blob versioning or soft delete keep the deleted lock
+blobs for their retention period; a lifecycle rule on `_locks/` cleans them up.
+
+**Upgrade note:** Datastores already wedged by this bug recover on upgrade; no
+manual deletion of lock blobs is needed.
+
 ## 2026.11.10.2
 
 **Fixed:** Data names containing `/` or a space (stored by swamp on disk as
