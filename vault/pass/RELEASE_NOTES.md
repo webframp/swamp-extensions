@@ -9,6 +9,12 @@ keeps working. Tracing spans for a missing entry now record
 `error.type: "SecretNotFoundError"` instead of `"Error"`; every other failure
 still records `"Error"`.
 
+**Changed:** When `storeDir` does not exist or is not a directory, `get()` on a
+missing entry now rejects with `pass store directory "<dir>" does not exist or
+is not a directory; check the vault's storeDir config` instead of pass's "not
+in the password store" message. A mistyped `storeDir` no longer looks like an
+absent secret.
+
 **Changed:** Bump @opentelemetry/api 1.9.1 → 1.10.0
 
 ## 2026.11.03.1

@@ -384,6 +384,21 @@ export const vault = {
       return (await stat(`${storeDir}/${entry}`))?.isDirectory ?? false;
     };
 
+    /**
+     * Whether the configured store directory exists as a directory.
+     *
+     * Only "not found" counts as missing. Any other stat failure, such as a
+     * Deno permission refusal, is thrown as the real failure it is.
+     */
+    const storeDirExists = async (): Promise<boolean> => {
+      try {
+        return (await Deno.stat(storeDir)).isDirectory;
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) return false;
+        throw err;
+      }
+    };
+
     const spanAttributes = (
       method: string,
       key?: string,
@@ -411,6 +426,16 @@ export const vault = {
             content = await runPass(["show", entry]);
           } catch (err) {
             if (isNotInStore(err)) {
+              // pass says "not in the password store" for every key when the
+              // store itself is missing, so a mistyped storeDir would look like
+              // an absent secret. Report it as the misconfiguration it is.
+              if (!(await storeDirExists())) {
+                throw new Error(
+                  `pass store directory "${storeDir}" does not exist or is ` +
+                    `not a directory; check the vault's storeDir config`,
+                  { cause: err },
+                );
+              }
               throw new SecretNotFoundError(name, key, {
                 message: (err as Error).message,
                 cause: err,

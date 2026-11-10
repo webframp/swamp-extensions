@@ -270,6 +270,21 @@ async function withMockedPass<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Runs `fn` with a real, empty store directory, removed afterwards.
+ *
+ * `get()` checks that storeDir exists before reporting secret_not_found, so
+ * any test that reaches a missing entry needs a directory that is really there.
+ */
+async function withTempStore<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+  const dir = await Deno.makeTempDir({ prefix: "pass-store-" });
+  try {
+    return await fn(dir);
+  } finally {
+    await Deno.remove(dir, { recursive: true });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Behavioral tests
 // ---------------------------------------------------------------------------
@@ -284,40 +299,73 @@ Deno.test("pass vault: get returns stored secret", async () => {
 });
 
 Deno.test("pass vault: get rejects for missing secret", async () => {
-  await withMockedPass(async () => {
-    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
-    await assertRejects(
-      () => provider.get("nonexistent-key"),
-      Error,
-      "is not in the password store",
-    );
-  });
+  await withMockedPass(() =>
+    withTempStore(async (store) => {
+      const provider = vault.createProvider("test", { storeDir: store });
+      await assertRejects(
+        () => provider.get("nonexistent-key"),
+        Error,
+        "is not in the password store",
+      );
+    })
+  );
 });
 
 Deno.test("pass vault: missing secret rejects with code secret_not_found", async () => {
-  await withMockedPass(async () => {
-    const provider = vault.createProvider("test", {
-      storeDir: "/tmp/store",
-      prefix: "team",
-    });
-    const err = await assertRejects(() => provider.get("nonexistent-key"));
-    const e = err as Error & {
-      code?: string;
-      vaultName?: string;
-      key?: string;
-    };
-    assertEquals(e.code, "secret_not_found");
-    assertEquals(e.name, "SecretNotFoundError");
-    assertEquals(e.vaultName, "test");
-    // The caller's key, not the prefixed store path.
-    assertEquals(e.key, "nonexistent-key");
-    // The original pass diagnostic is kept for anyone matching on it.
-    assertEquals(
-      e.message,
-      "pass show team/nonexistent-key exited with code 1: " +
-        "Error: team/nonexistent-key is not in the password store.",
-    );
-  });
+  await withMockedPass(() =>
+    withTempStore(async (store) => {
+      const provider = vault.createProvider("test", {
+        storeDir: store,
+        prefix: "team",
+      });
+      const err = await assertRejects(() => provider.get("nonexistent-key"));
+      const e = err as Error & {
+        code?: string;
+        vaultName?: string;
+        key?: string;
+      };
+      assertEquals(e.code, "secret_not_found");
+      assertEquals(e.name, "SecretNotFoundError");
+      assertEquals(e.vaultName, "test");
+      // The caller's key, not the prefixed store path.
+      assertEquals(e.key, "nonexistent-key");
+      // The original pass diagnostic is kept for anyone matching on it.
+      assertEquals(
+        e.message,
+        "pass show team/nonexistent-key exited with code 1: " +
+          "Error: team/nonexistent-key is not in the password store.",
+      );
+    })
+  );
+});
+
+Deno.test("pass vault: a missing storeDir is a config error, not secret_not_found", async () => {
+  await withMockedPass(() =>
+    withTempStore(async (parent) => {
+      const missing = `${parent}/does-not-exist`;
+      const provider = vault.createProvider("test", { storeDir: missing });
+      const err = await assertRejects(() => provider.get("any-key"));
+      assertEquals((err as { code?: unknown }).code, undefined);
+      assertEquals(
+        (err as Error).message,
+        `pass store directory "${missing}" does not exist or is not a ` +
+          `directory; check the vault's storeDir config`,
+      );
+    })
+  );
+});
+
+Deno.test("pass vault: a storeDir that is a file is a config error", async () => {
+  await withMockedPass(() =>
+    withTempStore(async (parent) => {
+      const file = `${parent}/store-is-a-file`;
+      await Deno.writeTextFile(file, "");
+      const provider = vault.createProvider("test", { storeDir: file });
+      const err = await assertRejects(() => provider.get("any-key"));
+      assertEquals((err as { code?: unknown }).code, undefined);
+      assertEquals((err as Error).message.includes(file), true);
+    })
+  );
 });
 
 Deno.test("pass vault: a GPG failure is not reported as secret_not_found", async () => {
@@ -386,15 +434,17 @@ Deno.test("pass vault: list returns stored keys", async () => {
 });
 
 Deno.test("pass vault: failed get names the pass subcommand and exit code", async () => {
-  await withMockedPass(async () => {
-    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
-    const err = await assertRejects(
-      () => provider.get("nonexistent-key"),
-      Error,
-    );
-    assertEquals(err.message.startsWith("pass show"), true);
-    assertEquals(/exited with code \d+/.test(err.message), true);
-  });
+  await withMockedPass(() =>
+    withTempStore(async (store) => {
+      const provider = vault.createProvider("test", { storeDir: store });
+      const err = await assertRejects(
+        () => provider.get("nonexistent-key"),
+        Error,
+      );
+      assertEquals(err.message.startsWith("pass show"), true);
+      assertEquals(/exited with code \d+/.test(err.message), true);
+    })
+  );
 });
 
 Deno.test("pass vault: list throws (not silently empty) when find itself fails", async () => {
@@ -461,12 +511,14 @@ Deno.test("pass vault: getName returns vault name", async () => {
 });
 
 Deno.test("pass vault: full VaultProvider conformance", async () => {
-  await withMockedPass(async () => {
-    const provider = vault.createProvider("conformance", {
-      storeDir: "/tmp/store",
-    });
-    await assertVaultConformance(provider);
-  });
+  await withMockedPass(() =>
+    withTempStore(async (store) => {
+      const provider = vault.createProvider("conformance", {
+        storeDir: store,
+      });
+      await assertVaultConformance(provider);
+    })
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -1138,10 +1190,12 @@ Deno.test("otel: put and list emit spans, list reports the key count", async () 
 
 Deno.test("otel: a failed get is marked ERROR with a type and no message", async () => {
   const spans = await withMockedPass(() =>
-    withSpans(async () => {
-      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
-      await assertRejects(() => provider.get("missing"), Error);
-    })
+    withTempStore((store) =>
+      withSpans(async () => {
+        const provider = vault.createProvider("v", { storeDir: store });
+        await assertRejects(() => provider.get("missing"), Error);
+      })
+    )
   );
 
   const span = spanNamed(spans, "pass get");
