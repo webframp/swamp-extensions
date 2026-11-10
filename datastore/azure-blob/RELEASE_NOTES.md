@@ -8,9 +8,15 @@ request, matching how the lock blob key is already handled. Reported by
 @NeilHanlon in #554.
 
 **Changed:** Blob names preserve `/`, `@ : . - _ ~` and the RFC 3986 sub-delims
-(`+ ( ) , ; = ! $ & ' * [ ]`), so existing blobs keep their names and no data
-migration is needed. Only `%`, `?`, `#`, and characters outside that set are
-now encoded.
+(`+ ( ) , ; = ! $ & ' * [ ]`), so existing blobs keep their names. Everything
+else, including `%`, `?`, `#`, space, and non-ASCII characters, is
+percent-encoded in the request path (and in the Shared Key signature, so names
+with spaces or non-ASCII characters now sign correctly).
+
+**Upgrade note:** A name containing a valid percent escape other than `%00`
+(for example a literal `%41`) was previously decoded by Azure on upload and
+is now stored under its literal name. swamp's own escapes (`%002F`, `%0020`)
+always failed before this fix, so no existing blob is affected by them.
 
 ## 2026.11.10.1
 

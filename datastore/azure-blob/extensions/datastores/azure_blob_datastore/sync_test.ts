@@ -351,6 +351,30 @@ Deno.test("push then pull round-trips a %00-escaped data name", async () => {
   });
 });
 
+Deno.test("push then pull round-trips a name with ? # + & =", async () => {
+  await withHarness(async ({ client, cachePath, mock }) => {
+    const svc = sync(client, cachePath);
+    const relPath = "data/model/instance/a?b#c+d&e=f.json";
+    await Deno.mkdir(`${cachePath}/data/model/instance`, { recursive: true });
+    await Deno.writeFile(
+      `${cachePath}/${relPath}`,
+      new TextEncoder().encode("odd"),
+    );
+    await svc.markDirty({ relPath });
+    assertEquals(await svc.pushChanged(), 1);
+    assertExists(mock.blobs.get(`/${CONTAINER}/${PREFIX}/${relPath}`));
+
+    const cachePath2 = await Deno.makeTempDir();
+    try {
+      await sync(client, cachePath2).pullChanged();
+      const bytes = await Deno.readFile(`${cachePath2}/${relPath}`);
+      assertEquals(new TextDecoder().decode(bytes), "odd");
+    } finally {
+      await Deno.remove(cachePath2, { recursive: true });
+    }
+  });
+});
+
 Deno.test("encodeBlobName escapes % and unsafe characters", () => {
   assertEquals(encodeBlobName("a%002Fb%0020c"), "a%25002Fb%250020c");
   assertEquals(encodeBlobName("a b"), "a%20b");
