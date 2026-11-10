@@ -4,7 +4,11 @@
 // ABOUTME: Targeted shard fetch for dirty-path pushes, parallel blob uploads
 // ABOUTME: with bounded concurrency, batched shard CAS, and commitSeq counter.
 
-import type { BlobClient, BlobResponse } from "./rest_client.ts";
+import {
+  type BlobClient,
+  type BlobResponse,
+  isBlobAlreadyExists,
+} from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
 import { Attr, recordRetry, withSpan } from "./_lib/tracing.ts";
 import { Sidecar } from "./sidecar.ts";
@@ -332,8 +336,8 @@ export function createSyncService(
           })
         );
         if (resp.status === 201 || resp.status === 200) return;
-        if (resp.status === 412) {
-          // ETag conflict — re-read and retry. This loop is separate from
+        if (resp.status === 412 || isBlobAlreadyExists(resp)) {
+          // ETag conflict, or a racing writer created the shard first — re-read and retry. This loop is separate from
           // retryableRequest, so the retry event is recorded here too.
           recordRetry(attempt + 1, 0, {
             "retry.reason": "etag_conflict",
@@ -540,7 +544,7 @@ export function createSyncService(
         })
       );
       if (resp.status === 201 || resp.status === 200) return nextSeq;
-      if (resp.status === 412) {
+      if (resp.status === 412 || isBlobAlreadyExists(resp)) {
         recordRetry(attempt + 1, 0, {
           "retry.reason": "commit_seq_etag_conflict",
           "http.response.status_code": resp.status,

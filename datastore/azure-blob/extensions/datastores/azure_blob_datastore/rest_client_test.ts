@@ -1,5 +1,10 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert@1.0.19";
-import { buildStringToSign, parseConnectionString } from "./rest_client.ts";
+import {
+  type BlobResponse,
+  buildStringToSign,
+  isBlobAlreadyExists,
+  parseConnectionString,
+} from "./rest_client.ts";
 
 // Known-good vector adapted from Microsoft's published Shared Key signing
 // example (Azure Storage REST API — "Authorize with Shared Key"):
@@ -120,4 +125,40 @@ Deno.test("parseConnectionString throws when AccountKey is missing", () => {
     Error,
     "AccountName and AccountKey",
   );
+});
+
+function blobResponse(
+  status: number,
+  body: string,
+  headers: Record<string, string> = {},
+): BlobResponse {
+  return {
+    status,
+    headers: new Headers(headers),
+    body: new TextEncoder().encode(body),
+  };
+}
+
+Deno.test("isBlobAlreadyExists matches 409 by error-code header or body, and nothing else", () => {
+  assertEquals(
+    isBlobAlreadyExists(
+      blobResponse(409, "", { "x-ms-error-code": "BlobAlreadyExists" }),
+    ),
+    true,
+  );
+  assertEquals(
+    isBlobAlreadyExists(blobResponse(409, "<Code>BlobAlreadyExists</Code>")),
+    true,
+  );
+  assertEquals(
+    isBlobAlreadyExists(
+      blobResponse(409, "", { "x-ms-error-code": "LeaseAlreadyPresent" }),
+    ),
+    false,
+  );
+  assertEquals(
+    isBlobAlreadyExists(blobResponse(412, "BlobAlreadyExists")),
+    false,
+  );
+  assertEquals(isBlobAlreadyExists(blobResponse(201, "")), false);
 });

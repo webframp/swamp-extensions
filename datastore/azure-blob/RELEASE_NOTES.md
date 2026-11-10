@@ -9,6 +9,11 @@ accepted as 412. It now treats 409 `BlobAlreadyExists` as the normal
 responses (for example `ContainerBeingDeleted`) still fail. Reported by
 @NeilHanlon in #556.
 
+**Fixed:** The same misclassification affected the shard index and
+`commit_seq` writes. When two writers raced to create the first shard or
+`commit_seq` blob, the loser got 409 `BlobAlreadyExists` and the push threw
+instead of re-reading and retrying. Both now retry on it like an ETag conflict.
+
 **Changed:** Lock blobs are still not deleted on release. Deleting after release
 would race a waiter that already passed the existence check and is about to
 acquire its lease, so orphaned `_locks/` blobs remain by design (they are empty

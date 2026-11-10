@@ -268,6 +268,18 @@ export interface BlobResponse {
   body: Uint8Array;
 }
 
+/**
+ * True when a conditional create (`If-None-Match: *`) lost to an existing
+ * blob. Azure reports that as 409 BlobAlreadyExists, not 412 (412 is for
+ * `If-Match` ETag mismatches). Other 409s, such as ContainerBeingDeleted or
+ * lease conflicts, return false.
+ */
+export function isBlobAlreadyExists(resp: BlobResponse): boolean {
+  if (resp.status !== 409) return false;
+  return resp.headers.get("x-ms-error-code") === "BlobAlreadyExists" ||
+    new TextDecoder().decode(resp.body).includes("BlobAlreadyExists");
+}
+
 export class BlobClient {
   constructor(
     private readonly auth: BlobAuth,

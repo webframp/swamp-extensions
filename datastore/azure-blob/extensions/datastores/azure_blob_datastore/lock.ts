@@ -2,7 +2,11 @@
 // ABOUTME: doubles as the fencing-token nonce; Azure enforces compare-and-swap
 // ABOUTME: server-side, so this implementation is simpler than a hand-rolled CAS.
 
-import type { BlobClient, BlobResponse } from "./rest_client.ts";
+import {
+  type BlobClient,
+  type BlobResponse,
+  isBlobAlreadyExists,
+} from "./rest_client.ts";
 import { retryableRequest } from "./_lib/retry.ts";
 import { Attr, detached, recordRetry, withSpan } from "./_lib/tracing.ts";
 
@@ -121,15 +125,10 @@ async function ensureBlobExists(
   // release() frees the lease but leaves the blob — and Azure reports a
   // create-if-absent collision (If-None-Match: *) as 409 BlobAlreadyExists.
   // 412 is tolerated too. Other 409s (e.g. ContainerBeingDeleted) stay fatal.
-  if (resp.status === 201 || resp.status === 412) return;
-  const message = new TextDecoder().decode(resp.body);
-  const errorCode = resp.headers.get("x-ms-error-code");
-  if (
-    resp.status === 409 &&
-    (errorCode === "BlobAlreadyExists" || message.includes("BlobAlreadyExists"))
-  ) {
+  if (resp.status === 201 || resp.status === 412 || isBlobAlreadyExists(resp)) {
     return;
   }
+  const message = new TextDecoder().decode(resp.body);
   throw new Error(
     `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
   );
