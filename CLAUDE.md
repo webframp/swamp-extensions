@@ -151,7 +151,7 @@ When building models that wrap external APIs:
 - **Zod schemas are the contract.** Add `.min()`, `.max()`, and other constraints that match the API's actual limits. Don't rely on runtime slicing to enforce bounds — fail fast at validation.
 - **Null safety on SDK responses.** AWS SDK types are often `T | undefined`. Use `?? defaultValue` (not `|| defaultValue`) to handle both `null` and `undefined` without masking falsy values like `0` or `""`.
 - **Deterministic resource instance names.** Use filter parameters or entity IDs, not timestamps. `Date.now()` in instance names causes unbounded data accumulation.
-- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must score `passed` / 100% on the quality rubric. Anything less blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.6.5"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
+- **Run `swamp extension quality manifest.yaml` before pushing.** Extensions must meet CI's quality pass condition: `status: "passed"`, `allPassed` not `false`, and 100% either directly or once provisional factors are earned (`ifProvisionalEarned.percentage`). A compliant extension reports 87% locally because the `repository-verified` factor stays provisional until publish; any other unearned factor blocks the PR. This is also the ONLY gate that catches bare import specifiers — `from "zod"` instead of `from "npm:zod@4.6.5"` publishes unscored and fails the rubric, yet passes `deno task check`/`lint`/`test`. See "Dependency Import Specifiers (HARD RULE)".
 - **Bounded pagination is mandatory.** Never use `Infinity` or unbounded loops for API pagination. Cap fetch limits to a practical multiple (e.g., `limit * 20`) and set a `truncated: boolean` field in the output when results may be incomplete. Unbounded pagination can trigger API throttling and OOM on large accounts.
 - **`truncated` must be honest.** If results are sliced, capped, or filtered after fetching, the `truncated` field must reflect whether more data exists. Hardcoding `false` is a data integrity bug.
 - **SDK timestamp fields may be `Date` or `string`.** Use `String(field)` or `field?.toISOString?.() ?? String(field)` to normalize. Don't assume the SDK returns strings — some versions return `Date` objects.
@@ -227,8 +227,10 @@ Rules:
    `swamp-adoption`) MUST emit the same inline pinned specifier. Generated
    `deno.json` carries no dependency import-map entry.
 5. **Run `swamp extension quality manifest.yaml` before pushing any extension.**
-   Require `status: "passed"` and `percentage: 100`. This is the only gate that
-   catches an unscored-specifier regression.
+   Require CI's pass condition, checked with
+   `swamp extension quality manifest.yaml --json | jq -e '.status == "passed" and .allPassed != false and (.percentage == 100 or .ifProvisionalEarned.percentage == 100)'`.
+   A local 87% with only `repository-verified` provisional is a pass. This is
+   the only gate that catches an unscored-specifier regression.
 
 ## Secrets Come From a Vault (HARD RULE)
 

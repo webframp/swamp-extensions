@@ -101,10 +101,22 @@ swamp extension fmt manifest.yaml --check
 swamp extension quality manifest.yaml --json
 ```
 
-`swamp extension quality` MUST report `"status": "passed"` and
-`"percentage": 100`. Anything less blocks the push. This is the ONLY gate that
-catches the import-specifier failure below — the standard `deno task` gates all
-pass with bare imports.
+`swamp extension quality` MUST meet CI's pass condition (`.github/workflows/ci.yml`,
+quality job): `"status": "passed"`, `allPassed` not `false`, and 100% either
+directly (`percentage`) or once provisional factors are earned
+(`ifProvisionalEarned.percentage`). Verify with:
+
+```bash
+swamp extension quality manifest.yaml --json | jq -e \
+  '.status == "passed" and .allPassed != false and
+   (.percentage == 100 or .ifProvisionalEarned.percentage == 100)'
+```
+
+A compliant extension reports `"percentage": 87` locally. The 2-point
+`repository-verified` factor is `provisional` until the registry confirms it on
+publish. That is a pass. Any other unearned factor blocks the push. This is the
+ONLY gate that catches the import-specifier failure below — the standard
+`deno task` gates all pass with bare imports.
 
 ### 2b. Import specifiers must be inline (blocking)
 
