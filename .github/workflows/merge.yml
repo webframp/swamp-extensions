@@ -40,31 +40,42 @@ jobs:
           PR_DATA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
           echo "head_sha=$(echo $PR_DATA | jq -r '.head.sha')" >> $GITHUB_OUTPUT
 
-      - name: Check CI status
+      - name: Check the CI gate
         id: ci-status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
-          # Get combined status for the PR head commit
-          STATUS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/status --jq '.state')
-
-          # Also check for any failing check runs
-          CHECKS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/check-runs --jq '.check_runs | map(select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null)) | length')
-
-          if [ "$STATUS" = "success" ] || [ "$STATUS" = "pending" -a "$CHECKS" = "0" ]; then
-            echo "passed=true" >> $GITHUB_OUTPUT
+          # The `CI Gate` job in ci.yml succeeds only when every job that can
+          # block a merge succeeded, and its name never changes, unlike the
+          # per-extension matrix jobs. Read its latest run for this exact
+          # commit. A run that is queued or in progress is not a pass, and
+          # neither is no run at all.
+          #
+          # check_name filters server-side, so the answer does not depend on
+          # how many matrix jobs the commit has.
+          state=$(gh api -X GET "repos/${{ github.repository }}/commits/${HEAD_SHA}/check-runs" \
+            -f check_name="CI Gate" \
+            --jq 'if (.check_runs | length) == 0 then "missing"
+                  else (.check_runs | sort_by(.started_at) | last
+                        | if .status == "completed" then .conclusion else .status end)
+                  end')
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [ "$state" = "success" ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "passed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment if CI not passed
         if: steps.ci-status.outputs.passed != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATE: ${{ steps.ci-status.outputs.state }}
         run: |
           gh pr comment ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --body "Cannot merge: CI checks have not passed. Please wait for all checks to complete successfully."
+            --body "Cannot merge: the \`CI Gate\` check for this commit is \`${STATE}\`. It must be \`success\`. If it is queued or in progress, wait for it and comment again."
           exit 1
 
       - name: Merge PR

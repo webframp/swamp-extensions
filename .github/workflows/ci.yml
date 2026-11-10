@@ -124,7 +124,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [cloudflare-codegen, ci-discover, check-reserved-names, datadog-codegen, dnsimple-codegen, falai-codegen, snyk-codegen, griptape-codegen]
+        dir: [cloudflare-codegen, ci-discover, check-reserved-names, datadog-codegen, dnsimple-codegen, falai-codegen, snyk-codegen, griptape-codegen, verify]
         task: [check, lint, fmt:check, test]
     defaults:
       run:
@@ -705,6 +705,222 @@ jobs:
           if [ "$CHANGES_REQUESTED" -gt 0 ]; then
             echo "::error::CI security review has CHANGES_REQUESTED state on PR — blocking merge"
             exit 1
+          fi
+
+  ci-gate:
+    # The one check that decides whether a PR may merge. Most jobs above run in
+    # matrices whose names are derived from the diff, so branch protection
+    # cannot list them; this job `needs` all of them and fails unless each one
+    # succeeded. merge.yml reads this job's conclusion and nothing else.
+    #
+    # A skipped job is not a pass. The two review jobs are skipped on events
+    # that are not pull requests, which is the only skip allowed. On a pull
+    # request they run, or the gate fails: a fork PR has no review, so a
+    # maintainer must bring the branch into this repository first.
+    #
+    # Add every new job that should block a merge to `needs` and to the checks
+    # in the step below; scripts/verify/lib/ci_coverage_test.ts fails until the
+    # job is classified.
+    name: CI Gate
+    if: ${{ always() }}
+    needs:
+      - discover
+      - extension-check
+      - scripts-check
+      - reserved-data-names
+      - quality-gate
+      - manifest-validate
+      - adversarial-review
+      - ci-security-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          EVENT: ${{ github.event_name }}
+          FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          R_DISCOVER: ${{ needs.discover.result }}
+          R_EXTENSION_CHECK: ${{ needs.extension-check.result }}
+          R_SCRIPTS_CHECK: ${{ needs.scripts-check.result }}
+          R_RESERVED: ${{ needs.reserved-data-names.result }}
+          R_QUALITY: ${{ needs.quality-gate.result }}
+          R_MANIFEST: ${{ needs.manifest-validate.result }}
+          R_ADVERSARIAL: ${{ needs.adversarial-review.result }}
+          R_SECURITY: ${{ needs.ci-security-review.result }}
+        run: |
+          failed=0
+          # check <job> <result> <skip-allowed: yes|no>
+          check() {
+            case "$2" in
+              success) echo "ok      $1" ;;
+              skipped)
+                if [ "$3" = "yes" ]; then
+                  echo "ok      $1 (skipped; allowed on this event)"
+                else
+                  echo "::error::$1 was skipped, and a skip is not a pass"
+                  failed=1
+                fi ;;
+              *)
+                echo "::error::$1 finished as '$2'"
+                failed=1 ;;
+            esac
+          }
+          # Reviews run on same-repo pull requests and are skipped elsewhere.
+          review_skip=no
+          if [ "$EVENT" != "pull_request" ]; then review_skip=yes; fi
+          if [ "$FORK" = "true" ]; then
+            echo "::error::Pull request from a fork: the adversarial and security reviews do not run for forks. A maintainer must push the branch to this repository so they can."
+            failed=1
+          fi
+          check discover            "$R_DISCOVER"        no
+          check extension-check     "$R_EXTENSION_CHECK" no
+          check scripts-check       "$R_SCRIPTS_CHECK"   no
+          check reserved-data-names "$R_RESERVED"        no
+          check quality-gate        "$R_QUALITY"         no
+          check manifest-validate   "$R_MANIFEST"        no
+          check adversarial-review  "$R_ADVERSARIAL"     "$review_skip"
+          check ci-security-review  "$R_SECURITY"        "$review_skip"
+          exit "$failed"
+
+  verify-workflow:
+    # Runs the same swamp `verify` workflow a maintainer runs before opening
+    # the PR (verification/workflows/workflow-verify.yaml). Advisory for now:
+    # it is not in ci-gate's `needs`, so a failure here cannot block a merge.
+    # It proves the workflow works on a runner, and gives the shadow period a
+    # second opinion to compare with the jobs above.
+    name: Verify workflow
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      SWAMP_SIGNIN_TOKEN: ${{ secrets.SWAMP_SIGNIN_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The workflow adds a worktree at the PR head and diffs against the
+          # base, so both commits and their history must be present.
+          fetch-depth: 0
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Install swamp
+        id: setup_swamp
+        continue-on-error: true
+        uses: swamp-club/setup-swamp@17127b7554de0c07aa413ace39fcf6c104ffc3f7 # v0.1.1
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Wait before swamp install retry
+        if: steps.setup_swamp.outcome == 'failure'
+        run: sleep 5
+      - name: Install swamp (retry)
+        if: steps.setup_swamp.outcome == 'failure'
+        uses: swamp-club/setup-swamp@17127b7554de0c07aa413ace39fcf6c104ffc3f7 # v0.1.1
+        with:
+          api-key: ${{ secrets.SWAMP_API_KEY }}
+      - name: Run the verify workflow
+        # Values reach the shell as environment variables, never interpolated
+        # into the script, and the workflow's own shell steps receive its
+        # inputs the same way.
+        working-directory: verification
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          swamp workflow run verify \
+            --input commit="$HEAD_SHA" \
+            --input branch="$HEAD_REF" \
+            --input base="$BASE_SHA" \
+            --input concurrency=2
+      - name: Summarize the attestation
+        if: always()
+        run: |
+          # The runner is ephemeral and runs one verification, so there is
+          # exactly one output directory.
+          OUT=$(find /tmp -maxdepth 1 -type d -name 'swamp-verify-out-*' | head -n 1)
+          {
+            echo "## Verify workflow"
+            echo
+            if [ -n "$OUT" ] && [ -f "$OUT/attestation.json" ]; then
+              jq -r '"Tree `\(.subject.tree[0:12])`, \(.discovery.extensions | length) extension(s), \(.gate.stepsPassed)/\(.gate.stepsTotal) steps passed, \(.gate.stepsSkipped) skipped."' "$OUT/attestation.json"
+            else
+              echo "No attestation was produced; the workflow did not complete."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  attestation-shadow:
+    # Shadow period for pre-PR verification. When a maintainer has posted an
+    # attestation for this PR's tree, validate it the way a blocking check
+    # would, then compare with what this run's gate decided. An attestation
+    # that validates while ci-gate fails is an ESCAPE: verification said ready
+    # and CI found a failure. Nothing here blocks a merge. Remove the duplicated
+    # PR jobs only after escapes stay at zero across enough PRs.
+    #
+    # This job runs the tool from the PR checkout, so a PR that edits the tool
+    # judges itself. That is acceptable only while the job is advisory; before
+    # it blocks anything, run the validator from the base commit.
+    name: Attestation shadow
+    needs: [ci-gate]
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache Deno binary
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.tool_cache }}/deno
+          key: deno-tool-${{ runner.os }}-${{ runner.arch }}-${{ env.DENO_VERSION }}
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Validate the posted attestation
+        id: validate
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set +e
+          deno run --allow-read --allow-write --allow-run --allow-env \
+            scripts/verify/main.ts validate \
+            --commit "$HEAD_SHA" --base "$BASE_SHA" \
+            --expect-deno "$DENO_VERSION" \
+            --summary-file "$RUNNER_TEMP/attestation-summary.md"
+          code=$?
+          set -e
+          [ -f "$RUNNER_TEMP/attestation-summary.md" ] &&
+            cat "$RUNNER_TEMP/attestation-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "valid=$([ "$code" -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Compare with the gate
+        env:
+          VALID: ${{ steps.validate.outputs.valid }}
+          GATE: ${{ needs.ci-gate.result }}
+        run: |
+          if [ "$VALID" = "true" ] && [ "$GATE" != "success" ]; then
+            echo "::warning::ESCAPE: the attestation validated, but ci-gate finished as '$GATE'."
+            echo "### ⚠ ESCAPE: attestation valid, CI gate '$GATE'" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$VALID" = "true" ]; then
+            echo "### ✅ Attestation valid and CI gate passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### No valid attestation (gate '$GATE')" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   dispatch-publish:

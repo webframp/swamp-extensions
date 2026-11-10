@@ -411,6 +411,11 @@ All changes go through pull requests — no direct pushes to main.
   the repository root or add a root `.swamp.yaml`; root `.swamp/` state is
   local-only and ignored. Use `/home/sme/src/disciplines/devsecops` for
   operational models, workflows, and the `pr-factory` tracker.
+- The one intentional exception is `verification/`, a small swamp repo that
+  holds the `verify` workflow (see "Pre-PR Verification"). It follows the same
+  convention as every extension directory: a committed `.swamp.yaml`, an
+  ignored `.swamp/`, and a local datastore, so it needs no `devsecops` AWS
+  profile. Run it from inside `verification/`.
 - Run `pr-factory` commands from that DevSecOps workspace, then perform Git and
   GitHub operations from this checkout. A `pr-factory` invocation in this
   repository is rejected because it has no root `.swamp.yaml`.
@@ -424,6 +429,48 @@ All changes go through pull requests — no direct pushes to main.
 - Deno validation may refresh an extension's `deno.lock` even when its pinned
   source imports are unchanged. Inspect that diff; commit it when it is the
   lockfile's normal resolution update for the validated extension.
+
+## Pre-PR Verification
+
+Verification runs before the PR opens and leaves an attestation that CI can
+check. CI still runs every check itself for now; the attestation runs alongside
+it so the two can be compared before anything is removed.
+
+```bash
+# 1. Commit first: the workflow verifies the committed state in a fresh
+#    worktree, not your working copy.
+cd verification
+swamp workflow run verify \
+  --input commit="$(git rev-parse HEAD)" \
+  --input branch="$(git branch --show-current)"
+# The last step prints ATTESTATION_FILE=<path>. No file is written if any
+# check failed.
+
+# 2. Post it (pushes refs/attestations/<tree>/<timestamp>; never forces).
+cd ..
+deno run --allow-read --allow-write --allow-run --allow-env \
+  scripts/verify/main.ts post --file <ATTESTATION_FILE>
+```
+
+- The attestation is keyed by the commit's **tree hash**, which a squash merge
+  into an up-to-date `main` preserves. A new push or a rebase changes the tree
+  and needs a fresh attestation.
+- The `verify` workflow runs the same `deno task` commands CI runs, plus the
+  manifest format check, the registry quality rubric, and the reserved-data-name
+  scan. A change under `scripts/` or any other shared file verifies every
+  extension, as `ci-discover` selects.
+- The `attestation-shadow` CI job validates a posted attestation and prints
+  `ESCAPE` when it validated but CI's gate failed. The `verify-workflow` job runs
+  the same workflow on the runner. Both are advisory.
+- `CI Gate` is the check that decides whether a PR may merge. `merge.yml` reads
+  its conclusion for the PR head commit. Add any new job that should block a
+  merge to its `needs` and to its script; `scripts/verify/lib/ci_coverage_test.ts`
+  fails until every job in `ci.yml` is classified.
+- Not yet attested, and left to CI: the repo-wide import-specifier greps in
+  `manifest-validate`, `scripts-check`, and both agent reviews.
+- Changes to `scripts/verify`, `scripts/ci-discover`, `verification/`,
+  `.github/workflows`, or this file alter what an attestation proves. The
+  validator warns on them (an error with `--strict`); review them by hand.
 
 ## Publishing
 
