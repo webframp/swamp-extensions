@@ -4,10 +4,10 @@
  * @module
  */
 import { assert, assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
-import { Inspector2Client } from "npm:@aws-sdk/client-inspector2@3.1139.0";
-import { GuardDutyClient } from "npm:@aws-sdk/client-guardduty@3.1139.0";
-import { SecurityHubClient } from "npm:@aws-sdk/client-securityhub@3.1139.0";
-import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
+import { Inspector2Client } from "npm:@aws-sdk/client-inspector2@3.1164.0";
+import { GuardDutyClient } from "npm:@aws-sdk/client-guardduty@3.1164.0";
+import { SecurityHubClient } from "npm:@aws-sdk/client-securityhub@3.1164.0";
+import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1164.0";
 import {
   classifyLogGroup,
   emptyEvidence,

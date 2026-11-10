@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/redmine-kanban"
 license: Apache-2.0
-version: "2026.10.21.1"
+version: "2026.11.10.1"
 description: |
   Kanban workflow reports and automation for Redmine.
 
@@ -48,4 +48,4 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/redmine@2026.09.19.1"
+  - "@webframp/redmine@2026.11.03.1"

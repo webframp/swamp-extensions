@@ -2,9 +2,9 @@
 
 import { assertEquals, assertMatch } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1139.0";
-import { RDSClient } from "npm:@aws-sdk/client-rds@3.1139.0";
-import { SecretsManagerClient } from "npm:@aws-sdk/client-secrets-manager@3.1139.0";
+import { EC2Client } from "npm:@aws-sdk/client-ec2@3.1164.0";
+import { RDSClient } from "npm:@aws-sdk/client-rds@3.1164.0";
+import { SecretsManagerClient } from "npm:@aws-sdk/client-secrets-manager@3.1164.0";
 import { model } from "./adopt.ts";
 
 // =============================================================================
@@ -767,7 +767,7 @@ Deno.test({
 // CloudFormation Stack Adoption Tests
 // =============================================================================
 
-import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1139.0";
+import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1164.0";
 import { CFN_TO_SWAMP_TYPE_MAP, model as modelForCfn } from "./adopt.ts";
 
 /**
@@ -1430,9 +1430,9 @@ import {
   CloudControlClient,
   GetResourceCommand,
   ListResourcesCommand,
-} from "npm:@aws-sdk/client-cloudcontrol@3.1139.0";
-import { DescribeVpcsCommand } from "npm:@aws-sdk/client-ec2@3.1139.0";
-import { STSClient } from "npm:@aws-sdk/client-sts@3.1139.0";
+} from "npm:@aws-sdk/client-cloudcontrol@3.1164.0";
+import { DescribeVpcsCommand } from "npm:@aws-sdk/client-ec2@3.1164.0";
+import { STSClient } from "npm:@aws-sdk/client-sts@3.1164.0";
 
 /** A fake Cloud Control account: type → listed resources, id → full model. */
 interface FakeAccount {

@@ -1,3 +1,7 @@
+## 2026.11.10.1
+
+**Changed:** Bump @webframp/cloudflare 2026.09.18.1 → 2026.11.03.1
+
 ## 2026.10.21.1
 
 **Changed:** Documentation only: the README and the registry Quick Start now

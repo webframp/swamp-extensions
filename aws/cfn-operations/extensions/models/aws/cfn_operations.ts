@@ -16,8 +16,8 @@ import {
   type CloudFormationClientConfig,
   ContinueUpdateRollbackCommand,
   DescribeStacksCommand,
-} from "npm:@aws-sdk/client-cloudformation@3.1139.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1139.0";
+} from "npm:@aws-sdk/client-cloudformation@3.1164.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1164.0";
 
 const EXTENSION_NAME = "@webframp/aws/cfn-operations";
 
@@ -119,7 +119,7 @@ type Context = {
  */
 export const model = {
   type: "@webframp/aws/cfn-operations",
-  version: "2026.11.03.1",
+  version: "2026.11.10.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.10.14.1",
@@ -128,6 +128,10 @@ export const model = {
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }, {
     toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.10.1",
     description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],

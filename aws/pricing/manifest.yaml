@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/pricing"
 license: Apache-2.0
-version: "2026.11.03.1"
+version: "2026.11.10.1"
 description: |
   AWS Pricing API model for looking up service costs.
 

@@ -8,7 +8,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { ACMClient } from "npm:@aws-sdk/client-acm@3.1139.0";
+import { ACMClient } from "npm:@aws-sdk/client-acm@3.1164.0";
 import { model } from "./acm_diagnostics.ts";
 
 // =============================================================================

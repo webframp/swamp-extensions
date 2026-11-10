@@ -7,7 +7,7 @@ import {
   type Span,
   SpanStatusCode,
   trace,
-} from "npm:@opentelemetry/api@1.9.1";
+} from "npm:@opentelemetry/api@1.10.0";
 
 /** Instrumentation scope name — matches the extension name in manifest.yaml. */
 const TRACER_NAME = "@webframp/valkey-datastore";

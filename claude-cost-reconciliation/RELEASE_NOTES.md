@@ -1,3 +1,9 @@
+## 2026.11.10.1
+
+**Changed:** Bump @webframp/aws/cost-explorer 2026.10.07.1 → 2026.11.03.1
+
+**Changed:** Bump @webframp/anthropic/analytics 2026.10.07.1 → 2026.11.03.1
+
 ## 2026.10.21.1
 
 **Changed:** Documentation only: the README now shows how to create the two

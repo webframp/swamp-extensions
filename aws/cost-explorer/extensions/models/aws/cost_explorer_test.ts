@@ -7,7 +7,7 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { CostExplorerClient } from "npm:@aws-sdk/client-cost-explorer@3.1139.0";
+import { CostExplorerClient } from "npm:@aws-sdk/client-cost-explorer@3.1164.0";
 import { model } from "./cost_explorer.ts";
 
 // =============================================================================

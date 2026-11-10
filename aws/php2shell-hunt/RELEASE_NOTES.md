@@ -1,3 +1,9 @@
+## 2026.11.10.1
+
+**Changed:** Bump @aws-sdk/* 3.1139.0 → 3.1164.0 (6 packages)
+
+**Changed:** Bump @swamp/typesafe-ai 2026.09.15.1 → 2026.10.23.1
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

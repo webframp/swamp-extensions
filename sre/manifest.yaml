@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/sre"
 license: Apache-2.0
-version: "2026.10.14.1"
+version: "2026.11.10.1"
 description: |
   SRE Health Check - Unified site reliability health check workflow with report.
 
@@ -67,5 +67,5 @@ additionalFiles:
   - README.md
   - LICENSE.md
 dependencies:
-  - "@webframp/network@2026.09.18.1"
-  - "@webframp/system@2026.09.18.1"
+  - "@webframp/network@2026.11.03.1"
+  - "@webframp/system@2026.11.03.1"

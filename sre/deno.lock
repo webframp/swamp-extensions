@@ -5,7 +5,7 @@
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@^1.1.4": "1.1.6",
-    "jsr:@swamp-club/swamp-testing@0.20261030.68": "0.20261030.68",
+    "jsr:@swamp-club/swamp-testing@0.20261108.72": "0.20261108.72",
     "npm:@marcbachmann/cel-js@7.6.1": "7.6.1",
     "npm:zod@^4.6.7": "4.6.7"
   },
@@ -25,8 +25,8 @@
         "jsr:@std/internal@^1.0.14"
       ]
     },
-    "@swamp-club/swamp-testing@0.20261030.68": {
-      "integrity": "726e9b2f4db47720a93b30b150c8aa074f64a02436c5c961d9485b8780cf99f1",
+    "@swamp-club/swamp-testing@0.20261108.72": {
+      "integrity": "7be5b3cc33ecfb1188ce333a9521458f8261eaa4556690532ef02f28d5a8633b",
       "dependencies": [
         "jsr:@std/assert",
         "jsr:@std/path",
@@ -46,7 +46,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@swamp-club/swamp-testing@0.20261030.68"
+      "jsr:@swamp-club/swamp-testing@0.20261108.72"
     ]
   }
 }
