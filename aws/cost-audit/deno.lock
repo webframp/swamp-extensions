@@ -17,7 +17,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@swamp-club/swamp-testing@0.20261030.68"
+      "jsr:@swamp-club/swamp-testing@0.20261108.72"
     ]
   }
 }

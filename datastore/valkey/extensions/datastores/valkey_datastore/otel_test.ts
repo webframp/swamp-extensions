@@ -3,7 +3,7 @@
 // ABOUTME: nesting — plus that everything still works with no TracerProvider.
 
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { context, trace } from "npm:@opentelemetry/api@1.9.1";
+import { context, trace } from "npm:@opentelemetry/api@1.10.0";
 import { AsyncLocalStorageContextManager } from "npm:@opentelemetry/context-async-hooks@2.12.0";
 import {
   BasicTracerProvider,

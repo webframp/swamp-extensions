@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/aws/cost-explorer"
 license: Apache-2.0
-version: "2026.11.03.1"
+version: "2026.11.10.1"
 description: |
   Query AWS Cost Explorer for actual spend analysis by service, usage type,
   and time period. Identifies top cost drivers and spend trends.

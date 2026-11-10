@@ -1,3 +1,13 @@
+## 2026.11.10.1
+
+**Changed:** Bump @webframp/aws/bedrock-usage 2026.09.24.1 → 2026.11.03.1
+
+**Changed:** Bump @webframp/gcp/vertex-usage 2026.09.18.1 → 2026.11.03.1
+
+**Changed:** Bump @webframp/azure/openai-usage 2026.09.18.1 → 2026.11.03.1
+
+**Changed:** Bump @webframp/anthropic/analytics 2026.09.18.1 → 2026.11.03.1
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

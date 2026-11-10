@@ -15,7 +15,7 @@ import { z } from "npm:zod@4.6.7";
 import {
   CloudFormationClient,
   ListStackResourcesCommand,
-} from "npm:@aws-sdk/client-cloudformation@3.1139.0";
+} from "npm:@aws-sdk/client-cloudformation@3.1164.0";
 import {
   DescribeInternetGatewaysCommand,
   DescribeRouteTablesCommand,
@@ -23,27 +23,27 @@ import {
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
   EC2Client,
-} from "npm:@aws-sdk/client-ec2@3.1139.0";
+} from "npm:@aws-sdk/client-ec2@3.1164.0";
 import {
   DescribeDBClustersCommand,
   DescribeDBInstancesCommand,
   DescribeDBSubnetGroupsCommand,
   RDSClient,
-} from "npm:@aws-sdk/client-rds@3.1139.0";
+} from "npm:@aws-sdk/client-rds@3.1164.0";
 import {
   ListSecretsCommand,
   SecretsManagerClient,
-} from "npm:@aws-sdk/client-secrets-manager@3.1139.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1139.0";
+} from "npm:@aws-sdk/client-secrets-manager@3.1164.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1164.0";
 import {
   CloudControlClient,
   GetResourceCommand,
   ListResourcesCommand,
-} from "npm:@aws-sdk/client-cloudcontrol@3.1139.0";
+} from "npm:@aws-sdk/client-cloudcontrol@3.1164.0";
 import {
   GetCallerIdentityCommand,
   STSClient,
-} from "npm:@aws-sdk/client-sts@3.1139.0";
+} from "npm:@aws-sdk/client-sts@3.1164.0";
 import {
   ADOPTION_TIERS,
   ADOPTION_TYPES_BY_CFN,
@@ -1854,7 +1854,7 @@ async function readJudgeRequest(
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.11.03.1",
+  version: "2026.11.10.1",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/adopt-decision-report"],
 
@@ -1994,6 +1994,11 @@ export const model = {
     },
     {
       toVersion: "2026.11.03.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.10.1",
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

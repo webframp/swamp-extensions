@@ -9,12 +9,12 @@ import {
   type Span,
   SpanStatusCode,
   trace,
-} from "npm:@opentelemetry/api@1.9.1";
+} from "npm:@opentelemetry/api@1.10.0";
 import {
   CreateTableCommand,
   DescribeTableCommand,
   UpdateTimeToLiveCommand,
-} from "npm:@aws-sdk/client-dynamodb@3.1139.0";
+} from "npm:@aws-sdk/client-dynamodb@3.1164.0";
 import {
   BatchGetCommand,
   BatchWriteCommand,
@@ -24,7 +24,7 @@ import {
   QueryCommand,
   ScanCommand,
   UpdateCommand,
-} from "npm:@aws-sdk/lib-dynamodb@3.1139.0";
+} from "npm:@aws-sdk/lib-dynamodb@3.1164.0";
 
 /** Instrumentation scope name — matches the extension name in manifest.yaml. */
 const TRACER_NAME = "@webframp/dynamodb-datastore";

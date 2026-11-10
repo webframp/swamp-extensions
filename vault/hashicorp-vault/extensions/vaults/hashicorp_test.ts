@@ -10,7 +10,7 @@ import {
   context as otelContext,
   SpanStatusCode,
   trace as otelTrace,
-} from "npm:@opentelemetry/api@1.9.1";
+} from "npm:@opentelemetry/api@1.10.0";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,

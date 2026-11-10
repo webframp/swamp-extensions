@@ -38,7 +38,7 @@ import { z } from "npm:zod@4.6.7";
 import {
   Inspector2Client,
   ListFindingsCommand as ListInspectorFindingsCommand,
-} from "npm:@aws-sdk/client-inspector2@3.1139.0";
+} from "npm:@aws-sdk/client-inspector2@3.1164.0";
 import {
   type Condition,
   type Finding as GuardDutyFinding,
@@ -46,12 +46,12 @@ import {
   GuardDutyClient,
   ListDetectorsCommand,
   ListFindingsCommand as ListGuardDutyFindingsCommand,
-} from "npm:@aws-sdk/client-guardduty@3.1139.0";
+} from "npm:@aws-sdk/client-guardduty@3.1164.0";
 import {
   type AwsSecurityFinding,
   GetFindingsCommand as GetSecurityHubFindingsCommand,
   SecurityHubClient,
-} from "npm:@aws-sdk/client-securityhub@3.1139.0";
+} from "npm:@aws-sdk/client-securityhub@3.1164.0";
 import {
   DescribeLogGroupsCommand,
   GetQueryResultsCommand,
@@ -59,13 +59,13 @@ import {
   type ResultField,
   StartQueryCommand,
   StopQueryCommand,
-} from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
-import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1139.0";
+} from "npm:@aws-sdk/client-cloudwatch-logs@3.1164.0";
+import { CloudWatchLogsClient } from "npm:@aws-sdk/client-cloudwatch-logs@3.1164.0";
 import {
   ListAccountsCommand,
   OrganizationsClient,
-} from "npm:@aws-sdk/client-organizations@3.1139.0";
-import { fromIni } from "npm:@aws-sdk/credential-providers@3.1139.0";
+} from "npm:@aws-sdk/client-organizations@3.1164.0";
+import { fromIni } from "npm:@aws-sdk/credential-providers@3.1164.0";
 
 const EXTENSION_NAME = "@webframp/aws/php2shell-hunt";
 
@@ -1498,10 +1498,14 @@ type MethodContext = {
  */
 export const model = {
   type: "@webframp/aws/php2shell-hunt",
-  version: "2026.11.03.1",
+  version: "2026.11.10.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.10.1",
     description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],

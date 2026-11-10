@@ -1,3 +1,11 @@
+## 2026.11.10.1
+
+**Changed:** Bump @webframp/gitlab 2026.09.23.1 → 2026.11.09.1
+
+**Changed:** Bump @swamp/typesafe-ai 2026.09.15.1 → 2026.10.23.1
+
+**Changed:** Bump @webframp/typesafe-batch 2026.09.26.1 → 2026.11.03.1
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

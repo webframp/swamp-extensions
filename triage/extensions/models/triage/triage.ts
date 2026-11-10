@@ -503,7 +503,7 @@ async function authorizeAction(
 /** Deterministic cross-provider triage policy model. */
 export const model = {
   type: "@webframp/triage",
-  version: "2026.11.03.1",
+  version: "2026.11.10.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -533,6 +533,10 @@ export const model = {
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }, {
     toVersion: "2026.11.03.1",
+    description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.10.1",
     description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],

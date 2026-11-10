@@ -8,8 +8,8 @@ import {
   assertRejects,
 } from "jsr:@std/assert@1.0.19";
 import { createModelTestContext } from "@swamp-club/swamp-testing";
-import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1139.0";
-import { CloudTrailClient } from "npm:@aws-sdk/client-cloudtrail@3.1139.0";
+import { CloudFormationClient } from "npm:@aws-sdk/client-cloudformation@3.1164.0";
+import { CloudTrailClient } from "npm:@aws-sdk/client-cloudtrail@3.1164.0";
 import { model } from "./cfn_diagnostics.ts";
 
 // =============================================================================
