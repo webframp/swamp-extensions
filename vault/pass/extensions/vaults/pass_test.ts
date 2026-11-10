@@ -10,7 +10,7 @@ import {
   context as otelContext,
   SpanStatusCode,
   trace as otelTrace,
-} from "npm:@opentelemetry/api@1.9.1";
+} from "npm:@opentelemetry/api@1.10.0";
 import {
   BasicTracerProvider,
   InMemorySpanExporter,
@@ -89,6 +89,8 @@ const OriginalCommand = Deno.Command;
 let insertEchoesValueOnFailure = false;
 /** When set, the mocked `find` subprocess fails instead of listing files. */
 let findFails = false;
+/** When set, `show` fails the way a GPG decryption error does. */
+let showFailsWithGpgError = false;
 /** Options handed to the most recent subprocess, for environment assertions. */
 interface CapturedOptions {
   command: string;
@@ -142,6 +144,13 @@ class MockCommand {
       const sub = this.#args[0];
       if (sub === "show") {
         const key = this.#args[1];
+        if (showFailsWithGpgError) {
+          return {
+            code: 2,
+            stdout: new Uint8Array(),
+            stderr: enc.encode("gpg: decryption failed: No secret key"),
+          };
+        }
         const val = mockSecrets.get(key);
         if (val === undefined) {
           return {
@@ -250,6 +259,7 @@ async function withMockedPass<T>(fn: () => Promise<T>): Promise<T> {
   mockSecrets.clear();
   insertEchoesValueOnFailure = false;
   findFails = false;
+  showFailsWithGpgError = false;
   // deno-lint-ignore no-explicit-any
   (Deno as any).Command = MockCommand;
   try {
@@ -281,6 +291,43 @@ Deno.test("pass vault: get rejects for missing secret", async () => {
       Error,
       "is not in the password store",
     );
+  });
+});
+
+Deno.test("pass vault: missing secret rejects with code secret_not_found", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("test", {
+      storeDir: "/tmp/store",
+      prefix: "team",
+    });
+    const err = await assertRejects(() => provider.get("nonexistent-key"));
+    const e = err as Error & {
+      code?: string;
+      vaultName?: string;
+      key?: string;
+    };
+    assertEquals(e.code, "secret_not_found");
+    assertEquals(e.name, "SecretNotFoundError");
+    assertEquals(e.vaultName, "test");
+    // The caller's key, not the prefixed store path.
+    assertEquals(e.key, "nonexistent-key");
+    // The original pass diagnostic is kept for anyone matching on it.
+    assertEquals(
+      e.message,
+      "pass show team/nonexistent-key exited with code 1: " +
+        "Error: team/nonexistent-key is not in the password store.",
+    );
+  });
+});
+
+Deno.test("pass vault: a GPG failure is not reported as secret_not_found", async () => {
+  await withMockedPass(async () => {
+    const provider = vault.createProvider("test", { storeDir: "/tmp/store" });
+    await provider.put("present", "value");
+    showFailsWithGpgError = true;
+    const err = await assertRejects(() => provider.get("present"));
+    assertEquals((err as { code?: unknown }).code, undefined);
+    assertEquals((err as Error).message.includes("decryption failed"), true);
   });
 });
 
@@ -1100,8 +1147,23 @@ Deno.test("otel: a failed get is marked ERROR with a type and no message", async
   const span = spanNamed(spans, "pass get");
   assertEquals(span.status.code, SpanStatusCode.ERROR);
   assertEquals(span.status.message, undefined);
-  assertEquals(span.attributes["error.type"], "Error");
+  assertEquals(span.attributes["error.type"], "SecretNotFoundError");
   assertEquals(span.events.length, 0);
+});
+
+Deno.test("otel: a non-missing get failure keeps error.type Error", async () => {
+  const spans = await withMockedPass(() =>
+    withSpans(async () => {
+      const provider = vault.createProvider("v", { storeDir: "/tmp/store" });
+      await provider.put("present", "value");
+      showFailsWithGpgError = true;
+      await assertRejects(() => provider.get("present"), Error);
+    })
+  );
+
+  const span = spanNamed(spans, "pass get");
+  assertEquals(span.status.code, SpanStatusCode.ERROR);
+  assertEquals(span.attributes["error.type"], "Error");
 });
 
 Deno.test("otel: stderr echoing the submitted value does not leak it", async () => {

@@ -1,3 +1,16 @@
+## 2026.11.10.1
+
+**Changed:** `get()` on an entry that is not in the password store now rejects
+with `code: "secret_not_found"` (error name `SecretNotFoundError`). swamp reads
+that code to tell a missing secret apart from a real failure. A GPG decryption
+error, missing key, or locked agent still rejects without the code. The error
+message is unchanged, so anything matching on `is not in the password store`
+keeps working. Tracing spans for a missing entry now record
+`error.type: "SecretNotFoundError"` instead of `"Error"`; every other failure
+still records `"Error"`.
+
+**Changed:** Bump @opentelemetry/api 1.9.1 → 1.10.0
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

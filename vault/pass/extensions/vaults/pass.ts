@@ -20,6 +20,58 @@ import {
   withVaultSpan,
 } from "./_lib/tracing.ts";
 
+/** The `code` swamp reads on a `get()` rejection to tell "absent" from "failed". */
+const SECRET_NOT_FOUND_CODE = "secret_not_found";
+
+/**
+ * Thrown by `get()` when the entry does not exist in the store, and only then.
+ *
+ * Mirrors `SecretNotFoundError` from `@swamp-club/swamp-testing`. swamp reads
+ * `code` on the rejected error itself, so this must be the rejection and not
+ * its `cause`. The message is the original `pass` diagnostic, unchanged, so
+ * callers that matched on it keep working.
+ */
+class SecretNotFoundError extends Error {
+  readonly code = SECRET_NOT_FOUND_CODE;
+
+  constructor(
+    readonly vaultName: string,
+    readonly key: string,
+    options: { message: string; cause: unknown },
+  ) {
+    super(options.message, { cause: options.cause });
+    this.name = "SecretNotFoundError";
+  }
+}
+
+/**
+ * A `pass` subprocess that exited non-zero, with its (redacted) stderr kept.
+ *
+ * `name` stays "Error" on purpose: spans record `error.type` from it, and
+ * existing traces for CLI failures must not change type.
+ */
+class PassCommandError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode: number,
+    readonly stderr: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Whether a `pass show` failure means the entry does not exist.
+ *
+ * pass reports a missing entry as `Error: <name> is not in the password
+ * store.` and exits 1. A GPG decryption failure, a missing key, or a locked
+ * agent exits non-zero with different text and is a real failure, not absence.
+ */
+function isNotInStore(err: unknown): boolean {
+  return err instanceof PassCommandError &&
+    /^Error: .+ is not in the password store\.$/m.test(err.stderr);
+}
+
 /**
  * Environment variables forwarded to the `pass` subprocess.
  *
@@ -290,10 +342,12 @@ export const vault = {
         // trace backend, so strip the value we know we sent.
         if (stdin) errMsg = redactSecret(errMsg, stdin);
         const commandDesc = `pass ${args.join(" ")}`;
-        throw new Error(
+        throw new PassCommandError(
           `${commandDesc} exited with code ${code}${
             errMsg ? `: ${errMsg}` : ""
           }`,
+          code,
+          errMsg,
         );
       }
 
@@ -352,7 +406,18 @@ export const vault = {
         if (field !== undefined) attrs[Attr.VAULT_SECRET_FIELD] = field;
         return withVaultSpan("pass get", attrs, async () => {
           const entry = prefixKey(path);
-          const content = await runPass(["show", entry]);
+          let content: string;
+          try {
+            content = await runPass(["show", entry]);
+          } catch (err) {
+            if (isNotInStore(err)) {
+              throw new SecretNotFoundError(name, key, {
+                message: (err as Error).message,
+                cause: err,
+              });
+            }
+            throw err;
+          }
           if (
             (field !== undefined || parsed.passwordOnly) &&
             await isDirectory(entry)
