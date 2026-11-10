@@ -20,6 +20,58 @@ import {
   withVaultSpan,
 } from "./_lib/tracing.ts";
 
+/** The `code` swamp reads on a `get()` rejection to tell "absent" from "failed". */
+const SECRET_NOT_FOUND_CODE = "secret_not_found";
+
+/**
+ * Thrown by `get()` when the entry does not exist in the store, and only then.
+ *
+ * Mirrors `SecretNotFoundError` from `@swamp-club/swamp-testing`. swamp reads
+ * `code` on the rejected error itself, so this must be the rejection and not
+ * its `cause`. The message is the original `pass` diagnostic, unchanged, so
+ * callers that matched on it keep working.
+ */
+class SecretNotFoundError extends Error {
+  readonly code = SECRET_NOT_FOUND_CODE;
+
+  constructor(
+    readonly vaultName: string,
+    readonly key: string,
+    options: { message: string; cause: unknown },
+  ) {
+    super(options.message, { cause: options.cause });
+    this.name = "SecretNotFoundError";
+  }
+}
+
+/**
+ * A `pass` subprocess that exited non-zero, with its (redacted) stderr kept.
+ *
+ * `name` stays "Error" on purpose: spans record `error.type` from it, and
+ * existing traces for CLI failures must not change type.
+ */
+class PassCommandError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode: number,
+    readonly stderr: string,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * Whether a `pass show` failure means the entry does not exist.
+ *
+ * pass reports a missing entry as `Error: <name> is not in the password
+ * store.` and exits 1. A GPG decryption failure, a missing key, or a locked
+ * agent exits non-zero with different text and is a real failure, not absence.
+ */
+function isNotInStore(err: unknown): boolean {
+  return err instanceof PassCommandError &&
+    /^Error: .+ is not in the password store\.$/m.test(err.stderr);
+}
+
 /**
  * Environment variables forwarded to the `pass` subprocess.
  *
@@ -290,10 +342,12 @@ export const vault = {
         // trace backend, so strip the value we know we sent.
         if (stdin) errMsg = redactSecret(errMsg, stdin);
         const commandDesc = `pass ${args.join(" ")}`;
-        throw new Error(
+        throw new PassCommandError(
           `${commandDesc} exited with code ${code}${
             errMsg ? `: ${errMsg}` : ""
           }`,
+          code,
+          errMsg,
         );
       }
 
@@ -330,6 +384,21 @@ export const vault = {
       return (await stat(`${storeDir}/${entry}`))?.isDirectory ?? false;
     };
 
+    /**
+     * Whether the configured store directory exists as a directory.
+     *
+     * Only "not found" counts as missing. Any other stat failure, such as a
+     * Deno permission refusal, is thrown as the real failure it is.
+     */
+    const storeDirExists = async (): Promise<boolean> => {
+      try {
+        return (await Deno.stat(storeDir)).isDirectory;
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) return false;
+        throw err;
+      }
+    };
+
     const spanAttributes = (
       method: string,
       key?: string,
@@ -352,7 +421,28 @@ export const vault = {
         if (field !== undefined) attrs[Attr.VAULT_SECRET_FIELD] = field;
         return withVaultSpan("pass get", attrs, async () => {
           const entry = prefixKey(path);
-          const content = await runPass(["show", entry]);
+          let content: string;
+          try {
+            content = await runPass(["show", entry]);
+          } catch (err) {
+            if (isNotInStore(err)) {
+              // pass says "not in the password store" for every key when the
+              // store itself is missing, so a mistyped storeDir would look like
+              // an absent secret. Report it as the misconfiguration it is.
+              if (!(await storeDirExists())) {
+                throw new Error(
+                  `pass store directory "${storeDir}" does not exist or is ` +
+                    `not a directory; check the vault's storeDir config`,
+                  { cause: err },
+                );
+              }
+              throw new SecretNotFoundError(name, key, {
+                message: (err as Error).message,
+                cause: err,
+              });
+            }
+            throw err;
+          }
           if (
             (field !== undefined || parsed.passwordOnly) &&
             await isDirectory(entry)
