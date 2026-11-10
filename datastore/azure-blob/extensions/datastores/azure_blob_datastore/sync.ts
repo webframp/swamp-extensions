@@ -203,6 +203,28 @@ async function runBounded<T>(
   await Promise.all(workers);
 }
 
+/**
+ * Characters `encodeURIComponent` escapes but that blob names have always
+ * carried unescaped: `/` (directory separator) and the RFC 3986 path
+ * sub-delims plus `@` and `:`. Keeping them literal means already-stored
+ * blobs keep their names, so no migration is needed.
+ */
+const PRESERVED_ESCAPES = /%(?:2F|40|3A|2B|2C|3B|3D|24|26|5B|5D)/gi;
+
+/**
+ * Percent-encodes a swamp relative path for use as a blob name in a request
+ * path. `rest_client.request` treats its path as already encoded, so callers
+ * must encode. swamp stores `/` and space in data names as `%002F` / `%0020`;
+ * without this the literal `%00` reaches the URL parser as a NUL byte and
+ * Azure answers 400 "Invalid URL.".
+ */
+export function encodeBlobName(relPath: string): string {
+  return encodeURIComponent(relPath).replace(
+    PRESERVED_ESCAPES,
+    (m) => decodeURIComponent(m),
+  );
+}
+
 export function createSyncService(
   client: BlobClient,
   container: string,
@@ -212,7 +234,7 @@ export function createSyncService(
   const sidecar = new Sidecar(cachePath);
 
   function blobPath(relPath: string): string {
-    return `/${container}/${prefix}/${relPath}`;
+    return `/${container}/${prefix}/${encodeBlobName(relPath)}`;
   }
 
   function shardPath(shard: string): string {
