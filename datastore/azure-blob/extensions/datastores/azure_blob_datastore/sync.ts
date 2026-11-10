@@ -337,8 +337,9 @@ export function createSyncService(
         );
         if (resp.status === 201 || resp.status === 200) return;
         if (resp.status === 412 || isBlobAlreadyExists(resp)) {
-          // ETag conflict, or a racing writer created the shard first — re-read and retry. This loop is separate from
-          // retryableRequest, so the retry event is recorded here too.
+          // ETag conflict, or a racing writer created the shard first —
+          // re-read and retry. This loop is separate from retryableRequest,
+          // so the retry event is recorded here too.
           recordRetry(attempt + 1, 0, {
             "retry.reason": "etag_conflict",
             "http.response.status_code": resp.status,
