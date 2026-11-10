@@ -145,7 +145,11 @@ export function createMockAzureServer(): MockAzureServer {
       const ifMatch = req.headers.get("if-match");
       const ifNoneMatch = req.headers.get("if-none-match");
       if (ifNoneMatch === "*" && existing) {
-        return new Response("BlobAlreadyExists", { status: 412 });
+        // Real Azure answers a create-if-absent collision with 409, not 412.
+        return new Response("BlobAlreadyExists", {
+          status: 409,
+          headers: { "x-ms-error-code": "BlobAlreadyExists" },
+        });
       }
       if (ifMatch && (!existing || existing.etag !== ifMatch)) {
         return new Response("ConditionNotMet", { status: 412 });

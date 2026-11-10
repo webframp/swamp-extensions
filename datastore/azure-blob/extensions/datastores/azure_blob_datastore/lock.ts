@@ -117,14 +117,22 @@ async function ensureBlobExists(
         body: new Uint8Array(0),
       }),
   );
-  // 201 Created, or 412 Precondition Failed (If-None-Match: * means "already
-  // exists" — NOT 409, which Azure reserves for lease conflicts) are both fine.
-  if (resp.status !== 201 && resp.status !== 412) {
-    const message = new TextDecoder().decode(resp.body);
-    throw new Error(
-      `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
-    );
+  // 201 Created is the first-use case. An existing blob is the steady state —
+  // release() frees the lease but leaves the blob — and Azure reports a
+  // create-if-absent collision (If-None-Match: *) as 409 BlobAlreadyExists.
+  // 412 is tolerated too. Other 409s (e.g. ContainerBeingDeleted) stay fatal.
+  if (resp.status === 201 || resp.status === 412) return;
+  const message = new TextDecoder().decode(resp.body);
+  const errorCode = resp.headers.get("x-ms-error-code");
+  if (
+    resp.status === 409 &&
+    (errorCode === "BlobAlreadyExists" || message.includes("BlobAlreadyExists"))
+  ) {
+    return;
   }
+  throw new Error(
+    `Failed to create lock blob at ${path} (${resp.status}): ${message}`,
+  );
 }
 
 export function createBlobLock(

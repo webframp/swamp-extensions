@@ -135,6 +135,72 @@ Deno.test("lock acquire/inspect/release round-trip", async () => {
   });
 });
 
+Deno.test("a lock path can be acquired again after release (existing blob returns 409 BlobAlreadyExists)", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const opts = { ttlMs: 15_000, retryIntervalMs: 50, maxWaitMs: 1_000 };
+    const first = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/reuse",
+      opts,
+    );
+    await first.acquire();
+    await first.release();
+    // release() frees the lease but leaves the blob behind.
+    assertEquals(mock.blobs.size, 1);
+    const second = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/reuse",
+      opts,
+    );
+    await second.acquire();
+    assertExists(await second.inspect());
+    await second.release();
+    await second.acquire();
+    await second.release();
+  });
+});
+
+Deno.test("acquire still fails on a 409 that is not BlobAlreadyExists", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (() =>
+    Promise.resolve(
+      new Response("<Code>ContainerBeingDeleted</Code>", {
+        status: 409,
+        headers: { "x-ms-error-code": "ContainerBeingDeleted" },
+      }),
+    )) as typeof fetch;
+  try {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const lock = createBlobLock(client, "swamp-datastore", "swamp", "/test/x", {
+      ttlMs: 15_000,
+      retryIntervalMs: 50,
+      maxWaitMs: 500,
+    });
+    await assertRejects(
+      () => lock.acquire(),
+      Error,
+      "Failed to create lock blob",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 Deno.test("withLock releases even when the callback throws", async () => {
   await withMockServer(async ({ container }) => {
     const client = BlobClient.fromAuth({
