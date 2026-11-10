@@ -36,6 +36,10 @@ export interface DistributedLock {
   forceRelease(expectedNonce: string): Promise<boolean>;
 }
 
+// How many times one acquire() will re-create a lock blob that vanished
+// between ensureBlobExists() and the lease request (a concurrent release()
+// deleting it). Bounded so a hostile or looping deleter cannot spin us.
+const MAX_BLOB_RECREATES = 5;
 const MIN_LEASE_SECONDS = 15;
 const MAX_LEASE_SECONDS = 60;
 
@@ -134,6 +138,25 @@ async function ensureBlobExists(
   );
 }
 
+/**
+ * Best-effort delete of the lock blob so `_locks/` does not accumulate one
+ * orphan per key. Safe against concurrent acquirers: Azure refuses to delete
+ * a blob under a lease without the lease ID (412), and a waiter that loses
+ * the blob between ensureBlobExists() and its lease request recovers from the
+ * 404 by re-creating it.
+ */
+async function deleteLockBlob(client: BlobClient, path: string): Promise<void> {
+  try {
+    await requestWithContext(
+      "deleteLockBlob",
+      path,
+      () => client.request({ op: "deleteLockBlob", method: "DELETE", path }),
+    );
+  } catch {
+    // Orphaned blobs are harmless: the next acquire reuses or re-creates it.
+  }
+}
+
 export function createBlobLock(
   client: BlobClient,
   container: string,
@@ -194,6 +217,7 @@ export function createBlobLock(
       const start = Date.now();
       let attempt = 0;
       let contended = false;
+      let recreates = 0;
 
       while (Date.now() - start < maxWaitMs) {
         if (signal?.aborted) {
@@ -242,6 +266,13 @@ export function createBlobLock(
             [Attr.LOCK_CONTENDED]: contended,
           });
           return;
+        }
+        if (resp.status === 404 && recreates < MAX_BLOB_RECREATES) {
+          // The previous holder's release() deleted the blob after our
+          // ensureBlobExists(). Re-create it and retry the lease.
+          recreates++;
+          await ensureBlobExists(client, path);
+          continue;
         }
         if (resp.status !== 409) {
           const message = new TextDecoder().decode(resp.body);
@@ -302,7 +333,8 @@ export function createBlobLock(
         const releaseId = leaseId;
         leaseId = undefined;
         try {
-          await leaseAction(client, path, "release", releaseId);
+          const resp = await leaseAction(client, path, "release", releaseId);
+          if (resp.status === 200) await deleteLockBlob(client, path);
         } catch {
           // Already released/expired, or connection lost — lease will expire via its fixed duration
         }
@@ -378,6 +410,7 @@ export function createBlobLock(
       }, async () => {
         const resp = await leaseAction(client, path, "release", expectedNonce);
         if (resp.status !== 200) return false;
+        await deleteLockBlob(client, path);
         // If this instance itself held that lease, clear its local state too —
         // otherwise a subsequent acquire() on this same object would wrongly
         // throw "already acquired" even though the lease is now free on Azure.

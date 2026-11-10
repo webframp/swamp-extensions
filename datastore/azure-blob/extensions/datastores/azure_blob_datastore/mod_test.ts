@@ -135,7 +135,7 @@ Deno.test("lock acquire/inspect/release round-trip", async () => {
   });
 });
 
-Deno.test("a lock path can be acquired again after release (existing blob returns 409 BlobAlreadyExists)", async () => {
+Deno.test("a lock path can be acquired again after release (blob deleted on release)", async () => {
   await withMockServer(async ({ container, mock }) => {
     const client = BlobClient.fromAuth({
       mode: "sharedKey",
@@ -153,8 +153,8 @@ Deno.test("a lock path can be acquired again after release (existing blob return
     );
     await first.acquire();
     await first.release();
-    // release() frees the lease but leaves the blob behind.
-    assertEquals(mock.blobs.size, 1);
+    // release() deletes the lock blob so _locks/ does not accumulate orphans.
+    assertEquals(mock.blobs.size, 0);
     const second = createBlobLock(
       client,
       container,
@@ -167,6 +167,116 @@ Deno.test("a lock path can be acquired again after release (existing blob return
     await second.release();
     await second.acquire();
     await second.release();
+  });
+});
+
+/** Wraps the (already mock-redirected) fetch so `beforeLeaseAcquire` runs
+ * ahead of every lease-acquire request, simulating a concurrent release()
+ * deleting the lock blob between ensureBlobExists() and the lease request. */
+function beforeEachLeaseAcquire(hook: () => void): () => void {
+  const inner = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    if (
+      url.searchParams.get("comp") === "lease" &&
+      headers.get("x-ms-lease-action") === "acquire"
+    ) hook();
+    return inner(input, init);
+  }) as typeof fetch;
+  return () => {
+    globalThis.fetch = inner;
+  };
+}
+
+Deno.test("acquire re-creates the lock blob when it is deleted before the lease request", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    let deletions = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      if (deletions++ === 0) mock.blobs.clear();
+    });
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/gone", {
+        ttlMs: 15_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 1_000,
+      });
+      await lock.acquire();
+      assertExists(await lock.inspect());
+      await lock.release();
+    } finally {
+      restore();
+    }
+    assertEquals(deletions, 2, "one 404, then one successful retry");
+  });
+});
+
+Deno.test("acquire gives up after a bounded number of blob re-creations", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const restore = beforeEachLeaseAcquire(() => mock.blobs.clear());
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/loop", {
+        ttlMs: 15_000,
+        retryIntervalMs: 50,
+        maxWaitMs: 5_000,
+      });
+      await assertRejects(() => lock.acquire(), Error, "(404)");
+    } finally {
+      restore();
+    }
+  });
+});
+
+Deno.test("release does not delete a lock blob another holder has re-leased", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    const client = BlobClient.fromAuth({
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    });
+    const opts = { ttlMs: 15_000, retryIntervalMs: 50, maxWaitMs: 1_000 };
+    const first = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/held",
+      opts,
+    );
+    await first.acquire();
+    // Release the lease behind first's back so a second holder takes it, then
+    // let first.release() run: its lease release 409s, and its delete must not
+    // be attempted (and would 412 against the live lease if it were).
+    const [blobKey] = [...mock.blobs.keys()];
+    mock.blobs.get(blobKey)!.leaseState = "available";
+    mock.blobs.get(blobKey)!.leaseId = undefined;
+    const second = createBlobLock(
+      client,
+      container,
+      "swamp",
+      "/test/held",
+      opts,
+    );
+    await second.acquire();
+    await first.release();
+    assertEquals(mock.blobs.size, 1, "second holder's blob must survive");
+    assertExists(await second.inspect());
+    await second.release();
+    assertEquals(mock.blobs.size, 0);
   });
 });
 

@@ -14,10 +14,12 @@ responses (for example `ContainerBeingDeleted`) still fail. Reported by
 `commit_seq` blob, the loser got 409 `BlobAlreadyExists` and the push threw
 instead of re-reading and retrying. Both now retry on it like an ETag conflict.
 
-**Changed:** Lock blobs are still not deleted on release. Deleting after release
-would race a waiter that already passed the existence check and is about to
-acquire its lease, so orphaned `_locks/` blobs remain by design (they are empty
-and their lease state is `available`).
+**Changed:** `release()` and `forceRelease()` now delete the lock blob after
+releasing the lease (best-effort), so `_locks/` no longer accumulates one
+orphan per lock key. A delete against a blob another holder has just re-leased
+is refused by Azure (412) and ignored. A waiter whose lock blob is deleted
+between its existence check and its lease request now re-creates it and
+retries (up to 5 times) instead of failing with a 404.
 
 **Upgrade note:** Datastores already wedged by this bug recover on upgrade; no
 manual deletion of lock blobs is needed.
