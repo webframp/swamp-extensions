@@ -125,15 +125,20 @@ export function createMockAzureServer(): MockAzureServer {
     if (req.method === "DELETE" && !comp && !restype) {
       const blob = blobs.get(blobKey);
       if (!blob) return new Response(null, { status: 404 });
+      const supplied = req.headers.get("x-ms-lease-id");
       if (blob.leaseState === "leased") {
         // A leased blob cannot be deleted without its lease ID.
-        const supplied = req.headers.get("x-ms-lease-id");
         if (supplied !== blob.leaseId) {
           return new Response(
             supplied ? "LeaseIdMismatchWithBlobOperation" : "LeaseIdMissing",
             { status: 412 },
           );
         }
+      } else if (supplied) {
+        // A lease ID against a blob with no lease is refused, not ignored.
+        return new Response("LeaseNotPresentWithBlobOperation", {
+          status: 412,
+        });
       }
       blobs.delete(blobKey);
       return new Response(null, { status: 202 });

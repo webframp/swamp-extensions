@@ -256,7 +256,9 @@ export function createBlobLock(
             // set, so acquire() can be retried) and don't strand the lease we
             // just took on Azure — best-effort release it back.
             try {
-              await leaseAction(client, path, "release", acquiredId);
+              if (!(await deleteLockBlobWithLease(client, path, acquiredId))) {
+                await leaseAction(client, path, "release", acquiredId);
+              }
             } catch {
               // Ignore — the lease will expire via its fixed duration anyway.
             }
@@ -434,7 +436,10 @@ export function createBlobLock(
             "release",
             expectedNonce,
           );
-          if (resp.status !== 200) return false;
+          // 404: a delete we could not confirm (transport error, or a retried
+          // 5xx that had already committed) removed the blob. The lock is not
+          // held, which is what the caller asked for.
+          if (resp.status !== 200 && resp.status !== 404) return false;
         }
         // If this instance itself held that lease, clear its local state too —
         // otherwise a subsequent acquire() on this same object would wrongly

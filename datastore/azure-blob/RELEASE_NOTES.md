@@ -23,6 +23,8 @@ longer yours), they fall back to a plain lease release, which leaves the blob
 as before. A waiter whose lock blob is deleted between its existence check and
 its lease request re-creates it and retries, up to 5 consecutive times; any
 lease conflict resets that count, so waiting out a long queue is unaffected.
+Storage accounts with blob versioning or soft delete keep the deleted lock
+blobs for their retention period; a lifecycle rule on `_locks/` cleans them up.
 
 **Upgrade note:** Datastores already wedged by this bug recover on upgrade; no
 manual deletion of lock blobs is needed.
