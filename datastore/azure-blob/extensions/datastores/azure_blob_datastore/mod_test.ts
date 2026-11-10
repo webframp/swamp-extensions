@@ -219,9 +219,13 @@ Deno.test("acquire re-creates the lock blob when it is deleted before the lease 
   });
 });
 
-Deno.test("acquire gives up after a bounded number of blob re-creations", async () => {
+Deno.test("acquire gives up after 5 consecutive blob re-creations", async () => {
   await withMockServer(async ({ container, mock }) => {
-    const restore = beforeEachLeaseAcquire(() => mock.blobs.clear());
+    let leaseRequests = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      leaseRequests++;
+      mock.blobs.clear();
+    });
     try {
       const client = BlobClient.fromAuth({
         mode: "sharedKey",
@@ -238,10 +242,51 @@ Deno.test("acquire gives up after a bounded number of blob re-creations", async 
     } finally {
       restore();
     }
+    assertEquals(leaseRequests, 6, "initial attempt plus 5 re-creations");
   });
 });
 
-Deno.test("release does not delete a lock blob another holder has re-leased", async () => {
+Deno.test("a lease conflict resets the re-creation budget so patient waiters do not fail early", async () => {
+  await withMockServer(async ({ container, mock }) => {
+    let n = 0;
+    const restore = beforeEachLeaseAcquire(() => {
+      n++;
+      const key = [...mock.blobs.keys()][0];
+      if (n <= 5) {
+        mock.blobs.clear(); // five consecutive 404s: budget exhausted
+      } else if (n === 6) {
+        // Blob exists again; a foreign holder owns the lease -> 409 -> reset.
+        mock.blobs.get(key)!.leaseState = "leased";
+        mock.blobs.get(key)!.leaseId = "foreign";
+      } else if (n === 7) {
+        // Handover: foreign holder deletes the blob. Without the reset this
+        // would be the 6th 404 and acquire() would throw.
+        mock.blobs.clear();
+      }
+    });
+    try {
+      const client = BlobClient.fromAuth({
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      });
+      const lock = createBlobLock(client, container, "swamp", "/test/budget", {
+        ttlMs: 15_000,
+        retryIntervalMs: 20,
+        maxWaitMs: 5_000,
+      });
+      await lock.acquire();
+      assertExists(await lock.inspect());
+      await lock.release();
+    } finally {
+      restore();
+    }
+    assertEquals(n, 8);
+  });
+});
+
+Deno.test("a waiting holder takes over when the first releases and deletes the lock blob", async () => {
   await withMockServer(async ({ container, mock }) => {
     const client = BlobClient.fromAuth({
       mode: "sharedKey",
@@ -249,32 +294,30 @@ Deno.test("release does not delete a lock blob another holder has re-leased", as
       accountKey: "c3VwZXJzZWNyZXQ=",
       endpointSuffix: "core.windows.net",
     });
-    const opts = { ttlMs: 15_000, retryIntervalMs: 50, maxWaitMs: 1_000 };
+    const opts = { ttlMs: 15_000, retryIntervalMs: 20, maxWaitMs: 5_000 };
     const first = createBlobLock(
       client,
       container,
       "swamp",
-      "/test/held",
+      "/test/hand",
       opts,
     );
-    await first.acquire();
-    // Release the lease behind first's back so a second holder takes it, then
-    // let first.release() run: its lease release 409s, and its delete must not
-    // be attempted (and would 412 against the live lease if it were).
-    const [blobKey] = [...mock.blobs.keys()];
-    mock.blobs.get(blobKey)!.leaseState = "available";
-    mock.blobs.get(blobKey)!.leaseId = undefined;
     const second = createBlobLock(
       client,
       container,
       "swamp",
-      "/test/held",
+      "/test/hand",
       opts,
     );
-    await second.acquire();
+    await first.acquire();
+    const waiting = second.acquire();
+    await new Promise((r) => setTimeout(r, 100));
+    assertEquals(mock.blobs.size, 1);
     await first.release();
-    assertEquals(mock.blobs.size, 1, "second holder's blob must survive");
-    assertExists(await second.inspect());
+    await waiting;
+    const info = await second.inspect();
+    assertExists(info);
+    assertEquals(await first.heartbeat(), false);
     await second.release();
     assertEquals(mock.blobs.size, 0);
   });

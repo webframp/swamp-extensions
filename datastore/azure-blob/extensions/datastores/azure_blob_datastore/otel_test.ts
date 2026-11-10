@@ -667,6 +667,15 @@ Deno.test("every client span name the code can emit is asserted somewhere", asyn
       await lock.inspect();
       await lock.release();
 
+      // A release the atomic delete cannot serve (here: a lease ID that is not
+      // ours, refused with 412) falls back to a plain lease release.
+      const other = createBlobLock(client, CONTAINER, PREFIX, "/repo", {
+        lockKey: "coverage-fallback",
+      });
+      await other.acquire();
+      assertEquals(await other.forceRelease("not-the-nonce"), false);
+      await other.release();
+
       // Named ops are threaded through BlobRequestOptions.op; a typo would
       // silently fall back to the HTTP verb, so each one is pinned here.
       for (
@@ -675,6 +684,7 @@ Deno.test("every client span name the code can emit is asserted somewhere", asyn
           "Azure Blob setLockMetadata",
           "Azure Blob lease.acquire",
           "Azure Blob lease.release",
+          "Azure Blob deleteLockBlob",
           "Azure Blob getLockMetadata",
           "Azure Blob listBlobs",
           "Azure Blob getShard",
