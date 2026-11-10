@@ -1,0 +1,221 @@
+id: 7d3f1b92-4c8a-4e65-9a1f-2b6e0c5d8a47
+name: verify
+description: |
+  Pre-PR verification of a commit. Runs the same per-extension tasks CI runs
+  (check, lint, fmt:check, test), the manifest format check, the registry
+  quality rubric, and the reserved-data-name scan, in a fresh git worktree at
+  the verified commit, then assembles an attestation bound to the commit's tree
+  hash. The attestation is written to the output directory; posting it is a
+  separate, explicit step (scripts/verify main.ts post).
+
+  CI runs this same workflow. See verification/README.md.
+version: 1
+
+tags:
+  purpose: pre-pr-verification
+
+inputs:
+  properties:
+    commit:
+      type: string
+      description: Commit SHA to verify.
+    branch:
+      type: string
+      description: Branch name, recorded in the attestation.
+    base:
+      type: string
+      default: origin/main
+      description: Ref the diff is taken against to decide which extensions to verify.
+    repo:
+      type: string
+      default: ..
+      description: Path to the repository root, relative to verification/.
+    concurrency:
+      type: string
+      default: "4"
+      description: Extensions verified in parallel.
+  required:
+    - commit
+    - branch
+
+concurrency: 4
+
+jobs:
+  # A fresh worktree, so the verified state is the committed state and not
+  # whatever the caller's working copy holds. Unique per run, so verifications
+  # can run in parallel.
+  - name: setup
+    description: Create a clean worktree at the verified commit.
+    steps:
+      - name: checkout
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-setup-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              set -e
+              cd "${{ inputs.repo }}"
+              WT="/tmp/swamp-verify-wt-${{ run.id }}"
+              git worktree prune
+              git worktree add --detach "$WT" "${{ inputs.commit }}"
+              mkdir -p "/tmp/swamp-verify-out-${{ run.id }}"
+              echo "worktree=$WT out=/tmp/swamp-verify-out-${{ run.id }}"
+
+  - name: discover
+    description: Select the extensions the diff touches, as CI does.
+    dependsOn:
+      - job: setup
+        condition:
+          type: succeeded
+    steps:
+      - name: discover
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-discover-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              set -e
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts discover \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --base "${{ inputs.base }}"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+  - name: extensions
+    description: check, lint, fmt:check and test for every selected extension.
+    dependsOn:
+      - job: discover
+        condition:
+          type: succeeded
+    steps:
+      - name: tasks
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-tasks-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts checks \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --concurrency "${{ inputs.concurrency }}"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+      - name: reserved-data-names
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-reserved-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts step \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --name reserved-data-names \
+                -- deno task --cwd scripts/check-reserved-names scan \
+                "/tmp/swamp-verify-wt-${{ run.id }}"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+  # After the deno tasks: both read the same extension directories, and a task
+  # that refreshes a lockfile must not race a manifest read.
+  - name: registry
+    description: Manifest format and the registry quality rubric.
+    dependsOn:
+      - job: extensions
+        condition:
+          type: succeeded
+    steps:
+      - name: manifests
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-manifests-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts manifests \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --concurrency "${{ inputs.concurrency }}"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+      - name: quality
+        dependsOn:
+          - step: manifests
+            condition:
+              type: succeeded
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-quality-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts quality \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --concurrency "${{ inputs.concurrency }}"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+  # Runs only when every check passed, so a failed run leaves no attestation.
+  - name: attest
+    description: Assemble the attestation from the recorded steps.
+    dependsOn:
+      - job: registry
+        condition:
+          type: succeeded
+    steps:
+      - name: build
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-build-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              set -e
+              deno run --allow-read --allow-write --allow-run --allow-env \
+                scripts/verify/main.ts build \
+                --out "/tmp/swamp-verify-out-${{ run.id }}" \
+                --commit "${{ inputs.commit }}" \
+                --branch "${{ inputs.branch }}"
+              echo "ATTESTATION_FILE=/tmp/swamp-verify-out-${{ run.id }}/attestation.json"
+            workingDir: "/tmp/swamp-verify-wt-${{ run.id }}"
+
+  # Always: the worktree is removed whether or not verification passed.
+  - name: cleanup
+    description: Remove the worktree.
+    dependsOn:
+      - job: setup
+        condition:
+          type: always
+      - job: discover
+        condition:
+          type: always
+      - job: extensions
+        condition:
+          type: always
+      - job: registry
+        condition:
+          type: always
+      - job: attest
+        condition:
+          type: always
+    steps:
+      - name: remove-worktree
+        task:
+          type: model_method
+          modelType: "command/shell"
+          modelName: verify-cleanup-${{ run.id }}
+          methodName: execute
+          inputs:
+            run: |
+              cd "${{ inputs.repo }}"
+              git worktree remove --force "/tmp/swamp-verify-wt-${{ run.id }}" || true
+              git worktree prune
