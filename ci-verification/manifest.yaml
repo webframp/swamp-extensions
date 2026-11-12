@@ -14,15 +14,21 @@ description: |
   ```bash
   swamp extension pull @webframp/ci-verification
 
-  # Verify a commit of a swamp-extensions checkout. The workflow creates the
-  # ci-verification instance it runs on.
+  # Verify a commit of a swamp-extensions checkout. Each workflow step names
+  # the model type and the instance name ci-verification, so swamp creates
+  # that instance on the first run.
   swamp workflow run @webframp/ci-verification-verify \
     --input repoPath=/path/to/swamp-extensions \
     --input commit=<sha> --input base=<base-sha>
 
-  # Build and post the attestation once reviews are done.
+  # Build and post the attestation once reviews are done. A change to the
+  # trust root (ci-discover, check-reserved-names, this extension, CI
+  # workflows) needs at least one approval. To run methods before the
+  # workflow has run, create the instance first:
+  #   swamp model create @webframp/ci-verification ci-verification
   swamp model method run ci-verification attest \
-    --input repoPath=/path/to/swamp-extensions --input commit=<sha>
+    --input repoPath=/path/to/swamp-extensions --input commit=<sha> \
+    --input 'approvals:json=[{"gateId":"release-approval","decision":"approve"}]'
   swamp model method run ci-verification post \
     --input repoPath=/path/to/swamp-extensions --input commit=<sha>
   ```

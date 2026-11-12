@@ -25,7 +25,8 @@ method ends, including on failure or cancellation.
   selected extension under CI's pass condition (`quality-<tree>-<slug>`).
 - **attest**: builds `attestation-<tree>` from the recorded results. It
   recomputes the gate and writes nothing if any selected result is missing,
-  failed, or was recorded for another selection or model version.
+  failed, or was recorded for another selection or model version, or if the
+  change touches the trust root and no approval was given.
 - **post**: pushes the attestation to `refs/attestations/<tree>/<timestamp>` on
   a remote. The push is never forced, so an existing attestation is never
   overwritten.
@@ -41,8 +42,15 @@ so after a fix only the failures rerun.
 ## Usage
 
 The shipped workflow runs discover, check and quality in sequence, each job only
-when the previous one succeeded. Its steps create the `ci-verification` instance
-the model methods run on.
+when the previous one succeeded. Every step names the model type
+(`modelType: "@webframp/ci-verification"`) and the instance name
+(`modelName: ci-verification`), so swamp creates the `ci-verification` instance
+on the first run and reuses it after that. To run the methods directly before
+the workflow has run, create the instance first:
+
+```bash
+swamp model create @webframp/ci-verification ci-verification
+```
 
 ```bash
 swamp extension pull @webframp/ci-verification
@@ -107,8 +115,10 @@ Discovery and verification run the commit's own `scripts/ci-discover`,
 `scripts/check-reserved-names` and this extension's tests. A change to any of
 those, or to `.github/workflows/`, alters what verification checks, so the
 passing result was computed by the changed code. Such files are listed in
-`trustRootChanged` and the attestation sets `requiresSignOff: true`. Treat that
-as requiring a person's sign-off before release.
+`trustRootChanged` and the attestation sets `requiresSignOff: true`. `attest`
+refuses such a change unless at least one approval is passed, so a person's
+sign-off is part of the gate, not only a flag. The approval is recorded as
+asserted by the caller; the model does not check who gave it.
 
 ## License
 

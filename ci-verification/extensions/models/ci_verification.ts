@@ -763,7 +763,7 @@ export const model = {
 
     attest: {
       description:
-        "Build the attestation for a commit's tree from its recorded results; writes nothing unless every selected check passed for this selection and model version",
+        "Build the attestation for a commit's tree from its recorded results; writes nothing unless every selected check passed for this selection and model version, and, when the change touches the trust root, an approval is given",
       arguments: z.object({
         repoPath: RepoArg,
         commit: CommitArg,
@@ -771,7 +771,7 @@ export const model = {
           "Review verdicts, recorded as asserted by the caller",
         ),
         approvals: z.array(ApprovalSchema).default([]).describe(
-          "Approvals, recorded as asserted by the caller",
+          "Approvals, recorded as asserted by the caller; at least one is required when the change touches the trust root",
         ),
       }),
       execute: async (
@@ -841,6 +841,17 @@ export const model = {
           if (review.verdict !== "pass") {
             problems.push(`review ${review.name}: ${review.verdict}`);
           }
+        }
+        // The commit's own tooling verified a change to that tooling, so a
+        // pass needs a person's sign-off before it can count.
+        if (sel.trustRootChanged.length > 0 && args.approvals.length === 0) {
+          problems.push(
+            `trust root changed (${
+              sel.trustRootChanged.slice(0, 3).join(", ")
+            }${
+              sel.trustRootChanged.length > 3 ? ", ..." : ""
+            }): an approval is required`,
+          );
         }
         if (problems.length > 0) {
           throw new Error(

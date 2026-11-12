@@ -73,7 +73,10 @@ interface Fixture {
  * without the operator's AWS_PROFILE. group/ext-b fails its test and its
  * quality score when `bFails` is set.
  */
-async function fixture(bFails: boolean): Promise<Fixture> {
+async function fixture(
+  bFails: boolean,
+  touchTrustRoot = true,
+): Promise<Fixture> {
   const root = await Deno.makeTempDir({ prefix: "civ-model-test-" });
   const repo = `${root}/repo`;
   const remote = `${root}/remote.git`;
@@ -138,7 +141,9 @@ async function fixture(bFails: boolean): Promise<Fixture> {
     "git init -q -b main . && git add -A && git commit -q -m base",
   );
   const base = await sh(repo, "git rev-parse HEAD");
-  await write(`${repo}/scripts/ci-discover/README.md`, "changed\n");
+  if (touchTrustRoot) {
+    await write(`${repo}/scripts/ci-discover/README.md`, "changed\n");
+  }
   await write(`${repo}/ext-a/notes.txt`, "changed\n");
   await sh(repo, "git add -A && git commit -q -m head");
   const head = await sh(repo, "git rev-parse HEAD");
@@ -212,13 +217,16 @@ async function attest(
     { name: "code-review", verdict: "pass" },
   ],
   commit = f.head,
+  approvals: Array<{ gateId: string; decision: string }> = [
+    { gateId: "release-approval", decision: "approve" },
+  ],
 ) {
   await model.methods.attest.execute(
     {
       repoPath: f.repo,
       commit,
       reviews,
-      approvals: [{ gateId: "release-approval", decision: "approve" }],
+      approvals,
     },
     t.ctx,
   );
@@ -460,6 +468,15 @@ Deno.test("attest builds the attestation from recorded results, recomputes the g
       "review code-review: fail",
     );
 
+    // The change touches scripts/ci-discover/, so a pass needs an approval.
+    const ts = ctx(passing);
+    await assertRejects(
+      () => attest(f, ts, undefined, f.head, []),
+      Error,
+      "trust root changed (scripts/ci-discover/README.md): an approval is required",
+    );
+    assert(!ts.getWrittenResources().some((r) => r.specName === "attestation"));
+
     // post pushes the stored attestation as a ref, and refuses a twin commit.
     const tp = ctx(stored(ta, passing));
     await model.methods.post.execute(
@@ -500,4 +517,47 @@ Deno.test("the model version matches manifest.yaml", async () => {
   const m = manifest.match(/^version: "([^"]+)"$/m);
   assertEquals(m?.[1], model.version);
   assertEquals(MODEL_VERSION, model.version);
+});
+
+Deno.test("attest needs no approval when the trust root is untouched", async () => {
+  const f = await fixture(false, false);
+  try {
+    const t = ctx();
+    await discover(f, t);
+    await check(f, t);
+    await quality(f, t);
+    await attest(f, t, [], f.head, []);
+    const att = t.getWrittenResources().find((r) =>
+      r.specName === "attestation"
+    );
+    assertEquals(att?.data.trustRootChanged, []);
+    assertEquals(att?.data.requiresSignOff, false);
+    assertEquals(att?.data.approvals, []);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+Deno.test("every workflow step names the model type, so swamp creates the instance", async () => {
+  const yaml = await Deno.readTextFile(
+    new URL("../workflows/verify.yaml", import.meta.url),
+  );
+  const tasks = yaml.split(/\n\s+task:\n/).slice(1);
+  assertEquals(tasks.length, 3);
+  const methods: string[] = [];
+  for (const task of tasks) {
+    assertMatch(task, /^\s+type: model_method$/m);
+    assertMatch(task, /^\s+modelType: "@webframp\/ci-verification"$/m);
+    assertMatch(task, /^\s+modelName: ci-verification$/m);
+    assert(
+      !/modelIdOrName/.test(task),
+      "a step must not need an existing instance",
+    );
+    const m = task.match(/^\s+methodName: (\S+)$/m);
+    assert(m, task);
+    methods.push(m[1]);
+  }
+  assertEquals(methods, ["discover", "check", "quality"]);
+  for (const name of methods) assert(name in model.methods, name);
+  assertEquals(model.type, "@webframp/ci-verification");
 });
