@@ -650,7 +650,10 @@ Deno.test("get_commit maps a REST commit into the commitDetail resource", async 
 });
 
 Deno.test("get_commit fails when the SHA is not in the project", async () => {
-  const restore = mockFetch({});
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/repository/commits/deadbeef?stats=true":
+      { status: 404, body: { message: "404 Commit Not Found" } },
+  });
   try {
     const { context } = createModelTestContext({
       globalArgs: TEST_GLOBAL_ARGS,
@@ -662,7 +665,53 @@ Deno.test("get_commit fails when the SHA is not in the project", async () => {
           context as any,
         ),
       Error,
-      "404",
+      "Commit Not Found",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_commit tolerates omitted stats, parents and short_id", async () => {
+  const fullSha = "d202321e07f28c5706cfd63b016aa4a2c4480522";
+  const restore = mockFetch({
+    [`GET /api/v4/projects/group%2Frepo/repository/commits/${fullSha}?stats=true`]:
+      { status: 200, body: { id: fullSha, title: "t", message: "t" } },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_commit.execute(
+      { project: "group/repo", sha: fullSha },
+      context as any,
+    );
+    const data = getWrittenResources()[0].data as any;
+    assertEquals(data.stats, null);
+    assertEquals(data.parentIds, []);
+    assertEquals(data.shortId, "");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_commit fails when GitLab returns no commit id", async () => {
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/repository/commits/deadbeef?stats=true":
+      { status: 200, body: {} },
+  });
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_commit.execute(
+          { project: "group/repo", sha: "deadbeef" },
+          context as any,
+        ),
+      Error,
+      "no commit id",
     );
   } finally {
     restore();
