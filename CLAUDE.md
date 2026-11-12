@@ -434,8 +434,10 @@ needs every blocking job and fails unless each one succeeded. A skipped job is
 not a pass, except the two review jobs on events that are not pull requests.
 
 - `merge.yml` reads only the latest `CI Gate` check run for the PR head that the
-  GitHub Actions app created. Queued, in progress, missing or any other
-  conclusion is refused with a comment saying which.
+  GitHub Actions app created, and merges only that commit
+  (`--match-head-commit`), so a push after the check is refused rather than
+  merged ungated. Queued, in progress, missing or any other conclusion is
+  refused with a comment saying which.
 - **A new job that should block a merge goes in `ci-gate`'s `needs` and in its
   script.** `scripts/ci-discover/ci_gate_test.ts` fails until every job in
   `ci.yml` is either needed by the gate or listed there as non-gating.

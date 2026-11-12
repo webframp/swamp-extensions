@@ -29,6 +29,9 @@ jobs:
       )
     permissions:
       actions: write
+      # Read by "Check the CI gate" (commits/{sha}/check-runs). Public repos
+      # answer without it; a private one would refuse every /lgtm.
+      checks: read
       contents: write
       pull-requests: write
     steps:
@@ -89,11 +92,16 @@ jobs:
       - name: Merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Merge only the commit whose CI Gate was checked above. A push in
+          # between moves the head, and gh refuses rather than merging a commit
+          # the gate never saw.
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           gh pr merge ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
             --squash \
-            --delete-branch
+            --delete-branch \
+            --match-head-commit "$HEAD_SHA"
 
       - name: Trigger CI on main
         env:
