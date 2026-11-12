@@ -29,6 +29,9 @@ jobs:
       )
     permissions:
       actions: write
+      # Read by "Check the CI gate" (commits/{sha}/check-runs). Public repos
+      # answer without it; a private one would refuse every /lgtm.
+      checks: read
       contents: write
       pull-requests: write
     steps:
@@ -40,41 +43,65 @@ jobs:
           PR_DATA=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.issue.number }})
           echo "head_sha=$(echo $PR_DATA | jq -r '.head.sha')" >> $GITHUB_OUTPUT
 
-      - name: Check CI status
+      - name: Check the CI gate
         id: ci-status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
-          # Get combined status for the PR head commit
-          STATUS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/status --jq '.state')
-
-          # Also check for any failing check runs
-          CHECKS=$(gh api repos/${{ github.repository }}/commits/${{ steps.pr.outputs.head_sha }}/check-runs --jq '.check_runs | map(select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null)) | length')
-
-          if [ "$STATUS" = "success" ] || [ "$STATUS" = "pending" -a "$CHECKS" = "0" ]; then
-            echo "passed=true" >> $GITHUB_OUTPUT
+          # The `CI Gate` job in ci.yml succeeds only when every job that can
+          # block a merge succeeded, and its name never changes, unlike the
+          # per-extension matrix jobs. Read its latest run for this exact
+          # commit. A run that is queued or in progress is not a pass, and
+          # neither is no run at all.
+          #
+          # check_name filters server-side, so the answer does not depend on
+          # how many matrix jobs the commit has. Only runs the GitHub Actions
+          # app created count: any app with checks:write could post a check
+          # run with the same name.
+          state=$(gh api -X GET "repos/${{ github.repository }}/commits/${HEAD_SHA}/check-runs" \
+            -f check_name="CI Gate" -f filter=latest \
+            --jq '[.check_runs[] | select(.app.slug == "github-actions")]
+                  | if length == 0 then "missing"
+                    else (sort_by(.started_at) | last
+                          | if .status == "completed" then .conclusion else .status end)
+                    end')
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+          if [ "$state" = "success" ]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "passed=false" >> $GITHUB_OUTPUT
+            echo "passed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Comment if CI not passed
         if: steps.ci-status.outputs.passed != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STATE: ${{ steps.ci-status.outputs.state }}
         run: |
+          if [ "$STATE" = "missing" ]; then
+            reason="This commit has no \`CI Gate\` check. A pull request whose last push predates the CI Gate job has none: push to the branch (or update it from main) so CI runs again, then comment again."
+          else
+            reason="The \`CI Gate\` check for this commit is \`${STATE}\`. It must be \`success\`. If it is queued or in progress, wait for it and comment again."
+          fi
           gh pr comment ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
-            --body "Cannot merge: CI checks have not passed. Please wait for all checks to complete successfully."
+            --body "Cannot merge: ${reason}"
           exit 1
 
       - name: Merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Merge only the commit whose CI Gate was checked above. A push in
+          # between moves the head, and gh refuses rather than merging a commit
+          # the gate never saw.
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
         run: |
           gh pr merge ${{ github.event.issue.number }} \
             --repo ${{ github.repository }} \
             --squash \
-            --delete-branch
+            --delete-branch \
+            --match-head-commit "$HEAD_SHA"
 
       - name: Trigger CI on main
         env:

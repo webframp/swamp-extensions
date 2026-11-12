@@ -707,6 +707,82 @@ jobs:
             exit 1
           fi
 
+  ci-gate:
+    # The one check that decides whether a PR may merge. Most jobs above run in
+    # matrices whose names are derived from the diff, so branch protection
+    # cannot list them; this job `needs` all of them and fails unless each one
+    # succeeded. merge.yml reads this job's conclusion and nothing else.
+    #
+    # A skipped job is not a pass. The two review jobs are skipped on events
+    # that are not pull requests, which is the only skip allowed. On a pull
+    # request they run, or the gate fails: a fork PR has no review, so a
+    # maintainer must bring the branch into this repository first.
+    #
+    # Add every new job that should block a merge to `needs` and to the checks
+    # in the step below; scripts/ci-discover/ci_gate_test.ts fails until it is
+    # either there or listed as non-gating.
+    name: CI Gate
+    if: ${{ always() }}
+    needs:
+      - discover
+      - extension-check
+      - scripts-check
+      - reserved-data-names
+      - quality-gate
+      - manifest-validate
+      - adversarial-review
+      - ci-security-review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Require every job to have succeeded
+        env:
+          EVENT: ${{ github.event_name }}
+          FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+          R_DISCOVER: ${{ needs.discover.result }}
+          R_EXTENSION_CHECK: ${{ needs.extension-check.result }}
+          R_SCRIPTS_CHECK: ${{ needs.scripts-check.result }}
+          R_RESERVED: ${{ needs.reserved-data-names.result }}
+          R_QUALITY: ${{ needs.quality-gate.result }}
+          R_MANIFEST: ${{ needs.manifest-validate.result }}
+          R_ADVERSARIAL: ${{ needs.adversarial-review.result }}
+          R_SECURITY: ${{ needs.ci-security-review.result }}
+        run: |
+          failed=0
+          # check <job> <result> <skip-allowed: yes|no>
+          check() {
+            case "$2" in
+              success) echo "ok      $1" ;;
+              skipped)
+                if [ "$3" = "yes" ]; then
+                  echo "ok      $1 (skipped; allowed on this event)"
+                else
+                  echo "::error::$1 was skipped, and a skip is not a pass"
+                  failed=1
+                fi ;;
+              *)
+                echo "::error::$1 finished as '$2'"
+                failed=1 ;;
+            esac
+          }
+          # Reviews run on same-repo pull requests and are skipped elsewhere.
+          review_skip=no
+          if [ "$EVENT" != "pull_request" ]; then review_skip=yes; fi
+          if [ "$FORK" = "true" ]; then
+            echo "::error::Pull request from a fork: the adversarial and security reviews do not run for forks. A maintainer must push the branch to this repository so they can."
+            failed=1
+          fi
+          check discover            "$R_DISCOVER"        no
+          check extension-check     "$R_EXTENSION_CHECK" no
+          check scripts-check       "$R_SCRIPTS_CHECK"   no
+          check reserved-data-names "$R_RESERVED"        no
+          check quality-gate        "$R_QUALITY"         no
+          check manifest-validate   "$R_MANIFEST"        no
+          check adversarial-review  "$R_ADVERSARIAL"     "$review_skip"
+          check ci-security-review  "$R_SECURITY"        "$review_skip"
+          exit "$failed"
+
   dispatch-publish:
     # merge.yml starts CI on main with GITHUB_TOKEN, and GitHub raises no
     # workflow_run event for runs a GITHUB_TOKEN started, so publish.yml never
