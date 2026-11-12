@@ -1,0 +1,5303 @@
+{
+  "version": 1,
+  "workItem": "swampext-1",
+  "factory": "swampext-pr",
+  "definitionDigest": "sha256:ef55f31b8d69b12024f26f8fc6e2ad2d0cf0352f5096360e5a17dd03ae48afd4",
+  "subject": {
+    "commit": "4602eb73ce1dd17f68cb4c475455bb3ff2b35ea3",
+    "tree": "175dc27f7f79ea4ece30bc5f15078c84a436cd97",
+    "base": "9d133d4b12bb27c22e1084692adbe3aafb839582",
+    "branch": "fix/ci-gate"
+  },
+  "discovery": {
+    "scope": "full",
+    "extensions": [
+      "ai-usage",
+      "anthropic/admin",
+      "anthropic/analytics",
+      "anthropic/compliance",
+      "anydoc-ingest",
+      "artifactory",
+      "aurora-datastore-bootstrap",
+      "aws/acm-diagnostics",
+      "aws/adopt",
+      "aws/alarm-investigation",
+      "aws/alarms",
+      "aws/bedrock-usage",
+      "aws/cfn-diagnostics",
+      "aws/cfn-operations",
+      "aws/config-compliance",
+      "aws/cost-audit",
+      "aws/cost-estimate",
+      "aws/cost-explorer",
+      "aws/cost-report",
+      "aws/dns-observation",
+      "aws/drift-state",
+      "aws/event-topology",
+      "aws/guardduty",
+      "aws/iam",
+      "aws/inventory",
+      "aws/kiro-usage",
+      "aws/logs",
+      "aws/metrics",
+      "aws/networking",
+      "aws/ops",
+      "aws/php2shell-hunt",
+      "aws/pricing",
+      "aws/securityhub-findings",
+      "aws/service-quotas",
+      "aws/support",
+      "aws/terraform-drift",
+      "aws/traces",
+      "azure-blob-datastore-bootstrap",
+      "azure/openai-usage",
+      "bench-datastore",
+      "claude-cost-reconciliation",
+      "cloudflare",
+      "cloudflare-audit",
+      "cloudflare/access",
+      "cloudflare/api-shield",
+      "cloudflare/d1",
+      "cloudflare/durable-objects",
+      "cloudflare/email-routing",
+      "cloudflare/gateway",
+      "cloudflare/hyperdrive",
+      "cloudflare/images",
+      "cloudflare/kv",
+      "cloudflare/load-balancing",
+      "cloudflare/logpush",
+      "cloudflare/magic-transit",
+      "cloudflare/pages",
+      "cloudflare/queues",
+      "cloudflare/r2",
+      "cloudflare/registrar",
+      "cloudflare/rulesets",
+      "cloudflare/spectrum",
+      "cloudflare/ssl-certificates",
+      "cloudflare/stream",
+      "cloudflare/tunnel",
+      "cloudflare/turnstile",
+      "cloudflare/vectorize",
+      "cloudflare/waiting-room",
+      "cloudflare/workers-ai",
+      "cloudflare/workers-scripts",
+      "container-image",
+      "cost-projection",
+      "datadog/dora",
+      "datadog/downtimes",
+      "datadog/events",
+      "datadog/incidents",
+      "datadog/logs",
+      "datadog/metrics",
+      "datadog/monitors",
+      "datadog/on-call",
+      "datadog/security-rules",
+      "datadog/security-signals",
+      "datadog/security-suppressions",
+      "datadog/slos",
+      "datadog/synthetics",
+      "datadog/teams",
+      "datastore/azure-blob",
+      "datastore/dynamodb",
+      "datastore/gitlab-datastore",
+      "datastore/postgres",
+      "datastore/valkey",
+      "ddd-guidance",
+      "devops-measurement",
+      "discourse",
+      "dnsimple/account",
+      "dnsimple/certificates",
+      "dnsimple/contacts",
+      "dnsimple/dnssec",
+      "dnsimple/domains",
+      "dnsimple/registrar",
+      "dnsimple/secondary-dns",
+      "dnsimple/templates",
+      "dnsimple/tlds",
+      "dnsimple/webhooks",
+      "dnsimple/zones",
+      "dynamodb-datastore-bootstrap",
+      "editorial-review",
+      "elasticache-datastore-bootstrap",
+      "exe-dev/swamp-serve-fleet",
+      "exe-dev/vm",
+      "extension-maintenance",
+      "falai/account",
+      "falai/assets",
+      "falai/compute",
+      "falai/keys",
+      "falai/models",
+      "falai/organization",
+      "falai/serverless",
+      "falai/storage",
+      "falai/workflows",
+      "gcp/vertex-usage",
+      "github",
+      "github-issue-lifecycle",
+      "gitlab",
+      "gitlab-datastore-bootstrap",
+      "gitlab-review",
+      "griptape/assistants",
+      "griptape/buckets",
+      "griptape/data-connectors",
+      "griptape/import-export",
+      "griptape/integrations",
+      "griptape/knowledge-bases",
+      "griptape/models",
+      "griptape/observability",
+      "griptape/retrievers",
+      "griptape/rulesets",
+      "griptape/secrets",
+      "griptape/structures",
+      "griptape/tags",
+      "griptape/threads",
+      "griptape/tools",
+      "hermes-journal-writer",
+      "hermes-kanban-orchestrator",
+      "microsoft/teams",
+      "network",
+      "operator-briefing",
+      "org-simulation",
+      "presentation",
+      "reddit",
+      "redmine",
+      "redmine-kanban",
+      "research-collector",
+      "rice-scoring",
+      "snyk/apps",
+      "snyk/assets",
+      "snyk/cloud",
+      "snyk/collections",
+      "snyk/container-images",
+      "snyk/groups",
+      "snyk/inventory",
+      "snyk/issues",
+      "snyk/memberships",
+      "snyk/policies",
+      "snyk/projects",
+      "snyk/sast",
+      "snyk/sbom",
+      "snyk/self",
+      "snyk/service-accounts",
+      "snyk/settings",
+      "snyk/slack",
+      "snyk/sso",
+      "snyk/tenants",
+      "snyk/tests",
+      "sre",
+      "swamp-adoption",
+      "swamp-club",
+      "system",
+      "team-topology",
+      "terraform",
+      "threat-model",
+      "triage",
+      "twitch",
+      "typesafe-batch",
+      "vault/gopass",
+      "vault/hashicorp-vault",
+      "vault/macos-keychain",
+      "vault/pass"
+    ]
+  },
+  "checks": {
+    "status": "passed",
+    "results": [
+      {
+        "name": "ai-usage:check",
+        "status": "passed"
+      },
+      {
+        "name": "ai-usage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "ai-usage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "ai-usage:test",
+        "status": "passed"
+      },
+      {
+        "name": "ai-usage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/admin:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/admin:lint",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/admin:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/admin:test",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/admin:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/analytics:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/analytics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/analytics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/analytics:test",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/analytics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/compliance:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/compliance:lint",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/compliance:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/compliance:test",
+        "status": "passed"
+      },
+      {
+        "name": "anthropic/compliance:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "anydoc-ingest:check",
+        "status": "passed"
+      },
+      {
+        "name": "anydoc-ingest:lint",
+        "status": "passed"
+      },
+      {
+        "name": "anydoc-ingest:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "anydoc-ingest:test",
+        "status": "passed"
+      },
+      {
+        "name": "anydoc-ingest:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "artifactory:check",
+        "status": "passed"
+      },
+      {
+        "name": "artifactory:lint",
+        "status": "passed"
+      },
+      {
+        "name": "artifactory:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "artifactory:test",
+        "status": "passed"
+      },
+      {
+        "name": "artifactory:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aurora-datastore-bootstrap:check",
+        "status": "passed"
+      },
+      {
+        "name": "aurora-datastore-bootstrap:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aurora-datastore-bootstrap:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aurora-datastore-bootstrap:test",
+        "status": "passed"
+      },
+      {
+        "name": "aurora-datastore-bootstrap:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/acm-diagnostics:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/acm-diagnostics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/acm-diagnostics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/acm-diagnostics:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/acm-diagnostics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/adopt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/adopt:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/adopt:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/adopt:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/adopt:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarm-investigation:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarm-investigation:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarm-investigation:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarm-investigation:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarm-investigation:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarms:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarms:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarms:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarms:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/alarms:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/bedrock-usage:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/bedrock-usage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/bedrock-usage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/bedrock-usage:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/bedrock-usage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-diagnostics:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-diagnostics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-diagnostics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-diagnostics:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-diagnostics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-operations:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-operations:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-operations:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-operations:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cfn-operations:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/config-compliance:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/config-compliance:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/config-compliance:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/config-compliance:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/config-compliance:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-audit:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-audit:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-audit:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-audit:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-audit:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-estimate:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-estimate:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-estimate:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-estimate:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-estimate:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-explorer:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-explorer:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-explorer:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-explorer:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-explorer:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-report:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-report:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-report:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-report:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/cost-report:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/dns-observation:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/dns-observation:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/dns-observation:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/dns-observation:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/dns-observation:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/drift-state:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/drift-state:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/drift-state:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/drift-state:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/drift-state:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/event-topology:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/event-topology:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/event-topology:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/event-topology:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/event-topology:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/guardduty:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/guardduty:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/guardduty:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/guardduty:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/guardduty:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/iam:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/iam:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/iam:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/iam:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/iam:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/inventory:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/inventory:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/inventory:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/inventory:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/inventory:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/kiro-usage:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/kiro-usage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/kiro-usage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/kiro-usage:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/kiro-usage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/logs:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/logs:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/logs:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/logs:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/logs:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/metrics:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/metrics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/metrics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/metrics:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/metrics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/networking:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/networking:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/networking:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/networking:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/networking:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/ops:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/ops:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/ops:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/ops:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/ops:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/php2shell-hunt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/php2shell-hunt:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/php2shell-hunt:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/php2shell-hunt:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/php2shell-hunt:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/pricing:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/pricing:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/pricing:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/pricing:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/pricing:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/securityhub-findings:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/securityhub-findings:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/securityhub-findings:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/securityhub-findings:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/securityhub-findings:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/service-quotas:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/service-quotas:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/service-quotas:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/service-quotas:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/service-quotas:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/support:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/support:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/support:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/support:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/support:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/terraform-drift:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/terraform-drift:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/terraform-drift:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/terraform-drift:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/terraform-drift:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "aws/traces:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/traces:lint",
+        "status": "passed"
+      },
+      {
+        "name": "aws/traces:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "aws/traces:test",
+        "status": "passed"
+      },
+      {
+        "name": "aws/traces:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "azure-blob-datastore-bootstrap:check",
+        "status": "passed"
+      },
+      {
+        "name": "azure-blob-datastore-bootstrap:lint",
+        "status": "passed"
+      },
+      {
+        "name": "azure-blob-datastore-bootstrap:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "azure-blob-datastore-bootstrap:test",
+        "status": "passed"
+      },
+      {
+        "name": "azure-blob-datastore-bootstrap:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "azure/openai-usage:check",
+        "status": "passed"
+      },
+      {
+        "name": "azure/openai-usage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "azure/openai-usage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "azure/openai-usage:test",
+        "status": "passed"
+      },
+      {
+        "name": "azure/openai-usage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "bench-datastore:check",
+        "status": "passed"
+      },
+      {
+        "name": "bench-datastore:lint",
+        "status": "passed"
+      },
+      {
+        "name": "bench-datastore:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "bench-datastore:test",
+        "status": "passed"
+      },
+      {
+        "name": "bench-datastore:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "claude-cost-reconciliation:check",
+        "status": "passed"
+      },
+      {
+        "name": "claude-cost-reconciliation:lint",
+        "status": "passed"
+      },
+      {
+        "name": "claude-cost-reconciliation:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "claude-cost-reconciliation:test",
+        "status": "passed"
+      },
+      {
+        "name": "claude-cost-reconciliation:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/access:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/access:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/access:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/access:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/access:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/api-shield:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/api-shield:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/api-shield:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/api-shield:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/api-shield:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare-audit:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare-audit:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare-audit:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare-audit:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare-audit:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/d1:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/d1:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/d1:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/d1:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/d1:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/durable-objects:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/durable-objects:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/durable-objects:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/durable-objects:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/durable-objects:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/email-routing:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/email-routing:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/email-routing:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/email-routing:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/email-routing:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/gateway:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/gateway:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/gateway:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/gateway:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/gateway:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/hyperdrive:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/hyperdrive:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/hyperdrive:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/hyperdrive:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/hyperdrive:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/images:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/images:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/images:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/images:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/images:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/kv:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/kv:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/kv:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/kv:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/kv:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/load-balancing:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/load-balancing:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/load-balancing:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/load-balancing:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/load-balancing:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/logpush:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/logpush:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/logpush:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/logpush:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/logpush:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/magic-transit:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/magic-transit:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/magic-transit:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/magic-transit:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/magic-transit:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/pages:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/pages:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/pages:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/pages:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/pages:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/queues:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/queues:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/queues:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/queues:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/queues:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/r2:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/r2:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/r2:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/r2:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/r2:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/registrar:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/registrar:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/registrar:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/registrar:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/registrar:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/rulesets:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/rulesets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/rulesets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/rulesets:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/rulesets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/spectrum:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/spectrum:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/spectrum:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/spectrum:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/spectrum:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/ssl-certificates:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/ssl-certificates:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/ssl-certificates:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/ssl-certificates:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/ssl-certificates:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/stream:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/stream:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/stream:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/stream:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/stream:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/tunnel:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/tunnel:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/tunnel:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/tunnel:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/tunnel:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/turnstile:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/turnstile:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/turnstile:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/turnstile:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/turnstile:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/vectorize:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/vectorize:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/vectorize:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/vectorize:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/vectorize:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/waiting-room:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/waiting-room:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/waiting-room:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/waiting-room:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/waiting-room:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-ai:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-ai:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-ai:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-ai:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-ai:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-scripts:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-scripts:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-scripts:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-scripts:test",
+        "status": "passed"
+      },
+      {
+        "name": "cloudflare/workers-scripts:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "container-image:check",
+        "status": "passed"
+      },
+      {
+        "name": "container-image:lint",
+        "status": "passed"
+      },
+      {
+        "name": "container-image:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "container-image:test",
+        "status": "passed"
+      },
+      {
+        "name": "container-image:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "cost-projection:check",
+        "status": "passed"
+      },
+      {
+        "name": "cost-projection:lint",
+        "status": "passed"
+      },
+      {
+        "name": "cost-projection:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "cost-projection:test",
+        "status": "passed"
+      },
+      {
+        "name": "cost-projection:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/dora:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/dora:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/dora:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/dora:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/dora:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/downtimes:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/downtimes:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/downtimes:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/downtimes:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/downtimes:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/events:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/events:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/events:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/events:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/events:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/incidents:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/incidents:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/incidents:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/incidents:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/incidents:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/logs:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/logs:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/logs:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/logs:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/logs:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/metrics:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/metrics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/metrics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/metrics:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/metrics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/monitors:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/monitors:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/monitors:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/monitors:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/monitors:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/on-call:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/on-call:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/on-call:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/on-call:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/on-call:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-rules:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-rules:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-rules:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-rules:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-rules:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-signals:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-signals:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-signals:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-signals:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-signals:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-suppressions:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-suppressions:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-suppressions:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-suppressions:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/security-suppressions:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/slos:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/slos:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/slos:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/slos:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/slos:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/synthetics:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/synthetics:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/synthetics:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/synthetics:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/synthetics:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/teams:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/teams:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/teams:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/teams:test",
+        "status": "passed"
+      },
+      {
+        "name": "datadog/teams:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/azure-blob:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/azure-blob:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/azure-blob:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/azure-blob:test",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/azure-blob:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/dynamodb:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/dynamodb:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/dynamodb:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/dynamodb:test",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/dynamodb:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/gitlab-datastore:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/gitlab-datastore:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/gitlab-datastore:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/gitlab-datastore:test",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/gitlab-datastore:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/postgres:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/postgres:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/postgres:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/postgres:test",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/postgres:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/valkey:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/valkey:lint",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/valkey:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/valkey:test",
+        "status": "passed"
+      },
+      {
+        "name": "datastore/valkey:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "ddd-guidance:check",
+        "status": "passed"
+      },
+      {
+        "name": "ddd-guidance:lint",
+        "status": "passed"
+      },
+      {
+        "name": "ddd-guidance:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "ddd-guidance:test",
+        "status": "passed"
+      },
+      {
+        "name": "ddd-guidance:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "devops-measurement:check",
+        "status": "passed"
+      },
+      {
+        "name": "devops-measurement:lint",
+        "status": "passed"
+      },
+      {
+        "name": "devops-measurement:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "devops-measurement:test",
+        "status": "passed"
+      },
+      {
+        "name": "devops-measurement:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "discourse:check",
+        "status": "passed"
+      },
+      {
+        "name": "discourse:lint",
+        "status": "passed"
+      },
+      {
+        "name": "discourse:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "discourse:test",
+        "status": "passed"
+      },
+      {
+        "name": "discourse:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/account:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/account:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/account:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/account:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/account:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/certificates:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/certificates:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/certificates:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/certificates:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/certificates:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/contacts:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/contacts:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/contacts:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/contacts:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/contacts:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/dnssec:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/dnssec:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/dnssec:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/dnssec:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/dnssec:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/domains:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/domains:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/domains:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/domains:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/domains:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/registrar:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/registrar:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/registrar:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/registrar:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/registrar:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/secondary-dns:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/secondary-dns:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/secondary-dns:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/secondary-dns:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/secondary-dns:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/templates:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/templates:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/templates:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/templates:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/templates:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/tlds:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/tlds:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/tlds:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/tlds:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/tlds:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/webhooks:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/webhooks:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/webhooks:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/webhooks:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/webhooks:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/zones:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/zones:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/zones:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/zones:test",
+        "status": "passed"
+      },
+      {
+        "name": "dnsimple/zones:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "dynamodb-datastore-bootstrap:check",
+        "status": "passed"
+      },
+      {
+        "name": "dynamodb-datastore-bootstrap:lint",
+        "status": "passed"
+      },
+      {
+        "name": "dynamodb-datastore-bootstrap:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "dynamodb-datastore-bootstrap:test",
+        "status": "passed"
+      },
+      {
+        "name": "dynamodb-datastore-bootstrap:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "editorial-review:check",
+        "status": "passed"
+      },
+      {
+        "name": "editorial-review:lint",
+        "status": "passed"
+      },
+      {
+        "name": "editorial-review:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "editorial-review:test",
+        "status": "passed"
+      },
+      {
+        "name": "editorial-review:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "elasticache-datastore-bootstrap:check",
+        "status": "passed"
+      },
+      {
+        "name": "elasticache-datastore-bootstrap:lint",
+        "status": "passed"
+      },
+      {
+        "name": "elasticache-datastore-bootstrap:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "elasticache-datastore-bootstrap:test",
+        "status": "passed"
+      },
+      {
+        "name": "elasticache-datastore-bootstrap:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/swamp-serve-fleet:check",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/swamp-serve-fleet:lint",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/swamp-serve-fleet:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/swamp-serve-fleet:test",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/swamp-serve-fleet:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/vm:check",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/vm:lint",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/vm:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/vm:test",
+        "status": "passed"
+      },
+      {
+        "name": "exe-dev/vm:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "extension-maintenance:check",
+        "status": "passed"
+      },
+      {
+        "name": "extension-maintenance:lint",
+        "status": "passed"
+      },
+      {
+        "name": "extension-maintenance:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "extension-maintenance:test",
+        "status": "passed"
+      },
+      {
+        "name": "extension-maintenance:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/account:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/account:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/account:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/account:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/account:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/assets:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/assets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/assets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/assets:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/assets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/compute:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/compute:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/compute:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/compute:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/compute:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/keys:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/keys:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/keys:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/keys:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/keys:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/models:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/models:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/models:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/models:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/models:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/organization:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/organization:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/organization:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/organization:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/organization:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/serverless:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/serverless:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/serverless:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/serverless:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/serverless:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/storage:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/storage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/storage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/storage:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/storage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "falai/workflows:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/workflows:lint",
+        "status": "passed"
+      },
+      {
+        "name": "falai/workflows:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "falai/workflows:test",
+        "status": "passed"
+      },
+      {
+        "name": "falai/workflows:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "gcp/vertex-usage:check",
+        "status": "passed"
+      },
+      {
+        "name": "gcp/vertex-usage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "gcp/vertex-usage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "gcp/vertex-usage:test",
+        "status": "passed"
+      },
+      {
+        "name": "gcp/vertex-usage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "github-issue-lifecycle:check",
+        "status": "passed"
+      },
+      {
+        "name": "github-issue-lifecycle:lint",
+        "status": "passed"
+      },
+      {
+        "name": "github-issue-lifecycle:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "github-issue-lifecycle:test",
+        "status": "passed"
+      },
+      {
+        "name": "github-issue-lifecycle:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "github:check",
+        "status": "passed"
+      },
+      {
+        "name": "github:lint",
+        "status": "passed"
+      },
+      {
+        "name": "github:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "github:test",
+        "status": "passed"
+      },
+      {
+        "name": "github:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-datastore-bootstrap:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-datastore-bootstrap:lint",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-datastore-bootstrap:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-datastore-bootstrap:test",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-datastore-bootstrap:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab:lint",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab:test",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-review:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-review:lint",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-review:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-review:test",
+        "status": "passed"
+      },
+      {
+        "name": "gitlab-review:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/assistants:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/assistants:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/assistants:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/assistants:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/assistants:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/buckets:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/buckets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/buckets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/buckets:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/buckets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/data-connectors:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/data-connectors:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/data-connectors:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/data-connectors:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/data-connectors:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/import-export:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/import-export:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/import-export:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/import-export:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/import-export:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/integrations:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/integrations:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/integrations:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/integrations:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/integrations:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/knowledge-bases:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/knowledge-bases:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/knowledge-bases:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/knowledge-bases:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/knowledge-bases:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/models:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/models:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/models:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/models:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/models:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/observability:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/observability:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/observability:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/observability:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/observability:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/retrievers:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/retrievers:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/retrievers:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/retrievers:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/retrievers:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/rulesets:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/rulesets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/rulesets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/rulesets:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/rulesets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/secrets:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/secrets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/secrets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/secrets:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/secrets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/structures:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/structures:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/structures:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/structures:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/structures:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tags:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tags:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tags:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tags:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tags:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/threads:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/threads:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/threads:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/threads:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/threads:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tools:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tools:lint",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tools:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tools:test",
+        "status": "passed"
+      },
+      {
+        "name": "griptape/tools:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-journal-writer:check",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-journal-writer:lint",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-journal-writer:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-journal-writer:test",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-journal-writer:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-kanban-orchestrator:check",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-kanban-orchestrator:lint",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-kanban-orchestrator:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-kanban-orchestrator:test",
+        "status": "passed"
+      },
+      {
+        "name": "hermes-kanban-orchestrator:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "microsoft/teams:check",
+        "status": "passed"
+      },
+      {
+        "name": "microsoft/teams:lint",
+        "status": "passed"
+      },
+      {
+        "name": "microsoft/teams:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "microsoft/teams:test",
+        "status": "passed"
+      },
+      {
+        "name": "microsoft/teams:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "network:check",
+        "status": "passed"
+      },
+      {
+        "name": "network:lint",
+        "status": "passed"
+      },
+      {
+        "name": "network:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "network:test",
+        "status": "passed"
+      },
+      {
+        "name": "network:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "operator-briefing:check",
+        "status": "passed"
+      },
+      {
+        "name": "operator-briefing:lint",
+        "status": "passed"
+      },
+      {
+        "name": "operator-briefing:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "operator-briefing:test",
+        "status": "passed"
+      },
+      {
+        "name": "operator-briefing:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "org-simulation:check",
+        "status": "passed"
+      },
+      {
+        "name": "org-simulation:lint",
+        "status": "passed"
+      },
+      {
+        "name": "org-simulation:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "org-simulation:test",
+        "status": "passed"
+      },
+      {
+        "name": "org-simulation:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "presentation:check",
+        "status": "passed"
+      },
+      {
+        "name": "presentation:lint",
+        "status": "passed"
+      },
+      {
+        "name": "presentation:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "presentation:test",
+        "status": "passed"
+      },
+      {
+        "name": "presentation:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "reddit:check",
+        "status": "passed"
+      },
+      {
+        "name": "reddit:lint",
+        "status": "passed"
+      },
+      {
+        "name": "reddit:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "reddit:test",
+        "status": "passed"
+      },
+      {
+        "name": "reddit:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "redmine:check",
+        "status": "passed"
+      },
+      {
+        "name": "redmine:lint",
+        "status": "passed"
+      },
+      {
+        "name": "redmine:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "redmine:test",
+        "status": "passed"
+      },
+      {
+        "name": "redmine:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "redmine-kanban:check",
+        "status": "passed"
+      },
+      {
+        "name": "redmine-kanban:lint",
+        "status": "passed"
+      },
+      {
+        "name": "redmine-kanban:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "redmine-kanban:test",
+        "status": "passed"
+      },
+      {
+        "name": "redmine-kanban:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "research-collector:check",
+        "status": "passed"
+      },
+      {
+        "name": "research-collector:lint",
+        "status": "passed"
+      },
+      {
+        "name": "research-collector:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "research-collector:test",
+        "status": "passed"
+      },
+      {
+        "name": "research-collector:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "rice-scoring:check",
+        "status": "passed"
+      },
+      {
+        "name": "rice-scoring:lint",
+        "status": "passed"
+      },
+      {
+        "name": "rice-scoring:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "rice-scoring:test",
+        "status": "passed"
+      },
+      {
+        "name": "rice-scoring:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/apps:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/apps:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/apps:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/apps:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/apps:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/assets:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/assets:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/assets:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/assets:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/assets:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/cloud:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/cloud:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/cloud:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/cloud:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/cloud:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/collections:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/collections:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/collections:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/collections:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/collections:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/container-images:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/container-images:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/container-images:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/container-images:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/container-images:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/groups:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/groups:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/groups:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/groups:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/groups:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/inventory:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/inventory:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/inventory:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/inventory:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/inventory:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/issues:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/issues:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/issues:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/issues:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/issues:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/memberships:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/memberships:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/memberships:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/memberships:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/memberships:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/policies:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/policies:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/policies:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/policies:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/policies:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/projects:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/projects:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/projects:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/projects:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/projects:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sast:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sast:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sast:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sast:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sast:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sbom:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sbom:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sbom:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sbom:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sbom:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/self:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/self:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/self:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/self:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/self:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/service-accounts:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/service-accounts:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/service-accounts:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/service-accounts:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/service-accounts:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/settings:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/settings:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/settings:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/settings:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/settings:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/slack:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/slack:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/slack:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/slack:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/slack:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sso:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sso:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sso:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sso:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/sso:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tenants:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tenants:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tenants:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tenants:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tenants:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tests:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tests:lint",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tests:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tests:test",
+        "status": "passed"
+      },
+      {
+        "name": "snyk/tests:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "sre:check",
+        "status": "passed"
+      },
+      {
+        "name": "sre:lint",
+        "status": "passed"
+      },
+      {
+        "name": "sre:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "sre:test",
+        "status": "passed"
+      },
+      {
+        "name": "sre:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-adoption:check",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-adoption:lint",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-adoption:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-adoption:test",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-adoption:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-club:check",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-club:lint",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-club:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-club:test",
+        "status": "passed"
+      },
+      {
+        "name": "swamp-club:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "system:check",
+        "status": "passed"
+      },
+      {
+        "name": "system:lint",
+        "status": "passed"
+      },
+      {
+        "name": "system:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "system:test",
+        "status": "passed"
+      },
+      {
+        "name": "system:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "team-topology:check",
+        "status": "passed"
+      },
+      {
+        "name": "team-topology:lint",
+        "status": "passed"
+      },
+      {
+        "name": "team-topology:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "team-topology:test",
+        "status": "passed"
+      },
+      {
+        "name": "team-topology:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "terraform:check",
+        "status": "passed"
+      },
+      {
+        "name": "terraform:lint",
+        "status": "passed"
+      },
+      {
+        "name": "terraform:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "terraform:test",
+        "status": "passed"
+      },
+      {
+        "name": "terraform:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "threat-model:check",
+        "status": "passed"
+      },
+      {
+        "name": "threat-model:lint",
+        "status": "passed"
+      },
+      {
+        "name": "threat-model:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "threat-model:test",
+        "status": "passed"
+      },
+      {
+        "name": "threat-model:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "triage:check",
+        "status": "passed"
+      },
+      {
+        "name": "triage:lint",
+        "status": "passed"
+      },
+      {
+        "name": "triage:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "triage:test",
+        "status": "passed"
+      },
+      {
+        "name": "triage:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "twitch:check",
+        "status": "passed"
+      },
+      {
+        "name": "twitch:lint",
+        "status": "passed"
+      },
+      {
+        "name": "twitch:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "twitch:test",
+        "status": "passed"
+      },
+      {
+        "name": "twitch:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "typesafe-batch:check",
+        "status": "passed"
+      },
+      {
+        "name": "typesafe-batch:lint",
+        "status": "passed"
+      },
+      {
+        "name": "typesafe-batch:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "typesafe-batch:test",
+        "status": "passed"
+      },
+      {
+        "name": "typesafe-batch:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "vault/gopass:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/gopass:lint",
+        "status": "passed"
+      },
+      {
+        "name": "vault/gopass:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/gopass:test",
+        "status": "passed"
+      },
+      {
+        "name": "vault/gopass:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "vault/hashicorp-vault:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/hashicorp-vault:lint",
+        "status": "passed"
+      },
+      {
+        "name": "vault/hashicorp-vault:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/hashicorp-vault:test",
+        "status": "passed"
+      },
+      {
+        "name": "vault/hashicorp-vault:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "vault/macos-keychain:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/macos-keychain:lint",
+        "status": "passed"
+      },
+      {
+        "name": "vault/macos-keychain:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/macos-keychain:test",
+        "status": "passed"
+      },
+      {
+        "name": "vault/macos-keychain:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "vault/pass:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/pass:lint",
+        "status": "passed"
+      },
+      {
+        "name": "vault/pass:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "vault/pass:test",
+        "status": "passed"
+      },
+      {
+        "name": "vault/pass:manifest-fmt",
+        "status": "passed"
+      },
+      {
+        "name": "reserved-data-names",
+        "status": "passed"
+      },
+      {
+        "name": "bare-import-specifiers",
+        "status": "passed"
+      },
+      {
+        "name": "zod-pin",
+        "status": "passed",
+        "detail": "from \"npm:zod@4.6.7\""
+      },
+      {
+        "name": "scripts/ci-discover:check",
+        "status": "passed"
+      },
+      {
+        "name": "scripts/ci-discover:lint",
+        "status": "passed"
+      },
+      {
+        "name": "scripts/ci-discover:fmt:check",
+        "status": "passed"
+      },
+      {
+        "name": "scripts/ci-discover:test",
+        "status": "passed"
+      }
+    ]
+  },
+  "quality": {
+    "status": "passed",
+    "results": [
+      {
+        "extension": "ai-usage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "anthropic/admin",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "anthropic/analytics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "anthropic/compliance",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "anydoc-ingest",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "artifactory",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aurora-datastore-bootstrap",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/acm-diagnostics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/adopt",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/alarm-investigation",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/alarms",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/bedrock-usage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cfn-diagnostics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cfn-operations",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/config-compliance",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cost-audit",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cost-estimate",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cost-explorer",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/cost-report",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/dns-observation",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/drift-state",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/event-topology",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/guardduty",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/iam",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/inventory",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/kiro-usage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/logs",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/metrics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/networking",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/ops",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/php2shell-hunt",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/pricing",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/securityhub-findings",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/service-quotas",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/support",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/terraform-drift",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "aws/traces",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "azure-blob-datastore-bootstrap",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "azure/openai-usage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "bench-datastore",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "claude-cost-reconciliation",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/access",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/api-shield",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare-audit",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/d1",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/durable-objects",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/email-routing",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/gateway",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/hyperdrive",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/images",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/kv",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/load-balancing",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/logpush",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/magic-transit",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/pages",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/queues",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/r2",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/registrar",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/rulesets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/spectrum",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/ssl-certificates",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/stream",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/tunnel",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/turnstile",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/vectorize",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/waiting-room",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/workers-ai",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cloudflare/workers-scripts",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "container-image",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "cost-projection",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/dora",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/downtimes",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/events",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/incidents",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/logs",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/metrics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/monitors",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/on-call",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/security-rules",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/security-signals",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/security-suppressions",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/slos",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/synthetics",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datadog/teams",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datastore/azure-blob",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datastore/dynamodb",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datastore/gitlab-datastore",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datastore/postgres",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "datastore/valkey",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "ddd-guidance",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "devops-measurement",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "discourse",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/account",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/certificates",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/contacts",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/dnssec",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/domains",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/registrar",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/secondary-dns",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/templates",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/tlds",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/webhooks",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dnsimple/zones",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "dynamodb-datastore-bootstrap",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "editorial-review",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "elasticache-datastore-bootstrap",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "exe-dev/swamp-serve-fleet",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "exe-dev/vm",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "extension-maintenance",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/account",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/assets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/compute",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/keys",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/models",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/organization",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/serverless",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/storage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "falai/workflows",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "gcp/vertex-usage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "github-issue-lifecycle",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "github",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "gitlab-datastore-bootstrap",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "gitlab",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "gitlab-review",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/assistants",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/buckets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/data-connectors",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/import-export",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/integrations",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/knowledge-bases",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/models",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/observability",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/retrievers",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/rulesets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/secrets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/structures",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/tags",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/threads",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "griptape/tools",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "hermes-journal-writer",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "hermes-kanban-orchestrator",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "microsoft/teams",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "network",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "operator-briefing",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "org-simulation",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "presentation",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "reddit",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "redmine",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "redmine-kanban",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "research-collector",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "rice-scoring",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/apps",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/assets",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/cloud",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/collections",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/container-images",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/groups",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/inventory",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/issues",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/memberships",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/policies",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/projects",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/sast",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/sbom",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/self",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/service-accounts",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/settings",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/slack",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/sso",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/tenants",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "snyk/tests",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "sre",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "swamp-adoption",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "swamp-club",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "system",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "team-topology",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "terraform",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "threat-model",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "triage",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "twitch",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "typesafe-batch",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "vault/gopass",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "vault/hashicorp-vault",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "vault/macos-keychain",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      },
+      {
+        "extension": "vault/pass",
+        "passed": true,
+        "percentage": 87,
+        "provisionalPercentage": 100,
+        "allPassed": true
+      }
+    ]
+  },
+  "reviews": [
+    {
+      "name": "code-review",
+      "verdict": "pass",
+      "findings": {
+        "low": 2
+      }
+    }
+  ],
+  "approvals": [
+    {
+      "gateId": "plan-approval",
+      "decision": "approve",
+      "at": "2026-11-12T01:50:39.984Z",
+      "actor": {
+        "principal": "user:webframp",
+        "source": "platform",
+        "asserted": "sean"
+      },
+      "note": "Approved. implement handles F1-F4 as described (pinned jsr:@std/yaml plus deno.lock; rollout note for open PRs in docs and the missing-state comment; branch protection as an explicit follow-up, gap not called closed; pin the check-run query to the GitHub Actions app). Skip F5 and F6."
+    },
+    {
+      "gateId": "release-approval",
+      "decision": "approve",
+      "at": "2026-11-12T02:19:43.347Z",
+      "actor": {
+        "principal": "user:webframp",
+        "source": "platform",
+        "asserted": "sean"
+      },
+      "note": "Approved: release 4602eb73 (tree 175dc27f). Authorizes posting the attestation ref, pushing fix/ci-gate and opening the PR. R-1 and R-2 accepted as low; F-2 stays deferred."
+    }
+  ],
+  "gate": {
+    "allPassed": true,
+    "checks": 937,
+    "quality": 186
+  },
+  "generatedAt": "2026-11-12T02:20:53.570Z"
+}
