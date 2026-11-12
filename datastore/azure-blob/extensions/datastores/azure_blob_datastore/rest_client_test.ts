@@ -244,7 +244,7 @@ Deno.test("service-principal token exchange carries a deadline signal", async ()
   const fakeFetch = ((url: string | URL | Request, init?: RequestInit) => {
     const u = String(url);
     seen.push({ url: u, hasSignal: init?.signal != null });
-    if (u.includes("login.microsoftonline.com")) {
+    if (new URL(u).hostname === "login.microsoftonline.com") {
       return Promise.resolve(
         new Response(
           JSON.stringify({ access_token: "tok", expires_in: 3600 }),

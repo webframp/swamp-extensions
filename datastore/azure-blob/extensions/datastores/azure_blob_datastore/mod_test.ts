@@ -649,21 +649,25 @@ Deno.test("forceRelease on the holding instance clears local state so it can re-
   });
 });
 
-const STALLING_FETCH = ((_u: string | URL | Request, init?: RequestInit) => {
-  stalledCalls++;
-  return new Promise<Response>((_res, reject) => {
-    if (init?.signal?.aborted) return reject(init.signal.reason);
-    init?.signal?.addEventListener(
-      "abort",
-      () => reject(init.signal!.reason),
-      { once: true },
-    );
-  });
-}) as typeof fetch;
-let stalledCalls = 0;
+/** A fetch that never resolves until its signal aborts, with its own call count. */
+function stallingFetch(): { fetch: typeof fetch; calls: () => number } {
+  let calls = 0;
+  const fn = ((_u: string | URL | Request, init?: RequestInit) => {
+    calls++;
+    return new Promise<Response>((_res, reject) => {
+      if (init?.signal?.aborted) return reject(init.signal.reason);
+      init?.signal?.addEventListener(
+        "abort",
+        () => reject(init.signal!.reason),
+        { once: true },
+      );
+    });
+  }) as typeof fetch;
+  return { fetch: fn, calls: () => calls };
+}
 
 Deno.test("a lock request that times out is wrapped with its operation and path, and is not retried", async () => {
-  stalledCalls = 0;
+  const stall = stallingFetch();
   const client = BlobClient.fromAuth(
     {
       mode: "sharedKey",
@@ -671,14 +675,14 @@ Deno.test("a lock request that times out is wrapped with its operation and path,
       accountKey: "c3VwZXJzZWNyZXQ=",
       endpointSuffix: "core.windows.net",
     },
-    STALLING_FETCH,
+    stall.fetch,
     20,
   );
   const lock = createBlobLock(client, "c", "swamp", "/test/stall", {
     maxWaitMs: 1_000,
   });
   const err = await assertRejects(() => lock.inspect()) as Error;
-  assertEquals(stalledCalls, 1);
+  assertEquals(stall.calls(), 1);
   assertEquals(err.message.includes("/c/swamp/_locks/"), true);
   assertEquals((err.cause as DOMException).name, "TimeoutError");
 });
@@ -699,7 +703,7 @@ Deno.test("a caller abort through a lock request is not wrapped", async () => {
 });
 
 Deno.test("acquire() makes a single attempt when its first request times out", async () => {
-  stalledCalls = 0;
+  const stall = stallingFetch();
   const client = BlobClient.fromAuth(
     {
       mode: "sharedKey",
@@ -707,14 +711,14 @@ Deno.test("acquire() makes a single attempt when its first request times out", a
       accountKey: "c3VwZXJzZWNyZXQ=",
       endpointSuffix: "core.windows.net",
     },
-    STALLING_FETCH,
+    stall.fetch,
     20,
   );
   const lock = createBlobLock(client, "c", "swamp", "/test/acq", {
     maxWaitMs: 1_000,
   });
   const err = await assertRejects(() => lock.acquire()) as Error;
-  assertEquals(stalledCalls, 1);
+  assertEquals(stall.calls(), 1);
   assertEquals((err.cause as DOMException).name, "TimeoutError");
 });
 

@@ -244,6 +244,8 @@ async function getServicePrincipalToken(
           `Azure token exchange failed (${resp.status} ${resp.statusText})`,
         );
       }
+      // Own budget for the body read, matching BlobClient.request().
+      deadline.arm(timeoutMs);
       const data = await resp.json() as {
         access_token?: string;
         expires_in?: number;

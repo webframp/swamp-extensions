@@ -291,17 +291,22 @@ export function createBlobLock(
             // this tick redundant; skipping keeps renewals from stacking.
             if (renewing) return;
             renewing = true;
-            // Detached so the renewal span is its own trace rather than a
-            // child of this acquire span, which has already ended by then.
-            detached(async () => {
-              try {
-                await leaseAction(client, path, "renew", acquiredId);
-              } catch {
-                // Connection lost or lease lost — lease will expire via its fixed duration
-              } finally {
-                renewing = false;
-              }
-            });
+            try {
+              // Detached so the renewal span is its own trace rather than a
+              // child of this acquire span, which has already ended by then.
+              detached(async () => {
+                try {
+                  await leaseAction(client, path, "renew", acquiredId);
+                } catch {
+                  // Connection lost or lease lost — lease will expire via its fixed duration
+                } finally {
+                  renewing = false;
+                }
+              });
+            } catch {
+              // detached() threw before the renewal started; don't wedge the guard.
+              renewing = false;
+            }
           }, (leaseSeconds * 1000) / 3);
           Deno.unrefTimer(heartbeatId);
           span.setAttributes({
