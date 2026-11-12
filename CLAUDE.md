@@ -398,7 +398,7 @@ All changes go through pull requests — no direct pushes to main.
 4. **Run local adversarial review** — Before pushing, review the branch diff (`git diff origin/main...HEAD`) adversarially yourself, matching the CI adversarial prompt: assume the code is broken and probe for logic errors, edge cases, failure modes, pattern inconsistencies across sibling methods, and unhandled partial failures. Fix findings before pushing to avoid slow review cycles.
 5. **Push and open PR** — Push the branch and open a PR against main. CI runs check/lint/fmt/test. The adversarial code review runs automatically on PRs.
 6. **Address review** — Fix any issues raised by CI or the adversarial review. Push additional commits (do not force-push over review comments).
-7. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges after verifying CI passed, then deletes the branch.
+7. **Merge** — Comment `/lgtm`, `/approve`, or `/shipit` on the PR. The merge workflow squash-merges once the `CI Gate` check for the PR head has succeeded (see "CI Gate" below), then deletes the branch.
 8. **Publish** — After merge to main, CI runs again. Only after CI passes does the publish workflow run, auto-publishing any extensions with bumped `manifest.yaml` versions.
 
 **Version bumps**: Bump `version` in `manifest.yaml` (CalVer `YYYY.MM.DD.N`) in the same PR as the code change. Do not bump versions in separate commits or PRs.
@@ -424,6 +424,28 @@ All changes go through pull requests — no direct pushes to main.
 - Deno validation may refresh an extension's `deno.lock` even when its pinned
   source imports are unchanged. Inspect that diff; commit it when it is the
   lockfile's normal resolution update for the validated extension.
+
+## CI Gate
+
+`CI Gate` (the `ci-gate` job in `.github/workflows/ci.yml`) is the one check
+that decides whether a PR may merge. Most CI jobs run in matrices named after
+the extensions a diff touches, so branch protection cannot list them; `CI Gate`
+needs every blocking job and fails unless each one succeeded. A skipped job is
+not a pass, except the two review jobs on events that are not pull requests.
+
+- `merge.yml` reads only the latest `CI Gate` check run for the PR head that the
+  GitHub Actions app created. Queued, in progress, missing or any other
+  conclusion is refused with a comment saying which.
+- **A new job that should block a merge goes in `ci-gate`'s `needs` and in its
+  script.** `scripts/ci-discover/ci_gate_test.ts` fails until every job in
+  `ci.yml` is either needed by the gate or listed there as non-gating.
+- **Fork PRs fail the gate.** The adversarial and security reviews do not run
+  for forks, so a maintainer must push the branch to this repository first.
+- **A PR whose last push predates the gate has no `CI Gate` check**, so `/lgtm`
+  refuses it as `missing`. Push to the branch, or update it from `main`, to run
+  CI again.
+- **Branch protection must list `CI Gate` as a required check.** Until it does,
+  the GitHub merge button bypasses the gate; only `/lgtm` enforces it.
 
 ## Publishing
 
