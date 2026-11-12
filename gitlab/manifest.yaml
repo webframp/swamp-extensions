@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/gitlab"
 license: Apache-2.0
-version: "2026.11.09.1"
+version: "2026.11.12.1"
 description: |
   Read and write GitLab data via GraphQL (REST fallback for branches and
   merge accept). Projects, merge requests, issues, releases, pipelines,
@@ -46,6 +46,7 @@ description: |
   **Read:**
   - list_projects, get_project_info, list_merge_requests, list_issues
   - list_commits (REST repository/commits; optional ref + since bound)
+  - get_commit (a single commit by full or abbreviated SHA: message, parents, committer, stats)
   - get_file (raw file content at a ref — a pasted blob URL, or a project/filePath/ref trio)
   - get_issue (full description body, keyed by project + iid)
   - list_releases, list_pipelines, list_issue_notes, list_mr_notes

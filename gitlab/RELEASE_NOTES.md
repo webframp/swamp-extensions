@@ -1,30 +1,12 @@
-## 2026.11.09.1
+## 2026.11.12.1
 
-**Fixed:** `get_snippet` with `includeContent` or `filePath` returned the HTML
-sign-in page as the snippet's `content` on a GitLab instance behind SSO, and
-reported success. It fetched the snippet's `raw_url`, a web route that ignores
-the `PRIVATE-TOKEN` header. It now reads content through the API raw endpoints
-(`/snippets/:id/raw`, `/snippets/:id/files/:ref/:file_path/raw`, and their
-`/projects/:id/...` forms), which accept the token. Reported and diagnosed by
-@acameron17 in #549.
+**Added:** `get_commit` fetches one commit from a project by its full or
+abbreviated SHA (at least 7 hex characters) and writes it to the new
+`commitDetail` resource. The resource carries the full commit message, parent
+SHAs, author and committer with their dates, line stats, and the web URL.
+Looking up a commit by SHA used to need a `list_commits` call with the SHA as
+`ref` and `perPage=1`, which returned only the title and author. A SHA that is
+not in the project fails with GitLab's 404.
 
-**Changed:** A raw response that is an HTML sign-in page now fails with an
-error instead of being stored as content (detected by the `/users/auth/`
-marker in an HTML response; an HTML snippet file that itself contains that
-string would also be rejected). The raw read no longer follows redirects, so
-the token cannot be forwarded to another origin; a redirect is an error.
-Every other authenticated request the model makes (REST and GraphQL) now
-does the same: a 3xx response fails with an error naming the `Location`
-instead of being followed with `PRIVATE-TOKEN` attached (the error shows the
-`Location` origin and path only, not its query string). A project that was
-moved or renamed used to be reached through GitLab's redirect; it now fails,
-and you need to update the `project` argument to the new path. The `OPTIONS`
-diagnostic probe reports the redirect status without following it.
-`get_snippet` rejects `project` and `filePath` values containing `.` or `..`
-segments. The size cap, binary check and secret redaction are unchanged.
-`get_snippet` no longer needs the snippet's
-`raw_url` and no longer fetches it, so the external-host refusal for `raw_url`
-is gone; requests only ever go to the configured host.
-
-**Upgrade note:** No schema changes. The model version moves to 2026.11.09.1 with an
-identity upgrade.
+**Upgrade note:** No changes to existing schemas. The model version moves to
+2026.11.12.1 with an identity upgrade.
