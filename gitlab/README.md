@@ -115,6 +115,7 @@ fires the `@webframp/review-dashboard` report automatically.
 | `list_labels`         | Project labels                                                   | `project`                                      |
 | `list_members`        | Project members                                                  | `project`                                      |
 | `list_branches`       | Repository branches                                              | `project`                                      |
+| `get_commit`          | A single commit by full or abbreviated SHA                       | `project`, `sha`                               |
 | `get_file`            | Raw file content at a ref, parsed from a pasted blob URL         | `url`                                          |
 | `search`              | REST search; scope = blobs (code), commits, issues, merge_requests, notes, wiki_blobs, projects, milestones, snippet_titles, users | `query`, `scope?`, `project?` or `group?`, `ref?`, `state?`, `limit?` |
 
@@ -176,6 +177,7 @@ view:
 | **labels**              | Project labels                               | name, color, description                                  |
 | **members**             | Project members                              | username, accessLevel                                     |
 | **branches**            | Repository branches                          | name, protected, default                                  |
+| **commitDetail**        | A single commit looked up by SHA             | id, message, parentIds, committerName, stats              |
 | **fileContent**         | Raw file content at a ref                    | project, ref, path, content, truncated                    |
 | **searchResults**       | Raw GitLab search results                    | query, scope, project, group, results, count, truncated   |
 

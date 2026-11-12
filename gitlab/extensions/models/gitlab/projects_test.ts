@@ -82,6 +82,7 @@ Deno.test("model has all expected methods", () => {
     "delete_issue_note",
     "delete_mr_note",
     "delete_snippet",
+    "get_commit",
     "get_file",
     "get_issue",
     "get_job_log",
@@ -139,6 +140,7 @@ Deno.test("model has all expected resources", () => {
     "branchCreateResult",
     "branches",
     "bulkTodoResult",
+    "commitDetail",
     "commitFileResult",
     "commits",
     "dashboard",
@@ -599,6 +601,85 @@ Deno.test("list_commits flags truncated=true when a next page exists", async () 
   } finally {
     restore();
   }
+});
+
+Deno.test("get_commit maps a REST commit into the commitDetail resource", async () => {
+  const fullSha = "d202321e07f28c5706cfd63b016aa4a2c4480522";
+  const restore = mockFetch({
+    "GET /api/v4/projects/group%2Frepo/repository/commits/d202321e0?stats=true":
+      {
+        status: 200,
+        body: {
+          id: fullSha,
+          short_id: "d202321e",
+          title: "fix: the thing",
+          message: "fix: the thing\n\nWhy it was broken.\n",
+          author_name: "Alice Dev",
+          author_email: "alice@example.org",
+          authored_date: "2026-07-28T12:00:00Z",
+          committer_name: "Bob Dev",
+          committer_email: "bob@example.org",
+          committed_date: "2026-07-28T13:21:55Z",
+          parent_ids: ["aaa111"],
+          stats: { additions: 10, deletions: 2, total: 12 },
+          web_url: `https://git.example.org/group/repo/-/commit/${fullSha}`,
+        },
+      },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.get_commit.execute(
+      { project: "group/repo", sha: "d202321e0" },
+      context as any,
+    );
+    const resources = getWrittenResources();
+    assertEquals(resources[0].specName, "commitDetail");
+    assertEquals(resources[0].name, `group~repo-${fullSha}-commit`);
+    const data = resources[0].data as any;
+    assertEquals(data.requestedSha, "d202321e0");
+    assertEquals(data.id, fullSha);
+    assertEquals(data.message, "fix: the thing\n\nWhy it was broken.\n");
+    assertEquals(data.committerName, "Bob Dev");
+    assertEquals(data.parentIds, ["aaa111"]);
+    assertEquals(data.stats, { additions: 10, deletions: 2, total: 12 });
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_commit fails when the SHA is not in the project", async () => {
+  const restore = mockFetch({});
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.get_commit.execute(
+          { project: "group/repo", sha: "deadbeef" },
+          context as any,
+        ),
+      Error,
+      "404",
+    );
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("get_commit rejects a sha that is not 7-64 hex characters", () => {
+  const args = model.methods.get_commit.arguments;
+  assertEquals(args.safeParse({ project: "g/r", sha: "abc12" }).success, false);
+  assertEquals(
+    args.safeParse({ project: "g/r", sha: "main/../x" }).success,
+    false,
+  );
+  assertEquals(
+    args.safeParse({ project: "g/r", sha: "D202321E" }).success,
+    true,
+  );
 });
 
 Deno.test("list_issues writes issues resource via GraphQL", async () => {

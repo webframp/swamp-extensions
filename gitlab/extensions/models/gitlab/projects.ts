@@ -182,6 +182,37 @@ const CommitListSchema = z.object({
   ),
 });
 
+const CommitDetailSchema = z.object({
+  project: z.string().describe("Project the commit belongs to"),
+  requestedSha: z.string().describe("SHA (full or abbreviated) as requested"),
+  id: z.string().describe("Full commit SHA"),
+  shortId: z.string().describe("Abbreviated commit SHA"),
+  title: z.string().describe("Commit title (first line of the message)"),
+  message: z.string().describe("Full commit message"),
+  authorName: z.string().describe("Commit author name"),
+  authorEmail: z.string().describe("Commit author email"),
+  authoredDate: z.string().describe(
+    "ISO 8601 timestamp the commit was authored",
+  ),
+  committerName: z.string().describe("Committer name"),
+  committerEmail: z.string().describe("Committer email"),
+  committedDate: z.string().describe("ISO 8601 timestamp the commit was made"),
+  parentIds: z.array(z.string()).describe("Parent commit SHAs"),
+  stats: z.object({
+    additions: z.number(),
+    deletions: z.number(),
+    total: z.number(),
+  }).nullable().describe("Line change counts, null if GitLab omitted them"),
+  webUrl: z.string().describe("Web URL for the commit"),
+  fetchedAt: z.string().describe("Timestamp the commit was fetched"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
+
 const IssueSchema = z.object({
   iid: z.number().describe("Issue internal ID (project-scoped)"),
   title: z.string().describe("Issue title"),
@@ -2793,7 +2824,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.11.09.1",
+  version: "2026.11.12.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -3034,6 +3065,12 @@ export const model = {
         "get_snippet now reads content through the API raw endpoints; no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.12.1",
+      description:
+        "Adds get_commit and the commitDetail resource; existing schemas unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   reports: ["@webframp/review-dashboard"],
 
@@ -3059,6 +3096,12 @@ export const model = {
     commits: {
       description: "List of commits for a project",
       schema: CommitListSchema,
+      lifetime: "15m" as const,
+      garbageCollection: 10,
+    },
+    commitDetail: {
+      description: "A single commit looked up by SHA",
+      schema: CommitDetailSchema,
       lifetime: "15m" as const,
       garbageCollection: 10,
     },
@@ -3535,6 +3578,79 @@ export const model = {
         );
         ctx.logger.info("Found {count} commits for {project}", {
           count: commits.length,
+          project: args.project,
+        });
+        return { dataHandles: [handle] };
+      },
+    },
+
+    get_commit: {
+      description:
+        "Fetch a single commit by SHA (full or abbreviated) from a project, " +
+        "including the full message, parents, committer, and line stats. " +
+        "Uses the REST repository/commits/:sha endpoint; fails if the SHA " +
+        "does not exist in the project.",
+      arguments: z.object({
+        project: z.string().min(1).describe(
+          "Project path (group/repo) or numeric ID",
+        ),
+        sha: z.string().regex(/^[0-9a-fA-F]{7,64}$/).describe(
+          "Commit SHA, full or abbreviated (at least 7 hex characters)",
+        ),
+      }),
+      execute: async (
+        args: { project: string; sha: string },
+        ctx: ModelContext,
+      ) => {
+        const startMs = Date.now();
+        const client = new GitLabClient(
+          ctx.globalArgs.host,
+          ctx.globalArgs.token,
+        );
+        const c = await client.get(
+          args.project,
+          `/repository/commits/${encodeURIComponent(args.sha)}?stats=true`,
+        );
+        const id = c.id ?? "";
+        if (id === "") {
+          throw new Error(
+            `GitLab returned no commit id for ${args.project}@${args.sha}`,
+          );
+        }
+        const handle = await ctx.writeResource(
+          "commitDetail",
+          // Keyed by the resolved full SHA so short and full lookups of the
+          // same commit share one instance.
+          `${sanitizeName(args.project)}-${id}-commit`,
+          {
+            project: args.project,
+            requestedSha: args.sha,
+            id,
+            shortId: c.short_id ?? "",
+            title: c.title ?? "",
+            message: c.message ?? "",
+            authorName: c.author_name ?? "",
+            authorEmail: c.author_email ?? "",
+            authoredDate: c.authored_date ?? "",
+            committerName: c.committer_name ?? "",
+            committerEmail: c.committer_email ?? "",
+            committedDate: c.committed_date ?? "",
+            parentIds: Array.isArray(c.parent_ids) ? c.parent_ids : [],
+            stats: c.stats
+              ? {
+                additions: c.stats.additions ?? 0,
+                deletions: c.stats.deletions ?? 0,
+                total: c.stats.total ?? 0,
+              }
+              : null,
+            webUrl: c.web_url ?? "",
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+        ctx.logger.info("Fetched commit {id} from {project}", {
+          id,
           project: args.project,
         });
         return { dataHandles: [handle] };
