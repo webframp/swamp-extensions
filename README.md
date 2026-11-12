@@ -146,6 +146,7 @@ Extensions for [swamp](https://github.com/swamp-club/swamp) providing model inte
 | [`@webframp/twitch`](twitch/) | Twitch cross-channel moderation audit — gathers chatters, bans, and mod events across channels, then generates a report highlighting ban overlap and suspicious users | None (uses fetch) |
 | [`@webframp/bench-datastore`](bench-datastore/) | Datastore benchmarking harness — two workflow-based scenarios (throughput breadth and write-stress depth) exercising any datastore backend under sustained load without lock contention | None |
 | [`@webframp/presentation`](presentation/) | reveal.js presentations from Org (org-re-reveal) or Markdown (pandoc or reveal.js's markdown plugin), stored as versioned HTML and PDF with pinned, hash-checked reveal.js — plus an outline method, a build workflow and a deck-summary report | None (needs Emacs, pandoc or Chromium per engine) |
+| [`@webframp/ci-verification`](ci-verification/) | Pre-PR verification for this repository — runs the checks CI runs against one commit in a throwaway worktree, records every result and log keyed by tree hash, and builds and posts an attestation as a git ref | None (shells out to `git`, `deno` and `swamp`) |
 
 ## Vault Extensions
 
@@ -211,6 +212,7 @@ swamp extension pull @webframp/ai-usage
 swamp extension pull @webframp/redmine-kanban
 swamp extension pull @webframp/bench-datastore
 swamp extension pull @webframp/presentation
+swamp extension pull @webframp/ci-verification
 
 # AWS model extensions
 swamp extension pull @webframp/aws/pricing

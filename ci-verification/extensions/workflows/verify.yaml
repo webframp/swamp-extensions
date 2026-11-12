@@ -1,0 +1,86 @@
+id: db8ee9fc-69b2-43d3-851e-fcd480b08c27
+name: "@webframp/ci-verification-verify"
+description: |
+  Verify a swamp-extensions commit before opening a pull request: discover
+  which extensions the diff from base selects, then run each one's check,
+  lint, fmt:check, test and manifest fmt with the repo-wide checks, then the
+  registry quality rubric. Results and logs are stored as swamp data keyed by
+  the commit's tree. Each job runs only when the one before it succeeded. The
+  workflow never posts an attestation; run the model's attest and post methods
+  when the change is ready to release.
+version: 1
+tags:
+  extension: "@webframp/ci-verification"
+  category: "ci"
+inputs:
+  properties:
+    repoPath:
+      type: string
+      description: Absolute path to a swamp-extensions checkout that contains the commit.
+    commit:
+      type: string
+      description: The commit to verify, as a sha or anything git rev-parse resolves.
+    base:
+      type: string
+      description: The base the diff is taken against.
+      default: "origin/main"
+    concurrency:
+      type: integer
+      description: Extensions verified at once.
+      default: 4
+  required:
+    - repoPath
+    - commit
+jobs:
+  - name: discover
+    description: Record which extensions and repo-wide checks the diff selects.
+    steps:
+      - name: discover
+        description: Run the commit's own scripts/ci-discover against base.
+        task:
+          type: model_method
+          modelType: "@webframp/ci-verification"
+          modelName: ci-verification
+          methodName: discover
+          inputs:
+            repoPath: ${{ inputs.repoPath }}
+            commit: ${{ inputs.commit }}
+            base: ${{ inputs.base }}
+
+  - name: check
+    description: Run each selected extension's tasks and the repo-wide checks.
+    dependsOn:
+      - job: discover
+        condition:
+          type: succeeded
+    steps:
+      - name: check
+        description: Check, lint, fmt:check, test and manifest fmt per extension.
+        task:
+          type: model_method
+          modelType: "@webframp/ci-verification"
+          modelName: ci-verification
+          methodName: check
+          inputs:
+            repoPath: ${{ inputs.repoPath }}
+            commit: ${{ inputs.commit }}
+            concurrency: ${{ inputs.concurrency }}
+
+  - name: quality
+    description: Score each selected extension under CI's quality pass condition.
+    dependsOn:
+      - job: check
+        condition:
+          type: succeeded
+    steps:
+      - name: quality
+        description: swamp extension quality per extension.
+        task:
+          type: model_method
+          modelType: "@webframp/ci-verification"
+          modelName: ci-verification
+          methodName: quality
+          inputs:
+            repoPath: ${{ inputs.repoPath }}
+            commit: ${{ inputs.commit }}
+            concurrency: ${{ inputs.concurrency }}

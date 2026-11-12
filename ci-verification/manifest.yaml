@@ -1,0 +1,61 @@
+manifestVersion: 1
+name: "@webframp/ci-verification"
+license: Apache-2.0
+version: "2026.11.12.1"
+description: |
+  Pre-PR verification for webframp/swamp-extensions, as typed, versioned swamp
+  data. Runs the checks CI runs against one commit, in a throwaway worktree at
+  that commit, and records every result and its log keyed by the commit's tree
+  hash. Builds an attestation from the recorded results and posts it as a git
+  ref (refs/attestations/<tree>/<timestamp>), never forced.
+
+  ## Quick Start
+
+  ```bash
+  swamp extension pull @webframp/ci-verification
+
+  # Verify a commit of a swamp-extensions checkout. The workflow creates the
+  # ci-verification instance it runs on.
+  swamp workflow run @webframp/ci-verification-verify \
+    --input repoPath=/path/to/swamp-extensions \
+    --input commit=<sha> --input base=<base-sha>
+
+  # Build and post the attestation once reviews are done.
+  swamp model method run ci-verification attest \
+    --input repoPath=/path/to/swamp-extensions --input commit=<sha>
+  swamp model method run ci-verification post \
+    --input repoPath=/path/to/swamp-extensions --input commit=<sha>
+  ```
+
+  ## Methods
+
+  - **discover**: which extensions the diff selects, from the repository's own
+    scripts/ci-discover
+  - **check**: check, lint, fmt:check, test and manifest fmt per extension,
+    plus the repo-wide checks CI runs
+  - **quality**: the registry quality rubric per extension
+  - **attest**: the attestation for a tree, from recorded results
+  - **post**: push the attestation as a git ref
+
+  ## Workflow
+
+  - **@webframp/ci-verification-verify**: discover, check and quality in
+    sequence
+repository: "https://github.com/webframp/swamp-extensions"
+models:
+  - ci_verification.ts
+workflows:
+  - verify.yaml
+platforms:
+  - linux-x86_64
+  - linux-aarch64
+  - darwin-x86_64
+  - darwin-aarch64
+additionalFiles:
+  - README.md
+  - LICENSE.md
+labels:
+  - ci
+  - verification
+  - attestation
+  - git
