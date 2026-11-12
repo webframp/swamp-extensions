@@ -5,7 +5,7 @@ import {
   assertStringIncludes,
 } from "jsr:@std/assert@1.0.19";
 import { assertDatastoreExportConformance } from "@swamp-club/swamp-testing";
-import { createBlobLock } from "./lock.ts";
+import { createBlobLock, LOCK_REQUEST_TIMEOUT_MS } from "./lock.ts";
 import { BlobClient } from "./rest_client.ts";
 import { datastore } from "./mod.ts";
 import {
@@ -647,4 +647,103 @@ Deno.test("forceRelease on the holding instance clears local state so it can re-
     await lock.acquire();
     await lock.release();
   });
+});
+
+const STALLING_FETCH = ((_u: string | URL | Request, init?: RequestInit) => {
+  stalledCalls++;
+  return new Promise<Response>((_res, reject) => {
+    if (init?.signal?.aborted) return reject(init.signal.reason);
+    init?.signal?.addEventListener(
+      "abort",
+      () => reject(init.signal!.reason),
+      { once: true },
+    );
+  });
+}) as typeof fetch;
+let stalledCalls = 0;
+
+Deno.test("a lock request that times out is wrapped with its operation and path, and is not retried", async () => {
+  stalledCalls = 0;
+  const client = BlobClient.fromAuth(
+    {
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    },
+    STALLING_FETCH,
+    20,
+  );
+  const lock = createBlobLock(client, "c", "swamp", "/test/stall", {
+    maxWaitMs: 1_000,
+  });
+  const err = await assertRejects(() => lock.inspect()) as Error;
+  assertEquals(stalledCalls, 1);
+  assertEquals(err.message.includes("/c/swamp/_locks/"), true);
+  assertEquals((err.cause as DOMException).name, "TimeoutError");
+});
+
+Deno.test("a caller abort through a lock request is not wrapped", async () => {
+  const controllerFetch =
+    (() =>
+      Promise.reject(new DOMException("stop", "AbortError"))) as typeof fetch;
+  const client = BlobClient.fromAuth({
+    mode: "sharedKey",
+    accountName: "test",
+    accountKey: "c3VwZXJzZWNyZXQ=",
+    endpointSuffix: "core.windows.net",
+  }, controllerFetch);
+  const lock = createBlobLock(client, "c", "swamp", "/test/abort");
+  const err = await assertRejects(() => lock.inspect());
+  assertEquals((err as DOMException).name, "AbortError");
+});
+
+Deno.test("acquire() makes a single attempt when its first request times out", async () => {
+  stalledCalls = 0;
+  const client = BlobClient.fromAuth(
+    {
+      mode: "sharedKey",
+      accountName: "test",
+      accountKey: "c3VwZXJzZWNyZXQ=",
+      endpointSuffix: "core.windows.net",
+    },
+    STALLING_FETCH,
+    20,
+  );
+  const lock = createBlobLock(client, "c", "swamp", "/test/acq", {
+    maxWaitMs: 1_000,
+  });
+  const err = await assertRejects(() => lock.acquire()) as Error;
+  assertEquals(stalledCalls, 1);
+  assertEquals((err.cause as DOMException).name, "TimeoutError");
+});
+
+Deno.test("lock requests arm a LOCK_REQUEST_TIMEOUT_MS deadline even on a client with a longer base", async () => {
+  const armed: number[] = [];
+  const realSetTimeout = globalThis.setTimeout;
+  const patched = (fn: () => void, ms?: number) => {
+    if (ms !== undefined && ms >= 1_000) armed.push(ms);
+    return realSetTimeout(fn, ms);
+  };
+  globalThis.setTimeout = patched as unknown as typeof setTimeout;
+  try {
+    const ok = (() =>
+      Promise.resolve(new Response("", { status: 404 }))) as typeof fetch;
+    const client = BlobClient.fromAuth(
+      {
+        mode: "sharedKey",
+        accountName: "test",
+        accountKey: "c3VwZXJzZWNyZXQ=",
+        endpointSuffix: "core.windows.net",
+      },
+      ok,
+      120_000,
+    );
+    const lock = createBlobLock(client, "c", "swamp", "/test/dl");
+    await lock.inspect();
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+  assertEquals(armed.includes(LOCK_REQUEST_TIMEOUT_MS), true);
+  assertEquals(armed.includes(120_000), false);
 });

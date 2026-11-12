@@ -4,6 +4,7 @@
 
 import {
   type BlobClient,
+  type BlobRequestOptions,
   type BlobResponse,
   isBlobAlreadyExists,
 } from "./rest_client.ts";
@@ -51,6 +52,18 @@ function clampLeaseSeconds(ttlMs: number): number {
   );
 }
 
+// Lock requests carry no payload, so a short deadline is plenty. It keeps a
+// stalled renew or release from blocking for minutes while the lease (15 s
+// minimum) expires underneath it.
+export const LOCK_REQUEST_TIMEOUT_MS = 20_000;
+
+function lockRequest(
+  client: BlobClient,
+  opts: BlobRequestOptions,
+): Promise<BlobResponse> {
+  return client.request({ timeoutMs: LOCK_REQUEST_TIMEOUT_MS, ...opts });
+}
+
 function lockBlobPath(container: string, prefix: string, key: string): string {
   return `/${container}/${prefix}/_locks/${encodeURIComponent(key)}.lock`;
 }
@@ -69,9 +82,16 @@ async function requestWithContext(
   run: () => Promise<BlobResponse>,
 ): Promise<BlobResponse> {
   try {
-    return await retryableRequest(run);
+    // Timeouts are not retried: repeating a lease acquire whose response was
+    // lost leaves an orphaned lease the caller cannot see, and stacked
+    // retries would outlast the lease on a renew.
+    return await retryableRequest(run, { retryTimeouts: false });
   } catch (cause) {
-    if (cause instanceof DOMException) throw cause; // abort signals pass through unchanged
+    // Caller aborts pass through unchanged; a request-deadline TimeoutError
+    // is a transport failure and gets the operation/path context below.
+    if (cause instanceof DOMException && cause.name !== "TimeoutError") {
+      throw cause;
+    }
     const reason = cause instanceof Error ? cause.message : String(cause);
     throw new Error(
       `Azure Blob ${op} request failed for ${path}: ${reason}`,
@@ -96,7 +116,7 @@ async function leaseAction(
     `lease.${action}`,
     path,
     () =>
-      client.request({
+      lockRequest(client, {
         op: `lease.${action}`,
         method: "PUT",
         path,
@@ -114,7 +134,7 @@ async function ensureBlobExists(
     "createLockBlob",
     path,
     () =>
-      client.request({
+      lockRequest(client, {
         op: "createLockBlob",
         method: "PUT",
         path,
@@ -158,7 +178,7 @@ async function deleteLockBlobWithLease(
       "deleteLockBlob",
       path,
       () =>
-        client.request({
+        lockRequest(client, {
           op: "deleteLockBlob",
           method: "DELETE",
           path,
@@ -193,7 +213,7 @@ export function createBlobLock(
       "setLockMetadata",
       path,
       () =>
-        client.request({
+        lockRequest(client, {
           op: "setLockMetadata",
           method: "PUT",
           path,
@@ -265,7 +285,12 @@ export function createBlobLock(
             throw err;
           }
           leaseId = acquiredId;
+          let renewing = false;
           heartbeatId = setInterval(() => {
+            // A renewal still in flight (bounded by the lock deadline) makes
+            // this tick redundant; skipping keeps renewals from stacking.
+            if (renewing) return;
+            renewing = true;
             // Detached so the renewal span is its own trace rather than a
             // child of this acquire span, which has already ended by then.
             detached(async () => {
@@ -273,6 +298,8 @@ export function createBlobLock(
                 await leaseAction(client, path, "renew", acquiredId);
               } catch {
                 // Connection lost or lease lost — lease will expire via its fixed duration
+              } finally {
+                renewing = false;
               }
             });
           }, (leaseSeconds * 1000) / 3);
@@ -394,7 +421,7 @@ export function createBlobLock(
           "getLockMetadata",
           path,
           () =>
-            client.request({
+            lockRequest(client, {
               op: "getLockMetadata",
               method: "GET",
               path,

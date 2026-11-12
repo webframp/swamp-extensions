@@ -49,11 +49,22 @@ export interface RetryOptions {
   maxAttempts?: number;
   baseDelayMs?: number;
   signal?: AbortSignal;
+  /** Retry a request-deadline `TimeoutError` (default true). Disable for
+   * operations that are unsafe to repeat after an unobserved success, such as
+   * a lease acquire whose lost response leaves an orphaned lease. */
+  retryTimeouts?: boolean;
 }
 
-/** Retries `op` while it returns a retryable HTTP status; stops retrying once
- * `op` returns a non-retryable status or `maxAttempts` is exhausted — network
- * errors thrown by `op` itself propagate immediately (not retried here). */
+/** True for the `TimeoutError` that `AbortSignal.timeout` rejects with. A
+ * caller-initiated abort is an `AbortError` and is deliberately not matched. */
+export function isTimeoutError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "TimeoutError";
+}
+
+/** Retries `op` while it returns a retryable HTTP status or rejects with a
+ * request-deadline `TimeoutError`; stops once `op` returns a non-retryable
+ * status or `maxAttempts` is exhausted (the last timeout is rethrown). Other
+ * network errors thrown by `op` propagate immediately (not retried here). */
 export async function retryableRequest<T extends { status: number }>(
   op: () => Promise<T>,
   options?: RetryOptions,
@@ -61,6 +72,7 @@ export async function retryableRequest<T extends { status: number }>(
   const maxAttempts = options?.maxAttempts ?? 3;
   const baseDelayMs = options?.baseDelayMs ?? 500;
   const signal = options?.signal;
+  const retryTimeouts = options?.retryTimeouts ?? true;
 
   if (maxAttempts < 1) {
     throw new Error(
@@ -76,16 +88,27 @@ export async function retryableRequest<T extends { status: number }>(
         "AbortError",
       );
     }
-    const result = await op();
     const isLastAttempt = attempt === maxAttempts - 1;
-    if (isLastAttempt || !isRetryableStatus(result.status)) return result;
+    let result: T | undefined;
+    try {
+      result = await op();
+    } catch (err) {
+      if (isLastAttempt || !retryTimeouts || !isTimeoutError(err)) throw err;
+    }
+    if (result !== undefined) {
+      if (isLastAttempt || !isRetryableStatus(result.status)) return result;
+    }
     const raw = baseDelayMs * Math.pow(3, attempt);
     const jitter = raw * JITTER_FRACTION * (Math.random() * 2 - 1);
     const delay = Math.max(0, Math.floor(raw + jitter));
-    recordRetry(attempt + 1, delay, {
-      "retry.reason": "retryable_status",
-      "http.response.status_code": result.status,
-    });
+    recordRetry(
+      attempt + 1,
+      delay,
+      result === undefined ? { "retry.reason": "request_timeout" } : {
+        "retry.reason": "retryable_status",
+        "http.response.status_code": result.status,
+      },
+    );
     await abortableSleep(delay, signal);
     attempt++;
   }

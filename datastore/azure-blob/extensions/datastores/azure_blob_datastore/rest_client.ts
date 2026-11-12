@@ -200,6 +200,8 @@ const ARM_LIKE_TOKEN_CACHE = new Map<
 async function getServicePrincipalToken(
   auth: ServicePrincipalAuth,
   fetchFn: typeof fetch,
+  timeoutMs: number,
+  signal?: AbortSignal,
 ): Promise<string> {
   const cacheKey = `${auth.tenantId}:${auth.clientId}`;
   const cached = ARM_LIKE_TOKEN_CACHE.get(cacheKey);
@@ -222,34 +224,100 @@ async function getServicePrincipalToken(
       client_secret: auth.clientSecret,
       scope: STORAGE_SCOPE,
     });
-    const resp = await fetchFn(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: body.toString(),
-    });
-    span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
-    if (!resp.ok) {
-      // The response body is deliberately dropped rather than interpolated
-      // into the message. withSpan records error.message via setStatus and
-      // recordException, so anything in the message reaches the trace backend
-      // — and this is the AAD token endpoint's raw response.
-      throw new Error(
-        `Azure token exchange failed (${resp.status} ${resp.statusText})`,
-      );
+    // One deadline covers the exchange and the JSON body read.
+    const deadline = requestDeadline(signal);
+    deadline.arm(timeoutMs);
+    try {
+      const resp = await fetchFn(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+        signal: deadline.signal,
+      });
+      span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
+      if (!resp.ok) {
+        // The response body is deliberately dropped rather than interpolated
+        // into the message. withSpan records error.message via setStatus and
+        // recordException, so anything in the message reaches the trace
+        // backend — and this is the AAD token endpoint's raw response.
+        throw new Error(
+          `Azure token exchange failed (${resp.status} ${resp.statusText})`,
+        );
+      }
+      const data = await resp.json() as {
+        access_token?: string;
+        expires_in?: number;
+      };
+      if (!data.access_token) {
+        throw new Error("Azure token response missing access_token field");
+      }
+      ARM_LIKE_TOKEN_CACHE.set(cacheKey, {
+        token: data.access_token,
+        expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+      });
+      return data.access_token;
+    } finally {
+      deadline.clear();
     }
-    const data = await resp.json() as {
-      access_token?: string;
-      expires_in?: number;
-    };
-    if (!data.access_token) {
-      throw new Error("Azure token response missing access_token field");
-    }
-    ARM_LIKE_TOKEN_CACHE.set(cacheKey, {
-      token: data.access_token,
-      expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-    });
-    return data.access_token;
   });
+}
+
+/**
+ * Base deadline for one request phase. Without a deadline a connection that
+ * black-holes mid-request leaves `fetch` pending until the kernel gives up
+ * (~15 min with Linux `tcp_retries2=15`), surfacing as an opaque
+ * `fetch failed`.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 120_000;
+
+/**
+ * Slowest transfer rate a healthy link is assumed to sustain (~4 Mbit/s).
+ * Large bodies get `bytes / MIN_THROUGHPUT_BYTES_PER_SEC` extra seconds so a
+ * slow but progressing transfer is not cut off at the base deadline.
+ */
+export const MIN_THROUGHPUT_BYTES_PER_SEC = 512 * 1024;
+
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+/** Deadline for a phase that moves `bytes`: the base plus transfer allowance. */
+export function deadlineForBytes(baseMs: number, bytes: number): number {
+  return baseMs + Math.ceil(bytes / MIN_THROUGHPUT_BYTES_PER_SEC) * 1000;
+}
+
+/**
+ * A resettable per-request deadline. `signal` aborts with a `TimeoutError`
+ * DOMException when the current phase's timer fires (or follows the caller's
+ * signal, preserving its reason). `arm` replaces the timer for the next phase;
+ * `clear` must run in a `finally` so no timer outlives the request.
+ */
+function requestDeadline(callerSignal: AbortSignal | undefined) {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (rawMs: number) => {
+    if (timer !== undefined) clearTimeout(timer);
+    // setTimeout fires immediately for NaN, non-positive, or > 2^31-1 values.
+    const ms = Number.isFinite(rawMs)
+      ? Math.min(Math.max(Math.trunc(rawMs), 1), MAX_TIMER_MS)
+      : MAX_TIMER_MS;
+    timer = setTimeout(
+      () =>
+        controller.abort(
+          new DOMException(
+            `Request exceeded its ${ms}ms deadline`,
+            "TimeoutError",
+          ),
+        ),
+      ms,
+    );
+  };
+  const clear = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+  };
+  const signal = callerSignal
+    ? AbortSignal.any([callerSignal, controller.signal])
+    : controller.signal;
+  return { signal, arm, clear };
 }
 
 export interface BlobRequestOptions {
@@ -260,6 +328,10 @@ export interface BlobRequestOptions {
   body?: Uint8Array;
   /** Operation name for the emitted span; defaults to the HTTP method. */
   op?: string;
+  /** Caller abort signal, combined with the per-request deadline. */
+  signal?: AbortSignal;
+  /** Tighter base deadline for this request; never exceeds the client's. */
+  timeoutMs?: number;
 }
 
 export interface BlobResponse {
@@ -285,9 +357,14 @@ export class BlobClient {
     private readonly auth: BlobAuth,
     private readonly baseUrl: string,
     private readonly fetchFn: typeof fetch = fetch,
+    private readonly requestTimeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
   ) {}
 
-  static fromAuth(auth: BlobAuth, fetchFn: typeof fetch = fetch): BlobClient {
+  static fromAuth(
+    auth: BlobAuth,
+    fetchFn: typeof fetch = fetch,
+    requestTimeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
+  ): BlobClient {
     const accountName = auth.mode === "connectionString"
       ? parseConnectionString(auth.connectionString).accountName
       : auth.accountName;
@@ -298,6 +375,7 @@ export class BlobClient {
       auth,
       accountUrl(accountName, endpointSuffix),
       fetchFn,
+      requestTimeoutMs,
     );
   }
 
@@ -318,6 +396,10 @@ export class BlobClient {
       [Attr.AZURE_BLOB_CONTAINER]: container,
       ...(blobKey ? { [Attr.AZURE_BLOB_KEY]: blobKey } : {}),
     }, async (span) => {
+      const baseMs = Math.min(
+        opts.timeoutMs ?? this.requestTimeoutMs,
+        this.requestTimeoutMs,
+      );
       const now = new Date().toUTCString();
       const query = new URLSearchParams(opts.query ?? {});
       const search = query.toString();
@@ -339,18 +421,40 @@ export class BlobClient {
         );
         headers.set("Authorization", signature);
       } else if (this.auth.mode === "servicePrincipal") {
-        const token = await getServicePrincipalToken(this.auth, this.fetchFn);
+        const token = await getServicePrincipalToken(
+          this.auth,
+          this.fetchFn,
+          baseMs,
+          opts.signal,
+        );
         headers.set("Authorization", `Bearer ${token}`);
       }
 
-      const resp = await this.fetchFn(url, {
-        method: opts.method,
-        headers,
-        body: opts.body
-          ? (new Uint8Array(opts.body).buffer as ArrayBuffer)
-          : undefined,
-      });
-      const bodyBytes = new Uint8Array(await resp.arrayBuffer());
+      // Phase 1 (send + response headers): the base deadline plus an allowance
+      // for the request body. Phase 2 (response body): re-armed from
+      // Content-Length once headers arrive. The signal stays live through the
+      // body read, so a stalled body is bounded too.
+      const deadline = requestDeadline(opts.signal);
+      let resp: Response;
+      let bodyBytes: Uint8Array;
+      try {
+        deadline.arm(deadlineForBytes(baseMs, opts.body?.byteLength ?? 0));
+        resp = await this.fetchFn(url, {
+          method: opts.method,
+          headers,
+          body: opts.body
+            ? (new Uint8Array(opts.body).buffer as ArrayBuffer)
+            : undefined,
+          signal: deadline.signal,
+        });
+        const declared = Number(resp.headers.get("content-length"));
+        deadline.arm(
+          deadlineForBytes(baseMs, Number.isFinite(declared) ? declared : 0),
+        );
+        bodyBytes = new Uint8Array(await resp.arrayBuffer());
+      } finally {
+        deadline.clear();
+      }
 
       span.setAttribute(Attr.HTTP_RESPONSE_STATUS_CODE, resp.status);
       span.setAttribute(Attr.HTTP_RESPONSE_BODY_SIZE, bodyBytes.byteLength);
