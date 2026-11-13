@@ -23,8 +23,8 @@ description: |
 
   # Build and post the attestation once reviews are done. A change to the
   # trust root (ci-discover, check-reserved-names, this extension, CI
-  # workflows) needs at least one approval. To run methods before the
-  # workflow has run, create the instance first:
+  # workflows) needs an approval with decision "approve". To run methods
+  # before the workflow has run, create the instance first:
   #   swamp model create @webframp/ci-verification ci-verification
   swamp model method run ci-verification attest \
     --input repoPath=/path/to/swamp-extensions --input commit=<sha> \

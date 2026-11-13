@@ -468,14 +468,51 @@ Deno.test("attest builds the attestation from recorded results, recomputes the g
       "review code-review: fail",
     );
 
-    // The change touches scripts/ci-discover/, so a pass needs an approval.
-    const ts = ctx(passing);
+    // The change touches scripts/ci-discover/, so a pass needs an approval
+    // whose decision is "approve".
+    const tn = ctx(passing);
     await assertRejects(
-      () => attest(f, ts, undefined, f.head, []),
+      () => attest(f, tn, undefined, f.head, []),
       Error,
-      "trust root changed (scripts/ci-discover/README.md): an approval is required",
+      'trust root changed (scripts/ci-discover/README.md): an approval with decision "approve" is required',
     );
-    assert(!ts.getWrittenResources().some((r) => r.specName === "attestation"));
+    assert(!tn.getWrittenResources().some((r) => r.specName === "attestation"));
+    // Any approval that is not "approve" refuses, even beside an approval.
+    const notApproved: Array<
+      [string, Array<{ gateId: string; decision: string }>, string]
+    > = [
+      [
+        "a rejection",
+        [{ gateId: "release-approval", decision: "reject" }],
+        'approval release-approval: decision is "reject", not "approve"',
+      ],
+      [
+        "another decision",
+        [{ gateId: "release-approval", decision: "approved" }],
+        'approval release-approval: decision is "approved", not "approve"',
+      ],
+      [
+        "a rejection beside an approval",
+        [
+          { gateId: "quality-waiver", decision: "reject" },
+          { gateId: "release-approval", decision: "approve" },
+        ],
+        'approval quality-waiver: decision is "reject", not "approve"',
+      ],
+    ];
+    for (const [label, approvals, expected] of notApproved) {
+      const ts = ctx(passing);
+      await assertRejects(
+        () => attest(f, ts, undefined, f.head, approvals),
+        Error,
+        expected,
+        label,
+      );
+      assert(
+        !ts.getWrittenResources().some((r) => r.specName === "attestation"),
+        label,
+      );
+    }
 
     // post pushes the stored attestation as a ref, and refuses a twin commit.
     const tp = ctx(stored(ta, passing));

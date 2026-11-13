@@ -11,9 +11,10 @@ its log as swamp data, keyed by the commit's tree hash:
   the tasks of each touched `scripts/` tool.
 - `quality` runs `swamp extension quality` under CI's pass condition.
 - `attest` builds an attestation from the recorded results and refuses if any
-  result is missing, failed, or stale, or if the change touches the trust root
+  result is missing, failed, or stale, if a review failed or an approval's
+  decision is not `approve`, or if the change touches the trust root
   (ci-discover, check-reserved-names, this extension, CI workflows) and no
-  approval was given.
+  approval with decision `approve` was given.
 - `post` pushes the attestation to `refs/attestations/<tree>/<timestamp>`, never
   forced.
 

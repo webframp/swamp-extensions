@@ -763,7 +763,7 @@ export const model = {
 
     attest: {
       description:
-        "Build the attestation for a commit's tree from its recorded results; writes nothing unless every selected check passed for this selection and model version, and, when the change touches the trust root, an approval is given",
+        'Build the attestation for a commit\'s tree from its recorded results; writes nothing unless every selected check passed for this selection and model version, and, when the change touches the trust root, an approval with decision "approve" is given',
       arguments: z.object({
         repoPath: RepoArg,
         commit: CommitArg,
@@ -771,7 +771,7 @@ export const model = {
           "Review verdicts, recorded as asserted by the caller",
         ),
         approvals: z.array(ApprovalSchema).default([]).describe(
-          "Approvals, recorded as asserted by the caller; at least one is required when the change touches the trust root",
+          'Approvals, recorded as asserted by the caller; when the change touches the trust root, one must have decision "approve"',
         ),
       }),
       execute: async (
@@ -842,15 +842,27 @@ export const model = {
             problems.push(`review ${review.name}: ${review.verdict}`);
           }
         }
+        // An approval that is not an approval (a rejection or any other
+        // decision) refuses, as a failed review does.
+        for (const approval of args.approvals) {
+          if (approval.decision !== "approve") {
+            problems.push(
+              `approval ${approval.gateId}: decision is "${approval.decision}", not "approve"`,
+            );
+          }
+        }
         // The commit's own tooling verified a change to that tooling, so a
         // pass needs a person's sign-off before it can count.
-        if (sel.trustRootChanged.length > 0 && args.approvals.length === 0) {
+        if (
+          sel.trustRootChanged.length > 0 &&
+          !args.approvals.some((a) => a.decision === "approve")
+        ) {
           problems.push(
             `trust root changed (${
               sel.trustRootChanged.slice(0, 3).join(", ")
             }${
               sel.trustRootChanged.length > 3 ? ", ..." : ""
-            }): an approval is required`,
+            }): an approval with decision "approve" is required`,
           );
         }
         if (problems.length > 0) {
