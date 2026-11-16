@@ -408,3 +408,31 @@ Deno.test("concurrent first pushes to an empty store both succeed when the creat
     }
   });
 });
+
+Deno.test("unscoped pull handles a datastore larger than the spread-argument limit", async () => {
+  await withHarness(async ({ client, cachePath, mock }) => {
+    // Tombstoned entries keep the pull from fetching content; the point is the
+    // entry count, which must exceed V8's call-argument limit (~120k).
+    const shard: Record<string, unknown> = {};
+    for (let i = 0; i < 150_000; i++) {
+      shard[`data/model/instance/${i}.json`] = {
+        hash: "",
+        size: 0,
+        updatedAt: "2026-11-16T00:00:00.000Z",
+        deletedAt: "2026-11-16T00:00:00.000Z",
+      };
+    }
+    mock.blobs.set(`/${CONTAINER}/${PREFIX}/_index/00.json`, {
+      content: new TextEncoder().encode(JSON.stringify(shard)),
+      etag: '"0x1"',
+      leaseState: "available",
+      metadata: {},
+    });
+
+    const svc = sync(client, cachePath);
+    // Previously threw RangeError: Maximum call stack size exceeded.
+    const changes = await svc.pullChanged();
+    // Every entry is a tombstone for a file that was never cached locally.
+    assertEquals(changes, 0);
+  });
+});
