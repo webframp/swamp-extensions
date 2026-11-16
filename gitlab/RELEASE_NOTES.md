@@ -1,12 +1,16 @@
-## 2026.11.12.1
+## 2026.11.16.1
 
-**Added:** `get_commit` fetches one commit from a project by its full or
-abbreviated SHA (at least 7 hex characters) and writes it to the new
-`commitDetail` resource. The resource carries the full commit message, parent
-SHAs, author and committer with their dates, line stats, and the web URL.
-Looking up a commit by SHA used to need a `list_commits` call with the SHA as
-`ref` and `perPage=1`, which returned only the title and author. A SHA that is
-not in the project fails with GitLab's 404.
+**Fixed:** `update_snippet` rejected every call that passed `files` with
+GitLab's `400 files[0][action] is missing`, for both project and instance
+snippets, so no file update ever succeeded. Each `files[]` entry now carries
+an `action`, defaulting to `update`. Title, description, and visibility-only
+updates were unaffected.
 
-**Upgrade note:** No changes to existing schemas. The model version moves to
-2026.11.12.1 with an identity upgrade.
+**Added:** Each `files` entry accepts an optional `action` (`create`,
+`update`, `delete`, or `move`) and, for `move`, a `previousPath` giving the
+file's current path (`filePath` is the new path). `content` is now optional in
+the schema and is required only for `create` and `update`.
+
+**Upgrade note:** No schema changes to stored resources. The model version
+moves to 2026.11.16.1 with an identity upgrade. Existing calls that pass
+`filePath` and `content` keep working unchanged.

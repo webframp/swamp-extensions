@@ -2824,7 +2824,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.11.12.1",
+  version: "2026.11.16.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -3069,6 +3069,12 @@ export const model = {
       toVersion: "2026.11.12.1",
       description:
         "Adds get_commit and the commitDetail resource; existing schemas unchanged",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.16.1",
+      description:
+        "update_snippet now sends the required files[].action (default update); no schema changes",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -7768,12 +7774,43 @@ export const model = {
         visibility: SnippetVisibilitySchema.optional(),
         files: z.array(
           z.object({
+            action: z.enum(["create", "update", "delete", "move"]).default(
+              "update",
+            ).describe(
+              "What to do with this file. GitLab requires an action on " +
+                "every files[] entry. Defaults to update.",
+            ),
             filePath: z.string().min(1),
-            content: z.string(),
+            content: z.string().optional().describe(
+              "File content. Required for create and update; ignored by " +
+                "delete; optional for move (omit to keep the content).",
+            ),
+            previousPath: z.string().min(1).optional().describe(
+              "Current path of the file. Required for move, where " +
+                "filePath is the new path.",
+            ),
+          }).superRefine((f, c) => {
+            if (
+              (f.action === "create" || f.action === "update") &&
+              f.content === undefined
+            ) {
+              c.addIssue({
+                code: "custom",
+                path: ["content"],
+                message: `content is required for action "${f.action}"`,
+              });
+            }
+            if (f.action === "move" && f.previousPath === undefined) {
+              c.addIssue({
+                code: "custom",
+                path: ["previousPath"],
+                message: 'previousPath is required for action "move"',
+              });
+            }
           }),
         ).min(1).optional().describe(
-          "Replacement files for the snippet. Mapped to GitLab's " +
-            "files[] with file_path/content.",
+          "File changes for the snippet. Mapped to GitLab's files[] with " +
+            "action/file_path/content/previous_path.",
         ),
       }),
       execute: async (
@@ -7783,7 +7820,12 @@ export const model = {
           title?: string;
           description?: string;
           visibility?: "private" | "internal" | "public";
-          files?: Array<{ filePath: string; content: string }>;
+          files?: Array<{
+            action?: "create" | "update" | "delete" | "move";
+            filePath: string;
+            content?: string;
+            previousPath?: string;
+          }>;
         },
         ctx: ModelContext,
       ) => {
@@ -7797,10 +7839,20 @@ export const model = {
         if (args.description !== undefined) body.description = args.description;
         if (args.visibility !== undefined) body.visibility = args.visibility;
         if (args.files !== undefined) {
-          body.files = args.files.map((f) => ({
-            file_path: f.filePath,
-            content: f.content,
-          }));
+          body.files = args.files.map((f) => {
+            const action = f.action ?? "update";
+            const entry: Record<string, unknown> = {
+              action,
+              file_path: f.filePath,
+            };
+            if (f.content !== undefined && action !== "delete") {
+              entry.content = f.content;
+            }
+            if (f.previousPath !== undefined && action === "move") {
+              entry.previous_path = f.previousPath;
+            }
+            return entry;
+          });
         }
         if (Object.keys(body).length === 0) {
           throw new Error(
