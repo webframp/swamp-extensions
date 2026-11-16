@@ -7787,7 +7787,7 @@ export const model = {
             ),
             previousPath: z.string().min(1).optional().describe(
               "Current path of the file. Required for move, where " +
-                "filePath is the new path.",
+                "filePath is the new path; rejected for other actions.",
             ),
           }).superRefine((f, c) => {
             if (
@@ -7798,6 +7798,13 @@ export const model = {
                 code: "custom",
                 path: ["content"],
                 message: `content is required for action "${f.action}"`,
+              });
+            }
+            if (f.action !== "move" && f.previousPath !== undefined) {
+              c.addIssue({
+                code: "custom",
+                path: ["previousPath"],
+                message: 'previousPath is only valid with action "move"',
               });
             }
             if (f.action === "move" && f.previousPath === undefined) {
