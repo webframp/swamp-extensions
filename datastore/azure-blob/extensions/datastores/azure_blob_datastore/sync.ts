@@ -285,7 +285,7 @@ export function createSyncService(
           const { names: pageNames, nextMarker } = parseListBlobsResponse(
             new TextDecoder().decode(resp.body),
           );
-          names.push(...pageNames);
+          for (const n of pageNames) names.push(n);
           marker = nextMarker ?? undefined;
         } while (marker);
         span.setAttribute(Attr.DATASTORE_SHARDS, names.length);
@@ -617,7 +617,7 @@ export function createSyncService(
         }
       }
     } else {
-      entries.push(...(await queryAllFileMeta()).entries());
+      for (const e of await queryAllFileMeta()) entries.push(e);
     }
 
     let changes = 0;
