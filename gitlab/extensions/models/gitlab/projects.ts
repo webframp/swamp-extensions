@@ -958,6 +958,9 @@ const FileContentSchema = z.object({
   ),
 });
 
+// Cap on downstream pipelines visited by retry_pipeline.
+const MAX_DOWNSTREAM_PIPELINES = 50;
+
 const RetryResultSchema = z.object({
   project: z.string().describe("Project the job/pipeline belongs to"),
   kind: z.enum(["job", "pipeline"]).describe(
@@ -970,6 +973,9 @@ const RetryResultSchema = z.object({
     "For job retries, the id of the new job GitLab created; null for pipeline retries",
   ),
   status: z.string().describe("Resulting status after the retry"),
+  retriedJobIds: z.array(z.number()).optional().describe(
+    "For pipeline retries, ids of the failed jobs that were re-run in the downstream pipelines (the pipeline's own failed jobs are retried by the pipeline retry itself)",
+  ),
   fetchedAt: z.string().describe("Timestamp the retry was triggered"),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -2824,7 +2830,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.11.16.1",
+  version: "2026.11.17.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -3075,6 +3081,12 @@ export const model = {
       toVersion: "2026.11.16.1",
       description:
         "update_snippet now sends the required files[].action (default update); no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.17.1",
+      description:
+        "retryResult gains optional retriedJobIds; retry_pipeline now retries failed jobs in downstream pipelines",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -5655,7 +5667,10 @@ export const model = {
     },
 
     retry_pipeline: {
-      description: "Retry the failed jobs in a pipeline.",
+      description:
+        "Retry the failed jobs in a pipeline and in every downstream " +
+        "(child/multi-project) pipeline reachable through its bridge jobs. " +
+        "Fails when no pipeline in the chain has a failed job to retry.",
       arguments: z.object({
         project: z.string().min(1),
         pipelineId: z.number().int().positive(),
@@ -5669,10 +5684,73 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const raw = await client.post(
-          args.project,
-          `/pipelines/${args.pipelineId}/retry`,
-        );
+        const failedJobIds = async (
+          project: string,
+          pipelineId: number,
+        ): Promise<number[]> => {
+          const { data } = await client.getProjectList(
+            project,
+            `/pipelines/${pipelineId}/jobs`,
+            { per_page: "100", scope: "failed" },
+          );
+          return (Array.isArray(data) ? data : [])
+            .filter((j: any) => j.status === "failed")
+            .map((j: any) => j.id as number);
+        };
+        const rootFailed = await failedJobIds(args.project, args.pipelineId);
+
+        // Breadth-first walk of the bridge chain, bounded so a pathological
+        // fan-out cannot run away.
+        const downstreamJobs: Array<{ project: string; jobId: number }> = [];
+        const seen = new Set<string>([`${args.project}#${args.pipelineId}`]);
+        let queue = [{ project: args.project, pipelineId: args.pipelineId }];
+        while (queue.length > 0 && seen.size <= MAX_DOWNSTREAM_PIPELINES) {
+          const next: typeof queue = [];
+          for (const current of queue) {
+            const { data } = await client.getProjectList(
+              current.project,
+              `/pipelines/${current.pipelineId}/bridges`,
+              { per_page: "100" },
+            );
+            for (const bridge of Array.isArray(data) ? data : []) {
+              const down = (bridge as any).downstream_pipeline;
+              if (!down?.id) continue;
+              const project = down.project_id != null
+                ? String(down.project_id)
+                : current.project;
+              const key = `${project}#${down.id}`;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              next.push({ project, pipelineId: down.id });
+              for (const jobId of await failedJobIds(project, down.id)) {
+                downstreamJobs.push({ project, jobId });
+              }
+            }
+          }
+          queue = next;
+        }
+
+        if (rootFailed.length === 0 && downstreamJobs.length === 0) {
+          throw new Error(
+            `Pipeline ${args.pipelineId} and its downstream pipelines have ` +
+              "no failed jobs to retry",
+          );
+        }
+
+        let status = "";
+        if (rootFailed.length > 0) {
+          const raw = await client.post(
+            args.project,
+            `/pipelines/${args.pipelineId}/retry`,
+          );
+          status = raw.status ?? "";
+        }
+        const retriedJobIds: number[] = [];
+        for (const { project, jobId } of downstreamJobs) {
+          const raw = await client.post(project, `/jobs/${jobId}/retry`);
+          retriedJobIds.push(raw.id ?? jobId);
+          status = status || (raw.status ?? "");
+        }
         const handle = await ctx.writeResource(
           "retryResult",
           `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
@@ -5681,16 +5759,17 @@ export const model = {
             kind: "pipeline",
             id: args.pipelineId,
             newJobId: null,
-            status: raw.status ?? "",
+            status,
+            retriedJobIds,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
           },
         );
-        ctx.logger.info("Retried pipeline {pid} ({status})", {
-          pid: args.pipelineId,
-          status: raw.status ?? "?",
-        });
+        ctx.logger.info(
+          "Retried pipeline {pid} ({status}); {n} downstream job(s) re-run",
+          { pid: args.pipelineId, status, n: retriedJobIds.length },
+        );
         return { dataHandles: [handle] };
       },
     },
