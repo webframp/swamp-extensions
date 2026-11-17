@@ -958,6 +958,9 @@ const FileContentSchema = z.object({
   ),
 });
 
+// Cap on downstream pipelines visited by retry_pipeline.
+const MAX_DOWNSTREAM_PIPELINES = 50;
+
 const RetryResultSchema = z.object({
   project: z.string().describe("Project the job/pipeline belongs to"),
   kind: z.enum(["job", "pipeline"]).describe(
@@ -970,6 +973,15 @@ const RetryResultSchema = z.object({
     "For job retries, the id of the new job GitLab created; null for pipeline retries",
   ),
   status: z.string().describe("Resulting status after the retry"),
+  retriedJobIds: z.array(z.number()).optional().describe(
+    "For pipeline retries, ids of the failed jobs that were re-run in the downstream pipelines (the pipeline's own failed jobs are retried by the pipeline retry itself)",
+  ),
+  failedRetries: z.array(z.string()).optional().describe(
+    "For pipeline retries, retry or lookup steps that failed",
+  ),
+  truncated: z.boolean().optional().describe(
+    "For pipeline retries, true when a list page or the downstream-pipeline cap left part of the chain unvisited",
+  ),
   fetchedAt: z.string().describe("Timestamp the retry was triggered"),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -2824,7 +2836,7 @@ type ModelContext = {
 /** GitLab model — read and write projects, issues, MRs, pipelines via GraphQL API (REST fallback for branches and merge accept). */
 export const model = {
   type: "@webframp/gitlab",
-  version: "2026.11.16.1",
+  version: "2026.11.17.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -3075,6 +3087,12 @@ export const model = {
       toVersion: "2026.11.16.1",
       description:
         "update_snippet now sends the required files[].action (default update); no schema changes",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.17.1",
+      description:
+        "retryResult gains optional retriedJobIds, failedRetries, truncated; retry_pipeline now retries failed jobs in downstream pipelines",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -5655,7 +5673,11 @@ export const model = {
     },
 
     retry_pipeline: {
-      description: "Retry the failed jobs in a pipeline.",
+      description:
+        "Retry the failed jobs in a pipeline and in every downstream " +
+        "(child/multi-project) pipeline reachable through its bridge jobs. " +
+        "Fails when no pipeline in the chain has a failed job to retry, or " +
+        "when any retry fails (the retryResult still records what was re-run).",
       arguments: z.object({
         project: z.string().min(1),
         pipelineId: z.number().int().positive(),
@@ -5669,10 +5691,121 @@ export const model = {
           ctx.globalArgs.host,
           ctx.globalArgs.token,
         );
-        const raw = await client.post(
-          args.project,
-          `/pipelines/${args.pipelineId}/retry`,
-        );
+        let truncated = false;
+        const problems: string[] = [];
+        const failedJobs = async (
+          project: string,
+          pipelineId: number,
+        ): Promise<any[]> => {
+          const { data, truncated: more } = await client.getProjectList(
+            project,
+            `/pipelines/${pipelineId}/jobs`,
+            { per_page: "100", scope: "failed" },
+          );
+          truncated ||= more;
+          return (Array.isArray(data) ? data : [])
+            .filter((j: any) => j.status === "failed");
+        };
+        const rootJobs = (await failedJobs(args.project, args.pipelineId))
+          .filter((j: any) => j.allow_failure !== true);
+
+        // The root retry also re-triggers a failed root bridge, so when a
+        // failed bridge's old downstream pipeline still has failed jobs those
+        // jobs may run twice; GitLab's behavior here is unverified.
+        // Breadth-first walk of the bridge chain. Pipeline ids are unique
+        // across the instance, so they alone dedupe the walk. The cap is
+        // checked before every pipeline is admitted.
+        const downstreamJobs: Array<{ project: string; jobId: number }> = [];
+        const seen = new Set<number>([args.pipelineId]);
+        let rootBridgeFailed = false;
+        let queue = [{ project: args.project, pipelineId: args.pipelineId }];
+        while (queue.length > 0) {
+          const next: typeof queue = [];
+          for (const current of queue) {
+            let data: unknown;
+            try {
+              const res = await client.getProjectList(
+                current.project,
+                `/pipelines/${current.pipelineId}/bridges`,
+                { per_page: "100" },
+              );
+              data = res.data;
+              truncated ||= res.truncated;
+            } catch (e) {
+              // An unreadable downstream project must not block the retries
+              // that are possible.
+              if (current.pipelineId === args.pipelineId) throw e;
+              problems.push(
+                `pipeline ${current.pipelineId}: ${(e as Error).message}`,
+              );
+              continue;
+            }
+            for (const bridge of Array.isArray(data) ? data : []) {
+              if (
+                current.pipelineId === args.pipelineId &&
+                (bridge as any).status === "failed" &&
+                (bridge as any).allow_failure !== true
+              ) {
+                rootBridgeFailed = true;
+              }
+              const down = (bridge as any).downstream_pipeline;
+              if (!down?.id || seen.has(down.id)) continue;
+              if (seen.size > MAX_DOWNSTREAM_PIPELINES) {
+                truncated = true;
+                continue;
+              }
+              seen.add(down.id);
+              const project = down.project_id != null
+                ? String(down.project_id)
+                : current.project;
+              next.push({ project, pipelineId: down.id });
+              try {
+                for (const job of await failedJobs(project, down.id)) {
+                  // Allowed-to-fail jobs are not failures the caller can act on.
+                  if (job.allow_failure === true) continue;
+                  downstreamJobs.push({ project, jobId: job.id });
+                }
+              } catch (e) {
+                problems.push(`pipeline ${down.id}: ${(e as Error).message}`);
+              }
+            }
+          }
+          queue = next;
+        }
+
+        const retryRoot = rootJobs.length > 0 || rootBridgeFailed;
+        if (
+          !retryRoot && downstreamJobs.length === 0 && problems.length === 0
+        ) {
+          throw new Error(
+            `Pipeline ${args.pipelineId} and its downstream pipelines have ` +
+              "no failed jobs to retry",
+          );
+        }
+
+        let status = "";
+        if (retryRoot) {
+          try {
+            const raw = await client.post(
+              args.project,
+              `/pipelines/${args.pipelineId}/retry`,
+            );
+            status = raw.status ?? "";
+          } catch (e) {
+            problems.push(
+              `pipeline ${args.pipelineId}: ${(e as Error).message}`,
+            );
+          }
+        }
+        const retriedJobIds: number[] = [];
+        for (const { project, jobId } of downstreamJobs) {
+          try {
+            const raw = await client.post(project, `/jobs/${jobId}/retry`);
+            if (typeof raw.id === "number") retriedJobIds.push(raw.id);
+          } catch (e) {
+            problems.push(`job ${jobId}: ${(e as Error).message}`);
+          }
+        }
         const handle = await ctx.writeResource(
           "retryResult",
           `${sanitizeName(args.project)}-pipeline-${args.pipelineId}`,
@@ -5681,16 +5814,33 @@ export const model = {
             kind: "pipeline",
             id: args.pipelineId,
             newJobId: null,
-            status: raw.status ?? "",
+            status,
+            retriedJobIds,
+            failedRetries: problems,
+            truncated,
             fetchedAt: new Date().toISOString(),
             durationMs: Date.now() - startMs,
             collectedBy: EXTENSION_NAME,
           },
         );
-        ctx.logger.info("Retried pipeline {pid} ({status})", {
-          pid: args.pipelineId,
-          status: raw.status ?? "?",
-        });
+        ctx.logger.info(
+          "Retried pipeline {pid} ({status}); {n} downstream job(s) re-run",
+          { pid: args.pipelineId, status, n: retriedJobIds.length },
+        );
+        if (truncated) {
+          ctx.logger.warn(
+            "Pipeline {pid}: job/bridge lists or the {cap}-pipeline cap " +
+              "truncated the walk; run retry_pipeline again to retry the rest",
+            { pid: args.pipelineId, cap: MAX_DOWNSTREAM_PIPELINES },
+          );
+        }
+        if (problems.length > 0) {
+          throw new Error(
+            `retry_pipeline ${args.pipelineId}: ${problems.length} retry ` +
+              `step(s) failed (${retriedJobIds.length} downstream job(s) ` +
+              `were re-run): ${problems.join("; ")}`,
+          );
+        }
         return { dataHandles: [handle] };
       },
     },
