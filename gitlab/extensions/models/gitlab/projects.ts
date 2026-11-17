@@ -5706,8 +5706,12 @@ export const model = {
           return (Array.isArray(data) ? data : [])
             .filter((j: any) => j.status === "failed");
         };
-        const rootJobs = await failedJobs(args.project, args.pipelineId);
+        const rootJobs = (await failedJobs(args.project, args.pipelineId))
+          .filter((j: any) => j.allow_failure !== true);
 
+        // The root retry also re-triggers a failed root bridge, so when a
+        // failed bridge's old downstream pipeline still has failed jobs those
+        // jobs may run twice; GitLab's behavior here is unverified.
         // Breadth-first walk of the bridge chain. Pipeline ids are unique
         // across the instance, so they alone dedupe the walk. The cap is
         // checked before every pipeline is admitted.
@@ -5718,22 +5722,35 @@ export const model = {
         while (queue.length > 0) {
           const next: typeof queue = [];
           for (const current of queue) {
-            const { data, truncated: more } = await client.getProjectList(
-              current.project,
-              `/pipelines/${current.pipelineId}/bridges`,
-              { per_page: "100" },
-            );
-            truncated ||= more;
+            let data: unknown;
+            try {
+              const res = await client.getProjectList(
+                current.project,
+                `/pipelines/${current.pipelineId}/bridges`,
+                { per_page: "100" },
+              );
+              data = res.data;
+              truncated ||= res.truncated;
+            } catch (e) {
+              // An unreadable downstream project must not block the retries
+              // that are possible.
+              if (current.pipelineId === args.pipelineId) throw e;
+              problems.push(
+                `pipeline ${current.pipelineId}: ${(e as Error).message}`,
+              );
+              continue;
+            }
             for (const bridge of Array.isArray(data) ? data : []) {
               if (
                 current.pipelineId === args.pipelineId &&
-                (bridge as any).status === "failed"
+                (bridge as any).status === "failed" &&
+                (bridge as any).allow_failure !== true
               ) {
                 rootBridgeFailed = true;
               }
               const down = (bridge as any).downstream_pipeline;
               if (!down?.id || seen.has(down.id)) continue;
-              if (seen.size >= MAX_DOWNSTREAM_PIPELINES) {
+              if (seen.size > MAX_DOWNSTREAM_PIPELINES) {
                 truncated = true;
                 continue;
               }
@@ -5744,11 +5761,8 @@ export const model = {
               next.push({ project, pipelineId: down.id });
               try {
                 for (const job of await failedJobs(project, down.id)) {
-                  // Allowed-to-fail and non-retryable jobs are not failures
-                  // the caller can act on.
-                  if (job.allow_failure === true || job.retryable === false) {
-                    continue;
-                  }
+                  // Allowed-to-fail jobs are not failures the caller can act on.
+                  if (job.allow_failure === true) continue;
                   downstreamJobs.push({ project, jobId: job.id });
                 }
               } catch (e) {

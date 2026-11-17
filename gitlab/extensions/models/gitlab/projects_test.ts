@@ -3930,7 +3930,7 @@ Deno.test("retry_pipeline records partial progress when a job retry fails", asyn
     [`GET ${base}/pipelines/2/jobs?per_page=100&scope=failed`]: {
       status: 200,
       body: [
-        { id: 20, status: "failed", retryable: false },
+        { id: 20, status: "failed", allow_failure: true },
         { id: 21, status: "failed", allow_failure: true },
         { id: 22, status: "failed" },
         { id: 23, status: "failed" },
@@ -3960,6 +3960,45 @@ Deno.test("retry_pipeline records partial progress when a job retry fails", asyn
       .data as any;
     assertEquals(d.retriedJobIds, [220]);
     assertEquals(d.failedRetries.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_pipeline still retries the root when a downstream project is unreadable", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const base = `/api/v4/projects/${pid}`;
+  const restore = mockFetch({
+    [`GET ${base}/pipelines/1/jobs?per_page=100&scope=failed`]: {
+      status: 200,
+      body: [{ id: 5, status: "failed" }],
+    },
+    [`GET ${base}/pipelines/1/bridges?per_page=100`]: {
+      status: 200,
+      body: [{ downstream_pipeline: { id: 2, project_id: 999 } }],
+    },
+    [`POST ${base}/pipelines/1/retry`]: {
+      status: 201,
+      body: { id: 1, status: "running" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.retry_pipeline.execute(
+          { project: "group/proj", pipelineId: 1 },
+          context as any,
+        ),
+      Error,
+      "pipeline 2",
+    );
+    const d = getWrittenResources().find((x) => x.specName === "retryResult")!
+      .data as any;
+    assertEquals(d.status, "running");
+    assertEquals(d.failedRetries.length >= 1, true);
   } finally {
     restore();
   }

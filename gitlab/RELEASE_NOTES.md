@@ -4,8 +4,9 @@
 downstream (child or grandchild) pipeline: it reported `succeeded` while
 nothing re-ran. It now walks the pipeline's bridge jobs recursively (up to 50
 downstream pipelines), retries the failed jobs in each, and fails with an
-error when no pipeline in the chain has a failed job. Allowed-to-fail and
-non-retryable downstream jobs are skipped. A failed root bridge still triggers
+error when no pipeline in the chain has a failed job. Allowed-to-fail jobs are
+skipped. A failed root bridge's old downstream jobs may re-run alongside the
+re-triggered pipeline. A failed root bridge still triggers
 the pipeline retry.
 
 **Added:** `retryResult` carries optional `retriedJobIds` (new ids of the
