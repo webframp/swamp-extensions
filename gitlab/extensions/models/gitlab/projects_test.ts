@@ -7758,7 +7758,7 @@ Deno.test("update_snippet sends only provided fields via PUT, mapping files to f
     assertEquals(capturedBody.title, "updated-title");
     assertEquals(capturedBody.visibility, "public");
     assertEquals(capturedBody.files, [
-      { file_path: "new.txt", content: "new content" },
+      { action: "update", file_path: "new.txt", content: "new content" },
     ]);
     // description was not provided — must not be sent at all.
     assertEquals("description" in capturedBody, false);
@@ -7767,6 +7767,97 @@ Deno.test("update_snippet sends only provided fields via PUT, mapping files to f
     assertEquals(d.visibility, "public");
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_snippet sends per-file actions, previous_path for move, and no content for delete", async () => {
+  let capturedBody: any;
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({ id: 23, title: "t", files: [] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const args = model.methods.update_snippet.arguments.parse({
+      id: 23,
+      files: [
+        { action: "create", filePath: "a.txt", content: "a" },
+        { action: "delete", filePath: "b.txt", content: "ignored" },
+        { action: "move", filePath: "d.txt", previousPath: "c.txt" },
+      ],
+    });
+    await model.methods.update_snippet.execute(args, context as any);
+    assertEquals(capturedBody.files, [
+      { action: "create", file_path: "a.txt", content: "a" },
+      { action: "delete", file_path: "b.txt" },
+      { action: "move", file_path: "d.txt", previous_path: "c.txt" },
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_snippet sends empty-string content for an update", async () => {
+  let capturedBody: any;
+  const original = globalThis.fetch;
+  globalThis.fetch = (_input: string | URL | Request, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return Promise.resolve(
+      new Response(JSON.stringify({ id: 24, title: "t", files: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  };
+  try {
+    const { context } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    const args = model.methods.update_snippet.arguments.parse({
+      id: 24,
+      files: [{ action: "update", filePath: "a", content: "" }],
+    });
+    await model.methods.update_snippet.execute(args, context as any);
+    assertEquals(capturedBody.files, [
+      { action: "update", file_path: "a", content: "" },
+    ]);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("update_snippet defaults a file's action to update and validates per-action fields", () => {
+  const ok = model.methods.update_snippet.arguments.parse({
+    id: 1,
+    files: [{ filePath: "a.txt", content: "x" }],
+  });
+  assertEquals(ok.files![0].action, "update");
+  for (
+    const f of [
+      { filePath: "a.txt" },
+      { action: "create", filePath: "a.txt" },
+      { action: "move", filePath: "b.txt" },
+      {
+        action: "update",
+        filePath: "n.txt",
+        previousPath: "o.txt",
+        content: "x",
+      },
+    ]
+  ) {
+    const r = model.methods.update_snippet.arguments.safeParse({
+      id: 1,
+      files: [f],
+    });
+    assertEquals(r.success, false, JSON.stringify(f));
   }
 });
 
