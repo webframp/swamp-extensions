@@ -3876,7 +3876,8 @@ Deno.test("retry_pipeline retries failed jobs in child and grandchild pipelines"
     const d = getWrittenResources().find((x) => x.specName === "retryResult")!
       .data as any;
     assertEquals(d.retriedJobIds, [31]);
-    assertEquals(d.status, "pending");
+    // The root pipeline had nothing to retry, so there is no pipeline status.
+    assertEquals(d.status, "");
   } finally {
     restore();
   }
@@ -3909,6 +3910,91 @@ Deno.test("retry_pipeline fails when nothing in the chain can be retried", async
       "no failed jobs",
     );
     assertEquals(getWrittenResources().length, 0);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_pipeline records partial progress when a job retry fails", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const base = `/api/v4/projects/${pid}`;
+  const restore = mockFetch({
+    [`GET ${base}/pipelines/1/jobs?per_page=100&scope=failed`]: {
+      status: 200,
+      body: [],
+    },
+    [`GET ${base}/pipelines/1/bridges?per_page=100`]: {
+      status: 200,
+      body: [{ downstream_pipeline: { id: 2 } }],
+    },
+    [`GET ${base}/pipelines/2/jobs?per_page=100&scope=failed`]: {
+      status: 200,
+      body: [
+        { id: 20, status: "failed", retryable: false },
+        { id: 21, status: "failed", allow_failure: true },
+        { id: 22, status: "failed" },
+        { id: 23, status: "failed" },
+      ],
+    },
+    [`GET ${base}/pipelines/2/bridges?per_page=100`]: {
+      status: 200,
+      body: [],
+    },
+    [`POST ${base}/jobs/22/retry`]: { status: 201, body: { id: 220 } },
+    [`POST ${base}/jobs/23/retry`]: { status: 403, body: { message: "no" } },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await assertRejects(
+      () =>
+        model.methods.retry_pipeline.execute(
+          { project: "group/proj", pipelineId: 1 },
+          context as any,
+        ),
+      Error,
+      "job 23",
+    );
+    const d = getWrittenResources().find((x) => x.specName === "retryResult")!
+      .data as any;
+    assertEquals(d.retriedJobIds, [220]);
+    assertEquals(d.failedRetries.length, 1);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("retry_pipeline retries a failed root bridge and flags truncation", async () => {
+  const pid = encodeURIComponent("group/proj");
+  const base = `/api/v4/projects/${pid}`;
+  const restore = mockFetch({
+    [`GET ${base}/pipelines/1/jobs?per_page=100&scope=failed`]: {
+      status: 200,
+      body: [],
+    },
+    [`GET ${base}/pipelines/1/bridges?per_page=100`]: {
+      status: 200,
+      body: [{ status: "failed", downstream_pipeline: null }],
+      headers: { "x-next-page": "2" },
+    },
+    [`POST ${base}/pipelines/1/retry`]: {
+      status: 201,
+      body: { id: 1, status: "running" },
+    },
+  });
+  try {
+    const { context, getWrittenResources } = createModelTestContext({
+      globalArgs: TEST_GLOBAL_ARGS,
+    });
+    await model.methods.retry_pipeline.execute(
+      { project: "group/proj", pipelineId: 1 },
+      context as any,
+    );
+    const d = getWrittenResources().find((x) => x.specName === "retryResult")!
+      .data as any;
+    assertEquals(d.status, "running");
+    assertEquals(d.truncated, true);
   } finally {
     restore();
   }
