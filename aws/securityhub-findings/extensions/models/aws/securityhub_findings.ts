@@ -228,6 +228,9 @@ const DiffFindingsSchema = z.object({
   resolvedCount: z.number(),
   truncated: z.boolean(),
   currentSnapshot: z.array(FindingSummarySchema),
+  hasBaseline: z.boolean().optional().describe(
+    "False on the first run: no prior snapshot, so nothing is reported as new",
+  ),
   fetchedAt: z.string(),
   durationMs: z.number().optional().describe(
     "Method execution duration in milliseconds",
@@ -429,7 +432,7 @@ function hashInstanceName(parts: Record<string, unknown>): string {
 /** Security Hub findings operations model. */
 export const model = {
   type: "@webframp/aws/securityhub-findings",
-  version: "2026.11.10.1",
+  version: "2026.11.18.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -567,6 +570,13 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.18.1",
+      description:
+        "diff_findings keeps its baseline 7d, reports nothing new without one, " +
+        "and accepts several severity labels. Adds optional hasBaseline.",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     finding_list: {
@@ -602,7 +612,7 @@ export const model = {
     diff_findings: {
       description: "New and resolved findings since last run",
       schema: DiffFindingsSchema,
-      lifetime: "1h",
+      lifetime: "7d",
       garbageCollection: 10,
     },
     account_map: {
@@ -1366,9 +1376,9 @@ export const model = {
           .optional()
           .describe("Filter by product (e.g. GuardDuty)"),
         severityLabel: z
-          .string()
+          .union([z.string(), z.array(z.string()).min(1)])
           .optional()
-          .describe("Filter by severity label"),
+          .describe("Filter by severity label, or several (matches any)"),
         startTime: z
           .string()
           .default("24h")
@@ -1383,7 +1393,7 @@ export const model = {
       execute: async (
         args: {
           productName?: string;
-          severityLabel?: string;
+          severityLabel?: string | string[];
           startTime: string;
           limit: number;
         },
@@ -1424,10 +1434,16 @@ export const model = {
               { Value: args.productName, Comparison: "EQUALS" },
             ];
           }
-          if (args.severityLabel) {
-            filters.SeverityLabel = [
-              { Value: args.severityLabel, Comparison: "EQUALS" },
-            ];
+          // Sorted + deduped so label order never changes the instance name
+          // (and so never orphans the previous run's baseline).
+          const severity = Array.isArray(args.severityLabel)
+            ? [...new Set(args.severityLabel)].sort()
+            : args.severityLabel;
+          if (severity) {
+            filters.SeverityLabel = [severity].flat().map((v) => ({
+              Value: v,
+              Comparison: "EQUALS",
+            }));
           }
 
           let resp;
@@ -1452,7 +1468,7 @@ export const model = {
           const currentFindings = (resp.Findings ?? []).map(mapFindingSummary);
           const suffix = hashInstanceName({
             p: args.productName,
-            s: args.severityLabel,
+            s: severity,
             t: args.startTime,
           });
 
@@ -1460,11 +1476,13 @@ export const model = {
           type PrevSnapshot = Array<{ arn: string } & Record<string, unknown>>;
           let previousFindings: PrevSnapshot = [];
           let previousWasTruncated = false;
+          let hasBaseline = false;
           if (context.readResource) {
             const prev = await context.readResource(suffix);
             if (prev && Array.isArray(prev.currentSnapshot)) {
               previousFindings = prev.currentSnapshot as PrevSnapshot;
               previousWasTruncated = !!(prev.truncated);
+              hasBaseline = true;
             }
           }
 
@@ -1477,9 +1495,10 @@ export const model = {
           // Only compute diff when NEITHER snapshot was truncated.
           // When truncated, we can't distinguish "new/resolved" from
           // "fell off the page" — both directions produce false positives.
+          // Without a baseline every current finding would read as "new".
           let newFindings: typeof currentFindings = [];
           let resolvedFindings: typeof currentFindings = [];
-          if (!eitherTruncated) {
+          if (hasBaseline && !eitherTruncated) {
             newFindings = currentFindings.filter(
               (f) => !previousArns.has(f.arn),
             );
@@ -1495,6 +1514,7 @@ export const model = {
             resolvedCount: resolvedFindings.length,
             truncated: eitherTruncated,
             currentSnapshot: currentFindings,
+            hasBaseline,
             fetchedAt: new Date().toISOString(),
           };
 

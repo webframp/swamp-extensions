@@ -613,7 +613,7 @@ Deno.test({
 // =============================================================================
 
 Deno.test({
-  name: "diff_findings identifies new findings when no previous data",
+  name: "diff_findings records a baseline and reports nothing new on first run",
   sanitizeResources: false,
   fn: async () => {
     const restore = mockSecurityHub(() => ({
@@ -633,9 +633,48 @@ Deno.test({
       const diffData = ctx.written[0].data as {
         newCount: number;
         resolvedCount: number;
+        hasBaseline: boolean;
+        currentSnapshot: unknown[];
       };
-      assertEquals(diffData.newCount, 2); // all are new
+      // No baseline: nothing is "new" yet, but the snapshot is kept for next run
+      assertEquals(diffData.newCount, 0);
       assertEquals(diffData.resolvedCount, 0);
+      assertEquals(diffData.hasBaseline, false);
+      assertEquals(diffData.currentSnapshot.length, 2);
+    } finally {
+      restore();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "diff_findings ORs several severity labels and names the instance order-independently",
+  sanitizeResources: false,
+  fn: async () => {
+    // deno-lint-ignore no-explicit-any
+    const sent: any[] = [];
+    const restore = mockSecurityHub((command) => {
+      sent.push(command.input);
+      return { Findings: [] };
+    });
+    try {
+      const names: string[] = [];
+      for (
+        const severityLabel of [["HIGH", "CRITICAL"], ["CRITICAL", "HIGH"]]
+      ) {
+        const ctx = createMockContext();
+        await model.methods.diff_findings.execute(
+          { severityLabel, startTime: "24h", limit: 100 },
+          ctx,
+        );
+        names.push(ctx.written[0].name);
+      }
+      assertEquals(sent[0].Filters.SeverityLabel, [
+        { Value: "CRITICAL", Comparison: "EQUALS" },
+        { Value: "HIGH", Comparison: "EQUALS" },
+      ]);
+      assertEquals(names[0], names[1]);
     } finally {
       restore();
     }
