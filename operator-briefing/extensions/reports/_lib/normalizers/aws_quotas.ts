@@ -17,6 +17,9 @@ import type { Contribution, OpsSignal, SourceInput } from "../shapes.ts";
 
 const SOURCE = "aws-quotas";
 const MAX_AGE_HOURS = 24;
+/** At or above this utilization a quota is a breach (warn); below it, sweeping
+ * with a lower `threshold` surfaces "approaching" rows as info. */
+const BREACH_PCT = 80;
 
 interface QuotaEntry {
   profile?: string;
@@ -152,17 +155,32 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
       emitted = true;
     } else if ("serviceCode" in data && "threshold" in data) {
       const svc = String(data.serviceCode);
+      const rows = entries.filter((e) => e && typeof e === "object");
+      // A missing utilizationPct counts as a breach rather than hiding it.
+      const over = rows.filter((e) =>
+        (e.utilizationPct ?? BREACH_PCT) >= BREACH_PCT
+      ).length;
+      const near = rows.length - over;
+      const top = rows.reduce<QuotaEntry | undefined>(
+        (a, e) =>
+          (a && (a.utilizationPct ?? 0) >= (e.utilizationPct ?? 0)) ? a : e,
+        undefined,
+      );
       // A degraded fetch with no entries never observed the quotas — say "not
       // checked" rather than the dishonest "all quotas below threshold". A
       // non-empty result IS real (some accounts were reached), so keep it.
-      const detail = entries.length === 0
+      const detail = rows.length === 0
         ? (degraded
           ? `${svc}: not checked`
           : `${svc}: all quotas below threshold`)
-        : `${svc}: ${entries.length} quota(s) over threshold` +
-          (first
-            ? ` (${first.quotaName} ${first.utilizationPct}% in ${
-              accountName(first.profile)
+        : `${svc}: ` +
+          [
+            over && `${over} quota(s) over threshold`,
+            near && `${near} approaching`,
+          ].filter(Boolean).join(", ") +
+          (top
+            ? ` (${top.quotaName} ${top.utilizationPct}% in ${
+              accountName(top.profile)
             })`
             : "");
       // Only over-threshold rows actually observed become structured entries;
@@ -171,7 +189,7 @@ export function awsQuotasNormalizer(inputs: SourceInput[]): Contribution {
       ops.push({
         source: SOURCE,
         label: `utilization:${svc}`,
-        severity: entries.length > 0 ? "warn" : "ok",
+        severity: over > 0 ? "warn" : near > 0 ? "info" : "ok",
         detail,
         fetchedAt,
         stale,

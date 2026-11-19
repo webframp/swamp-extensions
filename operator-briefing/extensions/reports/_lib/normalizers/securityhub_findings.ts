@@ -29,7 +29,12 @@
  */
 
 import { freshness } from "../freshness.ts";
-import type { Contribution, OpsSignal, SourceInput } from "../shapes.ts";
+import type {
+  Contribution,
+  NormalizerContext,
+  OpsSignal,
+  SourceInput,
+} from "../shapes.ts";
 
 const SOURCE = "security-hub";
 const MAX_AGE_HOURS = 24;
@@ -88,8 +93,26 @@ function countBySeverity(
   };
 }
 
+/**
+ * Name the accounts holding the most findings ("jw-a (3), jw-b (2)") so a
+ * listed finding routes to an owner. Unmapped IDs are omitted, never printed.
+ */
+function topAccounts(
+  findings: Array<{ accountId?: string }>,
+  names: ReadonlyMap<string, string>,
+): string {
+  const counts = new Map<string, number>();
+  for (const f of findings) {
+    const name = f.accountId ? names.get(f.accountId) : undefined;
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([name, n]) => `${name} (${n})`).join(", ");
+}
+
 export function securityhubFindingsNormalizer(
   inputs: SourceInput[],
+  context?: NormalizerContext,
 ): Contribution {
   const ops: OpsSignal[] = [];
   const notes: string[] = [];
@@ -149,7 +172,9 @@ export function securityhubFindingsNormalizer(
     } else if (isFindingList(data)) {
       // finding_list / full_export spec: array of finding summaries
       // Each finding has `severity: string` (e.g. "CRITICAL", "HIGH")
-      const findings = data.findings as Array<{ severity?: string }>;
+      const findings = data.findings as Array<
+        { severity?: string; accountId?: string }
+      >;
       const critical = findings.filter(
         (f) => f.severity === "CRITICAL",
       ).length;
@@ -160,9 +185,11 @@ export function securityhubFindingsNormalizer(
 
       const severity = critical > 0 ? "critical" : high > 0 ? "warn" : "ok";
 
+      const top = topAccounts(findings, context?.accountNames ?? new Map());
       const detail = total === 0
         ? "no active findings"
-        : `${critical} CRITICAL, ${high} HIGH of ${total} findings`;
+        : `${critical} CRITICAL, ${high} HIGH of ${total} findings` +
+          (top ? `; top: ${top}` : "");
 
       ops.push({
         source: SOURCE,
@@ -221,11 +248,21 @@ export function securityhubFindingsNormalizer(
       if (resolvedCount > 0) parts.push(`${resolvedCount} resolved`);
       const truncatedNote = truncated ? ", truncated" : "";
 
+      // Zero counts mean "not compared" on a first run (no baseline) or when
+      // the model refused a truncated snapshot; never render those as "ok".
+      const notCompared = data.hasBaseline === false
+        ? "baseline recorded; delta starts next run"
+        : truncated && newCount === 0 && resolvedCount === 0
+        ? "not compared: more findings in scope than one diff snapshot holds"
+        : undefined;
       ops.push({
         source: SOURCE,
         label: "findings-delta",
-        severity: severity as "ok" | "warn" | "critical",
-        detail: `${parts.join(", ")} since last run${truncatedNote}`,
+        severity: notCompared
+          ? (data.hasBaseline === false ? "info" : "warn")
+          : severity as "ok" | "warn" | "critical",
+        detail: notCompared ??
+          `${parts.join(", ")} since last run${truncatedNote}`,
         fetchedAt,
         stale,
         degraded,

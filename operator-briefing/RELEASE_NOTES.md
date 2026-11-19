@@ -1,3 +1,27 @@
+## 2026.11.18.1
+
+**Added:** Quota utilization signals split breaches from near misses. A row at
+or above 80% still warns; a row below 80% (present when the sweep runs with a
+lower `threshold`, e.g. `0.7`) reads "N approaching" at info severity. The
+detail names the most utilized quota rather than the first row returned.
+
+**Added:** A Security Hub `finding_list` signal names the three accounts with
+the most findings (`top: jw-a (3), jw-b (2)`), using the run's
+`resolve_accounts` map. Unmapped account IDs are omitted, never printed.
+
+**Fixed:** A Security Hub delta that was never computed no longer reads as
+"no new findings". A `diff_findings` resource with `hasBaseline: false`
+(`@webframp/aws/securityhub-findings` 2026.11.18.1+) renders as "baseline
+recorded; delta starts next run" (info). A truncated diff with zero counts,
+which the model refuses to compare, renders as "not compared" (warn) instead
+of "no new findings since last run, truncated" (ok).
+
+**Fixed:** Null rows in a quota `entries` list no longer count toward the
+quota total.
+
+**Upgrade note:** Backward compatible. A sweep at the default 0.8 threshold
+renders as before. Stored data needs no migration.
+
 ## 2026.11.10.1
 
 **Changed:** Bump @webframp/gitlab 2026.09.23.1 → 2026.11.09.1

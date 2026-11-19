@@ -2774,3 +2774,153 @@ Deno.test("a guard-skipped step is silent, not a degraded source", async () => {
   // The GitLab queue still rendered.
   assertEquals(json.queue.length, 1);
 });
+
+// --- Approaching quotas, diff baseline, finding routing (2026-11-18) ---
+
+Deno.test("AWS quotas: rows under 80% are 'approaching' info; the worst row is shown", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["iam-0.7"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "iam-0.7", {
+      serviceCode: "iam",
+      threshold: 0.7,
+      entries: [
+        {
+          profile: "acct-a/ReadOnlyPlus",
+          quotaName: "Roles",
+          utilizationPct: 71,
+        },
+        {
+          profile: "acct-b/ReadOnlyPlus",
+          quotaName: "Policies",
+          utilizationPct: 76,
+        },
+      ],
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const json = (await report.execute(createContext(steps, artifacts) as Any))
+    .json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:iam");
+  assertEquals(sig.severity, "info");
+  assertEquals(sig.detail, "iam: 2 approaching (Policies 76% in acct-b)");
+});
+
+Deno.test("AWS quotas: any row at or over 80% warns and counts separately", async () => {
+  const steps = [
+    makeStep(AWS, "aws-quotas-all", "check_utilization", ["ec2-0.7"]),
+  ];
+  const artifacts = [
+    makeArtifact(AWS, "aws-quotas-all", "ec2-0.7", {
+      serviceCode: "ec2",
+      threshold: 0.7,
+      entries: [
+        {
+          profile: "acct-a/ReadOnlyPlus",
+          quotaName: "vCPU",
+          utilizationPct: 72,
+        },
+        {
+          profile: "acct-b/ReadOnlyPlus",
+          quotaName: "EIPs",
+          utilizationPct: 90,
+        },
+      ],
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const json = (await report.execute(createContext(steps, artifacts) as Any))
+    .json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "utilization:ec2");
+  assertEquals(sig.severity, "warn");
+  assertEquals(
+    sig.detail,
+    "ec2: 1 quota(s) over threshold, 1 approaching (EIPs 90% in acct-b)",
+  );
+});
+
+Deno.test("securityhub diff: no baseline -> info 'baseline recorded', not 'no new findings'", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "diff_findings", ["diff-abc"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "diff-abc", {
+      newFindings: [],
+      resolvedFindings: [],
+      newCount: 0,
+      resolvedCount: 0,
+      truncated: false,
+      hasBaseline: false,
+      currentSnapshot: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const json = (await report.execute(createContext(steps, artifacts) as Any))
+    .json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "findings-delta");
+  assertEquals(sig.severity, "info");
+  assertEquals(sig.detail, "baseline recorded; delta starts next run");
+});
+
+Deno.test("securityhub finding_list: names top accounts, never an unmapped id", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "resolve_accounts", ["accts"]),
+    makeStep(SECURITYHUB, "sh-findings", "list_findings", ["crit"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "accts", {
+      accounts: [
+        { id: "111111111111", name: "jw-a" },
+        { id: "222222222222", name: "jw-b" },
+      ],
+      count: 2,
+      truncated: false,
+      fetchedAt: hoursAgo(1),
+    }),
+    makeArtifact(SECURITYHUB, "sh-findings", "crit", {
+      findings: [
+        { severity: "CRITICAL", accountId: "222222222222" },
+        { severity: "CRITICAL", accountId: "111111111111" },
+        { severity: "CRITICAL", accountId: "222222222222" },
+        { severity: "CRITICAL", accountId: "999999999999" },
+      ],
+      count: 4,
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const result = await report.execute(createContext(steps, artifacts) as Any);
+  const sig = ((result.json as Any).ops as Any[]).find((o) =>
+    o.label === "findings"
+  );
+  assertEquals(
+    sig.detail,
+    "4 CRITICAL, 0 HIGH of 4 findings; top: jw-b (2), jw-a (1)",
+  );
+  assertEquals(result.markdown.includes("999999999999"), false);
+});
+
+Deno.test("securityhub diff: refused truncated diff warns 'not compared', never 'no new findings'", async () => {
+  const steps = [
+    makeStep(SECURITYHUB, "sh-findings", "diff_findings", ["diff-abc"]),
+  ];
+  const artifacts = [
+    makeArtifact(SECURITYHUB, "sh-findings", "diff-abc", {
+      newFindings: [],
+      resolvedFindings: [],
+      newCount: 0,
+      resolvedCount: 0,
+      truncated: true,
+      hasBaseline: true,
+      currentSnapshot: [],
+      fetchedAt: hoursAgo(1),
+    }),
+  ];
+  const json = (await report.execute(createContext(steps, artifacts) as Any))
+    .json as Any;
+  const sig = (json.ops as Any[]).find((o) => o.label === "findings-delta");
+  assertEquals(sig.severity, "warn");
+  assertStringIncludes(sig.detail, "not compared");
+});

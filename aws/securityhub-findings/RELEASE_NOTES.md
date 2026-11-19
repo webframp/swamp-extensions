@@ -1,3 +1,24 @@
+## 2026.11.18.1
+
+**Fixed:** `diff_findings` kept its snapshot for only 1h, so a daily run never
+found the previous day's baseline and the new-vs-resolved delta could not fire.
+The snapshot now lives 7d (10 versions), so runs up to a week apart still diff.
+
+**Fixed:** With no baseline, `diff_findings` reported every current finding as
+new. It now reports zero new and zero resolved, records the snapshot, and sets
+`hasBaseline: false`.
+
+**Added:** `diff_findings` accepts `severityLabel` as a list (e.g.
+`["CRITICAL", "HIGH"]`), matching any label. Scoping the diff to the severities
+that matter keeps it under the 100-finding cap, past which it refuses to diff.
+Label order does not change the resource instance name. Only `diff_findings`
+takes a list, because it needs one stable scope for its baseline; the list
+methods can be called once per label.
+
+**Upgrade note:** Backward compatible. A string `severityLabel` keeps its
+instance name. `hasBaseline` is optional; stored resources without it still
+validate.
+
 ## 2026.11.10.1
 
 **Changed:** Bump @aws-sdk/* 3.1139.0 → 3.1164.0 (3 packages)
