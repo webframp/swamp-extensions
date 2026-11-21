@@ -1854,7 +1854,7 @@ async function readJudgeRequest(
 /** Brownfield adoption model for discovering and importing existing AWS infrastructure. */
 export const model = {
   type: "@webframp/aws/adopt",
-  version: "2026.11.20.1",
+  version: "2026.11.20.2",
   globalArguments: GlobalArgsSchema,
   reports: ["@webframp/adopt-decision-report"],
 
@@ -2004,6 +2004,11 @@ export const model = {
     },
     {
       toVersion: "2026.11.20.1",
+      description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.20.2",
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },

@@ -1,3 +1,27 @@
+## 2026.11.20.2
+
+**Changed:** Bump @swamp/aws/cloudfront 2026.11.08.2 → 2026.11.20.1
+
+**Changed:** Bump @swamp/aws/cloudwatch 2026.11.08.2 → 2026.11.18.1
+
+**Changed:** Bump @swamp/aws/ec2 2026.11.08.3 → 2026.11.20.1
+
+**Changed:** Bump @swamp/aws/ecr 2026.11.08.2 → 2026.11.17.1
+
+**Changed:** Bump @swamp/aws/ecs 2026.11.08.2 → 2026.11.17.1
+
+**Changed:** Bump @swamp/aws/eks 2026.11.08.2 → 2026.11.17.1
+
+**Changed:** Bump @swamp/aws/lambda 2026.11.08.2 → 2026.11.20.1
+
+**Changed:** Bump @swamp/aws/route53 2026.11.08.2 → 2026.11.20.1
+
+**Changed:** Bump @swamp/aws/s3 2026.11.08.2 → 2026.11.20.1
+
+**Changed:** Bump @swamp/aws/ssm 2026.11.08.2 → 2026.11.14.1
+
+**Changed:** Bump @webframp/typesafe-batch 2026.11.03.1 → 2026.11.10.1
+
 ## 2026.11.20.1
 
 **Changed:** Bump @aws-sdk/* 3.1164.0 → 3.1173.0 (7 packages)

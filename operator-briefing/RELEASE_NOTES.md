@@ -1,3 +1,9 @@
+## 2026.11.20.1
+
+**Changed:** Bump @webframp/gitlab 2026.11.09.1 → 2026.11.17.1
+
+**Changed:** Bump @webframp/typesafe-batch 2026.11.03.1 → 2026.11.10.1
+
 ## 2026.11.18.1
 
 **Added:** Quota utilization signals split breaches from near misses. A row at
