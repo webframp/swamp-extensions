@@ -1,3 +1,9 @@
+## 2026.11.20.1
+
+**Changed:** Bump @swamp/agent-runner 2026.11.04.1 → 2026.11.11.1
+
+**Changed:** Bump @webframp/gitlab 2026.11.09.1 → 2026.11.17.1
+
 ## 2026.11.10.1
 
 **Changed:** Bump @swamp/software-factory 2026.09.24.2 → 2026.10.23.1
