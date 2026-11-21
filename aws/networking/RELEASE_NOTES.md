@@ -1,3 +1,7 @@
+## 2026.11.20.1
+
+**Changed:** Bump @aws-sdk/* 3.1164.0 → 3.1173.0 (4 packages)
+
 ## 2026.11.10.1
 
 **Changed:** Bump @aws-sdk/* 3.1139.0 → 3.1164.0 (4 packages)
