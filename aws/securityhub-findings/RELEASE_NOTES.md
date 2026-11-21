@@ -1,3 +1,7 @@
+## 2026.11.20.1
+
+**Changed:** Bump @aws-sdk/* 3.1164.0 → 3.1173.0 (3 packages)
+
 ## 2026.11.18.1
 
 **Fixed:** `diff_findings` kept its snapshot for only 1h, so a daily run never
