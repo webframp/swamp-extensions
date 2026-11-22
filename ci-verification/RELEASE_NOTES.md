@@ -1,3 +1,9 @@
+## 2026.11.20.1
+
+**Changed:** Selection, check, quality, repocheck and posted records now carry
+`fetchedAt`, `durationMs` and `collectedBy`. The attestation document is
+unchanged.
+
 ## 2026.11.12.1
 
 **Added:** Initial release. A model, `@webframp/ci-verification`, that runs the

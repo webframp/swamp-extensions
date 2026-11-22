@@ -116,6 +116,15 @@ const RequestSchema = z.object({
   ),
   extensionVersion: z.string(),
   timestamp: z.string(),
+  fetchedAt: z.string().optional().describe(
+    "Timestamp the request was prepared",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 type Document = z.infer<typeof DocumentSchema>;
@@ -570,7 +579,7 @@ export function draftTag(): string {
 export const model = {
   type: "@webframp/editorial-review",
   // A string literal: the registry catalog reads it statically.
-  version: "2026.11.03.1",
+  version: "2026.11.20.1",
   globalArguments: GlobalArgsSchema,
   resources: {
     request: {
@@ -590,6 +599,7 @@ export const model = {
         args: z.infer<typeof PrepareArgsSchema>,
         context: PrepareContext,
       ) => {
+        const startMs = Date.now();
         // Defaults are applied by swamp, not by every caller; default again here.
         const draft = await loadDraft(
           context.repoDir,
@@ -631,6 +641,9 @@ export const model = {
           }],
           extensionVersion: model.version,
           timestamp: new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: model.type,
         };
 
         context.logger.info(
@@ -659,6 +672,7 @@ export const model = {
         args: z.infer<typeof RecheckArgsSchema>,
         context: RecheckContext,
       ) => {
+        const startMs = Date.now();
         const parsed = RequestSchema.safeParse(
           await context.readResource(REVIEW_REQUEST),
         );
@@ -692,6 +706,9 @@ export const model = {
             ),
           }],
           timestamp: new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - startMs,
+          collectedBy: model.type,
         };
         context.logger.info(
           "Prepared recheck: {words} words (first pass started with {original})",

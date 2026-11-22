@@ -1,3 +1,7 @@
+## 2026.11.20.2
+
+**Changed:** `approvalBinding` and `authorizedAction` records now carry `fetchedAt`, `durationMs` and `collectedBy`. The `target`, `context`, `assessment` and `actionBundle` records are unchanged because they are addressed or verified by a hash of their content.
+
 ## 2026.11.20.1
 
 **Changed:** Bump @swamp/agent-runner 2026.11.04.1 → 2026.11.11.1

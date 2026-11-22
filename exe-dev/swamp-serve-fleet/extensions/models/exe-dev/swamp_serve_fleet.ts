@@ -245,6 +245,7 @@ const OrchestratorSchema = z.object({
     ),
   denoVersion: z.string(),
   provisionedAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
   durationMs: z.number(),
   collectedBy: z.string().optional(),
 });
@@ -259,6 +260,10 @@ const WorkerSchema = z.object({
   serveUrl: z.string(),
   sandboxDir: z.string(),
   enrolledAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
   collectedBy: z.string().optional(),
 });
 
@@ -270,6 +275,10 @@ const FleetStatusSchema = z.object({
   workerCount: z.number(),
   expectedWorkerCount: z.number(),
   healthy: z.boolean(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
   collectedBy: z.string().optional(),
 });
 
@@ -280,6 +289,10 @@ const PromotionSchema = z.object({
   datastoreSetupOutput: z.string(),
   migratedVaults: z.array(z.string()),
   dryRun: z.boolean(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
   collectedBy: z.string().optional(),
 });
 
@@ -295,6 +308,10 @@ const CutoverSchema = z.object({
       "manually in that case.",
   ),
   dryRun: z.boolean(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
   collectedBy: z.string().optional(),
 });
 
@@ -765,7 +782,7 @@ export function buildEnsureWorkerTokenCmd(opts: {
 
 export const model = {
   type: "@webframp/exe-dev/swamp-serve-fleet",
-  version: "2026.11.05.1",
+  version: "2026.11.20.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [],
 
@@ -1068,6 +1085,7 @@ export const model = {
           },
           denoVersion: g.denoVersion,
           provisionedAt: new Date().toISOString(),
+          fetchedAt: new Date().toISOString(),
           durationMs: Date.now() - started,
           collectedBy: EXTENSION_NAME,
         });
@@ -1109,6 +1127,7 @@ export const model = {
         const workerAuthKey = assertTailnetAuthKey(g.tailnetAuthKey);
 
         for (let i = 1; i <= g.workerCount; i++) {
+          const workerStarted = Date.now();
           const suffix = String(i).padStart(2, "0");
           const workerName = `${g.workerNamePrefix}-${suffix}`;
           assertVmName(workerName);
@@ -1248,6 +1267,8 @@ export const model = {
             serveUrl: orch.serveUrl,
             sandboxDir,
             enrolledAt: new Date().toISOString(),
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - workerStarted,
             collectedBy: EXTENSION_NAME,
           });
         }
@@ -1265,6 +1286,7 @@ export const model = {
         _args: Record<string, never>,
         ctx: ProvisionerContext,
       ) => {
+        const started = Date.now();
         const g = ctx.globalArgs;
         const orch = (await ctx.readResource!(
           g.orchestratorName,
@@ -1327,6 +1349,8 @@ export const model = {
           workerCount,
           expectedWorkerCount: g.workerCount,
           healthy,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
           collectedBy: EXTENSION_NAME,
         });
 
@@ -1380,6 +1404,7 @@ export const model = {
         },
         ctx: ProvisionerContext,
       ) => {
+        const started = Date.now();
         const g = ctx.globalArgs;
         const migrateVaults = normalizeMigrateVaults(args.migrateVaults);
         if (migrateVaults.length > 0 && !args.vaultType) {
@@ -1426,6 +1451,8 @@ export const model = {
           datastoreSetupOutput: redactSecrets(setupOut.slice(0, 4000)),
           migratedVaults: migrated,
           dryRun: false,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
           collectedBy: EXTENSION_NAME,
         });
       },
@@ -1449,6 +1476,7 @@ export const model = {
           ),
       }),
       execute: async (args: { dryRun: boolean }, ctx: ProvisionerContext) => {
+        const started = Date.now();
         const g = ctx.globalArgs;
         const orch = (await ctx.readResource!(
           g.orchestratorName,
@@ -1522,6 +1550,8 @@ export const model = {
           serveRestarted,
           restartError: restartError ?? null,
           dryRun: args.dryRun,
+          fetchedAt: new Date().toISOString(),
+          durationMs: Date.now() - started,
           collectedBy: EXTENSION_NAME,
         });
       },

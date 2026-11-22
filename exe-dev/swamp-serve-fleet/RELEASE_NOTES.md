@@ -1,5 +1,11 @@
 # Release Notes
 
+## 2026.11.20.1
+
+**Changed:** `orchestrator`, `worker`, `fleetStatus`, `promotion` and `cutover`
+records now carry `fetchedAt` and `durationMs`; `collectedBy` was already
+present.
+
 ## 2026.11.05.1
 
 Initial release.

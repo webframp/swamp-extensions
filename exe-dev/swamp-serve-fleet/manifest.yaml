@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/exe-dev/swamp-serve-fleet"
 license: Apache-2.0
-version: "2026.11.05.1"
+version: "2026.11.20.1"
 description: |
   One-shot bootstrap for a `swamp serve` orchestrator + remote worker fleet on
   exe.dev, run from an operator's local workstation. Creates the orchestrator

@@ -1,3 +1,8 @@
+## 2026.11.20.1
+
+**Changed:** `request` records now carry `fetchedAt`, `durationMs` and
+`collectedBy`.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7

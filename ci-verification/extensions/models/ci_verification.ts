@@ -71,6 +71,35 @@ export const COVERAGE = {
 const Sha = z.string().regex(/^[0-9a-f]{40}$/);
 const Status = z.enum(["passed", "failed"]);
 
+/** Name recorded as `collectedBy` on every observation record. */
+const EXTENSION_NAME = "@webframp/ci-verification";
+
+/**
+ * Provenance fields carried by every recorded observation (the repo-wide
+ * durationMs/collectedBy/fetchedAt convention). Optional so records written
+ * before they existed still validate.
+ */
+const Provenance = {
+  fetchedAt: z.string().optional().describe(
+    "Timestamp the data was collected",
+  ),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+};
+
+/** Provenance values for a record whose work began at `startMs`. */
+function provenance(startMs: number) {
+  return {
+    fetchedAt: new Date().toISOString(),
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
+  };
+}
+
 const ToolsSchema = z.object({
   deno: z.string(),
   swamp: z.string(),
@@ -89,6 +118,7 @@ const SelectionSchema = z.object({
   trustRootChanged: z.array(z.string()),
   modelVersion: z.string(),
   createdAt: z.string(),
+  ...Provenance,
 });
 type Selection = z.infer<typeof SelectionSchema>;
 
@@ -110,6 +140,7 @@ const ResultBase = {
   log: z.string(),
   truncated: z.boolean(),
   finishedAt: z.string(),
+  ...Provenance,
 };
 
 const CheckSchema = z.object({
@@ -201,6 +232,7 @@ const PostedSchema = z.object({
   commit: Sha,
   tree: Sha,
   postedAt: z.string(),
+  ...Provenance,
 });
 
 const RepoArg = z.string().min(1).describe(
@@ -368,7 +400,7 @@ function section(title: string, r: RunResult): string {
 /** Pre-PR verification of a swamp-extensions commit, recorded as swamp data. */
 export const model = {
   type: "@webframp/ci-verification",
-  version: "2026.11.12.1",
+  version: "2026.11.20.1",
   globalArguments: z.object({}),
 
   resources: {
@@ -433,6 +465,7 @@ export const model = {
         args: { repoPath: string; commit: string; base: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const signal = context.signal;
         const { sha, tree } = await resolveTarget(
           args.repoPath,
@@ -510,6 +543,7 @@ export const model = {
           ),
           modelVersion: MODEL_VERSION,
           createdAt: new Date().toISOString(),
+          ...provenance(startMs),
         };
         const handle = await context.writeResource(
           "selection",
@@ -561,6 +595,7 @@ export const model = {
                 const name = names.check(tree, ext.slug);
                 const stored = await read(context, name);
                 if (reusable(stored, sel, tools)) return;
+                const startMs = Date.now();
                 const results: CheckRecord["results"] = [];
                 let log = "";
                 let truncated = false;
@@ -617,6 +652,7 @@ export const model = {
                       log: logName,
                       truncated,
                       finishedAt: new Date().toISOString(),
+                      ...provenance(startMs),
                     } satisfies CheckRecord,
                   ),
                 );
@@ -628,6 +664,7 @@ export const model = {
             for (const check of sel.repoChecks) {
               const name = names.repoCheck(tree, check);
               if (reusable(await read(context, name), sel, tools)) continue;
+              const startMs = Date.now();
               const r = await runRepoCheck(check, wt, home, tools, signal);
               if (r.status === "failed") failed.push(check);
               const logName = names.log(tree, "repo", checkSlug(check));
@@ -647,6 +684,7 @@ export const model = {
                     log: logName,
                     truncated: r.truncated,
                     finishedAt: new Date().toISOString(),
+                    ...provenance(startMs),
                   } satisfies RepoCheckRecord,
                 ),
               );
@@ -697,6 +735,7 @@ export const model = {
             sel.extensions.map((ext) => async () => {
               const name = names.quality(tree, ext.slug);
               if (reusable(await read(context, name), sel, tools)) return;
+              const startMs = Date.now();
               const r = await run({
                 cmd: "swamp",
                 args: ["extension", "quality", "manifest.yaml", "--json"],
@@ -737,6 +776,7 @@ export const model = {
                     log: logName,
                     truncated: r.truncated,
                     finishedAt: new Date().toISOString(),
+                    ...provenance(startMs),
                   } satisfies QualityRecord,
                 ),
               );
@@ -930,6 +970,7 @@ export const model = {
         args: { repoPath: string; commit: string; remote: string },
         context: MethodContext,
       ) => {
+        const startMs = Date.now();
         const { sha, tree } = await resolveTarget(
           args.repoPath,
           args.commit,
@@ -961,6 +1002,7 @@ export const model = {
             commit: sha,
             tree,
             postedAt: new Date().toISOString(),
+            ...provenance(startMs),
           },
         );
         context.logger.info("Posted {ref}", { ref: posted.ref });

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 import { z } from "npm:zod@4.6.7";
 
+/** Recorded as `collectedBy` on the records this model writes itself. */
+const EXTENSION_NAME = "@webframp/triage";
+
 const text = z.string().trim().min(1);
 const ProviderSchema = z.enum(["github", "gitlab", "swamp_club"]);
 const TargetSchema = z.object({
@@ -149,6 +152,17 @@ const ApprovalBindingSchema = z.object({
   approvedActionIds: z.array(text).min(1),
   actor: z.literal("Sean"),
   approvedAt: z.string(),
+  // Provenance. This record is written by the model and is not hash-bound, so
+  // it can carry the repo-wide fields. The target, context, assessment and
+  // actionBundle records cannot: they are addressed or verified by a hash of
+  // their content, and extra fields would change it.
+  fetchedAt: z.string().optional().describe("Timestamp the record was written"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).strict();
 const AuthorizedActionSchema = z.object({
   bundleHash: text,
@@ -158,6 +172,13 @@ const AuthorizedActionSchema = z.object({
   payload: z.record(z.string(), z.unknown()),
   verify: z.record(z.string(), z.unknown()),
   authorizedAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the record was written"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).strict();
 
 type Provider = z.infer<typeof ProviderSchema>;
@@ -410,6 +431,7 @@ async function authorizeAction(
   actionId: string,
   context: Context,
 ) {
+  const startMs = Date.now();
   const bundle = await requireResource(
     context,
     bundleHash,
@@ -491,6 +513,9 @@ async function authorizeAction(
     payload: action.payload,
     verify: action.verify,
     authorizedAt: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    durationMs: Date.now() - startMs,
+    collectedBy: EXTENSION_NAME,
   };
   const handle = await context.writeResource(
     "authorizedAction",
@@ -503,7 +528,7 @@ async function authorizeAction(
 /** Deterministic cross-provider triage policy model. */
 export const model = {
   type: "@webframp/triage",
-  version: "2026.11.20.1",
+  version: "2026.11.20.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -542,6 +567,11 @@ export const model = {
   }, {
     toVersion: "2026.11.20.1",
     description: "No schema changes — dependency/license maintenance bump",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.20.2",
+    description:
+      "No schema changes — adds optional fetchedAt/durationMs/collectedBy provenance fields",
     upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {
@@ -746,14 +776,23 @@ export const model = {
       description:
         "Persist Sean's explicit approval only for actions in a matching saved bundle.",
       arguments: z.object({
-        binding: ApprovalBindingSchema.omit({ approvedAt: true }),
+        binding: ApprovalBindingSchema.omit({
+          approvedAt: true,
+          fetchedAt: true,
+          durationMs: true,
+          collectedBy: true,
+        }),
       }).strict(),
       execute: async (
         { binding }: {
-          binding: Omit<z.infer<typeof ApprovalBindingSchema>, "approvedAt">;
+          binding: Omit<
+            z.infer<typeof ApprovalBindingSchema>,
+            "approvedAt" | "fetchedAt" | "durationMs" | "collectedBy"
+          >;
         },
         context: Context,
       ) => {
+        const startMs = Date.now();
         const bundle = await requireResource(
           context,
           binding.bundleHash,
@@ -783,7 +822,13 @@ export const model = {
         const handle = await context.writeResource(
           "approvalBinding",
           `approval-${binding.bundleHash}`,
-          { ...binding, approvedAt: new Date().toISOString() },
+          {
+            ...binding,
+            approvedAt: new Date().toISOString(),
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
         );
         return { dataHandles: [handle] };
       },

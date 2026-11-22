@@ -1,7 +1,7 @@
 manifestVersion: 1
 name: "@webframp/ci-verification"
 license: Apache-2.0
-version: "2026.11.12.1"
+version: "2026.11.20.1"
 description: |
   Pre-PR verification for webframp/swamp-extensions, as typed, versioned swamp
   data. Runs the checks CI runs against one commit, in a throwaway worktree at

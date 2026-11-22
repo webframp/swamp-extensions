@@ -1,3 +1,7 @@
+## 2026.11.20.1
+
+**Changed:** `labIssue` and `ripple` records now carry `durationMs` and `collectedBy`; `ripple` also carries `fetchedAt`.
+
 ## 2026.11.03.1
 
 **Changed:** Bump zod 4.6.5 → 4.6.7
