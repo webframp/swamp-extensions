@@ -359,6 +359,60 @@ Deno.test("parseQualityResult applies CI's pass condition", () => {
   const partial = ok(JSON.stringify({ status: "passed", percentage: 95 }));
   assertEquals(partial.passed, false);
   assertEquals(partial.percentage, 95);
+  assertEquals(partial.scoringError, false);
+
+  // Public extension: repository-verified stays provisional until publish.
+  const provisionalFull = ok(JSON.stringify({
+    status: "passed",
+    percentage: 87,
+    ifProvisionalEarned: { percentage: 100, grade: "A" },
+    allPassed: true,
+  }));
+  assertEquals(provisionalFull.passed, true);
+  assertEquals(provisionalFull.percentage, 87);
+  assertEquals(provisionalFull.provisionalPercentage, 100);
+  assertEquals(provisionalFull.detail, null);
+
+  // Private source attested, or an older CLI: no provisional block.
+  const directFull = ok(JSON.stringify({
+    status: "passed",
+    percentage: 100,
+    ifProvisionalEarned: null,
+    allPassed: true,
+  }));
+  assertEquals(directFull.passed, true);
+  assertEquals(directFull.provisionalPercentage, undefined);
+
+  assertEquals(
+    ok('{"status":"passed","percentage":100.0,"allPassed":true}').passed,
+    true,
+  );
+
+  // A genuine rubric miss still fails and reports both numbers.
+  const miss = ok(JSON.stringify({
+    status: "passed",
+    percentage: 80,
+    ifProvisionalEarned: { percentage: 93 },
+    allPassed: true,
+  }));
+  assertEquals(miss.passed, false);
+  assertMatch(
+    miss.detail ?? "",
+    /score is 80%, 93% once provisional factors are earned; 100 is required/,
+  );
+
+  const provisionalNotAll = ok(JSON.stringify({
+    status: "passed",
+    percentage: 87,
+    ifProvisionalEarned: { percentage: 100 },
+    allPassed: false,
+  }));
+  assertEquals(provisionalNotAll.passed, false);
+
+  const errorReport = ok(JSON.stringify({ error: "deno.lock out of date" }));
+  assertEquals(errorReport.passed, false);
+  assertEquals(errorReport.scoringError, true);
+  assertMatch(errorReport.detail ?? "", /deno\.lock out of date/);
 
   const notAll = ok(
     JSON.stringify({ status: "passed", percentage: 100, allPassed: false }),

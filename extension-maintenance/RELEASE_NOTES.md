@@ -1,63 +1,20 @@
-## 2026.11.03.1
+## 2026.11.22.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Fixed:** `quality-gate` failed every extension against swamp's rubric v6. The
+CLI cannot award `repository-verified` for a public repository, so a compliant
+extension scores 87% locally and reaches 100% only in `ifProvisionalEarned`. The
+gate now passes an extension when `status` is `passed`, `allPassed` is not
+`false`, and the percentage is 100 directly or once provisional factors are
+earned, matching CI.
 
-## 2026.10.22.1
+**Fixed:** `audit` recorded a score of 0 when scoring errored (for example an
+out-of-date `deno.lock`), indistinguishable from a real 0%.
 
-**Fixed:** Existing definitions created against an earlier version were stranded
-on upgrade. The model shipped new versions without a corresponding `upgrades`
-chain, so swamp could not migrate a definition's `typeVersion` and logged a
-warning that global arguments would not be migrated. This release backfills the
-full upgrade chain through every shipped version and terminates it at the
-current version, so stale definitions migrate cleanly. The transform is identity
-— no stored global argument value changes.
+**Added:** `audit` records `qualityProvisionalScore` (percentage once
+provisional factors are earned) and `qualityError` (why scoring produced no
+score) per extension. Both are optional, so existing stored audits stay valid.
+Failure messages from `quality-gate` now report both the confirmed and the
+provisional percentage.
 
-**Changed:** The chain records the addition of the `min_dependency_age_hours`
-global argument (default 24) and additive optional report fields. Existing
-`ext-maint` definitions keep their configured arguments; the new argument takes
-its schema default.
-
-**Upgrade note:** No action required. On the next method run, each existing
-definition's `typeVersion` advances to 2026.10.22.1 with its global arguments
-preserved.
-
-## 2026.10.14.1
-
-**Added:** The manifest now declares `license: Apache-2.0` (SPDX). The registry
-quality rubric scores a declared license separately from the bundled
-`LICENSE.md`.
-
-**Upgrade note:** Metadata only. No code, schema, or behavioral changes.
-
-## 2026.09.24.1
-
-**Fixed:** Audit no longer plans npm or JSR versions newer than Deno's minimum
-dependency age. It reports the newest release published at least
-`min_dependency_age_hours` ago (new global argument, default 24). Before, the
-2026-09-24 sweep pinned `@aws-sdk/*` 3.1140.0 hours after release;
-`swamp extension quality` rejected it in CI across 21 extensions. A pin newer
-than that version is no longer reported as stale, and unpublished or deprecated
-npm versions are never picked. Manifest pins compare numerically too, so audit
-never plans a downgrade.
-
-**Fixed:** `apply-bump` appends upgrade entries correctly to compact
-`upgrades: [{ ... }, { ... }]` arrays. The old splice landed inside the last
-element and produced a syntax error. Comments and strings no longer steer the
-insert, and an insert that would not parse is reported and never written.
-
-**Changed:** `apply-bump` fails after writing `current-apply` when any extension
-recorded an error, including a failed `deno.lock` regeneration. It used to
-succeed, so the sweep workflow reported success over half-written lockfiles. The
-workflow's `verify` step still runs afterwards to snapshot the repo.
-
-**Changed:** `quality-gate` fails an extension that misses CI's quality verdict
-(status `passed`, 100%, `allPassed` not false). It used to record the score
-only.
-
-**Changed:** Local `deno cache` and `deno task` runs ignore the minimum
-dependency age (`--minimum-dependency-age=0`, `NPM_CONFIG_MIN_RELEASE_AGE=0`).
-The gate's `swamp extension quality` check still enforces it, matching CI.
-
-**Upgrade note:** The only new global argument, `min_dependency_age_hours`, has
-a default, so existing instances need no change. The model has no `upgrades:`
-array, so no migration entry is required.
+**Changed:** `qualityScore` still holds the confirmed percentage, so it reads 87
+for a compliant public extension.
