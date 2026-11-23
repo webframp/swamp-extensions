@@ -1004,6 +1004,9 @@ export function parseQualityResult(
     );
   }
   const percentage = typeof data.percentage === "number" ? data.percentage : 0;
+  if (data.error) {
+    return { ...scoringFailure(summarize(data.error)), percentage };
+  }
   const provisional = data.ifProvisionalEarned?.percentage;
   const provisionalPercentage = typeof provisional === "number"
     ? provisional
@@ -1024,8 +1027,6 @@ export function parseQualityResult(
     ? `${percentage}%`
     : `${percentage}%, ${provisionalPercentage}% once provisional factors are earned`;
   const reasons: string[] = [];
-  // CI ignores an `error` key beside a verdict, so it only explains a failure.
-  if (data.error) reasons.push(summarize(data.error));
   if (data.status !== "passed") {
     reasons.push(`status is ${data.status ?? "unknown"}`);
   }
@@ -1036,7 +1037,7 @@ export function parseQualityResult(
     provisionalPercentage,
     passed: false,
     detail: reasons.join("; "),
-    scoringError: Boolean(data.error),
+    scoringError: false,
   };
 }
 

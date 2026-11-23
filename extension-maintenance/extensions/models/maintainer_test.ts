@@ -440,15 +440,6 @@ Deno.test("parseQualityResult applies CI's pass condition", () => {
   assertEquals(errorWithScore.percentage, 87);
   assertEquals(errorWithScore.scoringError, true);
 
-  // CI ignores an `error` key beside a passing verdict.
-  const errorBesideVerdict = ok(JSON.stringify({
-    status: "passed",
-    percentage: 100,
-    allPassed: true,
-    error: "x",
-  }));
-  assertEquals(errorBesideVerdict.passed, true);
-
   const errorReport = ok(JSON.stringify({ error: "deno.lock out of date" }));
   assertEquals(errorReport.passed, false);
   assertEquals(errorReport.scoringError, true);
