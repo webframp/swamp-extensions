@@ -67,6 +67,9 @@ const ExtensionStatusSchema = z.object({
   qualityProvisionalScore: z.number().nullable().optional().describe(
     "Percentage once provisional factors (registry-only points such as repository-verified) are earned. Null when nothing is provisional or scoring failed.",
   ),
+  qualityPassed: z.boolean().optional().describe(
+    "Whether the extension meets CI's quality pass condition (status passed, allPassed not false, 100% directly or once provisional factors are earned).",
+  ),
   qualityError: z.string().nullable().optional().describe(
     "Why scoring did not produce a score (for example an out-of-date deno.lock). Null when the rubric ran.",
   ),
@@ -1770,7 +1773,7 @@ export const model = {
     {
       toVersion: "2026.11.22.1",
       description:
-        "No stored-value change; added optional qualityProvisionalScore and qualityError audit fields",
+        "No stored-value change; added optional qualityProvisionalScore, qualityPassed and qualityError audit fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1980,6 +1983,7 @@ export const model = {
             version,
             qualityScore,
             qualityProvisionalScore,
+            qualityPassed: qualityResult.passed,
             qualityError,
             npmDeps,
             testingDep,
