@@ -1016,3 +1016,68 @@ export const model = {
     ["1", "2"],
   );
 });
+
+/** Put a stub `swamp` executable first on PATH for the duration of `fn`, so a
+ * test of the gate does not depend on the swamp CLI being installed. The stub
+ * reports a passing quality verdict and a passing manifest format check. */
+async function withStubSwamp<T>(fn: () => Promise<T>): Promise<T> {
+  const binDir = await Deno.makeTempDir({ prefix: "stub-swamp-" });
+  const stub = `${binDir}/swamp`;
+  await Deno.writeTextFile(
+    stub,
+    `#!/bin/sh
+if [ "$2" = "quality" ]; then
+  echo '{"status":"passed","allPassed":true,"percentage":100}'
+fi
+exit 0
+`,
+  );
+  await Deno.chmod(stub, 0o755);
+  const originalPath = Deno.env.get("PATH") ?? "";
+  Deno.env.set("PATH", `${binDir}:${originalPath}`);
+  try {
+    return await fn();
+  } finally {
+    Deno.env.set("PATH", originalPath);
+    await Deno.remove(binDir, { recursive: true });
+  }
+}
+
+Deno.test("quality-gate reports a misformatted source file without rewriting it", async () => {
+  const misformatted = `export const   value =   1;\n`;
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: misformatted,
+    denoJson: {
+      tasks: {
+        check: "exit 0",
+        lint: "exit 0",
+        fmt: "deno fmt",
+        "fmt:check": "deno fmt --check",
+        test: "exit 0",
+      },
+    },
+  });
+
+  try {
+    const { context, written } = mockContext(root, {});
+    await withStubSwamp(() =>
+      model.methods["quality-gate"].execute({}, context)
+    );
+
+    const sourcePath = `${extDir}/extensions/models/mod.ts`;
+    assertEquals(await Deno.readTextFile(sourcePath), misformatted);
+
+    const report = written.find((w) => w.name === "current-quality")?.data as {
+      results: Array<{ fmt: boolean; errors: string[] }>;
+    };
+    assertEquals(report.results[0].fmt, false);
+    assertEquals(
+      report.results[0].errors.some((e) =>
+        e.startsWith("deno task fmt:check failed")
+      ),
+      true,
+    );
+  } finally {
+    await cleanup();
+  }
+});

@@ -1,3 +1,13 @@
+## 2026.11.23.1
+
+**Fixed:** `quality-gate` ran `deno task fmt`, which rewrites files, so a
+misformatted extension was reformatted in the working tree and then reported as
+passing. It now runs `deno task fmt:check`, leaves the working tree unchanged,
+and fails the extension when formatting is wrong.
+
+**Upgrade note:** an extension without a `fmt:check` task now fails the gate
+with deno's missing-task error. Add the task (`deno fmt --check`) next to `fmt`.
+
 ## 2026.11.22.1
 
 **Fixed:** `quality-gate` failed every extension against swamp's rubric v6. The

@@ -143,11 +143,11 @@ Each extension must score what CI's quality job requires: status `passed`, 100%,
 and `allPassed` not false. A lower score is listed in that extension's errors
 and counts as a failure.
 
-### Quality gate runs `deno task fmt`, not `fmt:check`
+### Quality gate runs `deno task fmt:check`
 
-The quality-gate method invokes `deno task fmt` which may modify files as a side
-effect. Ensure your working tree is clean before running the quality gate
-standalone.
+The quality-gate method invokes `deno task fmt:check`, so it never rewrites
+files. Every extension must define a `fmt:check` task (`deno fmt --check`); one
+without it fails the gate with deno's missing-task error.
 
 ## Development
 
