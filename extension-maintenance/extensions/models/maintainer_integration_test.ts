@@ -1016,3 +1016,40 @@ export const model = {
     ["1", "2"],
   );
 });
+
+Deno.test("quality-gate reports a misformatted source file without rewriting it", async () => {
+  const misformatted = `export const   value =   1;\n`;
+  const { root, extDir, cleanup } = await createFixture({
+    sourceContent: misformatted,
+    denoJson: {
+      tasks: {
+        check: "exit 0",
+        lint: "exit 0",
+        fmt: "deno fmt",
+        "fmt:check": "deno fmt --check",
+        test: "exit 0",
+      },
+    },
+  });
+
+  try {
+    const { context, written } = mockContext(root, {});
+    await model.methods["quality-gate"].execute({}, context);
+
+    const sourcePath = `${extDir}/extensions/models/mod.ts`;
+    assertEquals(await Deno.readTextFile(sourcePath), misformatted);
+
+    const report = written.find((w) => w.name === "current-quality")?.data as {
+      results: Array<{ fmt: boolean; errors: string[] }>;
+    };
+    assertEquals(report.results[0].fmt, false);
+    assertEquals(
+      report.results[0].errors.some((e) =>
+        e.startsWith("deno task fmt:check failed")
+      ),
+      true,
+    );
+  } finally {
+    await cleanup();
+  }
+});

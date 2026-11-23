@@ -264,7 +264,7 @@ const QualityResultSchema = z.object({
     dir: z.string().describe("Directory relative to repo root"),
     check: z.boolean().describe("Whether `deno task check` passed"),
     lint: z.boolean().describe("Whether `deno task lint` passed"),
-    fmt: z.boolean().describe("Whether `deno task fmt` passed"),
+    fmt: z.boolean().describe("Whether `deno task fmt:check` passed"),
     test: z.boolean().describe("Whether `deno task test` passed"),
     quality: z.number().describe(
       "Quality score 0-100 (confirmed points only). Anything short of CI's pass condition (status passed, 100% directly or once provisional factors are earned) is also listed in errors.",
@@ -1625,7 +1625,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.11.22.1",
+  version: "2026.11.23.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1774,6 +1774,12 @@ export const model = {
       toVersion: "2026.11.22.1",
       description:
         "No stored-value change; added optional qualityProvisionalScore, qualityPassed and qualityError audit fields",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.23.1",
+      description:
+        "No stored-value change; the quality-gate fmt field now records `deno task fmt:check`",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -2771,7 +2777,7 @@ export const model = {
             LOCAL_DENO_ENV,
           );
           const fmtResult = await run(
-            ["deno", "task", "fmt"],
+            ["deno", "task", "fmt:check"],
             dir,
             LOCAL_DENO_ENV,
           );
@@ -2797,7 +2803,7 @@ export const model = {
           }
           if (!fmtResult.success) {
             errors.push(
-              `deno task fmt failed for ${name}: ${
+              `deno task fmt:check failed for ${name}: ${
                 summarize(fmtResult.stderr)
               }`,
             );
