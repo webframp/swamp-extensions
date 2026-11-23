@@ -1023,13 +1023,17 @@ export function parseQualityResult(
   const score = provisionalPercentage === undefined
     ? `${percentage}%`
     : `${percentage}%, ${provisionalPercentage}% once provisional factors are earned`;
+  const reasons: string[] = [];
+  if (data.status !== "passed") {
+    reasons.push(`status is ${data.status ?? "unknown"}`);
+  }
+  if (data.allPassed === false) reasons.push("allPassed is false");
+  if (!reachesFull) reasons.push(`score is ${score}; 100 is required`);
   return {
     percentage,
     provisionalPercentage,
     passed: false,
-    detail: `status=${data.status ?? "unknown"} allPassed=${
-      data.allPassed ?? "n/a"
-    }; score is ${score}; 100 is required`,
+    detail: reasons.join("; "),
     scoringError: false,
   };
 }

@@ -409,6 +409,37 @@ Deno.test("parseQualityResult applies CI's pass condition", () => {
   }));
   assertEquals(provisionalNotAll.passed, false);
 
+  // A failed status cannot be rescued by a full provisional score, and the
+  // detail names the real cause rather than the score.
+  const failedStatus = ok(JSON.stringify({
+    status: "failed",
+    percentage: 100,
+    ifProvisionalEarned: { percentage: 100 },
+    allPassed: true,
+  }));
+  assertEquals(failedStatus.passed, false);
+  assertMatch(failedStatus.detail ?? "", /status is failed/);
+  assertEquals(/score is/.test(failedStatus.detail ?? ""), false);
+
+  // Malformed provisional block must not throw or count as 100.
+  for (const bad of ["x", 5, [100], {}]) {
+    const r = ok(JSON.stringify({
+      status: "passed",
+      percentage: 87,
+      ifProvisionalEarned: bad,
+      allPassed: true,
+    }));
+    assertEquals(r.passed, false);
+    assertEquals(r.provisionalPercentage, undefined);
+  }
+
+  // A percentage reported alongside an error survives, flagged as a scoring error.
+  const errorWithScore = ok(
+    JSON.stringify({ error: "boom", percentage: 87 }),
+  );
+  assertEquals(errorWithScore.percentage, 87);
+  assertEquals(errorWithScore.scoringError, true);
+
   const errorReport = ok(JSON.stringify({ error: "deno.lock out of date" }));
   assertEquals(errorReport.passed, false);
   assertEquals(errorReport.scoringError, true);
