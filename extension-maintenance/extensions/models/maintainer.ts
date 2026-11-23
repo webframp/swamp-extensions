@@ -61,7 +61,18 @@ const ExtensionStatusSchema = z.object({
   name: z.string().describe("Extension manifest name"),
   dir: z.string().describe("Directory relative to repo root"),
   version: z.string().describe("Current manifest version"),
-  qualityScore: z.number().describe("Quality rubric percentage (0-100)"),
+  qualityScore: z.number().describe(
+    "Quality rubric percentage (0-100) counting only points the CLI can confirm. 0 when scoring failed; see qualityError.",
+  ),
+  qualityProvisionalScore: z.number().nullable().optional().describe(
+    "Percentage once provisional factors (registry-only points such as repository-verified) are earned. Null when nothing is provisional or scoring failed.",
+  ),
+  qualityPassed: z.boolean().optional().describe(
+    "Whether the extension meets CI's quality pass condition (status passed, allPassed not false, 100% directly or once provisional factors are earned).",
+  ),
+  qualityError: z.string().nullable().optional().describe(
+    "Why scoring did not produce a score (for example an out-of-date deno.lock). Null when the rubric ran.",
+  ),
   npmDeps: z.array(DepStatusSchema).describe("npm dependency status"),
   testingDep: DepStatusSchema.nullable().describe("swamp-testing status"),
   manifestDeps: z.array(DepStatusSchema).describe("Manifest pin status"),
@@ -256,7 +267,7 @@ const QualityResultSchema = z.object({
     fmt: z.boolean().describe("Whether `deno task fmt` passed"),
     test: z.boolean().describe("Whether `deno task test` passed"),
     quality: z.number().describe(
-      "Quality score 0-100. Anything short of CI's pass condition (status passed, 100%) is also listed in errors.",
+      "Quality score 0-100 (confirmed points only). Anything short of CI's pass condition (status passed, 100% directly or once provisional factors are earned) is also listed in errors.",
     ),
     extensionFmt: z.boolean().describe(
       "Whether `swamp extension fmt --check` passed",
@@ -938,18 +949,33 @@ async function readManifestDeps(
   }
 }
 
+/** Result of judging `swamp extension quality --json` output. */
+export type QualityVerdict = {
+  percentage: number;
+  /** Percentage once provisional factors are earned, when any are provisional. */
+  provisionalPercentage?: number;
+  passed: boolean;
+  detail: string | null;
+  /** True when scoring produced no rubric result (error report or bad output). */
+  scoringError: boolean;
+};
+
 /** Parses `swamp extension quality --json` output against CI's pass condition
- * (`.github/workflows/ci.yml`, quality job): status "passed", percentage 100,
- * and allPassed not false. Returns the score and, on failure, why.
+ * (`.github/workflows/ci.yml`, quality job): status "passed", allPassed not
+ * false, and a percentage of 100 either directly or once provisional factors
+ * are earned. The CLI cannot award `repository-verified` for a public
+ * repository, so a compliant extension scores below 100 locally and reaches it
+ * only in `ifProvisionalEarned`. Returns the score and, on failure, why.
  *
  * Exported for unit testing. */
 export function parseQualityResult(
   output: { stdout: string; stderr: string; success: boolean },
-): { percentage: number; passed: boolean; detail: string | null } {
+): QualityVerdict {
   type QualityJson = {
     status?: string;
     percentage?: number;
     allPassed?: boolean;
+    ifProvisionalEarned?: { percentage?: number } | null;
     error?: string;
   };
   const parse = (text: string): QualityJson | null => {
@@ -960,10 +986,11 @@ export function parseQualityResult(
       return null;
     }
   };
-  const fail = (percentage: number, detail: string) => ({
-    percentage,
+  const scoringFailure = (detail: string): QualityVerdict => ({
+    percentage: 0,
     passed: false,
     detail,
+    scoringError: true,
   });
 
   // CI reads the verdict from stdout only. stderr is consulted solely for an
@@ -972,28 +999,53 @@ export function parseQualityResult(
   const data = parse(output.stdout);
   if (!data) {
     const err = parse(output.stderr);
-    return fail(
-      0,
+    return scoringFailure(
       summarize(err?.error ?? (output.stderr || output.stdout)),
     );
   }
   const percentage = typeof data.percentage === "number" ? data.percentage : 0;
-  if (data.error) return fail(percentage, summarize(data.error));
-  const passed = data.status === "passed" && percentage === 100 &&
+  if (data.error) {
+    return { ...scoringFailure(summarize(data.error)), percentage };
+  }
+  const provisional = data.ifProvisionalEarned?.percentage;
+  const provisionalPercentage = typeof provisional === "number"
+    ? provisional
+    : undefined;
+  const reachesFull = percentage === 100 || provisionalPercentage === 100;
+  const passed = data.status === "passed" && reachesFull &&
     data.allPassed !== false;
-  return passed ? { percentage, passed, detail: null } : fail(
+  if (passed) {
+    return {
+      percentage,
+      provisionalPercentage,
+      passed,
+      detail: null,
+      scoringError: false,
+    };
+  }
+  const score = provisionalPercentage === undefined
+    ? `${percentage}%`
+    : `${percentage}%, ${provisionalPercentage}% once provisional factors are earned`;
+  const reasons: string[] = [];
+  if (data.status !== "passed") {
+    reasons.push(`status is ${data.status ?? "unknown"}`);
+  }
+  if (data.allPassed === false) reasons.push("allPassed is false");
+  if (!reachesFull) reasons.push(`score is ${score}; 100 is required`);
+  return {
     percentage,
-    `status=${data.status ?? "unknown"} percentage=${percentage} allPassed=${
-      data.allPassed ?? "n/a"
-    }`,
-  );
+    provisionalPercentage,
+    passed: false,
+    detail: reasons.join("; "),
+    scoringError: false,
+  };
 }
 
 /** Run `swamp extension quality` the way CI does. Runs without
  * LOCAL_DENO_ENV so a dependency CI cannot resolve fails here too. */
 async function getQualityResult(
   extDir: string,
-): Promise<{ percentage: number; passed: boolean; detail: string | null }> {
+): Promise<QualityVerdict> {
   return parseQualityResult(
     await run(
       ["swamp", "extension", "quality", "manifest.yaml", "--json"],
@@ -1573,7 +1625,7 @@ async function checkLockfileCompleteness(
  */
 export const model = {
   type: "@webframp/extension-maintenance/maintainer",
-  version: "2026.11.03.1",
+  version: "2026.11.22.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -1716,6 +1768,12 @@ export const model = {
     {
       toVersion: "2026.11.03.1",
       description: "No schema changes — dependency/license maintenance bump",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.22.1",
+      description:
+        "No stored-value change; added optional qualityProvisionalScore, qualityPassed and qualityError audit fields",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -1889,7 +1947,13 @@ export const model = {
           if (hasStaleManifest) staleManifest++;
 
           // quality
-          const qualityScore = (await getQualityResult(dir)).percentage;
+          const qualityResult = await getQualityResult(dir);
+          const qualityScore = qualityResult.percentage;
+          const qualityProvisionalScore = qualityResult.provisionalPercentage ??
+            null;
+          const qualityError = qualityResult.scoringError
+            ? qualityResult.detail
+            : null;
 
           // lockfile sync
           const lockfileSync = await checkLockfileSync(dir);
@@ -1918,6 +1982,9 @@ export const model = {
             dir: relDir,
             version,
             qualityScore,
+            qualityProvisionalScore,
+            qualityPassed: qualityResult.passed,
+            qualityError,
             npmDeps,
             testingDep,
             manifestDeps,

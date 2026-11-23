@@ -359,6 +359,91 @@ Deno.test("parseQualityResult applies CI's pass condition", () => {
   const partial = ok(JSON.stringify({ status: "passed", percentage: 95 }));
   assertEquals(partial.passed, false);
   assertEquals(partial.percentage, 95);
+  assertEquals(partial.scoringError, false);
+
+  // Public extension: repository-verified stays provisional until publish.
+  const provisionalFull = ok(JSON.stringify({
+    status: "passed",
+    percentage: 87,
+    ifProvisionalEarned: { percentage: 100, grade: "A" },
+    allPassed: true,
+  }));
+  assertEquals(provisionalFull.passed, true);
+  assertEquals(provisionalFull.percentage, 87);
+  assertEquals(provisionalFull.provisionalPercentage, 100);
+  assertEquals(provisionalFull.detail, null);
+
+  // Private source attested, or an older CLI: no provisional block.
+  const directFull = ok(JSON.stringify({
+    status: "passed",
+    percentage: 100,
+    ifProvisionalEarned: null,
+    allPassed: true,
+  }));
+  assertEquals(directFull.passed, true);
+  assertEquals(directFull.provisionalPercentage, undefined);
+
+  assertEquals(
+    ok('{"status":"passed","percentage":100.0,"allPassed":true}').passed,
+    true,
+  );
+
+  // A genuine rubric miss still fails and reports both numbers.
+  const miss = ok(JSON.stringify({
+    status: "passed",
+    percentage: 80,
+    ifProvisionalEarned: { percentage: 93 },
+    allPassed: true,
+  }));
+  assertEquals(miss.passed, false);
+  assertMatch(
+    miss.detail ?? "",
+    /score is 80%, 93% once provisional factors are earned; 100 is required/,
+  );
+
+  const provisionalNotAll = ok(JSON.stringify({
+    status: "passed",
+    percentage: 87,
+    ifProvisionalEarned: { percentage: 100 },
+    allPassed: false,
+  }));
+  assertEquals(provisionalNotAll.passed, false);
+
+  // A failed status cannot be rescued by a full provisional score, and the
+  // detail names the real cause rather than the score.
+  const failedStatus = ok(JSON.stringify({
+    status: "failed",
+    percentage: 100,
+    ifProvisionalEarned: { percentage: 100 },
+    allPassed: true,
+  }));
+  assertEquals(failedStatus.passed, false);
+  assertMatch(failedStatus.detail ?? "", /status is failed/);
+  assertEquals(/score is/.test(failedStatus.detail ?? ""), false);
+
+  // Malformed provisional block must not throw or count as 100.
+  for (const bad of ["x", 5, [100], {}]) {
+    const r = ok(JSON.stringify({
+      status: "passed",
+      percentage: 87,
+      ifProvisionalEarned: bad,
+      allPassed: true,
+    }));
+    assertEquals(r.passed, false);
+    assertEquals(r.provisionalPercentage, undefined);
+  }
+
+  // A percentage reported alongside an error survives, flagged as a scoring error.
+  const errorWithScore = ok(
+    JSON.stringify({ error: "boom", percentage: 87 }),
+  );
+  assertEquals(errorWithScore.percentage, 87);
+  assertEquals(errorWithScore.scoringError, true);
+
+  const errorReport = ok(JSON.stringify({ error: "deno.lock out of date" }));
+  assertEquals(errorReport.passed, false);
+  assertEquals(errorReport.scoringError, true);
+  assertMatch(errorReport.detail ?? "", /deno\.lock out of date/);
 
   const notAll = ok(
     JSON.stringify({ status: "passed", percentage: 100, allPassed: false }),
