@@ -23,6 +23,12 @@ const Issue = z.object({
   ),
   truncated: z.boolean(),
   fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 }).strict();
 type Context = {
   globalArgs: z.infer<typeof GlobalArgs>;
@@ -65,7 +71,7 @@ async function request(ctx: Context, path: string, init?: RequestInit) {
 /** Narrow Swamp Club Lab intake and approval-gated ripple adapter. */
 export const model = {
   type: "@webframp/swamp-club",
-  version: "2026.11.03.1",
+  version: "2026.11.20.1",
   globalArguments: GlobalArgs,
   upgrades: [{
     toVersion: "2026.09.08.1",
@@ -99,6 +105,11 @@ export const model = {
     toVersion: "2026.11.03.1",
     description: "No schema changes — dependency/license maintenance bump",
     upgradeAttributes: (old: Record<string, unknown>) => old,
+  }, {
+    toVersion: "2026.11.20.1",
+    description:
+      "No schema changes — adds optional fetchedAt/durationMs/collectedBy provenance fields",
+    upgradeAttributes: (old: Record<string, unknown>) => old,
   }],
   resources: {
     labIssue: {
@@ -114,6 +125,15 @@ export const model = {
         commentId: z.string(),
         body: z.string(),
         postedAt: z.string(),
+        fetchedAt: z.string().optional().describe(
+          "Timestamp the data was collected",
+        ),
+        durationMs: z.number().optional().describe(
+          "Method execution duration in milliseconds",
+        ),
+        collectedBy: z.string().optional().describe(
+          "Extension that collected this data",
+        ),
       }).strict(),
       lifetime: "30d" as const,
       garbageCollection: 20,
@@ -129,6 +149,7 @@ export const model = {
         { issueNumber }: { issueNumber: number },
         context: Context,
       ) => {
+        const startMs = Date.now();
         const response = await request(context, `/lab/issues/${issueNumber}`);
         const data = await response.json() as {
           issue?: Record<string, unknown>;
@@ -161,6 +182,8 @@ export const model = {
             truncated: Array.isArray(issue.comments) &&
               issue.comments.length > comments.length,
             fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: model.type,
           },
         );
         return { dataHandles: [handle] };
@@ -182,6 +205,7 @@ export const model = {
         },
         context: Context,
       ) => {
+        const startMs = Date.now();
         const resourceName = `${issueNumber}-${idempotencyKey}`;
         const existing = await context.readResource(resourceName);
         if (existing) {
@@ -215,6 +239,9 @@ export const model = {
             commentId: data.comment.id,
             body: marked,
             postedAt: new Date().toISOString(),
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: model.type,
           },
         );
         return { dataHandles: [handle] };

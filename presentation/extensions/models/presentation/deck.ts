@@ -136,6 +136,9 @@ function exactlyOneSource(
 const SOURCE_RULE =
   "Pass exactly one of source or content; content also needs name";
 
+/** Recorded as `collectedBy` on every resource this model writes. */
+const EXTENSION_NAME = "@webframp/presentation";
+
 const BuildArgsSchema = z.object({
   ...SourceArgs,
   selfContained: z.boolean().default(false).describe(
@@ -195,6 +198,10 @@ const DeckSchema = z.object({
   warnings: z.array(z.string()),
   durationMs: z.number(),
   builtAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const OutlineSchema = z.object({
@@ -214,6 +221,13 @@ const OutlineSchema = z.object({
   slidesWithoutNotes: z.array(z.string()),
   missingImages: z.array(z.string()),
   outlinedAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 const PdfSchema = z.object({
@@ -231,6 +245,10 @@ const PdfSchema = z.object({
   blocked: z.array(z.string()),
   durationMs: z.number(),
   exportedAt: z.string(),
+  fetchedAt: z.string().optional().describe("Timestamp the data was collected"),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
 });
 
 /** Build record of one deck, stored as `deck-<name>`. */
@@ -627,6 +645,8 @@ async function build(
     warnings,
     durationMs: Date.now() - started,
     builtAt: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    collectedBy: EXTENSION_NAME,
   };
   handles.push(
     await context.writeResource("deck", deckResourceName(src.name), deck),
@@ -668,6 +688,7 @@ async function outline(
   args: z.infer<typeof OutlineArgsSchema>,
   context: DeckContext,
 ): Promise<{ dataHandles: DataHandle[] }> {
+  const started = Date.now();
   const src = await loadSource(args, context.repoDir);
   assertSameSource(
     await context.readResource(outlineResourceName(src.name)),
@@ -687,6 +708,9 @@ async function outline(
     ),
     missingImages: await missingImages(o, src.baseDir),
     outlinedAt: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    durationMs: Date.now() - started,
+    collectedBy: EXTENSION_NAME,
   };
   const handle = await context.writeResource(
     "outline",
@@ -785,6 +809,8 @@ async function exportDeckPdf(
     blocked,
     durationMs: Date.now() - started,
     exportedAt: new Date().toISOString(),
+    fetchedAt: new Date().toISOString(),
+    collectedBy: EXTENSION_NAME,
   };
   handles.push(
     await context.writeResource("pdfInfo", pdfResourceName(name), data),
@@ -808,7 +834,7 @@ async function exportDeckPdf(
  */
 export const model = {
   type: "@webframp/presentation/deck",
-  version: "2026.11.03.1",
+  version: "2026.11.20.1",
   reports: ["@webframp/presentation/deck-summary"],
   globalArguments: GlobalArgsSchema,
 
