@@ -50,7 +50,6 @@ const GetDeploymentSchema = z.looseObject({
   status: z.unknown().nullish(),
   status_detail: z.unknown().nullish(),
   structure_id: z.string().nullish(),
-  tool_id: z.string().nullish(),
 });
 
 const GetEventSchema = z.looseObject({
@@ -70,10 +69,17 @@ const GetEventSchema = z.looseObject({
 /** Griptape Cloud Observability — dashboards, platform config, events, and deployments */
 export const model = {
   type: "@webframp/griptape/observability",
-  version: "2026.11.07.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated from the Griptape API spec and codegen; global arguments keep their shape, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
 
   resources: {
     "config": {

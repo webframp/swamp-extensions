@@ -772,7 +772,6 @@ Deno.test({
       "POST /api/structures/test-id-123/deployments": { json: fixture },
     }, async ({ run, requests, written }) => {
       const result = await run("create_structure_deployment", {
-        "code_source": null,
         "force": true,
         "structure_id": "test-id-123",
       });
@@ -781,7 +780,7 @@ Deno.test({
         method: "POST",
         pathname: "/api/structures/test-id-123/deployments",
         query: {},
-        body: { "code_source": null, "force": true },
+        body: { "force": true },
       });
       assertWritten(written(), "structure_deployment", "new-123", fixture);
     });

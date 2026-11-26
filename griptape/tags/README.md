@@ -28,14 +28,14 @@ argument overrides `GT_CLOUD_BASE_URL` and the built-in default
 
 ## Methods
 
-| Method               | Description                                                                                                                                           |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_tag_profiles`  | list operation                                                                                                                                        |
-| `create_tag_profile` | Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409.                                                       |
-| `get_tag_profile`    | get operation                                                                                                                                         |
-| `update_tag_profile` | update operation                                                                                                                                      |
-| `delete_tag_profile` | delete operation                                                                                                                                      |
-| `list_tags`          | The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers. |
+| Method               | Description                                                                                                                                                                                                                   |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_tag_profiles`  | The organization's tag profiles. Open on every plan, including those without usage auditing.                                                                                                                                  |
+| `create_tag_profile` | Describe a recorded tag value. A value has at most one profile, so profiling it again is a 409. Only for organizations whose `can_audit_usage` is true; others get 403.                                                       |
+| `get_tag_profile`    | One tag profile. Open on every plan, including those without usage auditing.                                                                                                                                                  |
+| `update_tag_profile` | Change a tag profile's display name or metadata. Only for organizations whose `can_audit_usage` is true; others get 403.                                                                                                      |
+| `delete_tag_profile` | Delete a tag profile. Open on every plan, including those without usage auditing.                                                                                                                                             |
+| `list_tags`          | The distinct tags reported for one key in a window, one per value, most recently seen first. `matched=false` lists the tags no enabled budget covers. Only for organizations whose `can_audit_usage` is true; others get 403. |
 
 ## Development
 

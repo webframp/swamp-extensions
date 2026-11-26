@@ -1,4 +1,10 @@
-## 2026.11.07.1
+## 2026.11.26.1
 
-**Added:** Initial code-generated release of @webframp/griptape/integrations
-with 9 methods covering the Griptape Cloud integrations API surface.
+**Changed:** Breaking removal. Griptape Cloud dropped `/api/connections` from its
+API, so `list_connections`, `create_connection`, `delete_connection`, and
+`get_token` are removed. The manifest description and labels no longer mention
+connections. Regenerated from the current Griptape OpenAPI spec.
+
+**Upgrade note:** Workflows or models that call the removed methods must stop
+using them. Stored `connections` data remains readable but is no longer
+written. The remaining integration methods are unchanged.

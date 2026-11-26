@@ -1,8 +1,8 @@
 manifestVersion: 1
 name: "@webframp/griptape/integrations"
 license: Apache-2.0
-version: "2026.11.07.1"
-description: "Griptape Cloud Integrations — integrations and their outbound connections"
+version: "2026.11.26.1"
+description: "Griptape Cloud Integrations — integrations"
 repository: "https://github.com/webframp/swamp-extensions"
 models:
   - griptape/integrations.ts
@@ -17,4 +17,3 @@ additionalFiles:
 labels:
   - griptape
   - integrations
-  - connections
