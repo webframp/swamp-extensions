@@ -89,6 +89,7 @@ Deno.test("on-call model: has expected methods", () => {
   assertExists(model.methods.delete_on_call_escalation_policy);
   assertExists(model.methods.list_on_call_pages);
   assertExists(model.methods.get_on_call_page);
+  assertExists(model.methods.create_on_call_page_comment);
   assertExists(model.methods.list_on_call_schedules);
   assertExists(model.methods.create_on_call_schedule);
   assertExists(model.methods.get_on_call_schedule);
@@ -749,6 +750,63 @@ Deno.test({
       assertEquals(resources[0].name, "test-id-123");
       const data = resources[0].data as Record<string, unknown>;
       assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "on-call model: create_on_call_page_comment executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/test-id-123/comments": { body: null, status: 204 },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-on-call",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_on_call_page_comment.execute({
+        "page_id": "test-id-123",
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(req0.path, "/test-id-123/comments");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
     } finally {
       uninstall();
       await server.shutdown();

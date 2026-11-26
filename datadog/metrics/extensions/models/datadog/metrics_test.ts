@@ -87,6 +87,9 @@ Deno.test("metrics model: has expected methods", () => {
   assertExists(model.methods.get_derived_metric);
   assertExists(model.methods.update_derived_metric);
   assertExists(model.methods.delete_derived_metric);
+  assertExists(model.methods.create_historical_metrics_configuration);
+  assertExists(model.methods.get_historical_metrics_configuration);
+  assertExists(model.methods.delete_historical_metrics_configuration);
   assertExists(model.methods.list_tag_indexing_rules);
   assertExists(model.methods.create_tag_indexing_rule);
   assertExists(model.methods.reorder_tag_indexing_rules);
@@ -113,6 +116,7 @@ Deno.test("metrics model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["tag_configurations"]);
   assertExists(model.resources["derived_metric"]);
+  assertExists(model.resources["historical_metrics_configuration"]);
   assertExists(model.resources["tag_indexing_rules"]);
   assertExists(model.resources["tag_indexing_rule"]);
   assertExists(model.resources["list_active_metric_configurations"]);
@@ -511,6 +515,207 @@ Deno.test({
       const req0 = requests[0];
       assertEquals(req0.method, "DELETE");
       assertStringIncludes(req0.path, "/derived-metrics/test-id-123");
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: create_historical_metrics_configuration creates and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/metrics/historical-metrics-configurations": {
+        body: {
+          "data": {
+            "id": "new-123",
+            "type": "resource",
+            "attributes": { "created_at": "2024-01-15T12:00:00.000Z" },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_historical_metrics_configuration.execute({
+        "name": "test-resource",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "POST");
+      assertStringIncludes(
+        req0.path,
+        "/metrics/historical-metrics-configurations",
+      );
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+      assertEquals(req0.headers["content-type"], "application/json");
+      assertExists(req0.body);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "historical_metrics_configuration");
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: get_historical_metrics_configuration fetches and writes resource",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/historical-metrics-configurations/test-id-123": {
+        body: {
+          "data": {
+            "id": "fixture-123",
+            "type": "resource",
+            "attributes": { "created_at": "2024-01-15T12:00:00.000Z" },
+          },
+        },
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_historical_metrics_configuration.execute({
+        "metric_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "GET");
+      assertStringIncludes(
+        req0.path,
+        "/historical-metrics-configurations/test-id-123",
+      );
+      assertEquals(req0.headers["dd-api-key"], "test-api-key");
+      assertEquals(req0.headers["dd-application-key"], "test-app-key");
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      assertEquals(resources[0].specName, "historical_metrics_configuration");
+      assertEquals(resources[0].name, "test-id-123");
+      const data = resources[0].data as Record<string, unknown>;
+      assertEquals(data.id, "fixture-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "metrics model: delete_historical_metrics_configuration executes successfully",
+  // sanitizeResources: false — Deno.serve() listener outlives test scope
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server, requests } = startMockDdServer({
+      "/historical-metrics-configurations/test-id-123": {
+        body: {},
+        status: 204,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: {
+          "apiKey": "test-api-key",
+          "appKey": "test-app-key",
+          "site": "us1",
+        },
+        definition: {
+          id: "test-id",
+          name: "test-metrics",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_historical_metrics_configuration.execute({
+        "metric_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 0);
+
+      assertEquals(requests.length, 1);
+      const req0 = requests[0];
+      assertEquals(req0.method, "DELETE");
+      assertStringIncludes(
+        req0.path,
+        "/historical-metrics-configurations/test-id-123",
+      );
       assertEquals(req0.headers["dd-api-key"], "test-api-key");
       assertEquals(req0.headers["dd-application-key"], "test-app-key");
 
