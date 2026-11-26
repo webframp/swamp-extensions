@@ -39,49 +39,42 @@ swamp model create @webframp/cloudflare/r2 cf-r2 \
 
 ## Methods
 
-| Method                                   | Description                              |
-| ---------------------------------------- | ---------------------------------------- |
-| `list_catalogs`                          | List R2 catalogs                         |
-| `get_catalog_details`                    | Get R2 catalog details                   |
-| `create_store_credentials`               | Store catalog credentials                |
-| `disable_catalog`                        | Disable R2 catalog                       |
-| `enable_catalog`                         | Enable R2 bucket as a catalog            |
-| `get_maintenance_config`                 | Get catalog maintenance configuration    |
-| `update_maintenance_config`              | Update catalog maintenance configuration |
-| `list_namespaces`                        | List namespaces in catalog               |
-| `list_tables`                            | List tables in namespace                 |
-| `get_table`                              | Get table details                        |
-| `get_table_maintenance_config`           | Get table maintenance configuration      |
-| `update_table_maintenance_config`        | Update table maintenance configuration   |
-| `list_buckets`                           | List Buckets                             |
-| `create_bucket`                          | Create Bucket                            |
-| `get_bucket`                             | Get Bucket                               |
-| `patch_bucket`                           | Patch Bucket                             |
-| `delete_bucket`                          | Delete Bucket                            |
-| `get_bucket_cors_policy`                 | Get Bucket CORS Policy                   |
-| `put_bucket_cors_policy`                 | Put Bucket CORS Policy                   |
-| `delete_bucket_cors_policy`              | Delete Bucket CORS Policy                |
-| `list_custom_domains`                    | List Custom Domains of Bucket            |
-| `create_r2_add_custom_domain`            | Attach Custom Domain To Bucket           |
-| `get_custom_domain_settings`             | Get Custom Domain Settings               |
-| `update_r2_edit_custom_domain_settings`  | Configure Custom Domain Settings         |
-| `delete_custom_domain`                   | Remove Custom Domain From Bucket         |
-| `get_bucket_public_policy`               | Get r2.dev Domain of Bucket              |
-| `put_bucket_public_policy`               | Update r2.dev Domain of Bucket           |
-| `get_bucket_lifecycle_configuration`     | Get Object Lifecycle Rules               |
-| `put_bucket_lifecycle_configuration`     | Put Object Lifecycle Rules               |
-| `get_bucket_local_uploads_configuration` | Get Local Uploads Configuration          |
-| `put_bucket_local_uploads_configuration` | Put Local Uploads Configuration          |
-| `get_bucket_lock_configuration`          | Get Bucket Lock Rules                    |
-| `put_bucket_lock_configuration`          | Put Bucket Lock Rules                    |
-| `list_objects`                           | List Objects                             |
-| `delete_objects`                         | Delete Objects                           |
-| `delete_object`                          | Delete Object                            |
-| `get_bucket_sippy_config`                | Get Sippy Configuration                  |
-| `put_bucket_sippy_config`                | Enable Sippy                             |
-| `delete_bucket_sippy_config`             | Disable Sippy                            |
-| `get_account_level_metrics`              | Get Account-Level Metrics                |
-| `create_temp_access_credentials`         | Create Temporary Access Credentials      |
+| Method                                   | Description                         |
+| ---------------------------------------- | ----------------------------------- |
+| `list_buckets`                           | List Buckets                        |
+| `create_bucket`                          | Create Bucket                       |
+| `get_bucket`                             | Get Bucket                          |
+| `create_bucket_by_name`                  | Create Bucket (by name)             |
+| `patch_bucket`                           | Patch Bucket                        |
+| `delete_bucket`                          | Delete Bucket                       |
+| `get_bucket_cors_policy`                 | Get Bucket CORS Policy              |
+| `put_bucket_cors_policy`                 | Set Bucket CORS Policy              |
+| `delete_bucket_cors_policy`              | Delete Bucket CORS Policy           |
+| `list_custom_domains`                    | List Custom Domains of Bucket       |
+| `create_r2_add_custom_domain`            | Attach Custom Domain To Bucket      |
+| `get_custom_domain_settings`             | Get Custom Domain Settings          |
+| `update_r2_edit_custom_domain_settings`  | Configure Custom Domain Settings    |
+| `delete_custom_domain`                   | Remove Custom Domain From Bucket    |
+| `get_bucket_public_policy`               | Get r2.dev Domain of Bucket         |
+| `put_bucket_public_policy`               | Update r2.dev Domain of Bucket      |
+| `list_bucket_jobs`                       | List Bucket Jobs                    |
+| `create_bucket_job`                      | Create Bucket Job                   |
+| `get_bucket_job`                         | Get Bucket Job                      |
+| `get_bucket_lifecycle_configuration`     | Get Object Lifecycle Rules          |
+| `put_bucket_lifecycle_configuration`     | Set Object Lifecycle Rules          |
+| `get_bucket_local_uploads_configuration` | Get Local Uploads Configuration     |
+| `put_bucket_local_uploads_configuration` | Set Local Uploads Configuration     |
+| `get_bucket_lock_configuration`          | Get Bucket Lock Rules               |
+| `put_bucket_lock_configuration`          | Set Bucket Lock Rules               |
+| `delete_bucket_lock_configuration`       | Delete Bucket Lock Rules            |
+| `list_objects`                           | List Objects                        |
+| `delete_objects`                         | Delete Objects                      |
+| `delete_object`                          | Delete Object                       |
+| `get_bucket_sippy_config`                | Get Sippy Configuration             |
+| `put_bucket_sippy_config`                | Enable Sippy                        |
+| `delete_bucket_sippy_config`             | Disable Sippy                       |
+| `get_account_level_metrics`              | Get Account-Level Metrics           |
+| `create_temp_access_credentials`         | Create Temporary Access Credentials |
 
 ## Secrets
 
@@ -93,11 +86,11 @@ keeps only a vault reference. Because the model declares such fields, swamp
 refuses to run any of its methods, reads included, until a vault exists
 (`swamp vault create local_encryption cloudflare`).
 
-| Method                           | Secret inputs                   | Stored in a vault                 | Removed before storing |
-| -------------------------------- | ------------------------------- | --------------------------------- | ---------------------- |
-| `create_store_credentials`       | `token`                         | —                                 | —                      |
-| `put_bucket_sippy_config`        | `privateKey`, `secretAccessKey` | —                                 | —                      |
-| `create_temp_access_credentials` | —                               | `secretAccessKey`, `sessionToken` | —                      |
+| Method                           | Secret inputs                                             | Stored in a vault                 | Removed before storing |
+| -------------------------------- | --------------------------------------------------------- | --------------------------------- | ---------------------- |
+| `list_bucket_jobs`               | —                                                         | `nextContinuationToken`           | —                      |
+| `put_bucket_sippy_config`        | `accountKey`, `privateKey`, `sasToken`, `secretAccessKey` | —                                 | —                      |
+| `create_temp_access_credentials` | —                                                         | `secretAccessKey`, `sessionToken` | —                      |
 
 ## Development
 

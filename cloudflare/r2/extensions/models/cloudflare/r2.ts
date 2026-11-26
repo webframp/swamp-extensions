@@ -28,103 +28,19 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
-const ListCatalogsSchema = z.object({
-  warehouses: z.array(z.unknown()).optional().describe(
-    "Lists catalogs in the account.",
-  ),
-}).passthrough();
-
-const GetCatalogDetailsSchema = z.object({
-  bucket: z.string().optional().describe(
-    "Specifies the associated R2 bucket name.",
-  ),
-  credential_status: z.string().nullable().optional().describe(
-    "Shows the credential configuration status.",
-  ),
-  id: z.string().optional().describe(
-    "Use this to uniquely identify the catalog.",
-  ),
-  maintenance_config: z.object({}).nullable().optional().describe(
-    "Configures maintenance for the catalog.",
-  ),
-  name: z.string().optional().describe(
-    "Specifies the catalog name (generated from account and bucket name).",
-  ),
-  status: z.unknown().optional(),
-}).passthrough();
-
-const CreateStoreCredentialsSchema = z.object({}).passthrough().nullable();
-
-const EnableCatalogSchema = z.object({
-  id: z.string().optional().describe(
-    "Use this to uniquely identify the activated catalog.",
-  ),
-  name: z.string().optional().describe(
-    "Specifies the name of the activated catalog.",
-  ),
-}).passthrough();
-
-const GetMaintenanceConfigSchema = z.object({
-  credential_status: z.unknown().optional(),
-  maintenance_config: z.unknown().optional(),
-}).passthrough();
-
-const ListNamespacesSchema = z.object({
-  details: z.array(z.unknown()).nullable().optional().describe(
-    "Contains detailed metadata for each namespace when return_details is true. Each object includes t...",
-  ),
-  namespace_uuids: z.array(z.string()).nullable().optional().describe(
-    "Contains UUIDs for each namespace when return_uuids is true. The order corresponds to the namespa...",
-  ),
-  namespaces: z.array(z.unknown()).optional().describe(
-    "Lists namespaces in the catalog.",
-  ),
-  next_page_token: z.string().nullable().optional().describe(
-    "Use this opaque token to fetch the next page of results. A null or absent value indicates the las...",
-  ),
-}).passthrough();
-
-const ListTablesSchema = z.object({
-  details: z.array(z.unknown()).nullable().optional().describe(
-    "Contains detailed metadata for each table when return_details is true. Each object includes ident...",
-  ),
-  identifiers: z.array(z.unknown()).optional().describe(
-    "Lists tables in the namespace.",
-  ),
-  next_page_token: z.string().nullable().optional().describe(
-    "Use this opaque token to fetch the next page of results. A null or absent value indicates the las...",
-  ),
-  table_uuids: z.array(z.string()).nullable().optional().describe(
-    "Contains UUIDs for each table when return_uuids is true. The order corresponds to the identifiers...",
-  ),
-}).passthrough();
-
-const GetTableSchema = z.object({
-  identifier: z.unknown().optional(),
-  metadata: z.unknown().optional(),
-  metadata_location: z.string().optional().describe(
-    "Specifies the S3-compatible URI to the current Iceberg metadata file in R2. Omitted for staged ta...",
-  ),
-  returned_snapshots: z.number().int().min(0).optional().describe(
-    "Describes the number of snapshots that appear in `metadata.snapshots`. Caps the list at 10 (the m...",
-  ),
-  table_uuid: z.string().optional().describe(
-    "Contains the Iceberg table UUID, stable across renames.",
-  ),
-  total_snapshots: z.number().int().min(0).optional().describe(
-    "Indicates the total number of snapshots stored for the table, before pruning.",
-  ),
-}).passthrough();
-
-const GetTableMaintenanceConfigSchema = z.object({
-  maintenance_config: z.unknown().optional(),
-}).passthrough();
-
 const ListBucketsSchema = z.object({
   buckets: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const CreateBucketSchema = z.object({
+  creation_date: z.string().optional().describe("Creation timestamp."),
+  jurisdiction: z.unknown().optional(),
+  location: z.unknown().optional(),
+  name: z.unknown().optional(),
+  storage_class: z.unknown().optional(),
+}).passthrough();
+
+const CreateBucketByNameSchema = z.object({
   creation_date: z.string().optional().describe("Creation timestamp."),
   jurisdiction: z.unknown().optional(),
   location: z.unknown().optional(),
@@ -265,6 +181,49 @@ const PutBucketPublicPolicySchema = z.object({
   ),
 }).passthrough();
 
+const ListBucketJobsSchema = z.object({
+  jobs: z.array(z.unknown()).optional().describe(
+    "Bucket jobs in the current page.",
+  ),
+  nextContinuationToken: z.string().optional().describe(
+    "Token to pass as `continuationToken` to retrieve the next page.",
+  ).meta({ sensitive: true }),
+}).passthrough();
+
+const CreateBucketJobSchema = z.union([
+  z.object({
+    endTime: z.string().optional(),
+    id: z.string().optional(),
+    jobType: z.enum(["prefixDelete"]).optional(),
+    prefixDelete: z.object({
+      deletedObjects: z.number().int().optional(),
+      isBucketClear: z.boolean().optional(),
+      prefix: z.string().optional(),
+    }).optional(),
+    startTime: z.string().optional(),
+    status: z.unknown().optional(),
+  }),
+  z.object({
+    endTime: z.string().optional(),
+    id: z.string().optional(),
+    jobType: z.enum(["storageClassMigration"]).optional(),
+    startTime: z.string().optional(),
+    status: z.unknown().optional(),
+    storageClassMigration: z.object({
+      destinationStorageClass: z.enum(["Standard", "InfrequentAccess"])
+        .optional(),
+      failedBytes: z.number().int().min(0).optional(),
+      failedObjects: z.number().int().min(0).optional(),
+      migratedBytes: z.number().int().min(0).optional(),
+      migratedMetadataBytes: z.number().int().min(0).optional(),
+      migratedObjects: z.number().int().min(0).optional(),
+      skippedBytes: z.number().int().min(0).optional(),
+      skippedObjects: z.number().int().min(0).optional(),
+      sourceStorageClass: z.enum(["Standard", "InfrequentAccess"]).optional(),
+    }).optional(),
+  }),
+]);
+
 const GetBucketLifecycleConfigurationSchema = z.object({
   rules: z.array(z.unknown()).optional(),
 }).passthrough();
@@ -329,7 +288,8 @@ const GetBucketSippyConfigSchema = z.object({
   source: z.object({
     bucket: z.string().nullable().optional(),
     bucketUrl: z.string().nullable().optional(),
-    provider: z.enum(["aws", "gcs", "s3"]).optional(),
+    container: z.string().nullable().optional(),
+    provider: z.enum(["aws", "gcs", "s3", "azure"]).optional(),
     region: z.string().nullable().optional(),
   }).optional().describe("Details about the configured source bucket."),
 }).passthrough();
@@ -345,7 +305,8 @@ const PutBucketSippyConfigSchema = z.object({
   source: z.object({
     bucket: z.string().nullable().optional(),
     bucketUrl: z.string().nullable().optional(),
-    provider: z.enum(["aws", "gcs", "s3"]).optional(),
+    container: z.string().nullable().optional(),
+    provider: z.enum(["aws", "gcs", "s3", "azure"]).optional(),
     region: z.string().nullable().optional(),
   }).optional().describe("Details about the configured source bucket."),
 }).passthrough();
@@ -372,7 +333,7 @@ const CreateTempAccessCredentialsSchema = z.object({
 /** Cloudflare R2 object storage — buckets, objects, multipart uploads, notifications */
 export const model = {
   type: "@webframp/cloudflare/r2",
-  version: "2026.11.05.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -449,63 +410,15 @@ export const model = {
         "Regenerated by codegen; stored attributes unchanged, no migration required",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
-    "list_catalogs": {
-      description: "List R2 catalogs",
-      schema: ListCatalogsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "catalog_details": {
-      description: "Get R2 catalog details",
-      schema: GetCatalogDetailsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "store_credentials": {
-      description: "Store catalog credentials",
-      schema: CreateStoreCredentialsSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "enable_catalog": {
-      description: "Enable R2 bucket as a catalog",
-      schema: EnableCatalogSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "maintenance_config": {
-      description: "Get catalog maintenance configuration",
-      schema: GetMaintenanceConfigSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "list_namespaces": {
-      description: "List namespaces in catalog",
-      schema: ListNamespacesSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "list_tables": {
-      description: "List tables in namespace",
-      schema: ListTablesSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "table": {
-      description: "Get table details",
-      schema: GetTableSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
-    "table_maintenance_config": {
-      description: "Get table maintenance configuration",
-      schema: GetTableMaintenanceConfigSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "list_buckets": {
       description: "List Buckets",
       schema: ListBucketsSchema,
@@ -515,6 +428,12 @@ export const model = {
     "bucket": {
       description: "Create Bucket",
       schema: CreateBucketSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "bucket_by_name": {
+      description: "Create Bucket (by name)",
+      schema: CreateBucketByNameSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -531,7 +450,7 @@ export const model = {
       garbageCollection: 20,
     },
     "put_bucket_cors_policy": {
-      description: "Put Bucket CORS Policy",
+      description: "Set Bucket CORS Policy",
       schema: PutBucketCorsPolicySchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -572,6 +491,18 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
+    "list_bucket_jobs": {
+      description: "List Bucket Jobs",
+      schema: ListBucketJobsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "bucket_job": {
+      description: "Create Bucket Job",
+      schema: CreateBucketJobSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "bucket_lifecycle_configuration": {
       description: "Get Object Lifecycle Rules",
       schema: GetBucketLifecycleConfigurationSchema,
@@ -579,7 +510,7 @@ export const model = {
       garbageCollection: 20,
     },
     "put_bucket_lifecycle_configuration": {
-      description: "Put Object Lifecycle Rules",
+      description: "Set Object Lifecycle Rules",
       schema: PutBucketLifecycleConfigurationSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -591,7 +522,7 @@ export const model = {
       garbageCollection: 20,
     },
     "put_bucket_local_uploads_configuration": {
-      description: "Put Local Uploads Configuration",
+      description: "Set Local Uploads Configuration",
       schema: PutBucketLocalUploadsConfigurationSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -603,7 +534,7 @@ export const model = {
       garbageCollection: 20,
     },
     "put_bucket_lock_configuration": {
-      description: "Put Bucket Lock Rules",
+      description: "Set Bucket Lock Rules",
       schema: PutBucketLockConfigurationSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
@@ -641,520 +572,6 @@ export const model = {
   },
 
   methods: {
-    list_catalogs: {
-      description: "List R2 catalogs",
-      arguments: z.object({}),
-      execute: async (
-        _args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog`,
-        );
-
-        const handle = await context.writeResource(
-          "list_catalogs",
-          "list_catalogs-current",
-          result,
-        );
-        context.logger.info("Fetched list_catalogs", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_catalog_details: {
-      description: "Get R2 catalog details",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}`,
-        );
-
-        const handle = await context.writeResource(
-          "catalog_details",
-          sanitizeInstanceName(String(args.bucket_name)),
-          result,
-        );
-        context.logger.info("Fetched catalog_details", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    create_store_credentials: {
-      description: "Store catalog credentials",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        token: z.string().describe(
-          "Provides the Cloudflare API token for accessing R2. Secret: pass a vault.get expression, never a literal value.",
-        ).meta({ sensitive: true }),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["bucket_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/credential`,
-          body,
-        );
-
-        const id = sanitizeInstanceName(String(args.bucket_name));
-        const handle = await context.writeResource(
-          "store_credentials",
-          id,
-          result,
-        );
-        context.logger.info("Created store_credentials {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    disable_catalog: {
-      description: "Disable R2 catalog",
-      arguments: z.object({
-        bucket_name: z.string().describe(
-          "Specifies the R2 bucket name to disable as catalog.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        await cfApi(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/disable`,
-        );
-
-        context.logger.info("Executed disable_catalog", {});
-        return { dataHandles: [] };
-      },
-    },
-    enable_catalog: {
-      description: "Enable R2 bucket as a catalog",
-      arguments: z.object({
-        bucket_name: z.string().describe(
-          "Specifies the R2 bucket name to enable as catalog.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/enable`,
-        );
-
-        const handle = await context.writeResource(
-          "enable_catalog",
-          "enable_catalog-current",
-          result ?? {},
-        );
-        context.logger.info("Executed enable_catalog", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_maintenance_config: {
-      description: "Get catalog maintenance configuration",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/maintenance-configs`,
-        );
-
-        const handle = await context.writeResource(
-          "maintenance_config",
-          sanitizeInstanceName(String(args.bucket_name)),
-          result,
-        );
-        context.logger.info("Fetched maintenance_config", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_maintenance_config: {
-      description: "Update catalog maintenance configuration",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        compaction: z.unknown().optional(),
-        snapshot_expiration: z.unknown().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["bucket_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/maintenance-configs`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(created?.id ?? String(args.bucket_name)),
-        );
-        const handle = await context.writeResource(
-          "maintenance_config",
-          id,
-          result,
-        );
-        context.logger.info("Created update_maintenance_config {id}", { id });
-        return { dataHandles: [handle] };
-      },
-    },
-    list_namespaces: {
-      description: "List namespaces in catalog",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        page_token: z.string().optional().describe(
-          "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
-        ),
-        page_size: z.number().optional().describe(
-          "Maximum number of namespaces to return per page. Defaults to 100, maximum 1000. ",
-        ),
-        parent: z.string().optional().describe(
-          'Parent namespace to filter by. Only returns direct children of this namespace. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). Omit this parameter to list top-level namespaces. ',
-        ),
-        return_uuids: z.boolean().optional().describe(
-          "Whether to include namespace UUIDs in the response. Set to true to receive the namespace_uuids array. ",
-        ),
-        return_details: z.boolean().optional().describe(
-          "Whether to include additional metadata (timestamps). When true, response includes created_at and updated_at arrays. ",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/namespaces`,
-        );
-
-        const handle = await context.writeResource(
-          "list_namespaces",
-          sanitizeInstanceName(String(args.bucket_name)),
-          result,
-        );
-        context.logger.info("Fetched list_namespaces", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    list_tables: {
-      description: "List tables in namespace",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
-          'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
-        ),
-        page_token: z.string().optional().describe(
-          "Opaque pagination token from a previous response. Use this to fetch the next page of results. ",
-        ),
-        page_size: z.number().optional().describe(
-          "Maximum number of tables to return per page. Defaults to 100, maximum 1000. ",
-        ),
-        return_uuids: z.boolean().optional().describe(
-          "Whether to include table UUIDs in the response. Set to true to receive the table_uuids array. ",
-        ),
-        return_details: z.boolean().optional().describe(
-          "Whether to include additional metadata (timestamps, locations). When true, response includes created_at, updated_at, metadata_locations, and locations arrays. ",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/namespaces/${args.namespace}/tables`,
-        );
-
-        const handle = await context.writeResource(
-          "list_tables",
-          sanitizeInstanceName(String(args.namespace)),
-          result,
-        );
-        context.logger.info("Fetched list_tables", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_table: {
-      description: "Get table details",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
-          'The namespace identifier. For nested namespaces, use %1F as separator (e.g., "bronze%1Fanalytics"). ',
-        ),
-        table_name: z.string().describe(
-          "The table name within the given namespace.",
-        ),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/namespaces/${args.namespace}/tables/${args.table_name}`,
-        );
-
-        const handle = await context.writeResource(
-          "table",
-          sanitizeInstanceName(String(args.table_name)),
-          result,
-        );
-        context.logger.info("Fetched table", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    get_table_maintenance_config: {
-      description: "Get table maintenance configuration",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
-          "The namespace identifier (use %1F as separator for nested namespaces).",
-        ),
-        table_name: z.string().describe("The table name."),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/namespaces/${args.namespace}/tables/${args.table_name}/maintenance-configs`,
-        );
-
-        const handle = await context.writeResource(
-          "table_maintenance_config",
-          sanitizeInstanceName(String(args.table_name)),
-          result,
-        );
-        context.logger.info("Fetched table_maintenance_config", {});
-        return { dataHandles: [handle] };
-      },
-    },
-    update_table_maintenance_config: {
-      description: "Update table maintenance configuration",
-      arguments: z.object({
-        bucket_name: z.string().describe("Specifies the R2 bucket name."),
-        namespace: z.string().describe(
-          "The namespace identifier (use %1F as separator for nested namespaces).",
-        ),
-        table_name: z.string().describe("The table name."),
-        compaction: z.unknown().optional(),
-        snapshot_expiration: z.unknown().optional(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-
-        const body: Record<string, unknown> = {};
-        const excludeKeys = new Set(["bucket_name", "namespace", "table_name"]);
-        for (const [k, v] of Object.entries(args)) {
-          if (!excludeKeys.has(k)) body[k] = v;
-        }
-
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "POST",
-          `/accounts/${accountId}/r2-catalog/${args.bucket_name}/namespaces/${args.namespace}/tables/${args.table_name}/maintenance-configs`,
-          body,
-        );
-
-        const created = result as { id?: unknown } | null | undefined;
-        const id = sanitizeInstanceName(
-          String(
-            created?.id ??
-              await shortHash(
-                JSON.stringify([
-                  String(args.bucket_name),
-                  String(args.namespace),
-                  String(args.table_name),
-                ]),
-              ),
-          ),
-        );
-        const handle = await context.writeResource(
-          "table_maintenance_config",
-          id,
-          result,
-        );
-        context.logger.info("Created update_table_maintenance_config {id}", {
-          id,
-        });
-        return { dataHandles: [handle] };
-      },
-    },
     list_buckets: {
       description: "List Buckets",
       arguments: z.object({
@@ -1166,7 +583,7 @@ export const model = {
         cursor: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1180,15 +597,37 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "name_contains": "name_contains",
+          "start_after": "start_after",
+          "per_page": "per_page",
+          "order": "order",
+          "direction": "direction",
+          "cursor": "cursor",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/r2/buckets`,
+          `/accounts/${accountId}/r2/buckets${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_buckets",
-          "list_buckets-current",
+          `list_buckets-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_buckets", {});
@@ -1274,6 +713,49 @@ export const model = {
           result,
         );
         context.logger.info("Fetched bucket", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    create_bucket_by_name: {
+      description: "Create Bucket (by name)",
+      arguments: z.object({
+        bucket_name: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body: Record<string, unknown> = {};
+        const excludeKeys = new Set(["bucket_name"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (!excludeKeys.has(k)) body[k] = v;
+        }
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PUT",
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "bucket_by_name",
+          sanitizeInstanceName(String(args.bucket_name)),
+          result,
+        );
+        context.logger.info("Updated create_bucket_by_name", {});
         return { dataHandles: [handle] };
       },
     },
@@ -1387,7 +869,7 @@ export const model = {
       },
     },
     put_bucket_cors_policy: {
-      description: "Put Bucket CORS Policy",
+      description: "Set Bucket CORS Policy",
       arguments: z.object({
         bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
@@ -1756,6 +1238,162 @@ export const model = {
         return { dataHandles: [handle] };
       },
     },
+    list_bucket_jobs: {
+      description: "List Bucket Jobs",
+      arguments: z.object({
+        bucket_name: z.string(),
+        jobType: z.enum(["prefixDelete", "storageClassMigration"]).optional()
+          .describe("Restricts results to jobs of the specified type."),
+        status: z.string().optional().describe(
+          "Restricts results to jobs with the specified status. `jobType` is required when this parameter is provided.",
+        ),
+        maxKeys: z.number().optional().describe(
+          "Maximum number of jobs to return.",
+        ),
+        continuationToken: z.string().optional().describe(
+          "Pagination token received as `nextContinuationToken` in the previous response.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "jobType": "jobType",
+          "status": "status",
+          "maxKeys": "maxKeys",
+          "continuationToken": "continuationToken",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/jobs${qs}`,
+        );
+
+        const handle = await context.writeResource(
+          "list_bucket_jobs",
+          sanitizeInstanceName(`${String(args.bucket_name)}${querySuffix}`),
+          result,
+        );
+        context.logger.info("Fetched list_bucket_jobs", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    create_bucket_job: {
+      description: "Create Bucket Job",
+      arguments: z.object({
+        bucket_name: z.string(),
+        body: z.union([
+          z.object({
+            jobType: z.enum(["prefixDelete"]),
+            prefix: z.string(),
+          }),
+          z.object({
+            destinationStorageClass: z.enum(["Standard", "InfrequentAccess"])
+              .optional(),
+            jobType: z.enum(["storageClassMigration"]),
+            sourceStorageClass: z.enum(["Standard", "InfrequentAccess"])
+              .optional(),
+          }),
+        ]),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args.body;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "POST",
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/jobs`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "bucket_job",
+          "create_bucket_job-current",
+          result ?? {},
+        );
+        context.logger.info("Executed create_bucket_job", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    get_bucket_job: {
+      description: "Get Bucket Job",
+      arguments: z.object({
+        bucket_name: z.string(),
+        job_id: z.string().describe(
+          "Identifier returned when the background job was submitted.",
+        ),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/jobs/${args.job_id}`,
+        );
+
+        const handle = await context.writeResource(
+          "bucket_job",
+          sanitizeInstanceName(String(args.job_id)),
+          result,
+        );
+        context.logger.info("Fetched bucket_job", {});
+        return { dataHandles: [handle] };
+      },
+    },
     get_bucket_lifecycle_configuration: {
       description: "Get Object Lifecycle Rules",
       arguments: z.object({
@@ -1792,7 +1430,7 @@ export const model = {
       },
     },
     put_bucket_lifecycle_configuration: {
-      description: "Put Object Lifecycle Rules",
+      description: "Set Object Lifecycle Rules",
       arguments: z.object({
         bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
@@ -1871,7 +1509,7 @@ export const model = {
       },
     },
     put_bucket_local_uploads_configuration: {
-      description: "Put Local Uploads Configuration",
+      description: "Set Local Uploads Configuration",
       arguments: z.object({
         bucket_name: z.string(),
         enabled: z.boolean().describe(
@@ -1955,7 +1593,7 @@ export const model = {
       },
     },
     put_bucket_lock_configuration: {
-      description: "Put Bucket Lock Rules",
+      description: "Set Bucket Lock Rules",
       arguments: z.object({
         bucket_name: z.string(),
         rules: z.array(z.unknown()).optional(),
@@ -1996,6 +1634,37 @@ export const model = {
         );
         context.logger.info("Updated put_bucket_lock_configuration", {});
         return { dataHandles: [handle] };
+      },
+    },
+    delete_bucket_lock_configuration: {
+      description: "Delete Bucket Lock Rules",
+      arguments: z.object({
+        bucket_name: z.string(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        await cfApi(
+          apiToken,
+          "DELETE",
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/lock`,
+        );
+
+        context.logger.info("Deleted resource {id}", { id: args.bucket_name });
+        return { dataHandles: [] };
       },
     },
     list_objects: {
@@ -2061,7 +1730,9 @@ export const model = {
       description: "Delete Objects",
       arguments: z.object({
         bucket_name: z.string(),
-        prefix: z.string().optional(),
+        prefix: z.string().optional().describe(
+          "Deprecated. Create a `prefixDelete` job with the Create Bucket Job endpoint instead. When present, the request body is ignored and a prefix-delete job is created for this prefix, exactly as Create Bucket Job does; an empty value empties the bucket. The response is the job descriptor, with a `Deprecation` header and a deprecation message in `messages`. ",
+        ),
         items: z.array(z.string()),
       }),
       execute: async (
@@ -2225,6 +1896,26 @@ export const model = {
               ).meta({ sensitive: true }),
             }).optional(),
           }),
+          z.object({
+            destination: z.object({
+              accessKeyId: z.string().optional(),
+              provider: z.enum(["r2"]).optional(),
+              secretAccessKey: z.string().optional().describe(
+                "Secret: pass a vault.get expression, never a literal value.",
+              ).meta({ sensitive: true }),
+            }).optional(),
+            source: z.object({
+              accountKey: z.string().optional().describe(
+                "Secret: pass a vault.get expression, never a literal value.",
+              ).meta({ sensitive: true }),
+              accountName: z.string().optional(),
+              container: z.string().optional(),
+              provider: z.enum(["azure"]).optional(),
+              sasToken: z.string().optional().describe(
+                "Secret: pass a vault.get expression, never a literal value.",
+              ).meta({ sensitive: true }),
+            }).optional(),
+          }),
         ]),
       }),
       execute: async (
@@ -2328,24 +2019,50 @@ export const model = {
     create_temp_access_credentials: {
       description: "Create Temporary Access Credentials",
       arguments: z.object({
+        actions: z.array(
+          z.enum([
+            "HeadBucket",
+            "HeadObject",
+            "GetObject",
+            "GetBucketLocation",
+            "ListObjectsV1",
+            "ListObjectsV2",
+            "ListMultipartUploads",
+            "ListParts",
+            "PutObject",
+            "DeleteObject",
+            "DeleteObjects",
+            "DeleteObjectsByPrefix",
+            "CopyObject",
+            "CreateMultipartUpload",
+            "UploadPart",
+            "UploadPartCopy",
+            "AbortMultipartUpload",
+            "CompleteMultipartUpload",
+          ]),
+        ).optional().describe(
+          "S3 actions allowed on the credentials; requests for any other action are deni...",
+        ),
         bucket: z.string().describe("Name of the R2 bucket."),
         objects: z.array(z.string()).optional().describe(
           "Optional object paths to scope the credentials to.",
         ),
         parentAccessKeyId: z.string().describe(
-          "The parent access key id to use for signing.",
+          "Access key ID of the parent R2 API token. The temporary credentials cannot ex...",
         ),
         permission: z.enum([
           "admin-read-write",
           "admin-read-only",
           "object-read-write",
           "object-read-only",
-        ]).describe("Permissions allowed on the credentials."),
+        ]).optional().describe(
+          "Permissions allowed on the credentials. Exactly one of `permission` or `actio...",
+        ),
         prefixes: z.array(z.string()).optional().describe(
           "Optional prefix paths to scope the credentials to.",
         ),
-        ttlSeconds: z.number().max(604800).describe(
-          "How long the credentials will live for in seconds.",
+        ttlSeconds: z.number().min(0).max(604800).describe(
+          "Lifetime of the temporary credentials in seconds, up to 604800 seconds (7 days).",
         ),
       }),
       execute: async (

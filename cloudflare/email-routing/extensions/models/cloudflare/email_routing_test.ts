@@ -37,7 +37,7 @@ Deno.test("email-routing model: has expected methods", () => {
   );
   assertExists(model.methods.update_email_routing_settings);
   assertExists(
-    model.methods.get_email_routing_settings_email_routing_dns_settings,
+    model.methods.list_email_routing_settings_email_routing_dns_settings,
   );
   assertExists(
     model.methods.create_email_routing_settings_enable_email_routing_dns,
@@ -55,10 +55,6 @@ Deno.test("email-routing model: has expected methods", () => {
   assertExists(model.methods.get_routing_rule);
   assertExists(model.methods.update_routing_rule);
   assertExists(model.methods.delete_routing_rule);
-  assertExists(model.methods.get_publiclistsuppressionzonerouting);
-  assertExists(model.methods.create_post_publicnewsuppressionzonerouting);
-  assertExists(model.methods.get_publicgetsuppressionzonerouting);
-  assertExists(model.methods.delete_publicdeletesuppressionzonerouting);
   assertExists(model.methods.list_sending_subdomains);
   assertExists(model.methods.create_sending_subdomain);
   assertExists(
@@ -72,10 +68,7 @@ Deno.test("email-routing model: has expected methods", () => {
     model.methods.email_sending_subdomains_fix_sending_subdomain_dns,
   );
   assertExists(model.methods.get_sending_subdomain_dns_status);
-  assertExists(model.methods.get_publiclistsuppressionzonesending);
-  assertExists(model.methods.create_post_publicnewsuppressionzonesending);
-  assertExists(model.methods.get_publicgetsuppressionzonesending);
-  assertExists(model.methods.delete_publicdeletesuppressionzonesending);
+  assertExists(model.methods.get_sending_subdomain_reputation_complaints);
 });
 
 Deno.test("email-routing model: has expected resources", () => {
@@ -99,9 +92,6 @@ Deno.test("email-routing model: has expected resources", () => {
   assertExists(model.resources["routing_rules"]);
   assertExists(model.resources["routing_rule"]);
   assertExists(model.resources["catch_all_rule"]);
-  assertExists(model.resources["get_publiclistsuppressionzonerouting"]);
-  assertExists(model.resources["post_publicnewsuppressionzonerouting"]);
-  assertExists(model.resources["publicgetsuppressionzonerouting"]);
   assertExists(model.resources["sending_subdomains"]);
   assertExists(model.resources["sending_subdomain"]);
   assertExists(
@@ -112,9 +102,7 @@ Deno.test("email-routing model: has expected resources", () => {
     model.resources["email_sending_subdomains_fix_sending_subdomain_dns"],
   );
   assertExists(model.resources["sending_subdomain_dns_status"]);
-  assertExists(model.resources["get_publiclistsuppressionzonesending"]);
-  assertExists(model.resources["post_publicnewsuppressionzonesending"]);
-  assertExists(model.resources["publicgetsuppressionzonesending"]);
+  assertExists(model.resources["sending_subdomain_reputation_complaints"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -309,6 +297,61 @@ Deno.test({
 
 Deno.test({
   name:
+    "email-routing model: list_email_routing_settings_email_routing_dns_settings fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "content": "route1.mx.cloudflare.net",
+      "name": "example.com",
+      "priority": 12,
+      "ttl": 1,
+      "type": "NS",
+    }];
+    const { url, server } = startMockCfServer({
+      "/email/routing/dns": { result: mockData, isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
+        definition: {
+          id: "test-id",
+          name: "test-email-routing",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_email_routing_settings_email_routing_dns_settings.execute(
+        {},
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
     "email-routing model: create_email_routing_settings_enable_email_routing_dns creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
@@ -408,60 +451,6 @@ Deno.test({
         context,
       );
       assertEquals(result.dataHandles.length, 0);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "email-routing model: list_routing_rules fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = [{
-      "actions": null,
-      "enabled": null,
-      "id": null,
-      "matchers": null,
-      "name": null,
-      "priority": null,
-      "source": null,
-      "tag": null,
-    }];
-    const { url, server } = startMockCfServer({
-      "/email/routing/rules": { result: mockData, isCollection: true },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
-        definition: {
-          id: "test-id",
-          name: "test-email-routing",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).list_routing_rules.execute({}, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
     } finally {
       uninstall();
       await server.shutdown();

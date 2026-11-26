@@ -38,34 +38,42 @@ swamp model create @webframp/cloudflare/logpush cf-logpush \
 
 ## Methods
 
-| Method                                                           | Description                     |
-| ---------------------------------------------------------------- | ------------------------------- |
-| `get_accounts_account_id_logpush_datasets_dataset_id_fields`     | List fields                     |
-| `get_accounts_account_id_logpush_datasets_dataset_id_jobs`       | List Logpush jobs for a dataset |
-| `get_accounts_account_id_logpush_jobs`                           | List Logpush jobs               |
-| `create_post_accounts_account_id_logpush_jobs`                   | Create Logpush job              |
-| `get_accounts_account_id_logpush_jobs_job_id`                    | Get Logpush job details         |
-| `put_accounts_account_id_logpush_jobs_job_id`                    | Update Logpush job              |
-| `delete_accounts_account_id_logpush_jobs_job_id`                 | Delete Logpush job              |
-| `create_post_accounts_account_id_logpush_ownership`              | Get ownership challenge         |
-| `create_post_accounts_account_id_logpush_ownership_validate`     | Validate ownership challenge    |
-| `delete_accounts_account_id_logpush_validate_destination`        | Validate destination            |
-| `delete_accounts_account_id_logpush_validate_destination_exists` | Check destination exists        |
-| `create_post_accounts_account_id_logpush_validate_origin`        | Validate origin                 |
-| `get_zones_zone_id_logpush_datasets_dataset_id_fields`           | List fields                     |
-| `get_zones_zone_id_logpush_datasets_dataset_id_jobs`             | List Logpush jobs for a dataset |
-| `get_zones_zone_id_logpush_edge_jobs`                            | List Instant Logs jobs          |
-| `create_post_zones_zone_id_logpush_edge_jobs`                    | Create Instant Logs job         |
-| `get_zones_zone_id_logpush_jobs`                                 | List Logpush jobs               |
-| `create_post_zones_zone_id_logpush_jobs`                         | Create Logpush job              |
-| `get_zones_zone_id_logpush_jobs_job_id`                          | Get Logpush job details         |
-| `put_zones_zone_id_logpush_jobs_job_id`                          | Update Logpush job              |
-| `delete_zones_zone_id_logpush_jobs_job_id`                       | Delete Logpush job              |
-| `create_post_zones_zone_id_logpush_ownership`                    | Get ownership challenge         |
-| `create_post_zones_zone_id_logpush_ownership_validate`           | Validate ownership challenge    |
-| `create_post_zones_zone_id_logpush_validate_destination`         | Validate destination            |
-| `create_post_zones_zone_id_logpush_validate_destination_exists`  | Check destination exists        |
-| `create_post_zones_zone_id_logpush_validate_origin`              | Validate origin                 |
+| Method                                                                 | Description                     |
+| ---------------------------------------------------------------------- | ------------------------------- |
+| `get_accounts_account_id_logpush_datasets_dataset_id_fields`           | List fields                     |
+| `get_accounts_account_id_logpush_datasets_dataset_id_jobs`             | List Logpush jobs for a dataset |
+| `get_accounts_account_id_logpush_jobs`                                 | List Logpush jobs               |
+| `create_post_accounts_account_id_logpush_jobs`                         | Create Logpush job              |
+| `get_accounts_account_id_logpush_jobs_job_id`                          | Get Logpush job details         |
+| `put_accounts_account_id_logpush_jobs_job_id`                          | Update Logpush job              |
+| `delete_accounts_account_id_logpush_jobs_job_id`                       | Delete Logpush job              |
+| `create_post_accounts_account_id_logpush_ownership`                    | Get ownership challenge         |
+| `create_post_accounts_account_id_logpush_ownership_validate`           | Validate ownership challenge    |
+| `get_accounts_account_id_logpush_transformers`                         | List transformers               |
+| `create_post_accounts_account_id_logpush_transformers`                 | Create transformer              |
+| `create_post_accounts_account_id_logpush_transformers_preview`         | Preview transformer             |
+| `get_accounts_account_id_logpush_transformers_transformer_id`          | Get transformer                 |
+| `put_accounts_account_id_logpush_transformers_transformer_id`          | Update transformer              |
+| `delete_accounts_account_id_logpush_transformers_transformer_id`       | Delete transformer              |
+| `get_accounts_account_id_logpush_transformers_transformer_id_content`  | Get transformer content         |
+| `get_accounts_account_id_logpush_transformers_transformer_id_versions` | List transformer versions       |
+| `delete_accounts_account_id_logpush_validate_destination`              | Validate destination            |
+| `delete_accounts_account_id_logpush_validate_destination_exists`       | Check destination exists        |
+| `create_post_accounts_account_id_logpush_validate_origin`              | Validate origin                 |
+| `get_zones_zone_id_logpush_datasets_dataset_id_fields`                 | List fields                     |
+| `get_zones_zone_id_logpush_datasets_dataset_id_jobs`                   | List Logpush jobs for a dataset |
+| `get_zones_zone_id_logpush_edge_jobs`                                  | List Instant Logs jobs          |
+| `create_post_zones_zone_id_logpush_edge_jobs`                          | Create Instant Logs job         |
+| `get_zones_zone_id_logpush_jobs`                                       | List Logpush jobs               |
+| `create_post_zones_zone_id_logpush_jobs`                               | Create Logpush job              |
+| `get_zones_zone_id_logpush_jobs_job_id`                                | Get Logpush job details         |
+| `put_zones_zone_id_logpush_jobs_job_id`                                | Update Logpush job              |
+| `delete_zones_zone_id_logpush_jobs_job_id`                             | Delete Logpush job              |
+| `create_post_zones_zone_id_logpush_ownership`                          | Get ownership challenge         |
+| `create_post_zones_zone_id_logpush_ownership_validate`                 | Validate ownership challenge    |
+| `create_post_zones_zone_id_logpush_validate_destination`               | Validate destination            |
+| `create_post_zones_zone_id_logpush_validate_destination_exists`        | Check destination exists        |
+| `create_post_zones_zone_id_logpush_validate_origin`                    | Validate origin                 |
 
 ## Secrets
 

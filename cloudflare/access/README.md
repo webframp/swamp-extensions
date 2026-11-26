@@ -42,16 +42,20 @@ swamp model create @webframp/cloudflare/access cf-access \
 
 | Method                                                               | Description                                               |
 | -------------------------------------------------------------------- | --------------------------------------------------------- |
+| `get_mcp_portals_api_portal_tool_call_timeseries`                    | Per-portal MCP tool-call timeseries                       |
+| `get_mcp_portals_api_server_tool_call_timeseries`                    | Per-server MCP tool-call timeseries                       |
+| `get_mcp_portals_api_account_tool_call_timeseries`                   | Account-global MCP tool-call timeseries                   |
 | `list_portals`                                                       | List MCP Portals                                          |
 | `create_portals`                                                     | Create a new MCP Portal                                   |
 | `get_mcp_portals_api_fetch_gateways`                                 | Read details of an MCP Portal                             |
-| `update_portals`                                                     | Update a MCP Portal                                       |
-| `delete_portals`                                                     | Delete a MCP Portal                                       |
+| `update_portals`                                                     | Update an MCP Portal                                      |
+| `delete_portals`                                                     | Delete an MCP Portal                                      |
+| `get_mcp_portals_api_effective_redirect_uri`                         | Resolve an MCP server OAuth redirect URI                  |
 | `list_servers`                                                       | List MCP Servers                                          |
 | `create_servers`                                                     | Create a new MCP Server                                   |
-| `get_mcp_portals_api_fetch_servers`                                  | Read the details of a MCP Server                          |
-| `update_servers`                                                     | Update a MCP Server                                       |
-| `delete_servers`                                                     | Delete a MCP Server                                       |
+| `get_mcp_portals_api_fetch_servers`                                  | Read the details of an MCP Server                         |
+| `update_servers`                                                     | Update an MCP Server                                      |
+| `delete_servers`                                                     | Delete an MCP Server                                      |
 | `mcp_portals_api_sync_server`                                        | Sync MCP Server Capabilities                              |
 | `list_access_applications`                                           | List Access applications                                  |
 | `access_applications_add_an_application`                             | Add an Access application                                 |
@@ -81,6 +85,7 @@ swamp model create @webframp/cloudflare/access cf-access \
 | `delete_an_mtls_certificate`                                         | Delete an mTLS certificate                                |
 | `list_custom_pages`                                                  | List custom pages                                         |
 | `create_a_custom_page`                                               | Create a custom page                                      |
+| `create_access_custom_pages_validate_a_custom_page_template`         | Validate a custom page template                           |
 | `get_a_custom_page`                                                  | Get a custom page                                         |
 | `update_a_custom_page`                                               | Update a custom page                                      |
 | `delete_a_custom_page`                                               | Delete a custom page                                      |
@@ -99,7 +104,11 @@ swamp model create @webframp/cloudflare/access cf-access \
 | `delete_an_access_identity_provider`                                 | Delete an Access identity provider                        |
 | `create_saml_certificate_for_identity_provider`                      | Create SAML encryption certificate for Identity Provider  |
 | `list_scim_group_resources`                                          | List SCIM Group resources                                 |
+| `get_scim_group_resource`                                            | Get a SCIM Group resource                                 |
+| `delete_scim_group_resource`                                         | Delete a SCIM Group resource                              |
 | `list_scim_user_resources`                                           | List SCIM User resources                                  |
+| `get_scim_user_resource`                                             | Get a SCIM User resource                                  |
+| `delete_scim_user_resource`                                          | Delete a SCIM User resource                               |
 | `create`                                                             | Create an IdP federation grant                            |
 | `get`                                                                | Get an IdP federation grant                               |
 | `delete`                                                             | Delete an IdP federation grant                            |
@@ -111,9 +120,14 @@ swamp model create @webframp/cloudflare/access cf-access \
 | `get_your_zero_trust_organization`                                   | Get your Zero Trust organization                          |
 | `create_your_zero_trust_organization`                                | Create your Zero Trust organization                       |
 | `update_your_zero_trust_organization`                                | Update your Zero Trust organization                       |
+| `patch_your_zero_trust_organization`                                 | Partially update your Zero Trust organization             |
 | `get_your_zero_trust_organization_doh_settings`                      | Get your Zero Trust organization DoH settings             |
 | `update_your_zero_trust_organization_doh_settings`                   | Update your Zero Trust organization DoH settings          |
 | `create_zero_trust_organization_revoke_all_access_tokens_for_a_user` | Revoke all Access tokens for a user                       |
+| `get_trust_settings`                                                 | Get Zero Trust organization trust settings                |
+| `update_zero_trust_organization_replace_trust_settings`              | Replace Zero Trust organization trust settings            |
+| `update_trust_settings`                                              | Update Zero Trust organization trust settings             |
+| `delete_trust_settings`                                              | Delete Zero Trust organization trust settings             |
 | `list_access_reusable_policies`                                      | List Access reusable policies                             |
 | `create_an_access_reusable_policy`                                   | Create an Access reusable policy                          |
 | `get_an_access_reusable_policy`                                      | Get an Access reusable policy                             |
@@ -138,16 +152,24 @@ swamp model create @webframp/cloudflare/access cf-access \
 | `get_a_tag`                                                          | Get a tag                                                 |
 | `update_a_tag`                                                       | Update a tag                                              |
 | `delete_a_tag`                                                       | Delete a tag                                              |
+| `list_user_populations`                                              | List user populations                                     |
+| `create_user_population`                                             | Create a user population                                  |
+| `get_user_population`                                                | Get a user population                                     |
+| `update_user_population`                                             | Update a user population                                  |
+| `delete_user_population`                                             | Delete a user population                                  |
+| `list_users`                                                         | List users in a user population                           |
+| `create_user`                                                        | Create a user population user                             |
+| `get_user`                                                           | Get a user population user                                |
+| `update_access_user_populations_replace_user`                        | Replace a user population user                            |
+| `update_user`                                                        | Update a user population user                             |
+| `delete_user`                                                        | Delete a user population user                             |
 | `get_users`                                                          | Get users                                                 |
-| `create_user`                                                        | Create a user                                             |
-| `get_user`                                                           | Get a user                                                |
-| `update_user`                                                        | Update a user                                             |
-| `delete_user`                                                        | Delete a user                                             |
 | `get_active_sessions`                                                | Get active sessions                                       |
 | `get_active_session`                                                 | Get single active session                                 |
 | `get_failed_logins`                                                  | Get failed logins                                         |
 | `get_last_seen_identity`                                             | Get last seen identity                                    |
-| `delete_mfa_authenticator`                                           | Delete a user's MFA device                                |
+| `delete_mfa_authenticator`                                           | Delete a user's authenticator                             |
+| `delete_passkey`                                                     | Delete a user's passkey                                   |
 
 ## Secrets
 
@@ -165,13 +187,13 @@ so the method deletes those before it stores the result.
 
 | Method                                                      | Secret inputs                        | Stored in a vault                            | Removed before storing                                                                                                                                                                                                                                                                                                                                                 |
 | ----------------------------------------------------------- | ------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create_servers`                                            | `auth_credentials`                   | —                                            | —                                                                                                                                                                                                                                                                                                                                                                      |
-| `update_servers`                                            | `auth_credentials`                   | —                                            | —                                                                                                                                                                                                                                                                                                                                                                      |
+| `create_servers`                                            | `auth_credentials`, `client_secret`  | —                                            | —                                                                                                                                                                                                                                                                                                                                                                      |
+| `update_servers`                                            | `auth_credentials`, `client_secret`  | —                                            | —                                                                                                                                                                                                                                                                                                                                                                      |
 | `list_access_applications`                                  | —                                    | —                                            | `scim_config.authentication.password`, `scim_config.authentication.token`, `scim_config.authentication.client_secret`, `scim_config.authentication.client_secret`, `scim_config.authentication[].password`, `scim_config.authentication[].token`, `scim_config.authentication[].client_secret`, `scim_config.authentication[].client_secret`, `saas_app.client_secret` |
 | `access_applications_add_an_application`                    | `client_secret`, `password`, `token` | —                                            | `scim_config.authentication.password`, `scim_config.authentication.token`, `scim_config.authentication.client_secret`, `scim_config.authentication.client_secret`, `scim_config.authentication[].password`, `scim_config.authentication[].token`, `scim_config.authentication[].client_secret`, `scim_config.authentication[].client_secret`, `saas_app.client_secret` |
 | `get_an_access_application`                                 | —                                    | —                                            | `scim_config.authentication.password`, `scim_config.authentication.token`, `scim_config.authentication.client_secret`, `scim_config.authentication.client_secret`, `scim_config.authentication[].password`, `scim_config.authentication[].token`, `scim_config.authentication[].client_secret`, `scim_config.authentication[].client_secret`, `saas_app.client_secret` |
 | `update_an_access_application`                              | `client_secret`, `password`, `token` | —                                            | `scim_config.authentication.password`, `scim_config.authentication.token`, `scim_config.authentication.client_secret`, `scim_config.authentication.client_secret`, `scim_config.authentication[].password`, `scim_config.authentication[].token`, `scim_config.authentication[].client_secret`, `scim_config.authentication[].client_secret`, `saas_app.client_secret` |
-| `list_access_identity_providers`                            | —                                    | —                                            | `config.client_secret`, `scim_config.secret`, `scim_config.secret`, `scim_config.secret`                                                                                                                                                                                                                                                                               |
+| `list_access_identity_providers`                            | —                                    | —                                            | `config.client_secret`, `scim_config.secret`, `config.client_secret`, `scim_config.secret`, `scim_config.secret`, `scim_config.secret`, `scim_config.secret`                                                                                                                                                                                                           |
 | `access_identity_providers_add_an_access_identity_provider` | `client_secret`, `secret`            | `config.client_secret`, `scim_config.secret` | —                                                                                                                                                                                                                                                                                                                                                                      |
 | `get_an_access_identity_provider`                           | —                                    | `config.client_secret`, `scim_config.secret` | —                                                                                                                                                                                                                                                                                                                                                                      |
 | `update_an_access_identity_provider`                        | `client_secret`, `secret`            | `config.client_secret`, `scim_config.secret` | —                                                                                                                                                                                                                                                                                                                                                                      |

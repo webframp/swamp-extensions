@@ -28,6 +28,8 @@ Deno.test("images model: has globalArguments with apiToken", () => {
 
 Deno.test("images model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.get);
+  assertExists(model.methods.update_cloudflare_images_config_edit);
   assertExists(model.methods.list_signing_keys);
   assertExists(model.methods.update_cloudflare_images_keys_add_signing_key);
   assertExists(model.methods.delete_signing_key);
@@ -37,13 +39,11 @@ Deno.test("images model: has expected methods", () => {
   assertExists(model.methods.get_cloudflare_images_variants_variant_details);
   assertExists(model.methods.update_a_variant);
   assertExists(model.methods.delete_a_variant);
-  assertExists(
-    model.methods.get_cloudflare_images_variants_variant_details_flat,
-  );
   assertExists(model.methods.get_cloudflare_images_image_details);
   assertExists(model.methods.update_image);
   assertExists(model.methods.delete_image);
   assertExists(model.methods.list_images_v2);
+  assertExists(model.methods.list_metadata_keys);
   assertExists(model.methods.list_migrations);
   assertExists(model.methods.create_migration);
   assertExists(model.methods.get_migration);
@@ -70,18 +70,18 @@ Deno.test("images model: has expected methods", () => {
 
 Deno.test("images model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["get"]);
+  assertExists(model.resources["cloudflare_images_config_edit"]);
   assertExists(model.resources["list_signing_keys"]);
   assertExists(model.resources["cloudflare_images_keys_add_signing_key"]);
   assertExists(model.resources["cloudflare_images_images_usage_statistics"]);
   assertExists(model.resources["list_variants"]);
   assertExists(model.resources["a_variant"]);
   assertExists(model.resources["cloudflare_images_variants_variant_details"]);
-  assertExists(
-    model.resources["cloudflare_images_variants_variant_details_flat"],
-  );
   assertExists(model.resources["cloudflare_images_image_details"]);
   assertExists(model.resources["image"]);
   assertExists(model.resources["list_images_v2"]);
+  assertExists(model.resources["list_metadata_keys"]);
   assertExists(model.resources["list_migrations"]);
   assertExists(model.resources["migration"]);
   assertExists(model.resources["migration_progress"]);
@@ -161,12 +161,15 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
-  name: "images model: list_signing_keys fetches and writes resource",
+  name: "images model: get fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "keys": [null] };
+    const mockData = {
+      "flexible_variants": null,
+      "preserve_content_credentials": null,
+    };
     const { url, server } = startMockCfServer({
-      "/images/v1/keys": { result: mockData },
+      "/images/v1/config": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -189,7 +192,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_signing_keys.execute({}, context);
+      >).get.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -207,12 +210,15 @@ Deno.test({
 
 Deno.test({
   name:
-    "images model: update_cloudflare_images_keys_add_signing_key executes and writes resource",
+    "images model: update_cloudflare_images_config_edit executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "keys": [null] };
+    const mockData = {
+      "flexible_variants": null,
+      "preserve_content_credentials": null,
+    };
     const { url, server } = startMockCfServer({
-      "/images/v1/keys/test-id-123": { result: mockData },
+      "/images/v1/config": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -235,9 +241,9 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).update_cloudflare_images_keys_add_signing_key.execute({
-        "keys": [null],
-        "signing_key_name": "test-id-123",
+      >).update_cloudflare_images_config_edit.execute({
+        "flexible_variants": null,
+        "preserve_content_credentials": null,
       }, context);
       assertEquals(result.dataHandles.length, 1);
 

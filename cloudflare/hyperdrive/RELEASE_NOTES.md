@@ -1,16 +1,7 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Added:** `create_hyperdrive_database_signature` and `restart_hyperdrive`.
 
-## 2026.10.21.1
+**Changed:** `create_hyperdrive` no longer takes `caching`, `created_on`, `modified_on`, `mtls`, `name`, `origin`, `origin_connection_limit`. `update_hyperdrive` changed argument type: `origin`. `patch_hyperdrive` changed argument type: `name`.
 
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
-
-**Changed:** Method arguments that carry a secret are now marked sensitive, so
-swamp redacts them from logs and run records. Pass them as `vault.get`
-expressions. Affected: `create_hyperdrive`, `update_hyperdrive` and
-`patch_hyperdrive`. The README's new "Secrets" section lists them per method.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.

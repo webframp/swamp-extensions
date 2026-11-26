@@ -44,6 +44,31 @@ Deno.test("logpush model: has expected methods", () => {
   assertExists(
     model.methods.create_post_accounts_account_id_logpush_ownership_validate,
   );
+  assertExists(model.methods.get_accounts_account_id_logpush_transformers);
+  assertExists(
+    model.methods.create_post_accounts_account_id_logpush_transformers,
+  );
+  assertExists(
+    model.methods.create_post_accounts_account_id_logpush_transformers_preview,
+  );
+  assertExists(
+    model.methods.get_accounts_account_id_logpush_transformers_transformer_id,
+  );
+  assertExists(
+    model.methods.put_accounts_account_id_logpush_transformers_transformer_id,
+  );
+  assertExists(
+    model.methods
+      .delete_accounts_account_id_logpush_transformers_transformer_id,
+  );
+  assertExists(
+    model.methods
+      .get_accounts_account_id_logpush_transformers_transformer_id_content,
+  );
+  assertExists(
+    model.methods
+      .get_accounts_account_id_logpush_transformers_transformer_id_versions,
+  );
   assertExists(
     model.methods.delete_accounts_account_id_logpush_validate_destination,
   );
@@ -95,6 +120,32 @@ Deno.test("logpush model: has expected resources", () => {
   assertExists(model.resources["post_accounts_account_id_logpush_ownership"]);
   assertExists(
     model.resources["post_accounts_account_id_logpush_ownership_validate"],
+  );
+  assertExists(model.resources["get_accounts_account_id_logpush_transformers"]);
+  assertExists(
+    model.resources["post_accounts_account_id_logpush_transformers"],
+  );
+  assertExists(
+    model.resources["post_accounts_account_id_logpush_transformers_preview"],
+  );
+  assertExists(
+    model.resources["accounts_account_id_logpush_transformers_transformer_id"],
+  );
+  assertExists(
+    model
+      .resources["put_accounts_account_id_logpush_transformers_transformer_id"],
+  );
+  assertExists(
+    model
+      .resources[
+        "accounts_account_id_logpush_transformers_transformer_id_content"
+      ],
+  );
+  assertExists(
+    model
+      .resources[
+        "get_accounts_account_id_logpush_transformers_transformer_id_versions"
+      ],
   );
   assertExists(
     model.resources["delete_accounts_account_id_logpush_validate_destination"],
@@ -248,8 +299,10 @@ Deno.test({
     const mockData = [{
       "dataset": null,
       "destination_conf": null,
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -315,8 +368,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": null,
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": "new-123",
       "kind": null,
@@ -356,8 +411,10 @@ Deno.test({
       >).create_post_accounts_account_id_logpush_jobs.execute({
         "dataset": null,
         "destination_conf": null,
+        "destination_name": null,
         "enabled": null,
         "error_message": null,
+        "filter_attack_traffic": null,
         "frequency": null,
         "id": null,
         "kind": null,
@@ -394,8 +451,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": null,
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -435,8 +494,10 @@ Deno.test({
       >).put_accounts_account_id_logpush_jobs_job_id.execute({
         "dataset": null,
         "destination_conf": null,
+        "destination_name": null,
         "enabled": null,
         "error_message": null,
+        "filter_attack_traffic": null,
         "frequency": null,
         "id": null,
         "kind": null,
@@ -498,6 +559,117 @@ Deno.test({
         "job_id": "test-id-123",
       }, context);
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "logpush model: create_post_accounts_account_id_logpush_transformers_preview creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/logpush/transformers/preview": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-logpush",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_post_accounts_account_id_logpush_transformers_preview.execute(
+        {},
+        context,
+      );
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(/^[0-9a-f]{16}$/.test(resources[0].name), true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "logpush model: create_post_zones_zone_id_logpush_edge_jobs creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "destination_conf": null,
+      "fields": null,
+      "filter": null,
+      "sample": null,
+      "session_id": null,
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/zones/test-id-123/logpush/edge/jobs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-logpush",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_post_zones_zone_id_logpush_edge_jobs.execute({
+        "destination_conf": null,
+        "fields": null,
+        "filter": null,
+        "sample": null,
+        "session_id": null,
+        "zone_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -584,8 +756,10 @@ Deno.test({
     const mockData = [{
       "dataset": null,
       "destination_conf": "STRIP-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -661,8 +835,10 @@ Deno.test({
     const mockData = [{
       "dataset": null,
       "destination_conf": "STRIP-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -730,8 +906,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -812,8 +990,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -896,8 +1076,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -980,8 +1162,10 @@ Deno.test({
     const mockData = [{
       "dataset": null,
       "destination_conf": "STRIP-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -1058,8 +1242,10 @@ Deno.test({
     const mockData = [{
       "dataset": null,
       "destination_conf": "STRIP-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -1133,8 +1319,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -1214,8 +1402,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,
@@ -1296,8 +1486,10 @@ Deno.test({
     const mockData = {
       "dataset": null,
       "destination_conf": "VAULT-CANARY-0",
+      "destination_name": null,
       "enabled": null,
       "error_message": null,
+      "filter_attack_traffic": null,
       "frequency": null,
       "id": null,
       "kind": null,

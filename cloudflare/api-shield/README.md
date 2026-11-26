@@ -33,39 +33,38 @@ swamp model create @webframp/cloudflare/api-shield cf-api-shield \
 
 ## Methods
 
-| Method                                                                                    | Description                                                          |
-| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `get_api_shield_settings_retrieve_information_about_specific_configuration_properties`    | Retrieve information about specific configuration properties         |
-| `update_api_shield_settings_set_configuration_properties`                                 | Update configuration properties                                      |
-| `get_api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi`        | Retrieve discovered operations on a zone rendered as OpenAPI schemas |
-| `list_api_shield_api_discovery_retrieve_discovered_operations_on_a_zone`                  | Retrieve discovered operations on a zone                             |
-| `patch_discovered_operations`                                                             | Patch discovered operations                                          |
-| `list_api_shield_api_discovery_retrieve_discovered_operation_by_id`                       | Retrieve a discovered operation                                      |
-| `patch_discovered_operation`                                                              | Patch discovered operation                                           |
-| `create_api_shield_expression_templates_fallthrough`                                      | Generate fallthrough WAF expression template from a set of API hosts |
-| `get_labels`                                                                              | Retrieve all labels                                                  |
-| `get_managed_label`                                                                       | Retrieve managed label                                               |
-| `update_api_shield_labels_replace_operations_attached_to_managed_label`                   | Replace operation(s) attached to a managed label                     |
-| `create_user_labels`                                                                      | Create user labels                                                   |
-| `delete_user_labels`                                                                      | Delete user labels                                                   |
-| `get_user_label`                                                                          | Retrieve user label                                                  |
-| `put_user_label`                                                                          | Update user label                                                    |
-| `patch_user_label`                                                                        | Patch user label                                                     |
-| `delete_user_label`                                                                       | Delete user label                                                    |
-| `update_api_shield_labels_replace_operations_attached_to_user_label`                      | Replace operation(s) attached to a user label                        |
-| `list_api_shield_endpoint_management_retrieve_information_about_all_operations_on_a_zone` | Retrieve information about all operations on a zone                  |
-| `api_shield_endpoint_management_add_operations_to_a_zone`                                 | Add operations to a zone                                             |
-| `delete_multiple_operations`                                                              | Delete multiple operations                                           |
-| `create_api_shield_endpoint_management_add_operation_to_a_zone`                           | Add one operation to a zone                                          |
-| `create_api_shield_operations_bulk_post_labels_to_operations`                             | Bulk attach label(s) on operation(s) in endpoint management          |
-| `put_labels_to_operations`                                                                | Bulk replace label(s) on operation(s) in endpoint management         |
-| `delete_labels_to_operations`                                                             | Bulk remove label(s) on operation(s) in endpoint management          |
-| `get_api_shield_endpoint_management_retrieve_information_about_an_operation`              | Retrieve information about an operation                              |
-| `delete_an_operation`                                                                     | Delete an operation                                                  |
-| `create_api_shield_operations_post_labels_to_operation`                                   | Attach label(s) on an operation in endpoint management               |
-| `put_labels_to_operation`                                                                 | Replace label(s) on an operation in endpoint management              |
-| `delete_labels_from_operation`                                                            | Remove label(s) on an operation in endpoint management               |
-| `get_api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas` | Retrieve operations and features as OpenAPI schemas                  |
+| Method                                                                                    | Description                                         |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `get_api_shield_settings_retrieve_information_about_specific_configuration_properties`    | Get session identifier settings                     |
+| `update_api_shield_settings_set_configuration_properties`                                 | Update session identifier settings                  |
+| `get_api_shield_api_discovery_retrieve_discovered_operations_on_a_zone_as_openapi`        | Export discovered API operations as OpenAPI schemas |
+| `list_api_shield_api_discovery_retrieve_discovered_operations_on_a_zone`                  | List discovered web and API operations              |
+| `patch_discovered_operations`                                                             | Edit discovered web and API operations              |
+| `list_api_shield_api_discovery_retrieve_discovered_operation_by_id`                       | Get a discovered web or API operation               |
+| `patch_discovered_operation`                                                              | Edit a discovered web or API operation              |
+| `get_labels`                                                                              | List operation labels                               |
+| `get_managed_label`                                                                       | Get a managed operation label                       |
+| `update_api_shield_labels_replace_operations_attached_to_managed_label`                   | Replace operations attached to a managed label      |
+| `create_user_labels`                                                                      | Create user-defined operation labels                |
+| `delete_user_labels`                                                                      | Delete user-defined operation labels                |
+| `get_user_label`                                                                          | Get a user-defined operation label                  |
+| `put_user_label`                                                                          | Update a user-defined operation label               |
+| `patch_user_label`                                                                        | Edit a user-defined operation label                 |
+| `delete_user_label`                                                                       | Delete a user-defined operation label               |
+| `update_api_shield_labels_replace_operations_attached_to_user_label`                      | Replace operations attached to a user-defined label |
+| `list_api_shield_endpoint_management_retrieve_information_about_all_operations_on_a_zone` | List web and API operations                         |
+| `api_shield_endpoint_management_add_operations_to_a_zone`                                 | Create web or API operations                        |
+| `delete_multiple_operations`                                                              | Delete web or API operations                        |
+| `create_api_shield_endpoint_management_add_operation_to_a_zone`                           | Create a web or API operation                       |
+| `create_api_shield_operations_bulk_post_labels_to_operations`                             | Attach labels to web or API operations              |
+| `put_labels_to_operations`                                                                | Replace labels on web or API operations             |
+| `delete_labels_to_operations`                                                             | Remove labels from web or API operations            |
+| `get_api_shield_endpoint_management_retrieve_information_about_an_operation`              | Get a web or API operation                          |
+| `delete_an_operation`                                                                     | Delete a web or API operation                       |
+| `create_api_shield_operations_post_labels_to_operation`                                   | Attach labels to a web or API operation             |
+| `put_labels_to_operation`                                                                 | Replace labels on a web or API operation            |
+| `delete_labels_from_operation`                                                            | Remove labels from a web or API operation           |
+| `get_api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas` | Export web and API operations as OpenAPI schemas    |
 
 ## Development
 

@@ -21,6 +21,16 @@ const GlobalArgsSchema = z.object({
   accountId: z.string().describe("Cloudflare account ID"),
 });
 
+const GetSchema = z.object({
+  flexible_variants: z.unknown().optional(),
+  preserve_content_credentials: z.unknown().optional(),
+}).passthrough();
+
+const UpdateCloudflareImagesConfigEditSchema = z.object({
+  flexible_variants: z.unknown().optional(),
+  preserve_content_credentials: z.unknown().optional(),
+}).passthrough();
+
 const ListSigningKeysSchema = z.object({
   keys: z.array(z.unknown()).optional(),
 }).passthrough();
@@ -43,12 +53,6 @@ const CreateAVariantSchema = z.object({
 
 const GetCloudflareImagesVariantsVariantDetailsSchema = z.object({
   variant: z.unknown().optional(),
-}).passthrough();
-
-const GetCloudflareImagesVariantsVariantDetailsFlatSchema = z.object({
-  id: z.unknown().optional(),
-  neverRequireSignedURLs: z.unknown().optional(),
-  options: z.unknown().optional(),
 }).passthrough();
 
 const GetCloudflareImagesImageDetailsSchema = z.object({
@@ -75,14 +79,40 @@ const ListImagesV2Schema = z.object({
   images: z.array(z.unknown()).optional(),
 }).passthrough();
 
+const ListMetadataKeysSchema = z.object({
+  keys: z.array(z.string().max(100)).optional(),
+  truncated: z.boolean().optional(),
+}).passthrough();
+
 const ListMigrationsSchema = z.object({
   migrations: z.array(z.unknown()).optional(),
 }).passthrough();
 
 const CreateMigrationSchema = z.object({
-  id: z.string().optional().describe(
-    "The identifier of the created migration.",
+  conflictBehaviour: z.unknown().optional(),
+  createdAt: z.string().optional(),
+  endedAt: z.string().nullable().optional(),
+  excludedContentTypes: z.array(z.unknown()).nullable().optional().describe(
+    "Content types to skip during migration.",
   ),
+  id: z.string().optional().describe("Migration unique identifier."),
+  imagesPathPrefix: z.string().nullable().optional().describe(
+    "Alias for pathPrefix (deprecated).",
+  ),
+  logStopped: z.boolean().optional().describe(
+    "Whether logging was stopped due to excessive log volume.",
+  ),
+  pathPrefix: z.string().nullable().optional().describe(
+    "Prefix to prepend to image custom IDs.",
+  ),
+  rootDirectory: z.string().nullable().optional().describe(
+    "Only import objects under this prefix in the source bucket.",
+  ),
+  sourceId: z.string().nullable().optional().describe(
+    "The source this migration imports from.",
+  ),
+  startedAt: z.string().nullable().optional(),
+  status: z.unknown().optional(),
 }).passthrough();
 
 const GetMigrationProgressSchema = z.object({
@@ -124,15 +154,59 @@ const GetMigrationProgressSchema = z.object({
   status: z.unknown().optional(),
 }).passthrough();
 
-const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.union([
-  z.object({}),
-  z.string(),
-]);
+const UpdateCloudflareImagesSourcingkitAbortMigrationSchema = z.object({
+  conflictBehaviour: z.unknown().optional(),
+  createdAt: z.string().optional(),
+  endedAt: z.string().nullable().optional(),
+  excludedContentTypes: z.array(z.unknown()).nullable().optional().describe(
+    "Content types to skip during migration.",
+  ),
+  id: z.string().optional().describe("Migration unique identifier."),
+  imagesPathPrefix: z.string().nullable().optional().describe(
+    "Alias for pathPrefix (deprecated).",
+  ),
+  logStopped: z.boolean().optional().describe(
+    "Whether logging was stopped due to excessive log volume.",
+  ),
+  pathPrefix: z.string().nullable().optional().describe(
+    "Prefix to prepend to image custom IDs.",
+  ),
+  rootDirectory: z.string().nullable().optional().describe(
+    "Only import objects under this prefix in the source bucket.",
+  ),
+  sourceId: z.string().nullable().optional().describe(
+    "The source this migration imports from.",
+  ),
+  startedAt: z.string().nullable().optional(),
+  status: z.unknown().optional(),
+}).passthrough();
 
-const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.union([
-  z.object({}),
-  z.string(),
-]);
+const UpdateCloudflareImagesSourcingkitStartMigrationSchema = z.object({
+  conflictBehaviour: z.unknown().optional(),
+  createdAt: z.string().optional(),
+  endedAt: z.string().nullable().optional(),
+  excludedContentTypes: z.array(z.unknown()).nullable().optional().describe(
+    "Content types to skip during migration.",
+  ),
+  id: z.string().optional().describe("Migration unique identifier."),
+  imagesPathPrefix: z.string().nullable().optional().describe(
+    "Alias for pathPrefix (deprecated).",
+  ),
+  logStopped: z.boolean().optional().describe(
+    "Whether logging was stopped due to excessive log volume.",
+  ),
+  pathPrefix: z.string().nullable().optional().describe(
+    "Prefix to prepend to image custom IDs.",
+  ),
+  rootDirectory: z.string().nullable().optional().describe(
+    "Only import objects under this prefix in the source bucket.",
+  ),
+  sourceId: z.string().nullable().optional().describe(
+    "The source this migration imports from.",
+  ),
+  startedAt: z.string().nullable().optional(),
+  status: z.unknown().optional(),
+}).passthrough();
 
 const ListMigrationLogsSchema = z.object({
   logs: z.array(z.unknown()).optional(),
@@ -143,7 +217,17 @@ const ListSourcesSchema = z.object({
 }).passthrough();
 
 const CreateSourceSchema = z.object({
-  id: z.string().optional().describe("The identifier of the created source."),
+  bucket: z.string().optional().describe("The name of the storage bucket."),
+  createdAt: z.string().optional().describe("When the source was created."),
+  id: z.string().optional().describe("Source unique identifier."),
+  name: z.string().optional().describe("A human-readable name for the source."),
+  region: z.string().nullable().optional().describe(
+    "The region of the storage bucket (S3 sources only).",
+  ),
+  updatedAt: z.string().optional().describe(
+    "When the source was last updated.",
+  ),
+  vendor: z.unknown().optional(),
 }).passthrough();
 
 const CreateCloudflareImagesSourcingkitPrecheckSourceConnectivitySchema = z
@@ -178,7 +262,7 @@ const GetSourceConnectivitySchema = z.object({
 /** Cloudflare Images — upload, transform, deliver, and manage image pipelines */
 export const model = {
   type: "@webframp/cloudflare/images",
-  version: "2026.11.03.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -249,9 +333,27 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
+    "get": {
+      description: "Get Images account configuration",
+      schema: GetSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "cloudflare_images_config_edit": {
+      description: "Update Images account configuration",
+      schema: UpdateCloudflareImagesConfigEditSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
     "list_signing_keys": {
       description: "List Signing Keys",
       schema: ListSigningKeysSchema,
@@ -288,12 +390,6 @@ export const model = {
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
-    "cloudflare_images_variants_variant_details_flat": {
-      description: "Variant details (flat)",
-      schema: GetCloudflareImagesVariantsVariantDetailsFlatSchema,
-      lifetime: "infinite" as const,
-      garbageCollection: 20,
-    },
     "cloudflare_images_image_details": {
       description: "Image details",
       schema: GetCloudflareImagesImageDetailsSchema,
@@ -309,6 +405,12 @@ export const model = {
     "list_images_v2": {
       description: "List images V2",
       schema: ListImagesV2Schema,
+      lifetime: "infinite" as const,
+      garbageCollection: 20,
+    },
+    "list_metadata_keys": {
+      description: "List image metadata keys",
+      schema: ListMetadataKeysSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
     },
@@ -375,6 +477,79 @@ export const model = {
   },
 
   methods: {
+    get: {
+      description: "Get Images account configuration",
+      arguments: z.object({}),
+      execute: async (
+        _args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v1/config`,
+        );
+
+        const handle = await context.writeResource(
+          "get",
+          "get-current",
+          result,
+        );
+        context.logger.info("Fetched get", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    update_cloudflare_images_config_edit: {
+      description: "Update Images account configuration",
+      arguments: z.object({
+        flexible_variants: z.unknown().optional(),
+        preserve_content_credentials: z.unknown().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+
+        const body = args;
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "PATCH",
+          `/accounts/${accountId}/images/v1/config`,
+          body,
+        );
+
+        const handle = await context.writeResource(
+          "cloudflare_images_config_edit",
+          "updated",
+          result,
+        );
+        context.logger.info("Updated cloudflare_images_config_edit", {});
+        return { dataHandles: [handle] };
+      },
+    },
     list_signing_keys: {
       description: "List Signing Keys",
       arguments: z.object({}),
@@ -716,44 +891,6 @@ export const model = {
         return { dataHandles: [] };
       },
     },
-    get_cloudflare_images_variants_variant_details_flat: {
-      description: "Variant details (flat)",
-      arguments: z.object({
-        variant_id: z.string(),
-      }),
-      execute: async (
-        args: Record<string, unknown>,
-        context: {
-          globalArgs: Record<string, string>;
-          writeResource: (
-            spec: string,
-            instance: string,
-            data: unknown,
-          ) => Promise<{ name: string }>;
-          logger: {
-            info: (msg: string, props: Record<string, unknown>) => void;
-          };
-        },
-      ) => {
-        const { apiToken, accountId } = context.globalArgs;
-        const result = await cfApi<Record<string, unknown>>(
-          apiToken,
-          "GET",
-          `/accounts/${accountId}/images/v1/variants/${args.variant_id}/flat`,
-        );
-
-        const handle = await context.writeResource(
-          "cloudflare_images_variants_variant_details_flat",
-          sanitizeInstanceName(String(args.variant_id)),
-          result,
-        );
-        context.logger.info(
-          "Fetched cloudflare_images_variants_variant_details_flat",
-          {},
-        );
-        return { dataHandles: [handle] };
-      },
-    },
     get_cloudflare_images_image_details: {
       description: "Image details",
       arguments: z.object({
@@ -884,7 +1021,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -898,27 +1035,45 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "continuation_token": "continuation_token",
+          "per_page": "per_page",
+          "sort_order": "sort_order",
+          "creator": "creator",
+          "meta_field_operator": "meta.<field>[<operator>]",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2`,
+          `/accounts/${accountId}/images/v2${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_images_v2",
-          "list_images_v2-current",
+          `list_images_v2-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_images_v2", {});
         return { dataHandles: [handle] };
       },
     },
-    list_migrations: {
-      description: "List sourcing kit migrations",
-      arguments: z.object({
-        offset: z.number().optional(),
-        limit: z.number().optional(),
-      }),
+    list_metadata_keys: {
+      description: "List image metadata keys",
+      arguments: z.object({}),
       execute: async (
         _args: Record<string, unknown>,
         context: {
@@ -937,12 +1092,66 @@ export const model = {
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
+          `/accounts/${accountId}/images/v2/metadata/keys`,
+        );
+
+        const handle = await context.writeResource(
+          "list_metadata_keys",
+          "list_metadata_keys-current",
+          result,
+        );
+        context.logger.info("Fetched list_metadata_keys", {});
+        return { dataHandles: [handle] };
+      },
+    },
+    list_migrations: {
+      description: "List sourcing kit migrations",
+      arguments: z.object({
+        offset: z.number().optional(),
+        limit: z.number().optional(),
+      }),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
+        const result = await cfApi<Record<string, unknown>>(
+          apiToken,
+          "GET",
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_migrations",
-          "list_migrations-current",
+          `list_migrations-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_migrations", {});
@@ -1221,15 +1430,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs`,
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_migration_logs",
-          sanitizeInstanceName(String(args.migration_id)),
+          sanitizeInstanceName(`${String(args.migration_id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched list_migration_logs", {});
@@ -1244,7 +1471,7 @@ export const model = {
         name: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1258,15 +1485,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+          "name": "name",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/sources`,
+          `/accounts/${accountId}/images/v2/sourcingkit/sources${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_sources",
-          "list_sources-current",
+          `list_sources-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_sources", {});

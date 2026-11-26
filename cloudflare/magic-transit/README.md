@@ -111,25 +111,12 @@ swamp model create @webframp/cloudflare/magic-transit cf-magic-transit \
 | `update_multiple_interconnects`                                     | Update multiple interconnects                   |
 | `list_interconnect_details`                                         | List interconnect Details                       |
 | `update_interconnect`                                               | Update interconnect                             |
-| `list`                                                              | List Catalog Syncs                              |
-| `create`                                                            | Create Catalog Sync                             |
-| `get_catalog_syncs_read`                                            | Read Catalog Sync                               |
-| `update`                                                            | Update Catalog Sync                             |
-| `patch`                                                             | Patch Catalog Sync                              |
-| `delete`                                                            | Delete Catalog Sync                             |
-| `catalog_syncs_refresh`                                             | Run Catalog Sync                                |
-| `get_onramps_mwan_addr_space_read`                                  | Read Magic WAN Address Space                    |
-| `get_onramps_read`                                                  | Read On-ramp                                    |
-| `onramps_apply`                                                     | Apply On-ramp                                   |
-| `onramps_plan`                                                      | Plan On-ramp                                    |
-| `providers_discover_all`                                            | Run Discovery for All Integrations              |
-| `get_providers_read`                                                | Read Cloud Integration                          |
-| `providers_discover`                                                | Run Discovery                                   |
-| `get_providers_initial_setup`                                       | Get Cloud Integration Setup Config              |
-| `create_resources_catalog_policy_preview`                           | Preview Rego Query                              |
-| `get_resources_catalog_read`                                        | Read Resource                                   |
+| `list`                                                              | List Connectors                                 |
+| `create`                                                            | Create Connector                                |
 | `get`                                                               | Get Connector                                   |
+| `update`                                                            | Update Connector                                |
 | `update_mconn_connectors_edit`                                      | Edit Connector                                  |
+| `delete`                                                            | Delete Connector                                |
 | `list_gre_tunnels`                                                  | List GRE tunnels                                |
 | `create_gre_tunnels`                                                | Create a GRE tunnel                             |
 | `update_multiple_gre_tunnels`                                       | Update multiple GRE tunnels                     |

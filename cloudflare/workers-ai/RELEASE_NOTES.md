@@ -1,41 +1,11 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Fixed:** GET methods that declare query parameters ignored them: the request went out without the filters, so a call always returned the unfiltered default. Affected: `get_invoice_history`, `get_usage_history`, `list_gateway_dynamic_routes`, `list_gateway_dynamic_route_deployments`, `list_gateway_dynamic_route_versions`, `get_model_schema`, `get_workers_ai_search_model`. They now send their query parameters, and a call that supplies any writes its own instance (suffixed with a hash of the query) instead of overwriting the shared one. Calls without query arguments keep their existing instance names.
 
-## 2026.10.21.1
+**Added:** Custom domain methods (`list_custom_domain`, `create_custom_domain`, `delete_custom_domain`), model alias methods (list, get, create, update, delete), logging state (`get_logging_state`, `patch_logging_state`), AI Gateway billing and provider methods (`aig_billing_set_topup_config`, `get_topup_eligibility`, `aig_config_test_providers`, `get_aig_config_fetch_providers`, `get_aig_config_fetch_custom_domain`), `create_workers_ai_ai_gateway_web_search`, `delete_finetune`, `get_workers_ai_download_finetune_asset`, and `ai_search_namespace_purge_instance_cache`.
 
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
+**Removed:** 123 methods the API no longer exposes. Roughly 113 are per-model run methods (`create_workers_ai_post_run_*`, `workers_ai_post_run_*`, and `get_workers_ai_post_websocket_run_*`); the API no longer publishes one operation per model. Also removed: `create_ai_search_instance_search`, `create_ai_search_instance_chat_completion`, `get_ai_search_stats`, `get_ai_search_fetch_instance`, `update_ai_search_instance_change_job_status`, `create_aig_billing_set_topup_config`, `get_topup_config`, `get_topup_limits`, `get_spending_limit`, and `delete_spending_limit`.
 
-**Changed:** Method arguments that carry a secret are now marked sensitive, so
-swamp redacts them from logs and run records. Pass them as `vault.get`
-expressions. Affected: `create_providers`, `update_providers`, `create_tokens`
-and `update_tokens`. The README's new "Secrets" section lists them per method.
+**Changed:** AI Search methods now sit under a namespace. `create_instance`, `update_instance`, `delete_instance`, `list_jobs`, `create_job`, `get_job`, `list_job_logs`, `get_ai_search_namespace_fetch_instance`, `update_ai_search_move_instance`, `create_ai_search_namespace_instance_chat_completion`, `list_items`, `create_or_update_item`, `get_item`, `update_ai_search_namespace_instance_sync_item`, `delete_item`, `list_item_chunks`, `list_ai_search_namespace_instance_logs_item`, `update_ai_search_namespace_instance_change_job_status`, `create_ai_search_namespace_instance_search`, `get_ai_search_namespace_stats` require a `namespace` argument, and instance, job and item calls go to `/ai-search/namespaces/{namespace}/instances/...`. 13 of them took the namespace as `name` before; that argument is replaced by `namespace`. Argument types also changed on `create_account_provider`, `update_account_provider`, `create_gateway`, `create_aig_config_post_gateway_dynamic_route`, `update_gateway_dynamic_route`, `update_gateway`, `create_ai_search_namespace_multi_instance_chat_completion`, `create_ai_search_namespace_multi_instance_search`, `workers_ai_post_run_model`; `create_workers_ai_post_run_generic` no longer takes `options`.
 
-**Changed:** Secrets returned by `create_topup` are now stored in a vault, and
-the stored resource holds a `vault.get` reference instead of the value. Because
-the model now declares secret output, swamp refuses to run any of the model's
-methods, reads included, until a vault exists
-(`swamp vault create local_encryption cloudflare`). The README's "Secrets"
-section lists what each method stores.
-
-**Fixed:** `create_or_update_item` wrote to a resource the model does not
-declare, so it always failed. It now writes the resource the model declares.
-
-**Fixed:** Create methods whose response carries no `id` wrote every result to
-one instance named `created`, so each call overwrote the previous one. They now
-name the instance by the response's `id` when present, else by the path
-parameter that scopes the call, else by a hash of the request arguments (secret
-arguments left out). Affected: `create_topup`,
-`create_aig_billing_set_topup_config`, `create_aig_billing_check_topup_status`,
-`create_ai_search_instance_search`, `create_namespace`,
-`create_ai_search_namespace_instance_search` and 32 more.
-
-**Upgrade note:** Resources stored by earlier versions of the methods in the
-README's "Secrets" section may hold plaintext secrets; delete them with
-`swamp data delete` and rotate the affected credentials. Results earlier
-versions wrote to the `created` instance stay there; new runs write under the
-new names.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.

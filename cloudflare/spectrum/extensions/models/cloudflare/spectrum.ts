@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.7";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/spectrum";
 
@@ -52,8 +57,12 @@ const GetAnalyticsByTimeSchema = z.object({
   data_lag: z.number().min(0).optional().describe(
     "Number of seconds between current time and last processed event, i.e. how many seconds of data co...",
   ),
-  max: z.unknown().optional(),
-  min: z.unknown().optional(),
+  max: z.unknown().optional().describe(
+    "Maximum result for each selected metrics across all data.",
+  ),
+  min: z.unknown().optional().describe(
+    "Minimum result for each selected metrics across all data.",
+  ),
   query: z.unknown().optional(),
   rows: z.number().min(0).optional().describe(
     "Total number of rows in the result.",
@@ -61,7 +70,9 @@ const GetAnalyticsByTimeSchema = z.object({
   time_intervals: z.array(z.array(z.unknown())).optional().describe(
     "List of time interval buckets: [start, end].",
   ),
-  totals: z.unknown().optional(),
+  totals: z.unknown().optional().describe(
+    "Total result for each selected metrics across all data.",
+  ),
 }).passthrough();
 
 const GetAnalyticsSummarySchema = z.object({
@@ -71,8 +82,12 @@ const GetAnalyticsSummarySchema = z.object({
   data_lag: z.number().min(0).optional().describe(
     "Number of seconds between current time and last processed event, i.e. how many seconds of data co...",
   ),
-  max: z.unknown().optional(),
-  min: z.unknown().optional(),
+  max: z.unknown().optional().describe(
+    "Maximum result for each selected metrics across all data.",
+  ),
+  min: z.unknown().optional().describe(
+    "Minimum result for each selected metrics across all data.",
+  ),
   query: z.unknown().optional(),
   rows: z.number().min(0).optional().describe(
     "Total number of rows in the result.",
@@ -80,7 +95,9 @@ const GetAnalyticsSummarySchema = z.object({
   time_intervals: z.array(z.array(z.unknown())).optional().describe(
     "List of time interval buckets: [start, end].",
   ),
-  totals: z.unknown().optional(),
+  totals: z.unknown().optional().describe(
+    "Total result for each selected metrics across all data.",
+  ),
 }).passthrough();
 
 const ListSpectrumApplicationsSchema = z.union([
@@ -95,11 +112,15 @@ const CreateSpectrumApplicationUsingANameForTheOriginSchema = z.union([
     modified_on: z.unknown().optional(),
     argo_smart_routing: z.unknown().optional(),
     dns: z.unknown().optional(),
+    edge_alpn_protocols: z.unknown().optional(),
     edge_ips: z.unknown().optional(),
     ip_firewall: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
     origin_dns: z.unknown().optional(),
     origin_port: z.unknown().optional(),
+    origin_worker_id: z.unknown().optional(),
+    origin_worker_name: z.unknown().optional(),
+    origin_worker_status: z.unknown().optional(),
     protocol: z.unknown().optional(),
     proxy_protocol: z.unknown().optional(),
     tls: z.unknown().optional(),
@@ -112,7 +133,12 @@ const CreateSpectrumApplicationUsingANameForTheOriginSchema = z.union([
     modified_on: z.unknown().optional(),
     dns: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
+    origin_worker_id: z.unknown().optional(),
+    origin_worker_name: z.unknown().optional(),
+    origin_worker_status: z.unknown().optional(),
     protocol: z.unknown().optional(),
+    traffic_type: z.union([z.enum(["direct", "worker"]), z.string().max(0)])
+      .optional().default("direct"),
   }),
 ]);
 
@@ -123,11 +149,15 @@ const GetSpectrumApplicationConfigurationSchema = z.union([
     modified_on: z.unknown().optional(),
     argo_smart_routing: z.unknown().optional(),
     dns: z.unknown().optional(),
+    edge_alpn_protocols: z.unknown().optional(),
     edge_ips: z.unknown().optional(),
     ip_firewall: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
     origin_dns: z.unknown().optional(),
     origin_port: z.unknown().optional(),
+    origin_worker_id: z.unknown().optional(),
+    origin_worker_name: z.unknown().optional(),
+    origin_worker_status: z.unknown().optional(),
     protocol: z.unknown().optional(),
     proxy_protocol: z.unknown().optional(),
     tls: z.unknown().optional(),
@@ -140,7 +170,12 @@ const GetSpectrumApplicationConfigurationSchema = z.union([
     modified_on: z.unknown().optional(),
     dns: z.unknown().optional(),
     origin_direct: z.unknown().optional(),
+    origin_worker_id: z.unknown().optional(),
+    origin_worker_name: z.unknown().optional(),
+    origin_worker_status: z.unknown().optional(),
     protocol: z.unknown().optional(),
+    traffic_type: z.union([z.enum(["direct", "worker"]), z.string().max(0)])
+      .optional().default("direct"),
   }),
 ]);
 
@@ -152,11 +187,15 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
       modified_on: z.unknown().optional(),
       argo_smart_routing: z.unknown().optional(),
       dns: z.unknown().optional(),
+      edge_alpn_protocols: z.unknown().optional(),
       edge_ips: z.unknown().optional(),
       ip_firewall: z.unknown().optional(),
       origin_direct: z.unknown().optional(),
       origin_dns: z.unknown().optional(),
       origin_port: z.unknown().optional(),
+      origin_worker_id: z.unknown().optional(),
+      origin_worker_name: z.unknown().optional(),
+      origin_worker_status: z.unknown().optional(),
       protocol: z.unknown().optional(),
       proxy_protocol: z.unknown().optional(),
       tls: z.unknown().optional(),
@@ -169,9 +208,41 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
       modified_on: z.unknown().optional(),
       dns: z.unknown().optional(),
       origin_direct: z.unknown().optional(),
+      origin_worker_id: z.unknown().optional(),
+      origin_worker_name: z.unknown().optional(),
+      origin_worker_status: z.unknown().optional(),
       protocol: z.unknown().optional(),
+      traffic_type: z.union([z.enum(["direct", "worker"]), z.string().max(0)])
+        .optional().default("direct"),
     }),
   ]);
+
+const SpectrumApplicationProtocolsItemSchema = z.object({
+  description: z.string().optional().describe(
+    "The full name of the application protocol.",
+  ),
+  name: z.string().optional().describe(
+    "The short name of the application protocol.",
+  ),
+  ports: z.array(z.number().int().min(1).max(65535)).optional().describe(
+    "The available listening ports for the given protocol.",
+  ),
+  transport: z.string().optional().describe(
+    "The transport layer protocol used by the application protocol",
+  ),
+}).passthrough();
+
+const ListSpectrumApplicationProtocolsSchema = z.object({
+  items: z.array(SpectrumApplicationProtocolsItemSchema),
+  truncated: z.boolean(),
+  fetchedAt: z.string(),
+  durationMs: z.number().optional().describe(
+    "Method execution duration in milliseconds",
+  ),
+  collectedBy: z.string().optional().describe(
+    "Extension that collected this data",
+  ),
+});
 
 // =============================================================================
 // Model Definition
@@ -180,7 +251,7 @@ const UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema = z
 /** Cloudflare Spectrum — TCP/UDP proxying for non-HTTP applications */
 export const model = {
   type: "@webframp/cloudflare/spectrum",
-  version: "2026.11.03.1",
+  version: "2026.11.26.1",
   globalArguments: GlobalArgsSchema,
 
   upgrades: [
@@ -256,6 +327,12 @@ export const model = {
       description: "No schema changes — dependency/license maintenance bump",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.26.1",
+      description:
+        "Regenerated by codegen; stored attributes unchanged, no migration required",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
 
   resources: {
@@ -302,6 +379,12 @@ export const model = {
         UpdateSpectrumApplicationConfigurationUsingANameForTheOriginSchema,
       lifetime: "infinite" as const,
       garbageCollection: 20,
+    },
+    "spectrum_application_protocols": {
+      description: "List Spectrum application protocols",
+      schema: ListSpectrumApplicationProtocolsSchema,
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
     },
   },
 
@@ -388,7 +471,7 @@ export const model = {
         ]).optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -402,15 +485,38 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "dimensions": "dimensions",
+          "sort": "sort",
+          "until": "until",
+          "metrics": "metrics",
+          "filters": "filters",
+          "since": "since",
+          "time_delta": "time_delta",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/analytics/events/bytime`,
+          `/zones/${zoneId}/spectrum/analytics/events/bytime${qs}`,
         );
 
         const handle = await context.writeResource(
           "analytics_by_time",
-          "analytics_by_time-current",
+          `analytics_by_time-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched analytics_by_time", {});
@@ -428,7 +534,7 @@ export const model = {
         since: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -442,15 +548,37 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "dimensions": "dimensions",
+          "sort": "sort",
+          "until": "until",
+          "metrics": "metrics",
+          "filters": "filters",
+          "since": "since",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/analytics/events/summary`,
+          `/zones/${zoneId}/spectrum/analytics/events/summary${qs}`,
         );
 
         const handle = await context.writeResource(
           "analytics_summary",
-          "analytics_summary-current",
+          `analytics_summary-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched analytics_summary", {});
@@ -472,7 +600,7 @@ export const model = {
         ]).optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -486,15 +614,35 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "page": "page",
+          "per_page": "per_page",
+          "direction": "direction",
+          "order": "order",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/apps`,
+          `/zones/${zoneId}/spectrum/apps${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_spectrum_applications",
-          "list_spectrum_applications-current",
+          `list_spectrum_applications-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_spectrum_applications", {});
@@ -511,11 +659,15 @@ export const model = {
             modified_on: z.unknown(),
             argo_smart_routing: z.unknown().optional(),
             dns: z.unknown(),
+            edge_alpn_protocols: z.unknown().optional(),
             edge_ips: z.unknown().optional(),
             ip_firewall: z.unknown().optional(),
             origin_direct: z.unknown().optional(),
             origin_dns: z.unknown().optional(),
             origin_port: z.unknown().optional(),
+            origin_worker_id: z.unknown().optional(),
+            origin_worker_name: z.unknown().optional(),
+            origin_worker_status: z.unknown().optional(),
             protocol: z.unknown(),
             proxy_protocol: z.unknown().optional(),
             tls: z.unknown().optional(),
@@ -528,7 +680,14 @@ export const model = {
             modified_on: z.unknown(),
             dns: z.unknown(),
             origin_direct: z.unknown().optional(),
+            origin_worker_id: z.unknown().optional(),
+            origin_worker_name: z.unknown().optional(),
+            origin_worker_status: z.unknown().optional(),
             protocol: z.unknown(),
+            traffic_type: z.union([
+              z.enum(["direct", "worker"]),
+              z.string().max(0),
+            ]).optional().default("direct"),
           }),
         ]),
       }),
@@ -616,11 +775,15 @@ export const model = {
             modified_on: z.unknown(),
             argo_smart_routing: z.unknown().optional(),
             dns: z.unknown(),
+            edge_alpn_protocols: z.unknown().optional(),
             edge_ips: z.unknown().optional(),
             ip_firewall: z.unknown().optional(),
             origin_direct: z.unknown().optional(),
             origin_dns: z.unknown().optional(),
             origin_port: z.unknown().optional(),
+            origin_worker_id: z.unknown().optional(),
+            origin_worker_name: z.unknown().optional(),
+            origin_worker_status: z.unknown().optional(),
             protocol: z.unknown(),
             proxy_protocol: z.unknown().optional(),
             tls: z.unknown().optional(),
@@ -633,7 +796,14 @@ export const model = {
             modified_on: z.unknown(),
             dns: z.unknown(),
             origin_direct: z.unknown().optional(),
+            origin_worker_id: z.unknown().optional(),
+            origin_worker_name: z.unknown().optional(),
+            origin_worker_status: z.unknown().optional(),
             protocol: z.unknown(),
+            traffic_type: z.union([
+              z.enum(["direct", "worker"]),
+              z.string().max(0),
+            ]).optional().default("direct"),
           }),
         ]),
       }),
@@ -703,6 +873,64 @@ export const model = {
 
         context.logger.info("Deleted resource {id}", { id: args.app_id });
         return { dataHandles: [] };
+      },
+    },
+    list_spectrum_application_protocols: {
+      description: "List Spectrum application protocols",
+      arguments: z.object({}),
+      execute: async (
+        args: Record<string, unknown>,
+        context: {
+          globalArgs: Record<string, string>;
+          writeResource: (
+            spec: string,
+            instance: string,
+            data: unknown,
+          ) => Promise<{ name: string }>;
+          logger: {
+            info: (msg: string, props: Record<string, unknown>) => void;
+          };
+        },
+      ) => {
+        const { apiToken, zoneId } = context.globalArgs;
+        const startMs = Date.now();
+        const params: Record<string, string> = {};
+        const excludeKeys = new Set(["page", "per_page"]);
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && !excludeKeys.has(k)) params[k] = String(v);
+        }
+
+        const { results, truncated } = await cfApiPaginated<
+          Record<string, unknown>
+        >(
+          apiToken,
+          `/zones/${zoneId}/spectrum/protocols`,
+          params,
+        );
+
+        if (truncated) {
+          context.logger.info(
+            "WARNING: results truncated at {count} (pagination cap)",
+            { count: results.length },
+          );
+        }
+
+        const handle = await context.writeResource(
+          "spectrum_application_protocols",
+          "main",
+          {
+            items: results,
+            truncated,
+            fetchedAt: new Date().toISOString(),
+            durationMs: Date.now() - startMs,
+            collectedBy: EXTENSION_NAME,
+          },
+        );
+
+        context.logger.info("Found {count} spectrum_application_protocols", {
+          count: results.length,
+        });
+        return { dataHandles: [handle] };
       },
     },
   },

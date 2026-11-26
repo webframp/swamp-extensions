@@ -101,23 +101,10 @@ Deno.test("magic-transit model: has expected methods", () => {
   assertExists(model.methods.update_interconnect);
   assertExists(model.methods.list);
   assertExists(model.methods.create);
-  assertExists(model.methods.get_catalog_syncs_read);
-  assertExists(model.methods.update);
-  assertExists(model.methods.patch);
-  assertExists(model.methods.delete);
-  assertExists(model.methods.catalog_syncs_refresh);
-  assertExists(model.methods.get_onramps_mwan_addr_space_read);
-  assertExists(model.methods.get_onramps_read);
-  assertExists(model.methods.onramps_apply);
-  assertExists(model.methods.onramps_plan);
-  assertExists(model.methods.providers_discover_all);
-  assertExists(model.methods.get_providers_read);
-  assertExists(model.methods.providers_discover);
-  assertExists(model.methods.get_providers_initial_setup);
-  assertExists(model.methods.create_resources_catalog_policy_preview);
-  assertExists(model.methods.get_resources_catalog_read);
   assertExists(model.methods.get);
+  assertExists(model.methods.update);
   assertExists(model.methods.update_mconn_connectors_edit);
+  assertExists(model.methods.delete);
   assertExists(model.methods.list_gre_tunnels);
   assertExists(model.methods.create_gre_tunnels);
   assertExists(model.methods.update_multiple_gre_tunnels);
@@ -236,17 +223,8 @@ Deno.test("magic-transit model: has expected resources", () => {
   assertExists(model.resources["interconnect"]);
   assertExists(model.resources["list"]);
   assertExists(model.resources["create"]);
-  assertExists(model.resources["catalog_syncs_read"]);
-  assertExists(model.resources["update"]);
-  assertExists(model.resources["patch"]);
-  assertExists(model.resources["catalog_syncs_refresh"]);
-  assertExists(model.resources["onramps_mwan_addr_space_read"]);
-  assertExists(model.resources["onramps_read"]);
-  assertExists(model.resources["providers_read"]);
-  assertExists(model.resources["providers_initial_setup"]);
-  assertExists(model.resources["resources_catalog_policy_preview"]);
-  assertExists(model.resources["resources_catalog_read"]);
   assertExists(model.resources["get"]);
+  assertExists(model.resources["update"]);
   assertExists(model.resources["mconn_connectors_edit"]);
   assertExists(model.resources["list_gre_tunnels"]);
   assertExists(model.resources["gre_tunnels"]);
@@ -365,6 +343,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = [{
+      "block_any_queries": true,
       "burst_sensitivity": "test-value",
       "created_on": "2024-01-01T00:00:00Z",
       "id": "test-value",
@@ -424,6 +403,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
+      "block_any_queries": true,
       "burst_sensitivity": "test-value",
       "created_on": "2024-01-01T00:00:00Z",
       "id": "new-123",
@@ -461,6 +441,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).creatednsprotectionrule.execute({
+        "block_any_queries": true,
         "burst_sensitivity": "test-value",
         "created_on": "2024-01-01T00:00:00Z",
         "id": "test-value",
@@ -532,6 +513,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
+      "block_any_queries": true,
       "burst_sensitivity": "test-value",
       "created_on": "2024-01-01T00:00:00Z",
       "id": "test-value",
@@ -589,6 +571,7 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
+      "block_any_queries": true,
       "burst_sensitivity": "test-value",
       "created_on": "2024-01-01T00:00:00Z",
       "id": "test-value",
@@ -625,6 +608,7 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).updatednsprotectionrule.execute({
+        "block_any_queries": true,
         "burst_sensitivity": "test-value",
         "created_on": "2024-01-01T00:00:00Z",
         "id": "test-value",
@@ -713,11 +697,21 @@ Deno.test({
 });
 
 Deno.test({
-  name: "magic-transit model: onramps_apply executes successfully",
+  name: "magic-transit model: create_acl creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
+    const mockData = {
+      "description": "Allows local traffic between PIN pads and cash register.",
+      "forward_locally": null,
+      "id": "new-123",
+      "lan_1": null,
+      "lan_2": null,
+      "name": "PIN Pad - Cash Register",
+      "protocols": ["tcp"],
+      "unidirectional": null,
+    };
     const { url, server } = startMockCfServer({
-      "/magic/cloud/onramps/test-id-123/apply": { result: null },
+      "/magic/sites/test-id-123/acls": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -740,14 +734,27 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).onramps_apply.execute({
-        "id": "fixture-123",
-        "onramp_id": "test-id-123",
+      >).create_acl.execute({
+        "description":
+          "Allows local traffic between PIN pads and cash register.",
+        "forward_locally": null,
+        "id": null,
+        "lan_1": null,
+        "lan_2": null,
+        "name": "PIN Pad - Cash Register",
+        "protocols": ["tcp"],
+        "unidirectional": null,
+        "site_id": "test-id-123",
       }, context);
-      assertEquals(result.dataHandles.length, 0);
+      assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
-      assertEquals(resources.length, 0);
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -891,7 +898,11 @@ Deno.test({
     "magic-transit model: magic_ipsec_tunnels_generate_pre_shared_key_psk_for_ipsec_tunnels keeps returned secrets out of the stored resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "psk": "VAULT-CANARY-0" };
+    const mockData = {
+      "ipsec_tunnel_id": null,
+      "psk": "VAULT-CANARY-0",
+      "psk_metadata": null,
+    };
     const { url, server } = startMockCfServer({
       "/magic/ipsec_tunnels/test-id-123/psk_generate": { result: mockData },
     });

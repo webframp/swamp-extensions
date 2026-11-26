@@ -1,15 +1,9 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Fixed:** GET methods that declare query parameters ignored them: the request went out without the filters, so a call always returned the unfiltered default. Affected: `get_analytics_by_time`, `get_analytics_summary`, `list_spectrum_applications`. They now send their query parameters, and a call that supplies any writes its own instance (suffixed with a hash of the query) instead of overwriting the shared one. Calls without query arguments keep their existing instance names.
 
-## 2026.10.21.1
+**Added:** `list_spectrum_application_protocols`.
 
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
+**Changed:** `create_spectrum_application_using_a_name_for_the_origin` changed argument type: `body`. `update_spectrum_application_configuration_using_a_name_for_the_origin` changed argument type: `body`.
 
-**Fixed:** `create_spectrum_application_using_a_name_for_the_origin` wrote to a
-resource the model does not declare, so it always failed. It now writes the
-resource the model declares.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.

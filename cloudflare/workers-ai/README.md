@@ -38,228 +38,123 @@ swamp model create @webframp/cloudflare/workers-ai cf-workers-ai \
 
 ## Methods
 
-| Method                                                                          | Description                                                                        |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `get_credit_balance`                                                            | Get credit balance                                                                 |
-| `get_invoice_history`                                                           | Get invoice history                                                                |
-| `get_invoice_preview`                                                           | Get invoice preview                                                                |
-| `get_spending_limit`                                                            | Get spending limit                                                                 |
-| `delete_spending_limit`                                                         | Delete spending limit                                                              |
-| `create_topup`                                                                  | Create a top-up                                                                    |
-| `get_topup_config`                                                              | Get auto top-up configuration                                                      |
-| `create_aig_billing_set_topup_config`                                           | Set auto top-up configuration                                                      |
-| `delete_topup_config`                                                           | Delete auto top-up configuration                                                   |
-| `get_topup_limits`                                                              | Get account top-up limits                                                          |
-| `create_aig_billing_check_topup_status`                                         | Check top-up status                                                                |
-| `get_usage_history`                                                             | Get usage history                                                                  |
-| `list_account_provider`                                                         | List Account Providers                                                             |
-| `create_account_provider`                                                       | Create a new Account Provider                                                      |
-| `list_account_provider_cost`                                                    | List Account Provider Costs                                                        |
-| `create_account_provider_cost`                                                  | Create a new Account Provider Cost                                                 |
-| `get_aig_config_fetch_account_provider_cost`                                    | Fetch a Account Provider Cost                                                      |
-| `update_account_provider_cost`                                                  | Update a Account Provider Cost                                                     |
-| `delete_account_provider_cost`                                                  | Delete a Account Provider Cost                                                     |
-| `get_aig_config_fetch_account_provider`                                         | Fetch a Account Provider                                                           |
-| `update_account_provider`                                                       | Update a Account Provider                                                          |
-| `delete_account_provider`                                                       | Delete a Account Provider                                                          |
-| `list_evaluators`                                                               | List Evaluators                                                                    |
-| `list_gateway`                                                                  | List Gateways                                                                      |
-| `create_gateway`                                                                | Create a new Gateway                                                               |
-| `list_dataset`                                                                  | List Datasets                                                                      |
-| `create_dataset`                                                                | Create a new Dataset                                                               |
-| `get_aig_config_fetch_dataset`                                                  | Fetch a Dataset                                                                    |
-| `update_dataset`                                                                | Update a Dataset                                                                   |
-| `delete_dataset`                                                                | Delete a Dataset                                                                   |
-| `list_evaluations`                                                              | List Evaluations                                                                   |
-| `create_evaluations`                                                            | Create a new Evaluation                                                            |
-| `get_aig_config_fetch_evaluations`                                              | Fetch a Evaluation                                                                 |
-| `delete_evaluations`                                                            | Delete a Evaluation                                                                |
-| `list_gateway_logs`                                                             | List Gateway Logs                                                                  |
-| `delete_gateway_logs`                                                           | Delete Gateway Logs                                                                |
-| `get_gateway_log_detail`                                                        | Get Gateway Log Detail                                                             |
-| `patch_gateway_log`                                                             | Patch Gateway Log                                                                  |
-| `get_gateway_log_request`                                                       | Get Gateway Log Request                                                            |
-| `get_gateway_log_response`                                                      | Get Gateway Log Response                                                           |
-| `list_providers`                                                                | List Provider Configs                                                              |
-| `create_providers`                                                              | Create a new Provider Configs                                                      |
-| `update_providers`                                                              | Update a Provider Configs                                                          |
-| `delete_providers`                                                              | Delete a Provider Configs                                                          |
-| `list_gateway_dynamic_routes`                                                   | List all AI Gateway Dynamic Routes.                                                |
-| `create_aig_config_post_gateway_dynamic_route`                                  | Create a new AI Gateway Dynamic Route.                                             |
-| `get_gateway_dynamic_route`                                                     | Get an AI Gateway Dynamic Route.                                                   |
-| `update_gateway_dynamic_route`                                                  | Update an AI Gateway Dynamic Route.                                                |
-| `delete_gateway_dynamic_route`                                                  | Delete an AI Gateway Dynamic Route.                                                |
-| `list_gateway_dynamic_route_deployments`                                        | List all AI Gateway Dynamic Route Deployments.                                     |
-| `create_aig_config_post_gateway_dynamic_route_deployment`                       | Create a new AI Gateway Dynamic Route Deployment.                                  |
-| `list_gateway_dynamic_route_versions`                                           | List all AI Gateway Dynamic Route Versions.                                        |
-| `create_aig_config_post_gateway_dynamic_route_version`                          | Create a new AI Gateway Dynamic Route Version.                                     |
-| `get_gateway_dynamic_route_version`                                             | Get an AI Gateway Dynamic Route Version.                                           |
-| `get_gateway_url`                                                               | Get Gateway URL                                                                    |
-| `get_aig_config_fetch_gateway`                                                  | Fetch a Gateway                                                                    |
-| `update_gateway`                                                                | Update a Gateway                                                                   |
-| `delete_gateway`                                                                | Delete a Gateway                                                                   |
-| `list_instances`                                                                | List AI Search instances.                                                          |
-| `create_instance`                                                               | Create an AI Search instance.                                                      |
-| `get_ai_search_fetch_instance`                                                  | Get an AI Search instance.                                                         |
-| `update_instance`                                                               | Update an AI Search instance.                                                      |
-| `delete_instance`                                                               | Delete an AI Search instance.                                                      |
-| `create_ai_search_instance_chat_completion`                                     | Chat Completions                                                                   |
-| `list_jobs`                                                                     | List Jobs                                                                          |
-| `create_job`                                                                    | Create new job                                                                     |
-| `get_job`                                                                       | Get a Job Details                                                                  |
-| `update_ai_search_instance_change_job_status`                                   | Cancel an indexing job.                                                            |
-| `list_job_logs`                                                                 | List Job Logs                                                                      |
-| `create_ai_search_instance_search`                                              | Search                                                                             |
-| `get_ai_search_stats`                                                           | Get instance statistics.                                                           |
-| `list_namespaces`                                                               | List namespaces.                                                                   |
-| `create_namespace`                                                              | Create namespace.                                                                  |
-| `get_ai_search_fetch_namespace`                                                 | Read namespace.                                                                    |
-| `update_namespace`                                                              | Update namespace.                                                                  |
-| `delete_namespace`                                                              | Delete namespace.                                                                  |
-| `create_ai_search_namespace_multi_instance_chat_completion`                     | Multi-Instance Chat Completions                                                    |
-| `get_ai_search_namespace_fetch_instance`                                        | Get an AI Search instance.                                                         |
-| `update_ai_search_move_instance`                                                | Move an instance to a different namespace.                                         |
-| `create_ai_search_namespace_instance_chat_completion`                           | Chat Completions                                                                   |
-| `list_items`                                                                    | Items List.                                                                        |
-| `create_or_update_item`                                                         | Create or Update Item.                                                             |
-| `get_item`                                                                      | Get Item.                                                                          |
-| `update_ai_search_namespace_instance_sync_item`                                 | Sync Item.                                                                         |
-| `delete_item`                                                                   | Delete Item.                                                                       |
-| `list_item_chunks`                                                              | List Item Chunks.                                                                  |
-| `list_ai_search_namespace_instance_logs_item`                                   | Item Logs.                                                                         |
-| `update_ai_search_namespace_instance_change_job_status`                         | Cancel an indexing job.                                                            |
-| `create_ai_search_namespace_instance_search`                                    | Search                                                                             |
-| `get_ai_search_namespace_stats`                                                 | Get instance statistics.                                                           |
-| `create_ai_search_namespace_multi_instance_search`                              | Multi-Instance Search                                                              |
-| `list_tokens`                                                                   | List tokens.                                                                       |
-| `create_tokens`                                                                 | Create token.                                                                      |
-| `get_ai_search_fetch_tokens`                                                    | Read token.                                                                        |
-| `update_tokens`                                                                 | Update token.                                                                      |
-| `delete_tokens`                                                                 | Delete token.                                                                      |
-| `list_workers_ai_search_author`                                                 | Author Search                                                                      |
-| `list_finetunes`                                                                | List Finetunes                                                                     |
-| `create_finetune`                                                               | Create a new Finetune                                                              |
-| `list_public_finetunes`                                                         | List Public Finetunes                                                              |
-| `get_model_schema`                                                              | Get Model Schema                                                                   |
-| `get_workers_ai_search_model`                                                   | Model Search                                                                       |
-| `create_workers_ai_post_run_generic`                                            | Execute AI Model (Generic)                                                         |
-| `create_workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b`               | Execute @cf/ai4bharat/indictrans2-en-indic-1B model.                               |
-| `create_workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b`       | Execute @cf/ai4bharat/nonomni-indictrans2-en-indic-1b model.                       |
-| `workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it`                   | Execute @cf/aisingapore/gemma-sea-lion-v4-27b-it model.                            |
-| `workers_ai_post_run_cf_baai_bge_base_en_v1_5`                                  | Execute @cf/baai/bge-base-en-v1.5 model.                                           |
-| `workers_ai_post_run_cf_baai_bge_large_en_v1_5`                                 | Execute @cf/baai/bge-large-en-v1.5 model.                                          |
-| `workers_ai_post_run_cf_baai_bge_m3`                                            | Execute @cf/baai/bge-m3 model.                                                     |
-| `create_workers_ai_post_run_cf_baai_bge_reranker_base`                          | Execute @cf/baai/bge-reranker-base model.                                          |
-| `workers_ai_post_run_cf_baai_bge_small_en_v1_5`                                 | Execute @cf/baai/bge-small-en-v1.5 model.                                          |
-| `workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5`                          | Execute @cf/baai/nonomni-bge-base-en-v1.5 model.                                   |
-| `workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5`                         | Execute @cf/baai/nonomni-bge-large-en-v1.5 model.                                  |
-| `workers_ai_post_run_cf_baai_nonomni_bge_m3`                                    | Execute @cf/baai/nonomni-bge-m3 model.                                             |
-| `workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5`                         | Execute @cf/baai/nonomni-bge-small-en-v1.5 model.                                  |
-| `create_workers_ai_post_run_cf_black_forest_labs_flux_1_schnell`                | Execute @cf/black-forest-labs/flux-1-schnell model.                                |
-| `create_workers_ai_post_run_cf_black_forest_labs_flux_2_dev`                    | Execute @cf/black-forest-labs/flux-2-dev model.                                    |
-| `create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b`               | Execute @cf/black-forest-labs/flux-2-klein-4b model.                               |
-| `create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b`               | Execute @cf/black-forest-labs/flux-2-klein-9b model.                               |
-| `create_workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning`         | Execute @cf/bytedance/stable-diffusion-xl-lightning model.                         |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura`                            | Open Websocket connection with @cf/deepgram/aura model.                            |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_1`                          | Open Websocket connection with @cf/deepgram/aura-1 model.                          |
-| `create_workers_ai_post_run_cf_deepgram_aura_1`                                 | Execute @cf/deepgram/aura-1 model.                                                 |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_1_internal`                 | Open Websocket connection with @cf/deepgram/aura-1-internal model.                 |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_2`                          | Open Websocket connection with @cf/deepgram/aura-2 model.                          |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en`                       | Open Websocket connection with @cf/deepgram/aura-2-en model.                       |
-| `create_workers_ai_post_run_cf_deepgram_aura_2_en`                              | Execute @cf/deepgram/aura-2-en model.                                              |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws`                    | Open Websocket connection with @cf/deepgram/aura-2-en-ws model.                    |
-| `get_workers_ai_post_websocket_run_cf_deepgram_aura_2_es`                       | Open Websocket connection with @cf/deepgram/aura-2-es model.                       |
-| `create_workers_ai_post_run_cf_deepgram_aura_2_es`                              | Execute @cf/deepgram/aura-2-es model.                                              |
-| `get_workers_ai_post_websocket_run_cf_deepgram_flux`                            | Open Websocket connection with @cf/deepgram/flux model.                            |
-| `create_workers_ai_post_run_cf_deepgram_flux`                                   | Execute @cf/deepgram/flux model.                                                   |
-| `get_workers_ai_post_websocket_run_cf_deepgram_nova_3`                          | Open Websocket connection with @cf/deepgram/nova-3 model.                          |
-| `create_workers_ai_post_run_cf_deepgram_nova_3`                                 | Execute @cf/deepgram/nova-3 model.                                                 |
-| `get_workers_ai_post_websocket_run_cf_deepgram_nova_3_internal`                 | Open Websocket connection with @cf/deepgram/nova-3-internal model.                 |
-| `get_workers_ai_post_websocket_run_cf_deepgram_nova_3_ws`                       | Open Websocket connection with @cf/deepgram/nova-3-ws model.                       |
-| `workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct`                  | Execute @cf/deepseek-ai/deepseek-math-7b-instruct model.                           |
-| `workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b`               | Execute @cf/deepseek-ai/deepseek-r1-distill-qwen-32b model.                        |
-| `workers_ai_post_run_cf_defog_sqlcoder_7b_2`                                    | Execute @cf/defog/sqlcoder-7b-2 model.                                             |
-| `create_workers_ai_post_run_cf_facebook_bart_large_cnn`                         | Execute @cf/facebook/bart-large-cnn model.                                         |
-| `create_workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn`                 | Execute @cf/facebook/nonomni-bart-large-cnn model.                                 |
-| `workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16`                        | Execute @cf/fblgit/una-cybertron-7b-v2-bf16 model.                                 |
-| `create_workers_ai_post_run_cf_google_embeddinggemma_300m`                      | Execute @cf/google/embeddinggemma-300m model.                                      |
-| `workers_ai_post_run_cf_google_gemma_2b_it_lora`                                | Execute @cf/google/gemma-2b-it-lora model.                                         |
-| `workers_ai_post_run_cf_google_gemma_3_12b_it`                                  | Execute @cf/google/gemma-3-12b-it model.                                           |
-| `workers_ai_post_run_cf_google_gemma_4_26b_a4b_it`                              | Execute @cf/google/gemma-4-26b-a4b-it model.                                       |
-| `workers_ai_post_run_cf_google_gemma_7b_it_lora`                                | Execute @cf/google/gemma-7b-it-lora model.                                         |
-| `create_workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m`              | Execute @cf/google/nonomni-embeddinggemma-300m model.                              |
-| `create_workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8`               | Execute @cf/huggingface/distilbert-sst-2-int8 model.                               |
-| `create_workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8`       | Execute @cf/huggingface/nonomni-distilbert-sst-2-int8 model.                       |
-| `workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro`                        | Execute @cf/ibm-granite/granite-4.0-h-micro model.                                 |
-| `create_workers_ai_post_run_cf_leonardo_lucid_origin`                           | Execute @cf/leonardo/lucid-origin model.                                           |
-| `create_workers_ai_post_run_cf_leonardo_phoenix_1_0`                            | Execute @cf/leonardo/phoenix-1.0 model.                                            |
-| `create_workers_ai_post_run_cf_lykon_dreamshaper_8_lcm`                         | Execute @cf/lykon/dreamshaper-8-lcm model.                                         |
-| `workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora`                     | Execute @cf/meta-llama/llama-2-7b-chat-hf-lora model.                              |
-| `workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16`                              | Execute @cf/meta/llama-2-7b-chat-fp16 model.                                       |
-| `workers_ai_post_run_cf_meta_llama_2_7b_chat_int8`                              | Execute @cf/meta/llama-2-7b-chat-int8 model.                                       |
-| `workers_ai_post_run_cf_meta_llama_3_8b_instruct`                               | Execute @cf/meta/llama-3-8b-instruct model.                                        |
-| `workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq`                           | Execute @cf/meta/llama-3-8b-instruct-awq model.                                    |
-| `workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast`                   | Execute @cf/meta/llama-3.1-70b-instruct-fp8-fast model.                            |
-| `workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq`                         | Execute @cf/meta/llama-3.1-8b-instruct-awq model.                                  |
-| `workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8`                         | Execute @cf/meta/llama-3.1-8b-instruct-fp8 model.                                  |
-| `workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast`                    | Execute @cf/meta/llama-3.1-8b-instruct-fp8-fast model.                             |
-| `workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct`                     | Execute @cf/meta/llama-3.2-11b-vision-instruct model.                              |
-| `workers_ai_post_run_cf_meta_llama_3_2_1b_instruct`                             | Execute @cf/meta/llama-3.2-1b-instruct model.                                      |
-| `workers_ai_post_run_cf_meta_llama_3_2_3b_instruct`                             | Execute @cf/meta/llama-3.2-3b-instruct model.                                      |
-| `workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast`                   | Execute @cf/meta/llama-3.3-70b-instruct-fp8-fast model.                            |
-| `workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct`                    | Execute @cf/meta/llama-4-scout-17b-16e-instruct model.                             |
-| `create_workers_ai_post_run_cf_meta_llama_guard_3_8b`                           | Execute @cf/meta/llama-guard-3-8b model.                                           |
-| `workers_ai_post_run_cf_meta_m2m100_1_2b`                                       | Execute @cf/meta/m2m100-1.2b model.                                                |
-| `workers_ai_post_run_cf_microsoft_phi_2`                                        | Execute @cf/microsoft/phi-2 model.                                                 |
-| `workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1`                       | Execute @cf/mistral/mistral-7b-instruct-v0.1 model.                                |
-| `workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora`                  | Execute @cf/mistral/mistral-7b-instruct-v0.2-lora model.                           |
-| `workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct`               | Execute @cf/mistralai/mistral-small-3.1-24b-instruct model.                        |
-| `workers_ai_post_run_cf_moonshotai_kimi_k2_5`                                   | Execute @cf/moonshotai/kimi-k2.5 model.                                            |
-| `workers_ai_post_run_cf_moonshotai_kimi_k2_6`                                   | Execute @cf/moonshotai/kimi-k2.6 model.                                            |
-| `workers_ai_post_run_cf_moonshotai_kimi_k2_7_code`                              | Execute @cf/moonshotai/kimi-k2.7-code model.                                       |
-| `create_workers_ai_post_run_cf_myshell_ai_melotts`                              | Execute @cf/myshell-ai/melotts model.                                              |
-| `workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b`                            | Execute @cf/nvidia/nemotron-3-120b-a12b model.                                     |
-| `get_workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b` | Open Websocket connection with @cf/nvidia/nemotron-speech-streaming-en-0.6b model. |
-| `workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b`               | Execute @cf/nvidia/nemotron-speech-streaming-en-0.6b model.                        |
-| `workers_ai_post_run_cf_openai_gpt_oss_120b`                                    | Execute @cf/openai/gpt-oss-120b model.                                             |
-| `workers_ai_post_run_cf_openai_gpt_oss_20b`                                     | Execute @cf/openai/gpt-oss-20b model.                                              |
-| `create_workers_ai_post_run_cf_openai_whisper_large_v3_turbo`                   | Execute @cf/openai/whisper-large-v3-turbo model.                                   |
-| `workers_ai_post_run_cf_openchat_openchat_3_5_0106`                             | Execute @cf/openchat/openchat-3.5-0106 model.                                      |
-| `create_workers_ai_post_run_cf_pfnet_plamo_embedding_1b`                        | Execute @cf/pfnet/plamo-embedding-1b model.                                        |
-| `get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2`                 | Open Websocket connection with @cf/pipecat-ai/smart-turn-v2 model.                 |
-| `get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3`                 | Open Websocket connection with @cf/pipecat-ai/smart-turn-v3 model.                 |
-| `workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat`                                 | Execute @cf/qwen/qwen1.5-0.5b-chat model.                                          |
-| `workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat`                                 | Execute @cf/qwen/qwen1.5-1.8b-chat model.                                          |
-| `workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq`                              | Execute @cf/qwen/qwen1.5-14b-chat-awq model.                                       |
-| `workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq`                               | Execute @cf/qwen/qwen1.5-7b-chat-awq model.                                        |
-| `workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct`                        | Execute @cf/qwen/qwen2.5-coder-32b-instruct model.                                 |
-| `workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8`                                 | Execute @cf/qwen/qwen3-30b-a3b-fp8 model.                                          |
-| `create_workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b`                       | Execute @cf/qwen/qwen3-embedding-0.6b model.                                       |
-| `workers_ai_post_run_cf_qwen_qwq_32b`                                           | Execute @cf/qwen/qwq-32b model.                                                    |
-| `create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img`          | Execute @cf/runwayml/stable-diffusion-v1-5-img2img model.                          |
-| `create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting`       | Execute @cf/runwayml/stable-diffusion-v1-5-inpainting model.                       |
-| `create_workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0`        | Execute @cf/stabilityai/stable-diffusion-xl-base-1.0 model.                        |
-| `get_workers_ai_post_websocket_run_cf_sven_test_pipe_http`                      | Open Websocket connection with @cf/sven/test-pipe-http model.                      |
-| `get_workers_ai_post_websocket_run_cf_test_hello_world_cog`                     | Open Websocket connection with @cf/test/hello-world-cog model.                     |
-| `workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq`                      | Execute @cf/thebloke/discolm-german-7b-v1-awq model.                               |
-| `workers_ai_post_run_cf_tiiuae_falcon_7b_instruct`                              | Execute @cf/tiiuae/falcon-7b-instruct model.                                       |
-| `workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0`                     | Execute @cf/tinyllama/tinyllama-1.1b-chat-v1.0 model.                              |
-| `workers_ai_post_run_cf_zai_org_glm_4_7_flash`                                  | Execute @cf/zai-org/glm-4.7-flash model.                                           |
-| `workers_ai_post_run_cf_zai_org_glm_5_2`                                        | Execute @cf/zai-org/glm-5.2 model.                                                 |
-| `workers_ai_post_run_hf_google_gemma_7b_it`                                     | Execute @hf/google/gemma-7b-it model.                                              |
-| `workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2`                       | Execute @hf/mistral/mistral-7b-instruct-v0.2 model.                                |
-| `workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta`                          | Execute @hf/nexusflow/starling-lm-7b-beta model.                                   |
-| `workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b`                   | Execute @hf/nousresearch/hermes-2-pro-mistral-7b model.                            |
-| `workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq`                  | Execute @hf/thebloke/deepseek-coder-6.7b-base-awq model.                           |
-| `workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq`              | Execute @hf/thebloke/deepseek-coder-6.7b-instruct-awq model.                       |
-| `workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq`                          | Execute @hf/thebloke/llama-2-13b-chat-awq model.                                   |
-| `workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq`                  | Execute @hf/thebloke/mistral-7b-instruct-v0.1-awq model.                           |
-| `workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq`                       | Execute @hf/thebloke/neural-chat-7b-v3-1-awq model.                                |
-| `workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq`                 | Execute @hf/thebloke/openhermes-2.5-mistral-7b-awq model.                          |
-| `workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq`                            | Execute @hf/thebloke/zephyr-7b-beta-awq model.                                     |
-| `workers_ai_post_run_model`                                                     | Execute AI model                                                                   |
-| `list_workers_ai_search_task`                                                   | Task Search                                                                        |
-| `get_to_markdown_supported`                                                     | Get all converted formats supported                                                |
+| Method                                                      | Description                                         |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `get_credit_balance`                                        | Get credit balance                                  |
+| `get_invoice_history`                                       | Get invoice history                                 |
+| `get_invoice_preview`                                       | Get invoice preview                                 |
+| `create_topup`                                              | Create a top-up                                     |
+| `aig_billing_set_topup_config`                              | Set auto top-up configuration                       |
+| `delete_topup_config`                                       | Delete auto top-up configuration                    |
+| `get_topup_eligibility`                                     | Get top-up eligibility                              |
+| `create_aig_billing_check_topup_status`                     | Check top-up status                                 |
+| `get_usage_history`                                         | Get usage history                                   |
+| `list_account_provider`                                     | List custom providers                               |
+| `create_account_provider`                                   | Create a custom provider                            |
+| `list_account_provider_cost`                                | List custom provider pricing rules                  |
+| `create_account_provider_cost`                              | Create a custom provider pricing rule               |
+| `get_aig_config_fetch_account_provider_cost`                | Get a custom provider pricing rule                  |
+| `update_account_provider_cost`                              | Update a custom provider pricing rule               |
+| `delete_account_provider_cost`                              | Delete a custom provider pricing rule               |
+| `get_aig_config_fetch_account_provider`                     | Get a custom provider                               |
+| `update_account_provider`                                   | Update a custom provider                            |
+| `delete_account_provider`                                   | Delete a custom provider                            |
+| `list_evaluators`                                           | List evaluator types (deprecated)                   |
+| `list_gateway`                                              | List gateways                                       |
+| `create_gateway`                                            | Create a gateway                                    |
+| `list_custom_domain`                                        | List custom domains                                 |
+| `create_custom_domain`                                      | Create a custom domain for a gateway                |
+| `get_aig_config_fetch_custom_domain`                        | Get a custom domain                                 |
+| `delete_custom_domain`                                      | Delete a custom domain                              |
+| `list_dataset`                                              | List datasets (deprecated)                          |
+| `create_dataset`                                            | Create a dataset (deprecated)                       |
+| `get_aig_config_fetch_dataset`                              | Get a dataset (deprecated)                          |
+| `update_dataset`                                            | Update a dataset (deprecated)                       |
+| `delete_dataset`                                            | Delete a dataset (deprecated)                       |
+| `list_evaluations`                                          | List evaluations (deprecated)                       |
+| `create_evaluations`                                        | Create an evaluation (deprecated)                   |
+| `get_aig_config_fetch_evaluations`                          | Get an evaluation (deprecated)                      |
+| `delete_evaluations`                                        | Delete an evaluation (deprecated)                   |
+| `list_gateway_logs`                                         | List Gateway Logs                                   |
+| `delete_gateway_logs`                                       | Delete Gateway Logs                                 |
+| `get_gateway_log_detail`                                    | Get Gateway Log Detail                              |
+| `patch_gateway_log`                                         | Patch Gateway Log                                   |
+| `get_gateway_log_request`                                   | Get Gateway Log Request                             |
+| `get_gateway_log_response`                                  | Get Gateway Log Response                            |
+| `list_model_aliases`                                        | List model aliases                                  |
+| `create_model_alias`                                        | Create a model alias                                |
+| `get_model_alias`                                           | Get a model alias                                   |
+| `update_model_alias`                                        | Update a model alias                                |
+| `delete_model_alias`                                        | Delete a model alias                                |
+| `list_providers`                                            | List provider keys                                  |
+| `create_providers`                                          | Store a provider key                                |
+| `get_aig_config_fetch_providers`                            | Get a provider key                                  |
+| `update_providers`                                          | Rotate a provider key                               |
+| `delete_providers`                                          | Delete a provider key                               |
+| `aig_config_test_providers`                                 | Check stored provider credentials                   |
+| `list_gateway_dynamic_routes`                               | List dynamic routes                                 |
+| `create_aig_config_post_gateway_dynamic_route`              | Create a dynamic route                              |
+| `get_gateway_dynamic_route`                                 | Get a dynamic route                                 |
+| `update_gateway_dynamic_route`                              | Rename a dynamic route                              |
+| `delete_gateway_dynamic_route`                              | Delete a dynamic route                              |
+| `list_gateway_dynamic_route_deployments`                    | List dynamic route deployments                      |
+| `create_aig_config_post_gateway_dynamic_route_deployment`   | Deploy a dynamic route version                      |
+| `list_gateway_dynamic_route_versions`                       | List dynamic route versions                         |
+| `create_aig_config_post_gateway_dynamic_route_version`      | Create a dynamic route version                      |
+| `get_gateway_dynamic_route_version`                         | Get a dynamic route version                         |
+| `get_gateway_url`                                           | Get Gateway URL                                     |
+| `get_aig_config_fetch_gateway`                              | Get a gateway                                       |
+| `update_gateway`                                            | Update a gateway                                    |
+| `delete_gateway`                                            | Delete a gateway                                    |
+| `get_logging_state`                                         | Get AI Gateway logging state                        |
+| `patch_logging_state`                                       | Migrate AI Gateway logging to Workers Observability |
+| `list_namespaces`                                           | List namespaces                                     |
+| `create_namespace`                                          | Create a namespace                                  |
+| `list_instances`                                            | List AI Search instances.                           |
+| `create_instance`                                           | Create an AI Search instance.                       |
+| `get_ai_search_namespace_fetch_instance`                    | Get an AI Search instance.                          |
+| `update_instance`                                           | Update an AI Search instance.                       |
+| `update_ai_search_move_instance`                            | Move an instance to a different namespace.          |
+| `delete_instance`                                           | Delete an AI Search instance.                       |
+| `create_ai_search_namespace_instance_chat_completion`       | Chat Completions                                    |
+| `list_items`                                                | Items List.                                         |
+| `create_or_update_item`                                     | Create or Update Item.                              |
+| `get_item`                                                  | Get Item.                                           |
+| `update_ai_search_namespace_instance_sync_item`             | Sync Item.                                          |
+| `delete_item`                                               | Delete Item.                                        |
+| `list_item_chunks`                                          | List Item Chunks.                                   |
+| `list_ai_search_namespace_instance_logs_item`               | Item Logs.                                          |
+| `list_jobs`                                                 | List Jobs                                           |
+| `create_job`                                                | Create new job                                      |
+| `get_job`                                                   | Get a Job Details                                   |
+| `update_ai_search_namespace_instance_change_job_status`     | Cancel an indexing job.                             |
+| `list_job_logs`                                             | List Job Logs                                       |
+| `ai_search_namespace_purge_instance_cache`                  | Purge search cache.                                 |
+| `create_ai_search_namespace_instance_search`                | Search                                              |
+| `get_ai_search_namespace_stats`                             | Get instance statistics.                            |
+| `get_ai_search_fetch_namespace`                             | Get a namespace                                     |
+| `update_namespace`                                          | Update a namespace                                  |
+| `delete_namespace`                                          | Delete a namespace                                  |
+| `create_ai_search_namespace_multi_instance_chat_completion` | Multi-Instance Chat Completions                     |
+| `create_ai_search_namespace_multi_instance_search`          | Multi-Instance Search                               |
+| `list_tokens`                                               | List tokens                                         |
+| `create_tokens`                                             | Create a token                                      |
+| `get_ai_search_fetch_tokens`                                | Get a token                                         |
+| `update_tokens`                                             | Update a token                                      |
+| `delete_tokens`                                             | Delete a token                                      |
+| `list_workers_ai_search_author`                             | Author Search                                       |
+| `list_finetunes`                                            | List Finetunes                                      |
+| `create_finetune`                                           | Create a new Finetune                               |
+| `list_public_finetunes`                                     | List Public Finetunes                               |
+| `delete_finetune`                                           | Delete a Finetune                                   |
+| `get_workers_ai_download_finetune_asset`                    | Download a Finetune Asset                           |
+| `get_model_schema`                                          | Get an AI model's input and output schemas          |
+| `get_workers_ai_search_model`                               | Model Search                                        |
+| `create_workers_ai_post_run_generic`                        | Run an AI model with request options                |
+| `workers_ai_post_run_model`                                 | Run a Workers AI model                              |
+| `list_workers_ai_search_task`                               | Task Search                                         |
+| `get_to_markdown_supported`                                 | List supported Markdown conversion formats          |
+| `create_workers_ai_ai_gateway_web_search`                   | Search the web through AI Gateway                   |
 
 ## Secrets
 
@@ -271,13 +166,20 @@ keeps only a vault reference. Because the model declares such fields, swamp
 refuses to run any of its methods, reads included, until a vault exists
 (`swamp vault create local_encryption cloudflare`).
 
-| Method             | Secret inputs | Stored in a vault | Removed before storing |
-| ------------------ | ------------- | ----------------- | ---------------------- |
-| `create_topup`     | —             | `client_secret`   | —                      |
-| `create_providers` | `secret`      | —                 | —                      |
-| `update_providers` | `secret`      | —                 | —                      |
-| `create_tokens`    | `cf_api_key`  | —                 | —                      |
-| `update_tokens`    | `cf_api_key`  | —                 | —                      |
+Swamp cannot move a secret that sits inside a list, map or union into a vault,
+so the method deletes those before it stores the result.
+
+| Method                                  | Secret inputs | Stored in a vault | Removed before storing |
+| --------------------------------------- | ------------- | ----------------- | ---------------------- |
+| `create_topup`                          | —             | `client_secret`   | —                      |
+| `list_account_provider`                 | —             | —                 | `headers`              |
+| `create_account_provider`               | `headers`     | `headers`         | —                      |
+| `get_aig_config_fetch_account_provider` | —             | `headers`         | —                      |
+| `update_account_provider`               | `headers`     | `headers`         | —                      |
+| `create_providers`                      | `secret`      | —                 | —                      |
+| `update_providers`                      | `secret`      | —                 | —                      |
+| `create_tokens`                         | `cf_api_key`  | —                 | —                      |
+| `update_tokens`                         | `cf_api_key`  | —                 | —                      |
 
 ## Development
 

@@ -57,7 +57,6 @@ Deno.test("stream model: has expected methods", () => {
   assertExists(model.methods.delete_an_output);
   assertExists(model.methods.stream_live_inputs_rotate_keys_for_a_live_input);
   assertExists(model.methods.get_stream_videos_storage_usage);
-  assertExists(model.methods.get_account_stream_usage);
   assertExists(model.methods.list_watermark_profiles);
   assertExists(model.methods.create_watermark_profiles_via_basic_upload);
   assertExists(
@@ -117,7 +116,6 @@ Deno.test("stream model: has expected resources", () => {
     model.resources["stream_live_inputs_rotate_keys_for_a_live_input"],
   );
   assertExists(model.resources["stream_videos_storage_usage"]);
-  assertExists(model.resources["get_account_stream_usage"]);
   assertExists(model.resources["watermark_profiles"]);
   assertExists(model.resources["watermark_profiles_via_basic_upload"]);
   assertExists(
@@ -213,6 +211,7 @@ Deno.test({
       "created": null,
       "creator": null,
       "duration": null,
+      "encodingMode": null,
       "input": null,
       "liveInput": null,
       "maxDurationSeconds": null,
@@ -221,6 +220,7 @@ Deno.test({
       "modified": null,
       "playback": null,
       "preview": null,
+      "previewStatus": null,
       "publicDetails": {
         "channel_link": "test-value",
         "logo": "test-value",
@@ -335,6 +335,7 @@ Deno.test({
       "created": null,
       "creator": null,
       "duration": null,
+      "encodingMode": null,
       "input": null,
       "liveInput": null,
       "maxDurationSeconds": null,
@@ -343,6 +344,7 @@ Deno.test({
       "modified": null,
       "playback": null,
       "preview": null,
+      "previewStatus": null,
       "publicDetails": {
         "channel_link": "test-value",
         "logo": "test-value",
@@ -395,6 +397,7 @@ Deno.test({
           "created": null,
           "creator": null,
           "duration": null,
+          "encodingMode": null,
           "input": null,
           "liveInput": null,
           "maxDurationSeconds": null,
@@ -403,6 +406,7 @@ Deno.test({
           "modified": null,
           "playback": null,
           "preview": null,
+          "previewStatus": null,
           "publicDetails": {
             "channel_link": "test-value",
             "logo": "test-value",
@@ -585,6 +589,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": null, "url": null },
@@ -627,6 +632,7 @@ Deno.test({
         "keysRotatedAt": null,
         "meta": null,
         "modified": null,
+        "playback": null,
         "preferLowLatency": null,
         "recording": null,
         "rtmps": { "streamKey": null, "url": null },
@@ -647,6 +653,113 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "stream model: create_a_new_output_connected_to_a_live_input creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = null;
+    const { url, server } = startMockCfServer({
+      "/stream/live_inputs/test-id-123/outputs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_a_new_output_connected_to_a_live_input.execute({
+        "live_input_identifier": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "stream model: create_add_audio_track creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "default": null,
+      "label": null,
+      "status": null,
+      "uid": null,
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/stream/test-id-123/audio/copy": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-stream",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_add_audio_track.execute({
+        "default": null,
+        "label": null,
+        "status": null,
+        "uid": null,
+        "identifier": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -809,6 +922,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
@@ -971,6 +1085,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
@@ -1138,6 +1253,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
@@ -1303,6 +1419,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
@@ -1470,6 +1587,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },
@@ -1845,6 +1963,7 @@ Deno.test({
       "keysRotatedAt": null,
       "meta": null,
       "modified": null,
+      "playback": null,
       "preferLowLatency": null,
       "recording": null,
       "rtmps": { "streamKey": "VAULT-CANARY-0", "url": "VAULT-CANARY-1" },

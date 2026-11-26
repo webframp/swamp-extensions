@@ -41,6 +41,7 @@ Deno.test("spectrum model: has expected methods", () => {
       .update_spectrum_application_configuration_using_a_name_for_the_origin,
   );
   assertExists(model.methods.delete_spectrum_application);
+  assertExists(model.methods.list_spectrum_application_protocols);
 });
 
 Deno.test("spectrum model: has expected resources", () => {
@@ -59,6 +60,7 @@ Deno.test("spectrum model: has expected resources", () => {
         "spectrum_application_configuration_using_a_name_for_the_origin"
       ],
   );
+  assertExists(model.resources["spectrum_application_protocols"]);
 });
 
 // ---------------------------------------------------------------------------

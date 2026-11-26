@@ -61,13 +61,12 @@ swamp model create @webframp/cloudflare/stream cf-stream \
 | `delete_an_output`                                                    | Delete an output                                              |
 | `stream_live_inputs_rotate_keys_for_a_live_input`                     | Rotate keys for a live input                                  |
 | `get_stream_videos_storage_usage`                                     | Storage use                                                   |
-| `get_account_stream_usage`                                            | Get account Stream usage                                      |
 | `list_watermark_profiles`                                             | List watermark profiles                                       |
 | `create_watermark_profiles_via_basic_upload`                          | Create watermark profiles via basic upload                    |
 | `get_stream_watermark_profile_watermark_profile_details`              | Watermark profile details                                     |
 | `delete_watermark_profiles`                                           | Delete watermark profiles                                     |
-| `get_stream_webhook_view_webhooks`                                    | View webhooks                                                 |
-| `create_webhooks`                                                     | Create webhooks                                               |
+| `get_stream_webhook_view_webhooks`                                    | View webhook                                                  |
+| `create_webhooks`                                                     | Create VOD webhooks                                           |
 | `delete_webhooks`                                                     | Delete webhooks                                               |
 | `get_stream_videos_retrieve_video_details`                            | Retrieve video details                                        |
 | `update_video_details`                                                | Edit video details                                            |

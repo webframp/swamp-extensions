@@ -30,12 +30,14 @@ Deno.test("durable-objects model: has expected methods", () => {
   assertExists(model.methods);
   assertExists(model.methods.list_namespaces);
   assertExists(model.methods.list_objects);
+  assertExists(model.methods.durable_objects_namespace_query);
 });
 
 Deno.test("durable-objects model: has expected resources", () => {
   assertExists(model.resources);
   assertExists(model.resources["namespaces"]);
   assertExists(model.resources["objects"]);
+  assertExists(model.resources["durable_objects_namespace_query"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -136,6 +138,69 @@ Deno.test({
           ) => Promise<{ dataHandles: unknown[] }>;
         }
       >).list_namespaces.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "durable-objects model: durable_objects_namespace_query executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "error": "test-value",
+      "results": [{
+        "columns": ["test-value"],
+        "meta": { "rows_read": 1, "rows_written": 1 },
+        "rows": [[null]],
+      }],
+    };
+    const { url, server } = startMockCfServer({
+      "/workers/durable_objects/namespaces/test-id-123/query/v2": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-durable-objects",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).durable_objects_namespace_query.execute({
+        "error": "test-value",
+        "results": [{
+          "columns": ["test-value"],
+          "meta": { "rows_read": 1, "rows_written": 1 },
+          "rows": [[null]],
+        }],
+        "id": "test-id-123",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();

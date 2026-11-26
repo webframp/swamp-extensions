@@ -29,11 +29,15 @@ Deno.test("access model: has globalArguments with apiToken", () => {
 
 Deno.test("access model: has expected methods", () => {
   assertExists(model.methods);
+  assertExists(model.methods.get_mcp_portals_api_portal_tool_call_timeseries);
+  assertExists(model.methods.get_mcp_portals_api_server_tool_call_timeseries);
+  assertExists(model.methods.get_mcp_portals_api_account_tool_call_timeseries);
   assertExists(model.methods.list_portals);
   assertExists(model.methods.create_portals);
   assertExists(model.methods.get_mcp_portals_api_fetch_gateways);
   assertExists(model.methods.update_portals);
   assertExists(model.methods.delete_portals);
+  assertExists(model.methods.get_mcp_portals_api_effective_redirect_uri);
   assertExists(model.methods.list_servers);
   assertExists(model.methods.create_servers);
   assertExists(model.methods.get_mcp_portals_api_fetch_servers);
@@ -70,6 +74,9 @@ Deno.test("access model: has expected methods", () => {
   assertExists(model.methods.delete_an_mtls_certificate);
   assertExists(model.methods.list_custom_pages);
   assertExists(model.methods.create_a_custom_page);
+  assertExists(
+    model.methods.create_access_custom_pages_validate_a_custom_page_template,
+  );
   assertExists(model.methods.get_a_custom_page);
   assertExists(model.methods.update_a_custom_page);
   assertExists(model.methods.delete_a_custom_page);
@@ -90,7 +97,11 @@ Deno.test("access model: has expected methods", () => {
   assertExists(model.methods.delete_an_access_identity_provider);
   assertExists(model.methods.create_saml_certificate_for_identity_provider);
   assertExists(model.methods.list_scim_group_resources);
+  assertExists(model.methods.get_scim_group_resource);
+  assertExists(model.methods.delete_scim_group_resource);
   assertExists(model.methods.list_scim_user_resources);
+  assertExists(model.methods.get_scim_user_resource);
+  assertExists(model.methods.delete_scim_user_resource);
   assertExists(model.methods.create);
   assertExists(model.methods.get);
   assertExists(model.methods.delete);
@@ -102,12 +113,19 @@ Deno.test("access model: has expected methods", () => {
   assertExists(model.methods.get_your_zero_trust_organization);
   assertExists(model.methods.create_your_zero_trust_organization);
   assertExists(model.methods.update_your_zero_trust_organization);
+  assertExists(model.methods.patch_your_zero_trust_organization);
   assertExists(model.methods.get_your_zero_trust_organization_doh_settings);
   assertExists(model.methods.update_your_zero_trust_organization_doh_settings);
   assertExists(
     model.methods
       .create_zero_trust_organization_revoke_all_access_tokens_for_a_user,
   );
+  assertExists(model.methods.get_trust_settings);
+  assertExists(
+    model.methods.update_zero_trust_organization_replace_trust_settings,
+  );
+  assertExists(model.methods.update_trust_settings);
+  assertExists(model.methods.delete_trust_settings);
   assertExists(model.methods.list_access_reusable_policies);
   assertExists(model.methods.create_an_access_reusable_policy);
   assertExists(model.methods.get_an_access_reusable_policy);
@@ -134,22 +152,34 @@ Deno.test("access model: has expected methods", () => {
   assertExists(model.methods.get_a_tag);
   assertExists(model.methods.update_a_tag);
   assertExists(model.methods.delete_a_tag);
-  assertExists(model.methods.get_users);
+  assertExists(model.methods.list_user_populations);
+  assertExists(model.methods.create_user_population);
+  assertExists(model.methods.get_user_population);
+  assertExists(model.methods.update_user_population);
+  assertExists(model.methods.delete_user_population);
+  assertExists(model.methods.list_users);
   assertExists(model.methods.create_user);
   assertExists(model.methods.get_user);
+  assertExists(model.methods.update_access_user_populations_replace_user);
   assertExists(model.methods.update_user);
   assertExists(model.methods.delete_user);
+  assertExists(model.methods.get_users);
   assertExists(model.methods.get_active_sessions);
   assertExists(model.methods.get_active_session);
   assertExists(model.methods.get_failed_logins);
   assertExists(model.methods.get_last_seen_identity);
   assertExists(model.methods.delete_mfa_authenticator);
+  assertExists(model.methods.delete_passkey);
 });
 
 Deno.test("access model: has expected resources", () => {
   assertExists(model.resources);
+  assertExists(model.resources["mcp_portals_api_portal_tool_call_timeseries"]);
+  assertExists(model.resources["mcp_portals_api_server_tool_call_timeseries"]);
+  assertExists(model.resources["mcp_portals_api_account_tool_call_timeseries"]);
   assertExists(model.resources["portals"]);
   assertExists(model.resources["mcp_portals_api_fetch_gateways"]);
+  assertExists(model.resources["mcp_portals_api_effective_redirect_uri"]);
   assertExists(model.resources["servers"]);
   assertExists(model.resources["mcp_portals_api_fetch_servers"]);
   assertExists(model.resources["mcp_portals_api_sync_server"]);
@@ -171,6 +201,9 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["an_mtls_certificate"]);
   assertExists(model.resources["custom_pages"]);
   assertExists(model.resources["a_custom_page"]);
+  assertExists(
+    model.resources["access_custom_pages_validate_a_custom_page_template"],
+  );
   assertExists(model.resources["ssh_ca"]);
   assertExists(model.resources["access_gateway_ca_add_an_ssh_ca"]);
   assertExists(model.resources["access_groups"]);
@@ -183,7 +216,9 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["an_access_identity_provider"]);
   assertExists(model.resources["saml_certificate_for_identity_provider"]);
   assertExists(model.resources["scim_group_resources"]);
+  assertExists(model.resources["scim_group_resource"]);
   assertExists(model.resources["scim_user_resources"]);
+  assertExists(model.resources["scim_user_resource"]);
   assertExists(model.resources["create"]);
   assertExists(model.resources["get"]);
   assertExists(model.resources["the_access_key_configuration"]);
@@ -191,10 +226,15 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["get_access_authentication_logs"]);
   assertExists(model.resources["access_scim_update_logs"]);
   assertExists(model.resources["your_zero_trust_organization"]);
+  assertExists(model.resources["patch_your_zero_trust_organization"]);
   assertExists(model.resources["your_zero_trust_organization_doh_settings"]);
   assertExists(
     model
       .resources["zero_trust_organization_revoke_all_access_tokens_for_a_user"],
+  );
+  assertExists(model.resources["trust_settings"]);
+  assertExists(
+    model.resources["zero_trust_organization_replace_trust_settings"],
   );
   assertExists(model.resources["access_reusable_policies"]);
   assertExists(model.resources["an_access_reusable_policy"]);
@@ -214,8 +254,12 @@ Deno.test("access model: has expected resources", () => {
   assertExists(model.resources["tags"]);
   assertExists(model.resources["tag"]);
   assertExists(model.resources["a_tag"]);
-  assertExists(model.resources["get_users"]);
+  assertExists(model.resources["user_populations"]);
+  assertExists(model.resources["user_population"]);
+  assertExists(model.resources["list_users"]);
   assertExists(model.resources["user"]);
+  assertExists(model.resources["access_user_populations_replace_user"]);
+  assertExists(model.resources["get_users"]);
   assertExists(model.resources["get_active_sessions"]);
   assertExists(model.resources["active_session"]);
   assertExists(model.resources["get_failed_logins"]);
@@ -282,26 +326,104 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
+  name:
+    "access model: get_mcp_portals_api_portal_tool_call_timeseries fetches and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "aggregate": true,
+      "end": 1,
+      "granularity": "daily",
+      "response_status": "success",
+      "series": [{ "count": 1, "day": "test-value" }],
+      "start": 1,
+      "total": 1,
+      "tz": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/access/ai-controls/mcp/analytics/portals/test-id-123/tool-calls/timeseries":
+        { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_mcp_portals_api_portal_tool_call_timeseries.execute({
+        "portal_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
   name: "access model: list_portals fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = [{
       "allow_code_mode": true,
+      "code_mode": "opt_in",
       "created_at": "2024-01-01T00:00:00Z",
       "created_by": "test-value",
       "description": "This is my custom MCP Portal",
-      "hostname": "exmaple.com",
+      "hostname": "example.com",
       "id": "my-mcp-portal",
       "modified_at": "2024-01-01T00:00:00Z",
       "modified_by": "test-value",
       "name": "My MCP Portal",
       "secure_web_gateway": false,
       "servers": [{
+        "auth_config_summary": {
+          "auth_mode": "dcr",
+          "client_secret_version": 1,
+          "config": {
+            "authorization_endpoint": null,
+            "issuer": null,
+            "resource": null,
+            "revocation_endpoint": null,
+            "token_endpoint": null,
+          },
+          "has_client_secret": true,
+          "registration_info": {
+            "client_id": null,
+            "redirect_uris": null,
+            "scope": null,
+            "token_endpoint_auth_method": null,
+          },
+        },
         "auth_type": "unauthenticated",
+        "authentication_status": "not_required",
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "default_disabled": true,
-        "description": "This is one remote mcp server",
+        "description": "This is one remote MCP server",
         "error": "test-value",
         "error_details": {
           "cause": "test-value",
@@ -320,6 +442,7 @@ Deno.test({
         "name": "My MCP Server",
         "on_behalf": true,
         "prompts": [{}],
+        "registered_at": "2024-01-01T00:00:00Z",
         "secure_web_gateway": false,
         "server_id": "my-mcp-server",
         "status": "ready",
@@ -329,16 +452,20 @@ Deno.test({
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
         "updated_tools": [{
           "enabled": null,
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
       }],
     }];
@@ -391,21 +518,41 @@ Deno.test({
   fn: async () => {
     const mockData = {
       "allow_code_mode": true,
+      "code_mode": "opt_in",
       "created_at": "2024-01-01T00:00:00Z",
       "created_by": "test-value",
       "description": "This is my custom MCP Portal",
-      "hostname": "exmaple.com",
+      "hostname": "example.com",
       "id": "new-123",
       "modified_at": "2024-01-01T00:00:00Z",
       "modified_by": "test-value",
       "name": "My MCP Portal",
       "secure_web_gateway": false,
       "servers": [{
+        "auth_config_summary": {
+          "auth_mode": "dcr",
+          "client_secret_version": 1,
+          "config": {
+            "authorization_endpoint": null,
+            "issuer": null,
+            "resource": null,
+            "revocation_endpoint": null,
+            "token_endpoint": null,
+          },
+          "has_client_secret": true,
+          "registration_info": {
+            "client_id": null,
+            "redirect_uris": null,
+            "scope": null,
+            "token_endpoint_auth_method": null,
+          },
+        },
         "auth_type": "unauthenticated",
+        "authentication_status": "not_required",
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "default_disabled": true,
-        "description": "This is one remote mcp server",
+        "description": "This is one remote MCP server",
         "error": "test-value",
         "error_details": {
           "cause": "test-value",
@@ -424,6 +571,7 @@ Deno.test({
         "name": "My MCP Server",
         "on_behalf": true,
         "prompts": [{}],
+        "registered_at": "2024-01-01T00:00:00Z",
         "secure_web_gateway": false,
         "server_id": "my-mcp-server",
         "status": "ready",
@@ -433,16 +581,20 @@ Deno.test({
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
         "updated_tools": [{
           "enabled": null,
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
       }],
     };
@@ -472,21 +624,41 @@ Deno.test({
         }
       >).create_portals.execute({
         "allow_code_mode": true,
+        "code_mode": "opt_in",
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "description": "This is my custom MCP Portal",
-        "hostname": "exmaple.com",
+        "hostname": "example.com",
         "id": "my-mcp-portal",
         "modified_at": "2024-01-01T00:00:00Z",
         "modified_by": "test-value",
         "name": "My MCP Portal",
         "secure_web_gateway": false,
         "servers": [{
+          "auth_config_summary": {
+            "auth_mode": "dcr",
+            "client_secret_version": 1,
+            "config": {
+              "authorization_endpoint": null,
+              "issuer": null,
+              "resource": null,
+              "revocation_endpoint": null,
+              "token_endpoint": null,
+            },
+            "has_client_secret": true,
+            "registration_info": {
+              "client_id": null,
+              "redirect_uris": null,
+              "scope": null,
+              "token_endpoint_auth_method": null,
+            },
+          },
           "auth_type": "unauthenticated",
+          "authentication_status": "not_required",
           "created_at": "2024-01-01T00:00:00Z",
           "created_by": "test-value",
           "default_disabled": true,
-          "description": "This is one remote mcp server",
+          "description": "This is one remote MCP server",
           "error": "test-value",
           "error_details": {
             "cause": "test-value",
@@ -505,6 +677,7 @@ Deno.test({
           "name": "My MCP Server",
           "on_behalf": true,
           "prompts": [{}],
+          "registered_at": "2024-01-01T00:00:00Z",
           "secure_web_gateway": false,
           "server_id": "my-mcp-server",
           "status": "ready",
@@ -514,16 +687,20 @@ Deno.test({
             "name": null,
             "portal_alias": null,
             "portal_description": null,
+            "portal_enabled": null,
             "server_alias": null,
             "server_description": null,
+            "server_enabled": null,
           }],
           "updated_tools": [{
             "enabled": null,
             "name": null,
             "portal_alias": null,
             "portal_description": null,
+            "portal_enabled": null,
             "server_alias": null,
             "server_description": null,
+            "server_enabled": null,
           }],
         }],
       }, context);
@@ -544,131 +721,46 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "access model: get_mcp_portals_api_fetch_gateways fetches and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = {
-      "allow_code_mode": true,
-      "created_at": "2024-01-01T00:00:00Z",
-      "created_by": "test-value",
-      "description": "This is my custom MCP Portal",
-      "hostname": "exmaple.com",
-      "id": "my-mcp-portal",
-      "modified_at": "2024-01-01T00:00:00Z",
-      "modified_by": "test-value",
-      "name": "My MCP Portal",
-      "secure_web_gateway": false,
-      "servers": [{
-        "auth_type": "unauthenticated",
-        "created_at": "2024-01-01T00:00:00Z",
-        "created_by": "test-value",
-        "default_disabled": true,
-        "description": "This is one remote mcp server",
-        "error": "test-value",
-        "error_details": {
-          "cause": "test-value",
-          "is_upstream": true,
-          "mcp_code": 1,
-          "retryable": true,
-          "status_code": 1,
-        },
-        "hostname": "https://example.com/mcp",
-        "id": "my-mcp-server",
-        "is_shared_oauth_callback_enabled": true,
-        "last_successful_sync": "2024-01-01T00:00:00Z",
-        "last_synced": "2024-01-01T00:00:00Z",
-        "modified_at": "2024-01-01T00:00:00Z",
-        "modified_by": "test-value",
-        "name": "My MCP Server",
-        "on_behalf": true,
-        "prompts": [{}],
-        "secure_web_gateway": false,
-        "server_id": "my-mcp-server",
-        "status": "ready",
-        "tools": [{}],
-        "updated_prompts": [{
-          "enabled": null,
-          "name": null,
-          "portal_alias": null,
-          "portal_description": null,
-          "server_alias": null,
-          "server_description": null,
-        }],
-        "updated_tools": [{
-          "enabled": null,
-          "name": null,
-          "portal_alias": null,
-          "portal_description": null,
-          "server_alias": null,
-          "server_description": null,
-        }],
-      }],
-    };
-    const { url, server } = startMockCfServer({
-      "/access/ai-controls/mcp/portals/test-id-123": { result: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: {
-          id: "test-id",
-          name: "test-access",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).get_mcp_portals_api_fetch_gateways.execute(
-        { "id": "test-id-123" },
-        context,
-      );
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
   name: "access model: update_portals executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
       "allow_code_mode": true,
+      "code_mode": "opt_in",
       "created_at": "2024-01-01T00:00:00Z",
       "created_by": "test-value",
       "description": "This is my custom MCP Portal",
-      "hostname": "exmaple.com",
+      "hostname": "example.com",
       "id": "my-mcp-portal",
       "modified_at": "2024-01-01T00:00:00Z",
       "modified_by": "test-value",
       "name": "My MCP Portal",
       "secure_web_gateway": false,
       "servers": [{
+        "auth_config_summary": {
+          "auth_mode": "dcr",
+          "client_secret_version": 1,
+          "config": {
+            "authorization_endpoint": null,
+            "issuer": null,
+            "resource": null,
+            "revocation_endpoint": null,
+            "token_endpoint": null,
+          },
+          "has_client_secret": true,
+          "registration_info": {
+            "client_id": null,
+            "redirect_uris": null,
+            "scope": null,
+            "token_endpoint_auth_method": null,
+          },
+        },
         "auth_type": "unauthenticated",
+        "authentication_status": "not_required",
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "default_disabled": true,
-        "description": "This is one remote mcp server",
+        "description": "This is one remote MCP server",
         "error": "test-value",
         "error_details": {
           "cause": "test-value",
@@ -687,6 +779,7 @@ Deno.test({
         "name": "My MCP Server",
         "on_behalf": true,
         "prompts": [{}],
+        "registered_at": "2024-01-01T00:00:00Z",
         "secure_web_gateway": false,
         "server_id": "my-mcp-server",
         "status": "ready",
@@ -696,16 +789,20 @@ Deno.test({
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
         "updated_tools": [{
           "enabled": null,
           "name": null,
           "portal_alias": null,
           "portal_description": null,
+          "portal_enabled": null,
           "server_alias": null,
           "server_description": null,
+          "server_enabled": null,
         }],
       }],
     };
@@ -735,21 +832,41 @@ Deno.test({
         }
       >).update_portals.execute({
         "allow_code_mode": true,
+        "code_mode": "opt_in",
         "created_at": "2024-01-01T00:00:00Z",
         "created_by": "test-value",
         "description": "This is my custom MCP Portal",
-        "hostname": "exmaple.com",
+        "hostname": "example.com",
         "id": "test-id-123",
         "modified_at": "2024-01-01T00:00:00Z",
         "modified_by": "test-value",
         "name": "My MCP Portal",
         "secure_web_gateway": false,
         "servers": [{
+          "auth_config_summary": {
+            "auth_mode": "dcr",
+            "client_secret_version": 1,
+            "config": {
+              "authorization_endpoint": null,
+              "issuer": null,
+              "resource": null,
+              "revocation_endpoint": null,
+              "token_endpoint": null,
+            },
+            "has_client_secret": true,
+            "registration_info": {
+              "client_id": null,
+              "redirect_uris": null,
+              "scope": null,
+              "token_endpoint_auth_method": null,
+            },
+          },
           "auth_type": "unauthenticated",
+          "authentication_status": "not_required",
           "created_at": "2024-01-01T00:00:00Z",
           "created_by": "test-value",
           "default_disabled": true,
-          "description": "This is one remote mcp server",
+          "description": "This is one remote MCP server",
           "error": "test-value",
           "error_details": {
             "cause": "test-value",
@@ -768,6 +885,7 @@ Deno.test({
           "name": "My MCP Server",
           "on_behalf": true,
           "prompts": [{}],
+          "registered_at": "2024-01-01T00:00:00Z",
           "secure_web_gateway": false,
           "server_id": "my-mcp-server",
           "status": "ready",
@@ -777,16 +895,20 @@ Deno.test({
             "name": null,
             "portal_alias": null,
             "portal_description": null,
+            "portal_enabled": null,
             "server_alias": null,
             "server_description": null,
+            "server_enabled": null,
           }],
           "updated_tools": [{
             "enabled": null,
             "name": null,
             "portal_alias": null,
             "portal_description": null,
+            "portal_enabled": null,
             "server_alias": null,
             "server_description": null,
+            "server_enabled": null,
           }],
         }],
       }, context);
@@ -992,6 +1114,189 @@ Deno.test({
 
       const resources = getWrittenResources();
       assertEquals(resources.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: create_zero_trust_organization_revoke_all_access_tokens_for_a_user creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = true;
+    const { url, server } = startMockCfServer({
+      "/access/organizations/revoke_user": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_zero_trust_organization_revoke_all_access_tokens_for_a_user
+        .execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(/^[0-9a-f]{16}$/.test(resources[0].name), true);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "access model: create_access_service_tokens_rotate_a_service_token creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "client_id": null,
+      "client_secret": null,
+      "created_at": null,
+      "duration": null,
+      "enabled": null,
+      "id": "new-123",
+      "name": null,
+      "tags": null,
+      "updated_at": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/access/service_tokens/test-id-123/rotate": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_access_service_tokens_rotate_a_service_token.execute({
+        "client_id": null,
+        "client_secret": null,
+        "created_at": null,
+        "duration": null,
+        "enabled": null,
+        "id": "test-value",
+        "name": null,
+        "tags": null,
+        "updated_at": null,
+        "service_token_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "access model: create_user creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "active": true,
+      "displayName": "test-value",
+      "emails": [null],
+      "externalId": "test-value",
+      "id": "new-123",
+      "meta": null,
+      "name": null,
+      "schemas": ["test-value"],
+      "userName": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/access/user_populations/test-id-123/users": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-access",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_user.execute({
+        "active": true,
+        "displayName": "test-value",
+        "emails": [null],
+        "externalId": "test-value",
+        "id": "test-value",
+        "meta": null,
+        "name": null,
+        "schemas": ["test-value"],
+        "userName": "test-value",
+        "user_population_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -1329,9 +1634,9 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = [{
-      "config": { "client_secret": "STRIP-CANARY-0" },
-      "scim_config": { "secret": "STRIP-CANARY-2" },
-      "type": "onetimepin",
+      "config": { "client_secret": "STRIP-CANARY-2" },
+      "scim_config": { "secret": "STRIP-CANARY-3" },
+      "type": "duo",
     }];
     const { url, server } = startMockCfServer({
       "/access/identity_providers": { result: mockData, isCollection: true },
@@ -1670,8 +1975,10 @@ Deno.test({
       "client_secret": "VAULT-CANARY-0",
       "created_at": null,
       "duration": null,
+      "enabled": null,
       "id": "test-value",
       "name": null,
+      "tags": null,
       "updated_at": null,
     };
     const { url, server } = startMockCfServer({
@@ -1741,8 +2048,10 @@ Deno.test({
       "client_secret": "VAULT-CANARY-0",
       "created_at": null,
       "duration": null,
+      "enabled": null,
       "id": "test-value",
       "name": null,
+      "tags": null,
       "updated_at": null,
     };
     const { url, server } = startMockCfServer({

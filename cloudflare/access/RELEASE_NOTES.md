@@ -1,71 +1,9 @@
-## 2026.11.05.1
+## 2026.11.26.1
 
-**Fixed:** `access_applications_revoke_service_tokens`,
-`update_access_application_settings` and `update_an_mtls_certificate_settings`
-are writes whose success response carries no body (HTTP 204). Earlier versions
-declared a resource with an empty schema for each and wrote an empty `{}` (or a
-dead instance name) on every call. Each method now issues the API call for its
-side effect and returns no data handles — it stores nothing. Their empty
-resource specs are gone.
+**Fixed:** GET methods that declare query parameters ignored them: the request went out without the filters, so a call always returned the unfiltered default. Affected: `get_mcp_portals_api_portal_tool_call_timeseries`, `get_mcp_portals_api_server_tool_call_timeseries`, `get_mcp_portals_api_account_tool_call_timeseries`. They now send their query parameters, and a call that supplies any writes its own instance (suffixed with a hash of the query) instead of overwriting the shared one. Calls without query arguments keep their existing instance names.
 
-**Upgrade note:** The resources
-`access_applications_revoke_service_tokens`, `access_application_settings` and
-`an_mtls_certificate_settings` are no longer declared. Any data earlier versions
-wrote under them is stale; delete it with `swamp data delete`.
+**Added:** SCIM user and group resource methods, user population methods (`list_user_populations`, `create_user_population`, `get_user_population`, `update_user_population`, `delete_user_population`), trust settings methods, `list_users`, `delete_passkey`, MCP portal tool-call timeseries and effective redirect URI methods, custom page template validation, and Zero Trust organization update methods (22 methods).
 
-## 2026.11.03.1
+**Changed:** `create_portals` changed argument type: `servers`. `update_portals` changed argument type: `servers`. `update_servers` changed argument type: `updated_prompts`, `updated_tools`. `create_an_access_policy` no longer takes `precedence`, `decision`, `exclude`, `include`, `name`, `require`. `update_an_access_policy` no longer takes `precedence`, `decision`, `exclude`, `include`, `name`, `require`. `create_your_zero_trust_organization` changed argument type: `auth_domain`, `name`. `create_user` now calls `POST /access/user_populations/{user_population_id}/users`; requires `user_population_id`; no longer takes `email`. `get_user` now calls `GET /access/user_populations/{user_population_id}/users/{user_id}`; requires `user_population_id`. `update_user` now calls `PATCH /access/user_populations/{user_population_id}/users/{user_id}`; requires `user_population_id`; no longer takes `email`, `name`. `delete_user` now calls `DELETE /access/user_populations/{user_population_id}/users/{user_id}`; requires `user_population_id`. The `user` resource now declares the SCIM user shape (`displayName`, `emails`, `externalId`, `userName`) instead of the earlier seat fields; users stored earlier still read because the schema is loose.
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
-
-## 2026.10.21.1
-
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
-
-**Changed:** Method arguments that carry a secret are now marked sensitive, so
-swamp redacts them from logs and run records. Pass them as `vault.get`
-expressions. Affected: `create_servers`, `update_servers`,
-`access_applications_add_an_application`, `update_an_access_application`,
-`access_identity_providers_add_an_access_identity_provider` and
-`update_an_access_identity_provider`. The README's new "Secrets" section lists
-them per method.
-
-**Changed:** Secrets returned by
-`access_identity_providers_add_an_access_identity_provider`,
-`get_an_access_identity_provider`, `update_an_access_identity_provider`,
-`create_a_service_token` and
-`create_access_service_tokens_rotate_a_service_token` are now stored in a vault,
-and the stored resource holds a `vault.get` reference instead of the value.
-Because the model now declares secret output, swamp refuses to run any of the
-model's methods except `list` and `get` (which swamp treats as reads by their
-names) until a vault exists (`swamp vault create local_encryption cloudflare`).
-The README's "Secrets" section lists what each method stores.
-
-**Changed:** Secrets inside list items, maps or unions, which swamp cannot move
-into a vault, are now removed before the result is stored. Affected:
-`list_access_applications`, `access_applications_add_an_application`,
-`get_an_access_application`, `update_an_access_application` and
-`list_access_identity_providers`.
-
-**Fixed:** `create_a_short_lived_certificate_ca` and
-`create_saml_certificate_for_identity_provider` wrote to a resource the model
-does not declare, so they always failed. They now write the resource the model
-declares.
-
-**Fixed:** Create methods whose response carries no `id` wrote every result to
-one instance named `created`, so each call overwrote the previous one. They now
-name the instance by the response's `id` or `uid` when present, else by the path
-parameter that scopes the call, else by a hash of the request arguments (secret
-arguments left out). Affected: `create_a_custom_page`,
-`create_your_zero_trust_organization`,
-`create_zero_trust_organization_revoke_all_access_tokens_for_a_user` and
-`create_tag`.
-
-**Upgrade note:** Resources stored by earlier versions of the methods in the
-README's "Secrets" section may hold plaintext secrets; delete them with
-`swamp data delete` and rotate the affected credentials. Results earlier
-versions wrote to the `created` instance stay there; new runs write under the
-new names.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Callers of the methods listed under Changed must update their arguments. Other methods are unchanged.

@@ -1,27 +1,9 @@
-## 2026.11.03.1
+## 2026.11.26.1
 
-**Changed:** Bump zod 4.6.5 → 4.6.7
+**Fixed:** GET methods that declare query parameters ignored them: the request went out without the filters, so a call always returned the unfiltered default. Affected: `list_images_v2`, `list_migrations`, `list_migration_logs`, `list_sources`. They now send their query parameters, and a call that supplies any writes its own instance (suffixed with a hash of the query) instead of overwriting the shared one. Calls without query arguments keep their existing instance names.
 
-## 2026.10.21.1
+**Added:** `get`, `list_metadata_keys`, and `update_cloudflare_images_config_edit`.
 
-**Changed:** The README and the `apiToken` description now lead with a vault.
-Store the token with `swamp vault put cloudflare API_TOKEN` and set `apiToken`
-to `${{ vault.get("cloudflare", "API_TOKEN") }}`. The `CLOUDFLARE_API_TOKEN`
-environment variable still works as a fallback, but swamp does not redact it, so
-it is no longer recommended. The missing-token error now says the same.
+**Removed:** `get_cloudflare_images_variants_variant_details_flat`, which the API no longer exposes.
 
-**Changed:** Method arguments that carry a secret are now marked sensitive, so
-swamp redacts them from logs and run records. Pass them as `vault.get`
-expressions. Affected: `create_source` and
-`create_cloudflare_images_sourcingkit_precheck_source_connectivity`. The
-README's new "Secrets" section lists them per method.
-
-**Fixed:** Create methods whose response carries no `id` wrote every result to
-one instance named `created`, so each call overwrote the previous one. They now
-name the instance by the response's `id` when present, else by the path
-parameter that scopes the call, else by a hash of the request arguments (secret
-arguments left out). Affected: `create_a_variant` and
-`create_cloudflare_images_sourcingkit_precheck_source_connectivity`.
-
-**Upgrade note:** Results earlier versions wrote to the `created` instance stay
-there; new runs write under the new names.
+**Upgrade note:** Regenerated from the current Cloudflare OpenAPI spec (api-schemas df5b788). Apart from the fixes above, additive only.

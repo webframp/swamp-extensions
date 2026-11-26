@@ -1011,6 +1011,14 @@ ${indent}    context.logger.info("Found {count} ${resourceName}", { count: resul
 ${indent}    return { dataHandles: [handle] };`;
 }
 
+/**
+ * Whether a get method forwards query parameters, and so derives a suffix for
+ * its instance name from them.
+ */
+function getForwardsQuery(method: ClassifiedMethod): boolean {
+  return method.type === "get" && method.operation.queryParams.length > 0;
+}
+
 /** Generate get method body */
 function generateGetBody(
   method: ClassifiedMethod,
@@ -1024,14 +1032,45 @@ function generateGetBody(
   const idParam = method.operation.pathParams[
     method.operation.pathParams.length - 1
   ];
+
+  // Query parameters are forwarded to the API, and a call that supplies any
+  // gets its own instance: two calls that differ only in a filter must not
+  // share (and so overwrite) one stored result.
+  const forwardsQuery = getForwardsQuery(method);
+  const queryNames = Object.fromEntries(
+    method.operation.queryParams.map((
+      p,
+    ) => [sanitizeFieldName(p.name), p.name]),
+  );
+  const queryBuild = forwardsQuery
+    ? `${indent}    const queryNames: Record<string, string> = ${
+      JSON.stringify(queryNames)
+    };
+${indent}    const queryParts: string[] = [];
+${indent}    for (const [k, v] of Object.entries(args)) {
+${indent}      if (v !== undefined && k in queryNames) queryParts.push(\`\${encodeURIComponent(queryNames[k])}=\${encodeURIComponent(String(v))}\`);
+${indent}    }
+${indent}    queryParts.sort();
+${indent}    const qs = queryParts.length > 0 ? \`?\${queryParts.join("&")}\` : "";
+${indent}    const querySuffix = qs ? \`-\${await shortHash(qs)}\` : "";
+${indent}
+`
+    : "";
+  const pathSuffix = forwardsQuery ? "${qs}" : "";
   const instanceExpr = idParam
-    ? `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
+    ? forwardsQuery
+      ? `sanitizeInstanceName(\`\${String(args.${
+        sanitizeFieldName(idParam.name)
+      })}\${querySuffix}\`)`
+      : `sanitizeInstanceName(String(args.${sanitizeFieldName(idParam.name)}))`
+    : forwardsQuery
+    ? `\`${resourceName}-current\${querySuffix}\``
     : `"${resourceName}-current"`;
 
-  return `${indent}    const result = await cfApi<Record<string, unknown>>(
+  return `${queryBuild}${indent}    const result = await cfApi<Record<string, unknown>>(
 ${indent}      apiToken,
 ${indent}      "GET",
-${indent}      \`${apiPath}\`,
+${indent}      \`${apiPath}${pathSuffix}\`,
 ${indent}    );
 ${indent}
 ${stored.setup}${indent}    const handle = await context.writeResource("${specName}", ${instanceExpr}, ${stored.ref});
@@ -1151,6 +1190,7 @@ function methodEmitsShortHash(
   method: ClassifiedMethod,
   config: ServiceConfig,
 ): boolean {
+  if (getForwardsQuery(method)) return methodWritesResource(method);
   if (method.type !== "create") return false;
   // A no-content create uses generateNoContentBody, which never derives an
   // instance name and so never calls shortHash.

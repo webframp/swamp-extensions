@@ -42,9 +42,10 @@ Deno.test("queues model: has expected methods", () => {
   assertExists(model.methods.create_queues_push_message);
   assertExists(model.methods.create_queues_ack_messages);
   assertExists(model.methods.create_queues_push_messages);
-  assertExists(model.methods.create_queues_preview_messages);
-  assertExists(model.methods.create_queues_ack_preview_messages);
+  assertExists(model.methods.create_queues_extend_messages);
+  assertExists(model.methods.create_queues_peek_messages);
   assertExists(model.methods.create_queues_pull_messages);
+  assertExists(model.methods.create_queues_purge_messages);
   assertExists(model.methods.get_metrics);
   assertExists(model.methods.create_queues_purge);
 });
@@ -61,9 +62,10 @@ Deno.test("queues model: has expected resources", () => {
   assertExists(model.resources["queues_push_message"]);
   assertExists(model.resources["queues_ack_messages"]);
   assertExists(model.resources["queues_push_messages"]);
-  assertExists(model.resources["queues_preview_messages"]);
-  assertExists(model.resources["queues_ack_preview_messages"]);
+  assertExists(model.resources["queues_extend_messages"]);
+  assertExists(model.resources["queues_peek_messages"]);
   assertExists(model.resources["queues_pull_messages"]);
+  assertExists(model.resources["queues_purge_messages"]);
   assertExists(model.resources["metrics"]);
   assertExists(model.resources["queues_purge"]);
 });
@@ -135,6 +137,7 @@ Deno.test({
       "consumers": [null],
       "consumers_total_count": 1,
       "created_on": "test-value",
+      "jurisdiction": null,
       "modified_on": "test-value",
       "producers": [null],
       "producers_total_count": 1,
@@ -190,6 +193,7 @@ Deno.test({
       "consumers": [null],
       "consumers_total_count": 1,
       "created_on": "test-value",
+      "jurisdiction": null,
       "modified_on": "test-value",
       "producers": [null],
       "producers_total_count": 1,
@@ -226,6 +230,7 @@ Deno.test({
         "consumers": [null],
         "consumers_total_count": 1,
         "created_on": "test-value",
+        "jurisdiction": null,
         "modified_on": "test-value",
         "producers": [null],
         "producers_total_count": 1,
@@ -257,6 +262,7 @@ Deno.test({
       "consumers": [null],
       "consumers_total_count": 1,
       "created_on": "test-value",
+      "jurisdiction": null,
       "modified_on": "test-value",
       "producers": [null],
       "producers_total_count": 1,
@@ -312,6 +318,7 @@ Deno.test({
       "consumers": [null],
       "consumers_total_count": 1,
       "created_on": "test-value",
+      "jurisdiction": null,
       "modified_on": "test-value",
       "producers": [null],
       "producers_total_count": 1,
@@ -347,6 +354,7 @@ Deno.test({
         "consumers": [null],
         "consumers_total_count": 1,
         "created_on": "test-value",
+        "jurisdiction": null,
         "modified_on": "test-value",
         "producers": [null],
         "producers_total_count": 1,
@@ -444,6 +452,55 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "queues model: create_queues_push_message creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "metadata": { "metrics": null }, "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/queues/test-id-123/messages": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-queues",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_queues_push_message.execute({
+        "metadata": { "metrics": null },
+        "queue_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

@@ -49,9 +49,6 @@ Deno.test("api-shield model: has expected methods", () => {
       .list_api_shield_api_discovery_retrieve_discovered_operation_by_id,
   );
   assertExists(model.methods.patch_discovered_operation);
-  assertExists(
-    model.methods.create_api_shield_expression_templates_fallthrough,
-  );
   assertExists(model.methods.get_labels);
   assertExists(model.methods.get_managed_label);
   assertExists(
@@ -128,7 +125,6 @@ Deno.test("api-shield model: has expected resources", () => {
       ],
   );
   assertExists(model.resources["patch_discovered_operation"]);
-  assertExists(model.resources["api_shield_expression_templates_fallthrough"]);
   assertExists(model.resources["get_labels"]);
   assertExists(model.resources["managed_label"]);
   assertExists(
@@ -440,60 +436,6 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "api-shield model: create_api_shield_expression_templates_fallthrough creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = {
-      "expression": "(cf.api_gateway.fallthrough_detected)",
-      "title": "Fallthrough Expression for [zone.domain.tld]",
-      "id": "new-123",
-    };
-    const { url, server } = startMockCfServer({
-      "/api_gateway/expression-template/fallthrough": { result: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
-        definition: {
-          id: "test-id",
-          name: "test-api-shield",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).create_api_shield_expression_templates_fallthrough.execute({
-        "expression": "(cf.api_gateway.fallthrough_detected)",
-        "title": "Fallthrough Expression for [zone.domain.tld]",
-      }, context);
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
-      assertEquals(resources[0].name, "new-123");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
   name: "api-shield model: create_user_labels executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
@@ -582,6 +524,133 @@ Deno.test({
         }
       >).delete_user_labels.execute({}, context);
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "api-shield model: create_api_shield_endpoint_management_add_operation_to_a_zone creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "endpoint": null,
+      "host": null,
+      "method": null,
+      "last_updated": null,
+      "operation_id": null,
+      "features": null,
+      "schemas": null,
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/api_gateway/operations/item": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
+        definition: {
+          id: "test-id",
+          name: "test-api-shield",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_api_shield_endpoint_management_add_operation_to_a_zone
+        .execute({
+          "endpoint": null,
+          "host": null,
+          "method": null,
+          "last_updated": null,
+          "operation_id": null,
+          "features": null,
+          "schemas": null,
+        }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "api-shield model: create_api_shield_operations_post_labels_to_operation creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "endpoint": null,
+      "host": null,
+      "method": null,
+      "last_updated": null,
+      "operation_id": null,
+      "labels": [null],
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/api_gateway/operations/test-id-123/labels": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "zoneId": "zone-123" },
+        definition: {
+          id: "test-id",
+          name: "test-api-shield",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_api_shield_operations_post_labels_to_operation.execute({
+        "endpoint": null,
+        "host": null,
+        "method": null,
+        "last_updated": null,
+        "operation_id": "test-id-123",
+        "labels": [null],
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

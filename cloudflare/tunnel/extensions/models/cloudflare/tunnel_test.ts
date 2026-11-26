@@ -36,6 +36,7 @@ Deno.test("tunnel model: has expected methods", () => {
   assertExists(model.methods.delete_a_cloudflare_tunnel);
   assertExists(model.methods.get_configuration);
   assertExists(model.methods.put_configuration);
+  assertExists(model.methods.delete_configuration);
   assertExists(model.methods.list_cloudflare_tunnel_connections);
   assertExists(
     model.methods
@@ -45,6 +46,11 @@ Deno.test("tunnel model: has expected methods", () => {
   assertExists(model.methods.get_a_cloudflare_tunnel_management_token);
   assertExists(model.methods.get_a_cloudflare_tunnel_token);
   assertExists(model.methods.list_all_tunnels);
+  assertExists(model.methods.list);
+  assertExists(model.methods.create);
+  assertExists(model.methods.get);
+  assertExists(model.methods.update);
+  assertExists(model.methods.delete);
 });
 
 Deno.test("tunnel model: has expected resources", () => {
@@ -58,6 +64,10 @@ Deno.test("tunnel model: has expected resources", () => {
   assertExists(model.resources["a_cloudflare_tunnel_management_token"]);
   assertExists(model.resources["a_cloudflare_tunnel_token"]);
   assertExists(model.resources["all_tunnels"]);
+  assertExists(model.resources["list"]);
+  assertExists(model.resources["create"]);
+  assertExists(model.resources["get"]);
+  assertExists(model.resources["update"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -421,6 +431,113 @@ Deno.test({
         context,
       );
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "tunnel model: get_a_cloudflare_tunnel_management_token creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = "eyJhIjoiNWFiNGU5Z...";
+    const { url, server } = startMockCfServer({
+      "/cfd_tunnel/test-id-123/management": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-tunnel",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_a_cloudflare_tunnel_management_token.execute({
+        "tunnel_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "test-id-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "tunnel model: create creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "canonical": null,
+      "created_at": null,
+      "hostname": null,
+      "id": "new-123",
+      "tunnel_id": null,
+    };
+    const { url, server } = startMockCfServer({
+      "/tunnels/test-id-123/hostnames": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-tunnel",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create.execute({
+        "canonical": null,
+        "created_at": null,
+        "hostname": null,
+        "id": null,
+        "tunnel_id": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();

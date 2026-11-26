@@ -29,21 +29,10 @@ Deno.test("r2 model: has globalArguments with apiToken", () => {
 
 Deno.test("r2 model: has expected methods", () => {
   assertExists(model.methods);
-  assertExists(model.methods.list_catalogs);
-  assertExists(model.methods.get_catalog_details);
-  assertExists(model.methods.create_store_credentials);
-  assertExists(model.methods.disable_catalog);
-  assertExists(model.methods.enable_catalog);
-  assertExists(model.methods.get_maintenance_config);
-  assertExists(model.methods.update_maintenance_config);
-  assertExists(model.methods.list_namespaces);
-  assertExists(model.methods.list_tables);
-  assertExists(model.methods.get_table);
-  assertExists(model.methods.get_table_maintenance_config);
-  assertExists(model.methods.update_table_maintenance_config);
   assertExists(model.methods.list_buckets);
   assertExists(model.methods.create_bucket);
   assertExists(model.methods.get_bucket);
+  assertExists(model.methods.create_bucket_by_name);
   assertExists(model.methods.patch_bucket);
   assertExists(model.methods.delete_bucket);
   assertExists(model.methods.get_bucket_cors_policy);
@@ -56,12 +45,16 @@ Deno.test("r2 model: has expected methods", () => {
   assertExists(model.methods.delete_custom_domain);
   assertExists(model.methods.get_bucket_public_policy);
   assertExists(model.methods.put_bucket_public_policy);
+  assertExists(model.methods.list_bucket_jobs);
+  assertExists(model.methods.create_bucket_job);
+  assertExists(model.methods.get_bucket_job);
   assertExists(model.methods.get_bucket_lifecycle_configuration);
   assertExists(model.methods.put_bucket_lifecycle_configuration);
   assertExists(model.methods.get_bucket_local_uploads_configuration);
   assertExists(model.methods.put_bucket_local_uploads_configuration);
   assertExists(model.methods.get_bucket_lock_configuration);
   assertExists(model.methods.put_bucket_lock_configuration);
+  assertExists(model.methods.delete_bucket_lock_configuration);
   assertExists(model.methods.list_objects);
   assertExists(model.methods.delete_objects);
   assertExists(model.methods.delete_object);
@@ -74,17 +67,9 @@ Deno.test("r2 model: has expected methods", () => {
 
 Deno.test("r2 model: has expected resources", () => {
   assertExists(model.resources);
-  assertExists(model.resources["list_catalogs"]);
-  assertExists(model.resources["catalog_details"]);
-  assertExists(model.resources["store_credentials"]);
-  assertExists(model.resources["enable_catalog"]);
-  assertExists(model.resources["maintenance_config"]);
-  assertExists(model.resources["list_namespaces"]);
-  assertExists(model.resources["list_tables"]);
-  assertExists(model.resources["table"]);
-  assertExists(model.resources["table_maintenance_config"]);
   assertExists(model.resources["list_buckets"]);
   assertExists(model.resources["bucket"]);
+  assertExists(model.resources["bucket_by_name"]);
   assertExists(model.resources["patch_bucket"]);
   assertExists(model.resources["bucket_cors_policy"]);
   assertExists(model.resources["put_bucket_cors_policy"]);
@@ -94,6 +79,8 @@ Deno.test("r2 model: has expected resources", () => {
   assertExists(model.resources["r2_edit_custom_domain_settings"]);
   assertExists(model.resources["bucket_public_policy"]);
   assertExists(model.resources["put_bucket_public_policy"]);
+  assertExists(model.resources["list_bucket_jobs"]);
+  assertExists(model.resources["bucket_job"]);
   assertExists(model.resources["bucket_lifecycle_configuration"]);
   assertExists(model.resources["put_bucket_lifecycle_configuration"]);
   assertExists(model.resources["bucket_local_uploads_configuration"]);
@@ -167,12 +154,12 @@ function installFetchMock(mockUrl: string): () => void {
 }
 
 Deno.test({
-  name: "r2 model: list_catalogs fetches and writes resource",
+  name: "r2 model: list_buckets fetches and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = { "warehouses": [null] };
+    const mockData = { "buckets": [null] };
     const { url, server } = startMockCfServer({
-      "/r2-catalog": { result: mockData },
+      "/r2/buckets": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -190,7 +177,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).list_catalogs.execute({}, context);
+      >).list_buckets.execute({}, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -207,97 +194,19 @@ Deno.test({
 });
 
 Deno.test({
-  name: "r2 model: create_store_credentials creates and writes resource",
-  sanitizeResources: false,
-  fn: async () => {
-    const mockData = { "id": "new-123" };
-    const { url, server } = startMockCfServer({
-      "/r2-catalog/test-id-123/credential": { result: mockData },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).create_store_credentials.execute(
-        { "bucket_name": "test-id-123" },
-        context,
-      );
-      assertEquals(result.dataHandles.length, 1);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 1);
-      // The spec written must be one the model declares, or swamp rejects it.
-      assertExists(
-        (model.resources as Record<string, unknown>)[resources[0].specName],
-      );
-      assertEquals(resources[0].name, "test-id-123");
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "r2 model: disable_catalog executes successfully",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockCfServer({
-      "/r2-catalog/test-id-123/disable": { result: null },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context, getWrittenResources } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).disable_catalog.execute({
-        "id": "fixture-123",
-        "bucket_name": "test-id-123",
-      }, context);
-      assertEquals(result.dataHandles.length, 0);
-
-      const resources = getWrittenResources();
-      assertEquals(resources.length, 0);
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "r2 model: enable_catalog executes and writes resource",
+  name: "r2 model: create_bucket creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "name": "account123_my-bucket",
+      "creation_date": "test-value",
+      "jurisdiction": null,
+      "location": null,
+      "name": null,
+      "storage_class": null,
+      "id": "new-123",
     };
     const { url, server } = startMockCfServer({
-      "/r2-catalog/test-id-123/enable": { result: mockData },
+      "/r2/buckets": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -315,10 +224,12 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).enable_catalog.execute({
-        "id": "550e8400-e29b-41d4-a716-446655440000",
-        "name": "account123_my-bucket",
-        "bucket_name": "test-id-123",
+      >).create_bucket.execute({
+        "creation_date": "test-value",
+        "jurisdiction": null,
+        "location": null,
+        "name": null,
+        "storage_class": null,
       }, context);
       assertEquals(result.dataHandles.length, 1);
 
@@ -328,6 +239,7 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+      assertEquals(resources[0].name, "new-123");
     } finally {
       uninstall();
       await server.shutdown();
@@ -336,7 +248,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: "r2 model: patch_bucket executes and writes resource",
+  name: "r2 model: create_bucket_by_name executes and writes resource",
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
@@ -365,7 +277,7 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).patch_bucket.execute({
+      >).create_bucket_by_name.execute({
         "creation_date": "test-value",
         "jurisdiction": null,
         "location": null,
@@ -413,6 +325,97 @@ Deno.test({
         }
       >).delete_bucket.execute({ "bucket_name": "test-id-123" }, context);
       assertEquals(result.dataHandles.length, 0);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "r2 model: create_r2_add_custom_domain creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "domain": "example-domain.com",
+      "enabled": true,
+      "zoneId": "36ca64a6d92827b8a6b90be344bb1bfd",
+      "id": "new-123",
+    };
+    const { url, server } = startMockCfServer({
+      "/r2/buckets/test-id-123/domains/custom": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_r2_add_custom_domain.execute({
+        "domain": "example-domain.com",
+        "enabled": true,
+        "zoneId": "36ca64a6d92827b8a6b90be344bb1bfd",
+        "bucket_name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "r2 model: create_bucket_job executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = null;
+    const { url, server } = startMockCfServer({
+      "/r2/buckets/test-id-123/jobs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_bucket_job.execute({ "bucket_name": "test-id-123" }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
     } finally {
       uninstall();
       await server.shutdown();
@@ -542,6 +545,67 @@ function persistedLikeSwamp(schema: unknown, data: unknown): unknown {
   }
   return copy;
 }
+
+Deno.test({
+  name:
+    "r2 model: list_bucket_jobs keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "jobs": [null],
+      "nextContinuationToken": "VAULT-CANARY-0",
+    };
+    const { url, server } = startMockCfServer({
+      "/r2/buckets/test-id-123/jobs": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: { id: "test-id", name: "test-r2", version: 1, tags: {} },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_bucket_jobs.execute({ "bucket_name": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "list_bucket_jobs");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "list_bucket_jobs"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["nextContinuationToken"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("nextContinuationToken"), true);
+      assertEquals(
+        String(valueAt(persisted, ["nextContinuationToken"])).startsWith(
+          "${{ vault.get(",
+        ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
 
 Deno.test({
   name:

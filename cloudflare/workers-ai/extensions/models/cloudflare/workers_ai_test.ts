@@ -32,13 +32,10 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.get_credit_balance);
   assertExists(model.methods.get_invoice_history);
   assertExists(model.methods.get_invoice_preview);
-  assertExists(model.methods.get_spending_limit);
-  assertExists(model.methods.delete_spending_limit);
   assertExists(model.methods.create_topup);
-  assertExists(model.methods.get_topup_config);
-  assertExists(model.methods.create_aig_billing_set_topup_config);
+  assertExists(model.methods.aig_billing_set_topup_config);
   assertExists(model.methods.delete_topup_config);
-  assertExists(model.methods.get_topup_limits);
+  assertExists(model.methods.get_topup_eligibility);
   assertExists(model.methods.create_aig_billing_check_topup_status);
   assertExists(model.methods.get_usage_history);
   assertExists(model.methods.list_account_provider);
@@ -54,6 +51,10 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.list_evaluators);
   assertExists(model.methods.list_gateway);
   assertExists(model.methods.create_gateway);
+  assertExists(model.methods.list_custom_domain);
+  assertExists(model.methods.create_custom_domain);
+  assertExists(model.methods.get_aig_config_fetch_custom_domain);
+  assertExists(model.methods.delete_custom_domain);
   assertExists(model.methods.list_dataset);
   assertExists(model.methods.create_dataset);
   assertExists(model.methods.get_aig_config_fetch_dataset);
@@ -69,10 +70,17 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.patch_gateway_log);
   assertExists(model.methods.get_gateway_log_request);
   assertExists(model.methods.get_gateway_log_response);
+  assertExists(model.methods.list_model_aliases);
+  assertExists(model.methods.create_model_alias);
+  assertExists(model.methods.get_model_alias);
+  assertExists(model.methods.update_model_alias);
+  assertExists(model.methods.delete_model_alias);
   assertExists(model.methods.list_providers);
   assertExists(model.methods.create_providers);
+  assertExists(model.methods.get_aig_config_fetch_providers);
   assertExists(model.methods.update_providers);
   assertExists(model.methods.delete_providers);
+  assertExists(model.methods.aig_config_test_providers);
   assertExists(model.methods.list_gateway_dynamic_routes);
   assertExists(model.methods.create_aig_config_post_gateway_dynamic_route);
   assertExists(model.methods.get_gateway_dynamic_route);
@@ -91,29 +99,16 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.get_aig_config_fetch_gateway);
   assertExists(model.methods.update_gateway);
   assertExists(model.methods.delete_gateway);
-  assertExists(model.methods.list_instances);
-  assertExists(model.methods.create_instance);
-  assertExists(model.methods.get_ai_search_fetch_instance);
-  assertExists(model.methods.update_instance);
-  assertExists(model.methods.delete_instance);
-  assertExists(model.methods.create_ai_search_instance_chat_completion);
-  assertExists(model.methods.list_jobs);
-  assertExists(model.methods.create_job);
-  assertExists(model.methods.get_job);
-  assertExists(model.methods.update_ai_search_instance_change_job_status);
-  assertExists(model.methods.list_job_logs);
-  assertExists(model.methods.create_ai_search_instance_search);
-  assertExists(model.methods.get_ai_search_stats);
+  assertExists(model.methods.get_logging_state);
+  assertExists(model.methods.patch_logging_state);
   assertExists(model.methods.list_namespaces);
   assertExists(model.methods.create_namespace);
-  assertExists(model.methods.get_ai_search_fetch_namespace);
-  assertExists(model.methods.update_namespace);
-  assertExists(model.methods.delete_namespace);
-  assertExists(
-    model.methods.create_ai_search_namespace_multi_instance_chat_completion,
-  );
+  assertExists(model.methods.list_instances);
+  assertExists(model.methods.create_instance);
   assertExists(model.methods.get_ai_search_namespace_fetch_instance);
+  assertExists(model.methods.update_instance);
   assertExists(model.methods.update_ai_search_move_instance);
+  assertExists(model.methods.delete_instance);
   assertExists(
     model.methods.create_ai_search_namespace_instance_chat_completion,
   );
@@ -124,11 +119,22 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.delete_item);
   assertExists(model.methods.list_item_chunks);
   assertExists(model.methods.list_ai_search_namespace_instance_logs_item);
+  assertExists(model.methods.list_jobs);
+  assertExists(model.methods.create_job);
+  assertExists(model.methods.get_job);
   assertExists(
     model.methods.update_ai_search_namespace_instance_change_job_status,
   );
+  assertExists(model.methods.list_job_logs);
+  assertExists(model.methods.ai_search_namespace_purge_instance_cache);
   assertExists(model.methods.create_ai_search_namespace_instance_search);
   assertExists(model.methods.get_ai_search_namespace_stats);
+  assertExists(model.methods.get_ai_search_fetch_namespace);
+  assertExists(model.methods.update_namespace);
+  assertExists(model.methods.delete_namespace);
+  assertExists(
+    model.methods.create_ai_search_namespace_multi_instance_chat_completion,
+  );
   assertExists(model.methods.create_ai_search_namespace_multi_instance_search);
   assertExists(model.methods.list_tokens);
   assertExists(model.methods.create_tokens);
@@ -139,293 +145,15 @@ Deno.test("workers-ai model: has expected methods", () => {
   assertExists(model.methods.list_finetunes);
   assertExists(model.methods.create_finetune);
   assertExists(model.methods.list_public_finetunes);
+  assertExists(model.methods.delete_finetune);
+  assertExists(model.methods.get_workers_ai_download_finetune_asset);
   assertExists(model.methods.get_model_schema);
   assertExists(model.methods.get_workers_ai_search_model);
   assertExists(model.methods.create_workers_ai_post_run_generic);
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_baai_bge_base_en_v1_5);
-  assertExists(model.methods.workers_ai_post_run_cf_baai_bge_large_en_v1_5);
-  assertExists(model.methods.workers_ai_post_run_cf_baai_bge_m3);
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_baai_bge_reranker_base,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_baai_bge_small_en_v1_5);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_baai_nonomni_bge_m3);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_black_forest_labs_flux_1_schnell,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_black_forest_labs_flux_2_dev,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_1,
-  );
-  assertExists(model.methods.create_workers_ai_post_run_cf_deepgram_aura_1);
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_1_internal,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_2,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en,
-  );
-  assertExists(model.methods.create_workers_ai_post_run_cf_deepgram_aura_2_en);
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_aura_2_es,
-  );
-  assertExists(model.methods.create_workers_ai_post_run_cf_deepgram_aura_2_es);
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_flux,
-  );
-  assertExists(model.methods.create_workers_ai_post_run_cf_deepgram_flux);
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_nova_3,
-  );
-  assertExists(model.methods.create_workers_ai_post_run_cf_deepgram_nova_3);
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_nova_3_internal,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_deepgram_nova_3_ws,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct,
-  );
-  assertExists(
-    model.methods
-      .workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_defog_sqlcoder_7b_2);
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_facebook_bart_large_cnn,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_google_embeddinggemma_300m,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_google_gemma_2b_it_lora);
-  assertExists(model.methods.workers_ai_post_run_cf_google_gemma_3_12b_it);
-  assertExists(model.methods.workers_ai_post_run_cf_google_gemma_4_26b_a4b_it);
-  assertExists(model.methods.workers_ai_post_run_cf_google_gemma_7b_it_lora);
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_leonardo_lucid_origin,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_leonardo_phoenix_1_0,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_lykon_dreamshaper_8_lcm,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16);
-  assertExists(model.methods.workers_ai_post_run_cf_meta_llama_2_7b_chat_int8);
-  assertExists(model.methods.workers_ai_post_run_cf_meta_llama_3_8b_instruct);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_meta_llama_3_2_1b_instruct);
-  assertExists(model.methods.workers_ai_post_run_cf_meta_llama_3_2_3b_instruct);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct,
-  );
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_meta_llama_guard_3_8b,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_meta_m2m100_1_2b);
-  assertExists(model.methods.workers_ai_post_run_cf_microsoft_phi_2);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora,
-  );
-  assertExists(
-    model.methods
-      .workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_moonshotai_kimi_k2_5);
-  assertExists(model.methods.workers_ai_post_run_cf_moonshotai_kimi_k2_6);
-  assertExists(model.methods.workers_ai_post_run_cf_moonshotai_kimi_k2_7_code);
-  assertExists(model.methods.create_workers_ai_post_run_cf_myshell_ai_melotts);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b,
-  );
-  assertExists(
-    model.methods
-      .get_workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b,
-  );
-  assertExists(
-    model.methods
-      .workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_openai_gpt_oss_120b);
-  assertExists(model.methods.workers_ai_post_run_cf_openai_gpt_oss_20b);
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_openai_whisper_large_v3_turbo,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_openchat_openchat_3_5_0106);
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_pfnet_plamo_embedding_1b,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat);
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat);
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq);
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8);
-  assertExists(
-    model.methods.create_workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_qwen_qwq_32b);
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting,
-  );
-  assertExists(
-    model.methods
-      .create_workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_sven_test_pipe_http,
-  );
-  assertExists(
-    model.methods.get_workers_ai_post_websocket_run_cf_test_hello_world_cog,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_tiiuae_falcon_7b_instruct);
-  assertExists(
-    model.methods.workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0,
-  );
-  assertExists(model.methods.workers_ai_post_run_cf_zai_org_glm_4_7_flash);
-  assertExists(model.methods.workers_ai_post_run_cf_zai_org_glm_5_2);
-  assertExists(model.methods.workers_ai_post_run_hf_google_gemma_7b_it);
-  assertExists(
-    model.methods.workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq,
-  );
-  assertExists(
-    model.methods
-      .workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq,
-  );
-  assertExists(
-    model.methods.workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq,
-  );
   assertExists(model.methods.workers_ai_post_run_model);
   assertExists(model.methods.list_workers_ai_search_task);
   assertExists(model.methods.get_to_markdown_supported);
+  assertExists(model.methods.create_workers_ai_ai_gateway_web_search);
 });
 
 Deno.test("workers-ai model: has expected resources", () => {
@@ -433,11 +161,9 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["credit_balance"]);
   assertExists(model.resources["invoice_history"]);
   assertExists(model.resources["invoice_preview"]);
-  assertExists(model.resources["spending_limit"]);
   assertExists(model.resources["topup"]);
-  assertExists(model.resources["topup_config"]);
   assertExists(model.resources["aig_billing_set_topup_config"]);
-  assertExists(model.resources["topup_limits"]);
+  assertExists(model.resources["topup_eligibility"]);
   assertExists(model.resources["aig_billing_check_topup_status"]);
   assertExists(model.resources["usage_history"]);
   assertExists(model.resources["account_provider"]);
@@ -446,6 +172,8 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["aig_config_fetch_account_provider"]);
   assertExists(model.resources["evaluators"]);
   assertExists(model.resources["gateway"]);
+  assertExists(model.resources["custom_domain"]);
+  assertExists(model.resources["aig_config_fetch_custom_domain"]);
   assertExists(model.resources["dataset"]);
   assertExists(model.resources["aig_config_fetch_dataset"]);
   assertExists(model.resources["evaluations"]);
@@ -455,7 +183,11 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["patch_gateway_log"]);
   assertExists(model.resources["gateway_log_request"]);
   assertExists(model.resources["gateway_log_response"]);
+  assertExists(model.resources["model_aliases"]);
+  assertExists(model.resources["model_alias"]);
   assertExists(model.resources["providers"]);
+  assertExists(model.resources["aig_config_fetch_providers"]);
+  assertExists(model.resources["aig_config_test_providers"]);
   assertExists(model.resources["list_gateway_dynamic_routes"]);
   assertExists(model.resources["aig_config_post_gateway_dynamic_route"]);
   assertExists(model.resources["gateway_dynamic_route"]);
@@ -470,22 +202,12 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["gateway_dynamic_route_version"]);
   assertExists(model.resources["gateway_url"]);
   assertExists(model.resources["aig_config_fetch_gateway"]);
-  assertExists(model.resources["instances"]);
-  assertExists(model.resources["instance"]);
-  assertExists(model.resources["ai_search_fetch_instance"]);
-  assertExists(model.resources["ai_search_instance_chat_completion"]);
-  assertExists(model.resources["jobs"]);
-  assertExists(model.resources["job"]);
-  assertExists(model.resources["ai_search_instance_change_job_status"]);
-  assertExists(model.resources["job_logs"]);
-  assertExists(model.resources["ai_search_instance_search"]);
-  assertExists(model.resources["ai_search_stats"]);
+  assertExists(model.resources["logging_state"]);
+  assertExists(model.resources["patch_logging_state"]);
   assertExists(model.resources["namespaces"]);
   assertExists(model.resources["namespace"]);
-  assertExists(model.resources["ai_search_fetch_namespace"]);
-  assertExists(
-    model.resources["ai_search_namespace_multi_instance_chat_completion"],
-  );
+  assertExists(model.resources["instances"]);
+  assertExists(model.resources["instance"]);
   assertExists(model.resources["ai_search_namespace_fetch_instance"]);
   assertExists(model.resources["ai_search_move_instance"]);
   assertExists(model.resources["ai_search_namespace_instance_chat_completion"]);
@@ -495,11 +217,19 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["ai_search_namespace_instance_sync_item"]);
   assertExists(model.resources["item_chunks"]);
   assertExists(model.resources["ai_search_namespace_instance_logs_item"]);
+  assertExists(model.resources["jobs"]);
+  assertExists(model.resources["job"]);
   assertExists(
     model.resources["ai_search_namespace_instance_change_job_status"],
   );
+  assertExists(model.resources["job_logs"]);
+  assertExists(model.resources["ai_search_namespace_purge_instance_cache"]);
   assertExists(model.resources["ai_search_namespace_instance_search"]);
   assertExists(model.resources["ai_search_namespace_stats"]);
+  assertExists(model.resources["ai_search_fetch_namespace"]);
+  assertExists(
+    model.resources["ai_search_namespace_multi_instance_chat_completion"],
+  );
   assertExists(model.resources["ai_search_namespace_multi_instance_search"]);
   assertExists(model.resources["tokens"]);
   assertExists(model.resources["ai_search_fetch_tokens"]);
@@ -507,368 +237,14 @@ Deno.test("workers-ai model: has expected resources", () => {
   assertExists(model.resources["list_finetunes"]);
   assertExists(model.resources["finetune"]);
   assertExists(model.resources["public_finetunes"]);
+  assertExists(model.resources["workers_ai_download_finetune_asset"]);
   assertExists(model.resources["model_schema"]);
   assertExists(model.resources["workers_ai_search_model"]);
   assertExists(model.resources["workers_ai_post_run_generic"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_ai4bharat_indictrans2_en_indic_1b"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_ai4bharat_nonomni_indictrans2_en_indic_1b"
-      ],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_baai_bge_base_en_v1_5"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_bge_large_en_v1_5"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_baai_bge_m3"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_bge_reranker_base"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_bge_small_en_v1_5"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_nonomni_bge_base_en_v1_5"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_nonomni_bge_large_en_v1_5"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_baai_nonomni_bge_m3"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_baai_nonomni_bge_small_en_v1_5"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_black_forest_labs_flux_1_schnell"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_black_forest_labs_flux_2_dev"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_black_forest_labs_flux_2_klein_4b"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_black_forest_labs_flux_2_klein_9b"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_bytedance_stable_diffusion_xl_lightning"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura_1"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_deepgram_aura_1"]);
-  assertExists(
-    model
-      .resources["workers_ai_post_websocket_run_cf_deepgram_aura_1_internal"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura_2"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura_2_en"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_deepgram_aura_2_en"]);
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura_2_en_ws"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_aura_2_es"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_deepgram_aura_2_es"]);
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_flux"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_deepgram_flux"]);
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_nova_3"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_deepgram_nova_3"]);
-  assertExists(
-    model
-      .resources["workers_ai_post_websocket_run_cf_deepgram_nova_3_internal"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_deepgram_nova_3_ws"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_deepseek_ai_deepseek_math_7b_instruct"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_deepseek_ai_deepseek_r1_distill_qwen_32b"
-      ],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_defog_sqlcoder_7b_2"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_facebook_bart_large_cnn"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_facebook_nonomni_bart_large_cnn"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_fblgit_una_cybertron_7b_v2_bf16"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_google_embeddinggemma_300m"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_google_gemma_2b_it_lora"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_google_gemma_3_12b_it"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_google_gemma_4_26b_a4b_it"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_google_gemma_7b_it_lora"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_google_nonomni_embeddinggemma_300m"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_huggingface_distilbert_sst_2_int8"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_huggingface_nonomni_distilbert_sst_2_int8"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_ibm_granite_granite_4_0_h_micro"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_leonardo_lucid_origin"]);
-  assertExists(model.resources["workers_ai_post_run_cf_leonardo_phoenix_1_0"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_lykon_dreamshaper_8_lcm"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_llama_2_7b_chat_hf_lora"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_2_7b_chat_fp16"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_2_7b_chat_int8"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_8b_instruct"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_8b_instruct_awq"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_3_1_70b_instruct_fp8_fast"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_awq"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_3_1_8b_instruct_fp8_fast"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_3_2_11b_vision_instruct"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_2_1b_instruct"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_meta_llama_3_2_3b_instruct"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_3_3_70b_instruct_fp8_fast"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_meta_llama_4_scout_17b_16e_instruct"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_meta_llama_guard_3_8b"]);
-  assertExists(model.resources["workers_ai_post_run_cf_meta_m2m100_1_2b"]);
-  assertExists(model.resources["workers_ai_post_run_cf_microsoft_phi_2"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_1"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_mistral_mistral_7b_instruct_v0_2_lora"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_mistralai_mistral_small_3_1_24b_instruct"
-      ],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_moonshotai_kimi_k2_5"]);
-  assertExists(model.resources["workers_ai_post_run_cf_moonshotai_kimi_k2_6"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_moonshotai_kimi_k2_7_code"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_myshell_ai_melotts"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_nvidia_nemotron_3_120b_a12b"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_websocket_run_cf_nvidia_nemotron_speech_streaming_en_0_6b"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_nvidia_nemotron_speech_streaming_en_0_6b"
-      ],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_openai_gpt_oss_120b"]);
-  assertExists(model.resources["workers_ai_post_run_cf_openai_gpt_oss_20b"]);
-  assertExists(
-    model.resources["workers_ai_post_run_cf_openai_whisper_large_v3_turbo"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_openchat_openchat_3_5_0106"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_pfnet_plamo_embedding_1b"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v2"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_websocket_run_cf_pipecat_ai_smart_turn_v3"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen1_5_0_5b_chat"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen1_5_1_8b_chat"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen1_5_14b_chat_awq"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen1_5_7b_chat_awq"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen2_5_coder_32b_instruct"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen3_30b_a3b_fp8"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_qwen_qwen3_embedding_0_6b"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_qwen_qwq_32b"]);
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_img2img"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_runwayml_stable_diffusion_v1_5_inpainting"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_cf_stabilityai_stable_diffusion_xl_base_1_0"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_sven_test_pipe_http"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_websocket_run_cf_test_hello_world_cog"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_thebloke_discolm_german_7b_v1_awq"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_cf_tiiuae_falcon_7b_instruct"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_cf_tinyllama_tinyllama_1_1b_chat_v1_0"],
-  );
-  assertExists(model.resources["workers_ai_post_run_cf_zai_org_glm_4_7_flash"]);
-  assertExists(model.resources["workers_ai_post_run_cf_zai_org_glm_5_2"]);
-  assertExists(model.resources["workers_ai_post_run_hf_google_gemma_7b_it"]);
-  assertExists(
-    model.resources["workers_ai_post_run_hf_mistral_mistral_7b_instruct_v0_2"],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_hf_nexusflow_starling_lm_7b_beta"],
-  );
-  assertExists(
-    model
-      .resources["workers_ai_post_run_hf_nousresearch_hermes_2_pro_mistral_7b"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_base_awq"
-      ],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_hf_thebloke_deepseek_coder_6_7b_instruct_awq"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_hf_thebloke_llama_2_13b_chat_awq"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_hf_thebloke_mistral_7b_instruct_v0_1_awq"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_hf_thebloke_neural_chat_7b_v3_1_awq"],
-  );
-  assertExists(
-    model
-      .resources[
-        "workers_ai_post_run_hf_thebloke_openhermes_2_5_mistral_7b_awq"
-      ],
-  );
-  assertExists(
-    model.resources["workers_ai_post_run_hf_thebloke_zephyr_7b_beta_awq"],
-  );
   assertExists(model.resources["workers_ai_post_run_model"]);
   assertExists(model.resources["workers_ai_search_task"]);
   assertExists(model.resources["get_to_markdown_supported"]);
+  assertExists(model.resources["workers_ai_ai_gateway_web_search"]);
 });
 
 // ---------------------------------------------------------------------------
@@ -935,16 +311,16 @@ Deno.test({
   sanitizeResources: false,
   fn: async () => {
     const mockData = {
-      "balance": 1,
+      "balance": 1250.5,
       "first_topup_success": true,
       "has_default_payment_method": true,
-      "payment_method": { "brand": "test-value", "last4": "test-value" },
+      "payment_method": { "brand": "visa", "last4": "4242" },
       "topup_config": {
-        "amount": 1,
-        "disabledReason": "test-value",
+        "amount": 5000,
+        "disabledReason": "Payment failed after multiple retries",
         "error": "test-value",
-        "lastFailedAt": 1,
-        "threshold": 1,
+        "lastFailedAt": 1700000000000,
+        "threshold": 500,
       },
     };
     const { url, server } = startMockCfServer({
@@ -980,43 +356,6 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
-    } finally {
-      uninstall();
-      await server.shutdown();
-    }
-  },
-});
-
-Deno.test({
-  name: "workers-ai model: delete_spending_limit executes successfully",
-  sanitizeResources: false,
-  fn: async () => {
-    const { url, server } = startMockCfServer({
-      "/ai-gateway/billing/spending-limit": { result: { id: "test-id-123" } },
-    });
-    const uninstall = installFetchMock(url);
-
-    try {
-      const { context } = createModelTestContext({
-        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
-        definition: {
-          id: "test-id",
-          name: "test-workers-ai",
-          version: 1,
-          tags: {},
-        },
-      });
-
-      const result = await (model.methods as Record<
-        string,
-        {
-          execute: (
-            args: Record<string, unknown>,
-            ctx: unknown,
-          ) => Promise<{ dataHandles: unknown[] }>;
-        }
-      >).delete_spending_limit.execute({}, context);
-      assertEquals(result.dataHandles.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1076,6 +415,89 @@ Deno.test({
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
       assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: aig_billing_set_topup_config executes and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = null;
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/billing/topup/config": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).aig_billing_set_topup_config.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "workers-ai model: delete_topup_config executes successfully",
+  sanitizeResources: false,
+  fn: async () => {
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/billing/topup/config": { result: { id: "test-id-123" } },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).delete_topup_config.execute({}, context);
+      assertEquals(result.dataHandles.length, 0);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1219,13 +641,20 @@ Deno.test({
 });
 
 Deno.test({
-  name:
-    "workers-ai model: workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it executes and writes resource",
+  name: "workers-ai model: create_custom_domain creates and writes resource",
   sanitizeResources: false,
   fn: async () => {
-    const mockData = {};
+    const mockData = {
+      "cname_target": "test-value",
+      "created_at": 1717459200000,
+      "gateway_id": "test-value",
+      "hostname": "test-value",
+      "modified_at": 1717459200000,
+      "status": "initializing",
+      "id": "new-123",
+    };
     const { url, server } = startMockCfServer({
-      "/ai/run/@cf/aisingapore/gemma-sea-lion-v4-27b-it": { result: mockData },
+      "/ai-gateway/gateways/test-id-123/custom-domains": { result: mockData },
     });
     const uninstall = installFetchMock(url);
 
@@ -1248,10 +677,14 @@ Deno.test({
             ctx: unknown,
           ) => Promise<{ dataHandles: unknown[] }>;
         }
-      >).workers_ai_post_run_cf_aisingapore_gemma_sea_lion_v4_27b_it.execute(
-        {},
-        context,
-      );
+      >).create_custom_domain.execute({
+        "cname_target": "test-value",
+        "created_at": 1717459200000,
+        "gateway_id": "test-id-123",
+        "hostname": "test-value",
+        "modified_at": 1717459200000,
+        "status": "initializing",
+      }, context);
       assertEquals(result.dataHandles.length, 1);
 
       const resources = getWrittenResources();
@@ -1260,6 +693,571 @@ Deno.test({
       assertExists(
         (model.resources as Record<string, unknown>)[resources[0].specName],
       );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: create_aig_config_post_gateway_dynamic_route_deployment creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "created_at": "2024-01-01T00:00:00Z",
+      "elements": [null],
+      "gateway_id": "test-value",
+      "id": "new-123",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "name": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/gateways/test-id-123/routes/test-id-123/deployments": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_aig_config_post_gateway_dynamic_route_deployment.execute({
+        "created_at": "2024-01-01T00:00:00Z",
+        "elements": [null],
+        "gateway_id": "test-id-123",
+        "id": "test-id-123",
+        "modified_at": "2024-01-01T00:00:00Z",
+        "name": "test-value",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name: "workers-ai model: create_instance creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "ai_gateway_id": "test-value",
+      "ai_search_model": "test-value",
+      "cache": true,
+      "cache_threshold": "super_strict_match",
+      "cache_ttl": null,
+      "chunk_overlap": 0,
+      "chunk_size": 64,
+      "created_at": "2024-01-01T00:00:00Z",
+      "created_by": "test-value",
+      "custom_metadata": [{ "data_type": "text", "field_name": "test-value" }],
+      "embedding_model": "test-value",
+      "enable": true,
+      "engine_version": 1,
+      "fusion_method": "max",
+      "hybrid_search_enabled": true,
+      "id": "new-123",
+      "index_method": { "keyword": true, "vector": true },
+      "indexing_options": {
+        "file_summary": true,
+        "keyword_tokenizer": "porter",
+        "use_ocr": true,
+      },
+      "last_activity": "2024-01-01T00:00:00Z",
+      "max_num_results": 1,
+      "metadata": {
+        "created_from_aisearch_wizard": true,
+        "created_from_emdash_plugin": {
+          "type": "native",
+          "version": "test-value",
+        },
+        "worker_domain": "test-value",
+      },
+      "modified_at": "2024-01-01T00:00:00Z",
+      "modified_by": "test-value",
+      "namespace": "test-value",
+      "paused": true,
+      "public_endpoint_id": "test-value",
+      "public_endpoint_params": {
+        "authorized_hosts": ["test-value"],
+        "chat_completions_endpoint": { "disabled": true },
+        "custom_domains": ["search.example.com"],
+        "default_domain_enabled": true,
+        "enabled": true,
+        "mcp": { "description": "test-value", "disabled": true },
+        "rate_limit": {
+          "period_ms": 60000,
+          "requests": 1,
+          "technique": "fixed",
+        },
+        "search_endpoint": { "disabled": true },
+      },
+      "reranking": true,
+      "reranking_model": "test-value",
+      "retrieval_options": {
+        "boost_by": [{ "direction": "desc", "field": "timestamp" }],
+        "keyword_match_mode": "and",
+      },
+      "rewrite_model": "test-value",
+      "rewrite_query": true,
+      "score_threshold": 0,
+      "source": "test-value",
+      "source_params": {
+        "d1": { "query": "test-value", "template": "labelled" },
+        "exclude_items": ["/admin/**", "/private/**", "**\\temp\\**"],
+        "include_items": ["/blog/**", "/docs/**/*.html", "**\\blog\\**.html"],
+        "prefix": "test-value",
+        "r2_jurisdiction": "test-value",
+        "web_crawler": {
+          "discover_options": {
+            "depth": 5,
+            "include_external_links": false,
+            "include_subdomains": false,
+            "limit": 10000,
+            "max_age": 86400,
+            "source": "all",
+          },
+          "parse_options": {
+            "content_selector": [{
+              "path": "**/blog/**",
+              "selector": "article div.post-body",
+            }, { "path": "**/docs/**", "selector": "main" }],
+            "include_headers": { "cache-control": "no-cache, no-store" },
+            "include_images": true,
+            "specific_sitemaps": [
+              "https://example.com/sitemap.xml",
+              "https://example.com/blog-sitemap.xml",
+            ],
+            "use_browser_rendering": true,
+          },
+          "parse_type": "sitemap",
+        },
+      },
+      "status": "test-value",
+      "sync_interval": null,
+      "token_id": "test-value",
+      "type": "r2",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-search/namespaces/test-id-123/instances": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_instance.execute({
+        "ai_gateway_id": "test-value",
+        "ai_search_model": "test-value",
+        "cache": true,
+        "cache_threshold": "super_strict_match",
+        "cache_ttl": null,
+        "chunk_overlap": 0,
+        "chunk_size": 64,
+        "created_at": "2024-01-01T00:00:00Z",
+        "created_by": "test-value",
+        "custom_metadata": [{
+          "data_type": "text",
+          "field_name": "test-value",
+        }],
+        "embedding_model": "test-value",
+        "enable": true,
+        "engine_version": 1,
+        "fusion_method": "max",
+        "hybrid_search_enabled": true,
+        "id": "my-ai-search",
+        "index_method": { "keyword": true, "vector": true },
+        "indexing_options": {
+          "file_summary": true,
+          "keyword_tokenizer": "porter",
+          "use_ocr": true,
+        },
+        "last_activity": "2024-01-01T00:00:00Z",
+        "max_num_results": 1,
+        "metadata": {
+          "created_from_aisearch_wizard": true,
+          "created_from_emdash_plugin": {
+            "type": "native",
+            "version": "test-value",
+          },
+          "worker_domain": "test-value",
+        },
+        "modified_at": "2024-01-01T00:00:00Z",
+        "modified_by": "test-value",
+        "namespace": "test-id-123",
+        "paused": true,
+        "public_endpoint_id": "test-value",
+        "public_endpoint_params": {
+          "authorized_hosts": ["test-value"],
+          "chat_completions_endpoint": { "disabled": true },
+          "custom_domains": ["search.example.com"],
+          "default_domain_enabled": true,
+          "enabled": true,
+          "mcp": { "description": "test-value", "disabled": true },
+          "rate_limit": {
+            "period_ms": 60000,
+            "requests": 1,
+            "technique": "fixed",
+          },
+          "search_endpoint": { "disabled": true },
+        },
+        "reranking": true,
+        "reranking_model": "test-value",
+        "retrieval_options": {
+          "boost_by": [{ "direction": "desc", "field": "timestamp" }],
+          "keyword_match_mode": "and",
+        },
+        "rewrite_model": "test-value",
+        "rewrite_query": true,
+        "score_threshold": 0,
+        "source": "test-value",
+        "source_params": {
+          "d1": { "query": "test-value", "template": "labelled" },
+          "exclude_items": ["/admin/**", "/private/**", "**\\temp\\**"],
+          "include_items": [
+            "/blog/**",
+            "/docs/**/*.html",
+            "**\\blog\\**.html",
+          ],
+          "prefix": "test-value",
+          "r2_jurisdiction": "test-value",
+          "web_crawler": {
+            "discover_options": {
+              "depth": 5,
+              "include_external_links": false,
+              "include_subdomains": false,
+              "limit": 10000,
+              "max_age": 86400,
+              "source": "all",
+            },
+            "parse_options": {
+              "content_selector": [{
+                "path": "**/blog/**",
+                "selector": "article div.post-body",
+              }, { "path": "**/docs/**", "selector": "main" }],
+              "include_headers": { "cache-control": "no-cache, no-store" },
+              "include_images": true,
+              "specific_sitemaps": [
+                "https://example.com/sitemap.xml",
+                "https://example.com/blog-sitemap.xml",
+              ],
+              "use_browser_rendering": true,
+            },
+            "parse_type": "sitemap",
+          },
+        },
+        "status": "test-value",
+        "sync_interval": null,
+        "token_id": "test-value",
+        "type": "r2",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: create_ai_search_namespace_instance_chat_completion creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "choices": [{
+        "index": 1,
+        "message": { "content": null, "role": "system" },
+      }],
+      "chunks": [{
+        "id": "test-value",
+        "item": { "key": "test-value", "metadata": {}, "timestamp": 1 },
+        "media_end_ms": 0,
+        "media_start_ms": 0,
+        "score": 0,
+        "scoring_details": {
+          "fusion_method": "rrf",
+          "keyword_rank": 1,
+          "keyword_score": 0,
+          "reranking_score": 0,
+          "vector_rank": 1,
+          "vector_score": 0,
+        },
+        "source_media_type": "audio",
+        "text": "test-value",
+        "type": "test-value",
+      }],
+      "id": "new-123",
+      "model": "test-value",
+      "object": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-search/namespaces/test-id-123/instances/test-id-123/chat/completions":
+        { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_ai_search_namespace_instance_chat_completion.execute({
+        "choices": [{
+          "index": 1,
+          "message": { "content": null, "role": "system" },
+        }],
+        "chunks": [{
+          "id": "test-value",
+          "item": { "key": "test-value", "metadata": {}, "timestamp": 1 },
+          "media_end_ms": 0,
+          "media_start_ms": 0,
+          "score": 0,
+          "scoring_details": {
+            "fusion_method": "rrf",
+            "keyword_rank": 1,
+            "keyword_score": 0,
+            "reranking_score": 0,
+            "vector_rank": 1,
+            "vector_score": 0,
+          },
+          "source_media_type": "audio",
+          "text": "test-value",
+          "type": "test-value",
+        }],
+        "id": "test-id-123",
+        "model": "test-value",
+        "object": "test-value",
+        "namespace": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: create_ai_search_namespace_multi_instance_chat_completion creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "choices": [{
+        "index": 1,
+        "message": { "content": null, "role": "system" },
+      }],
+      "chunks": [{
+        "id": "test-value",
+        "instance_id": "test-value",
+        "item": { "key": "test-value", "metadata": {}, "timestamp": 1 },
+        "media_end_ms": 0,
+        "media_start_ms": 0,
+        "score": 0,
+        "scoring_details": {
+          "fusion_method": "rrf",
+          "keyword_rank": 1,
+          "keyword_score": 0,
+          "reranking_score": 0,
+          "vector_rank": 1,
+          "vector_score": 0,
+        },
+        "source_media_type": "audio",
+        "text": "test-value",
+        "type": "test-value",
+      }],
+      "errors": [{ "instance_id": "test-value", "message": "test-value" }],
+      "id": "new-123",
+      "model": "test-value",
+      "object": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-search/namespaces/test-id-123/chat/completions": {
+        result: mockData,
+      },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_ai_search_namespace_multi_instance_chat_completion.execute({
+        "choices": [{
+          "index": 1,
+          "message": { "content": null, "role": "system" },
+        }],
+        "chunks": [{
+          "id": "test-value",
+          "instance_id": "test-value",
+          "item": { "key": "test-value", "metadata": {}, "timestamp": 1 },
+          "media_end_ms": 0,
+          "media_start_ms": 0,
+          "score": 0,
+          "scoring_details": {
+            "fusion_method": "rrf",
+            "keyword_rank": 1,
+            "keyword_score": 0,
+            "reranking_score": 0,
+            "vector_rank": 1,
+            "vector_score": 0,
+          },
+          "source_media_type": "audio",
+          "text": "test-value",
+          "type": "test-value",
+        }],
+        "errors": [{ "instance_id": "test-value", "message": "test-value" }],
+        "id": "test-value",
+        "model": "test-value",
+        "object": "test-value",
+        "name": "test-id-123",
+      }, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(resources[0].name, "new-123");
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: create_workers_ai_post_run_generic creates and writes resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = { "id": "new-123" };
+    const { url, server } = startMockCfServer({
+      "/ai/run": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      const result = await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_workers_ai_post_run_generic.execute({}, context);
+      assertEquals(result.dataHandles.length, 1);
+
+      const resources = getWrittenResources();
+      assertEquals(resources.length, 1);
+      // The spec written must be one the model declares, or swamp rejects it.
+      assertExists(
+        (model.resources as Record<string, unknown>)[resources[0].specName],
+      );
+      assertEquals(/^[0-9a-f]{16}$/.test(resources[0].name), true);
     } finally {
       uninstall();
       await server.shutdown();
@@ -1397,6 +1395,309 @@ Deno.test({
         String(valueAt(persisted, ["client_secret"])).startsWith(
           "${{ vault.get(",
         ),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: list_account_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = [{
+      "base_url": "https://example.com",
+      "beta": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "curl_example": "test-value",
+      "description": "test-value",
+      "enable": true,
+      "headers": "STRIP-CANARY-0",
+      "id": "test-value",
+      "js_example": "test-value",
+      "link": "test-value",
+      "logo": "test-value",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "name": "test-value",
+      "position": 1,
+      "slug": "test-value",
+    }];
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/custom-providers": { result: mockData, isCollection: true },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).list_account_provider.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "account_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "account_provider"
+      ].schema;
+      const data = written[0].data;
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: create_account_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "base_url": "https://example.com",
+      "beta": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "curl_example": "test-value",
+      "description": "test-value",
+      "enable": true,
+      "headers": "VAULT-CANARY-0",
+      "id": "test-value",
+      "js_example": "test-value",
+      "link": "test-value",
+      "logo": "test-value",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "name": "test-value",
+      "position": 1,
+      "slug": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/custom-providers": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).create_account_provider.execute({}, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "account_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "account_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["headers"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("headers"), true);
+      assertEquals(
+        String(valueAt(persisted, ["headers"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: get_aig_config_fetch_account_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "base_url": "https://example.com",
+      "beta": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "curl_example": "test-value",
+      "description": "test-value",
+      "enable": true,
+      "headers": "VAULT-CANARY-0",
+      "id": "test-value",
+      "js_example": "test-value",
+      "link": "test-value",
+      "logo": "test-value",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "name": "test-value",
+      "position": 1,
+      "slug": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/custom-providers/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).get_aig_config_fetch_account_provider.execute(
+        { "id": "test-id-123" },
+        context,
+      );
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "aig_config_fetch_account_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "aig_config_fetch_account_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["headers"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("headers"), true);
+      assertEquals(
+        String(valueAt(persisted, ["headers"])).startsWith("${{ vault.get("),
+        true,
+      );
+      assertEquals(JSON.stringify(persisted).includes("CANARY"), false);
+    } finally {
+      uninstall();
+      await server.shutdown();
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "workers-ai model: update_account_provider keeps returned secrets out of the stored resource",
+  sanitizeResources: false,
+  fn: async () => {
+    const mockData = {
+      "base_url": "https://example.com",
+      "beta": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "curl_example": "test-value",
+      "description": "test-value",
+      "enable": true,
+      "headers": "VAULT-CANARY-0",
+      "id": "test-value",
+      "js_example": "test-value",
+      "link": "test-value",
+      "logo": "test-value",
+      "modified_at": "2024-01-01T00:00:00Z",
+      "name": "test-value",
+      "position": 1,
+      "slug": "test-value",
+    };
+    const { url, server } = startMockCfServer({
+      "/ai-gateway/custom-providers/test-id-123": { result: mockData },
+    });
+    const uninstall = installFetchMock(url);
+
+    try {
+      const { context, getWrittenResources } = createModelTestContext({
+        globalArgs: { "apiToken": "test-token", "accountId": "acct-123" },
+        definition: {
+          id: "test-id",
+          name: "test-workers-ai",
+          version: 1,
+          tags: {},
+        },
+      });
+
+      await (model.methods as Record<
+        string,
+        {
+          execute: (
+            args: Record<string, unknown>,
+            ctx: unknown,
+          ) => Promise<{ dataHandles: unknown[] }>;
+        }
+      >).update_account_provider.execute({ "id": "test-id-123" }, context);
+
+      const written = getWrittenResources();
+      assertEquals(written.length, 1);
+      assertEquals(written[0].specName, "account_provider");
+      const schema = (model.resources as Record<string, { schema: unknown }>)[
+        "account_provider"
+      ].schema;
+      const data = written[0].data;
+      const sensitivePaths = new Set(
+        sensitivePathsOf(schema).map((p) => p.join(".")),
+      );
+      const persisted = persistedLikeSwamp(schema, data);
+
+      // Secrets swamp cannot vault are gone before the write.
+      assertEquals(JSON.stringify(data).includes("STRIP-CANARY"), false);
+      // Secrets it can vault are declared sensitive and become vault references.
+      assertEquals(valueAt(data, ["headers"]), "VAULT-CANARY-0");
+      assertEquals(sensitivePaths.has("headers"), true);
+      assertEquals(
+        String(valueAt(persisted, ["headers"])).startsWith("${{ vault.get("),
         true,
       );
       assertEquals(JSON.stringify(persisted).includes("CANARY"), false);

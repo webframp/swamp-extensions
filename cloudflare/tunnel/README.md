@@ -19,8 +19,9 @@ swamp vault put cloudflare API_TOKEN             # prompts; the value never touc
 
 Some methods return secrets, which swamp stores in a vault (see
 [Secrets](#secrets)). Because the model declares such fields, swamp refuses to
-run any of its methods, reads included, until a vault exists
-(`swamp vault create local_encryption cloudflare`).
+run any of its methods except `list` and `get` until a vault exists
+(`swamp vault create local_encryption cloudflare`); swamp treats a method of
+those names as a read.
 
 When `apiToken` is unset, the model falls back to the `CLOUDFLARE_API_TOKEN`
 environment variable. Swamp does not redact that variable, so it is not
@@ -45,14 +46,20 @@ swamp model create @webframp/cloudflare/tunnel cf-tunnel \
 | `get_a_cloudflare_tunnel`                                         | Get a Cloudflare Tunnel                  |
 | `update_a_cloudflare_tunnel`                                      | Update a Cloudflare Tunnel               |
 | `delete_a_cloudflare_tunnel`                                      | Delete a Cloudflare Tunnel               |
-| `get_configuration`                                               | Get configuration                        |
-| `put_configuration`                                               | Put configuration                        |
+| `get_configuration`                                               | Get Tunnel configuration                 |
+| `put_configuration`                                               | Update Tunnel configuration              |
+| `delete_configuration`                                            | Reset Tunnel configuration               |
 | `list_cloudflare_tunnel_connections`                              | List Cloudflare Tunnel connections       |
 | `delete_cloudflare_tunnel_clean_up_cloudflare_tunnel_connections` | Clean up Cloudflare Tunnel connections   |
 | `get_cloudflare_tunnel_connector`                                 | Get Cloudflare Tunnel connector          |
 | `get_a_cloudflare_tunnel_management_token`                        | Get a Cloudflare Tunnel management token |
 | `get_a_cloudflare_tunnel_token`                                   | Get a Cloudflare Tunnel token            |
 | `list_all_tunnels`                                                | List All Tunnels                         |
+| `list`                                                            | List tunnel hostnames                    |
+| `create`                                                          | Create a tunnel hostname                 |
+| `get`                                                             | Get a tunnel hostname                    |
+| `update`                                                          | Update a tunnel hostname                 |
+| `delete`                                                          | Delete a tunnel hostname                 |
 
 ## Secrets
 
@@ -61,8 +68,9 @@ never as a literal value. Swamp then redacts it from logs and run records.
 
 When a method returns a secret, swamp stores it in a vault and the resource
 keeps only a vault reference. Because the model declares such fields, swamp
-refuses to run any of its methods, reads included, until a vault exists
-(`swamp vault create local_encryption cloudflare`).
+refuses to run any of its methods except `list` and `get` until a vault exists
+(`swamp vault create local_encryption cloudflare`); swamp treats a method of
+those names as a read.
 
 | Method                                     | Secret inputs   | Stored in a vault | Removed before storing |
 | ------------------------------------------ | --------------- | ----------------- | ---------------------- |

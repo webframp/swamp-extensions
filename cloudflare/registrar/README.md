@@ -33,18 +33,19 @@ swamp model create @webframp/cloudflare/registrar cf-registrar \
 
 ## Methods
 
-| Method                                            | Description                  |
-| ------------------------------------------------- | ---------------------------- |
-| `create_sandbox_registrar_domain_discovery_check` | Check domain availability    |
-| `get_sandbox_registrar_domain_discovery_search`   | Search for available domains |
-| `list`                                            | List Registrations           |
-| `create`                                          | Create Registration          |
-| `get`                                             | Get Registration             |
-| `update`                                          | Update Registration          |
-| `get_status`                                      | Get Registration Status      |
-| `get_update_status`                               | Get Update Status            |
-| `create_registrar_domain_discovery_check`         | Check domain availability    |
-| `get_registrar_domain_discovery_search`           | Search for available domains |
+| Method                                             | Description                       |
+| -------------------------------------------------- | --------------------------------- |
+| `create_sandbox_registrar_domain_discovery_check`  | Check domain availability         |
+| `get_sandbox_registrar_domain_discovery_search`    | Search for available domains      |
+| `list`                                             | List extensions                   |
+| `get`                                              | Get extension                     |
+| `create`                                           | Create Registration               |
+| `update`                                           | Update Registration               |
+| `get_status`                                       | Get Registration Status           |
+| `get_update_status`                                | Get Update Status                 |
+| `create_registrar_domain_discovery_check`          | Check domain availability         |
+| `get_registrar_domain_discovery_search`            | Search for available domains      |
+| `create_registrar_domain_discovery_transfer_check` | Check domain transfer eligibility |
 
 ## Development
 
