@@ -417,7 +417,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -431,15 +431,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "q": "q",
+          "extensions": "extensions",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/registrar-sandbox/domain-search`,
+          `/accounts/${accountId}/registrar-sandbox/domain-search${qs}`,
         );
 
         const handle = await context.writeResource(
           "sandbox_registrar_domain_discovery_search",
-          "sandbox_registrar_domain_discovery_search-current",
+          `sandbox_registrar_domain_discovery_search-current${querySuffix}`,
           result,
         );
         context.logger.info(
@@ -791,7 +810,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -805,15 +824,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "q": "q",
+          "extensions": "extensions",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/registrar/domain-search`,
+          `/accounts/${accountId}/registrar/domain-search${qs}`,
         );
 
         const handle = await context.writeResource(
           "registrar_domain_discovery_search",
-          "registrar_domain_discovery_search-current",
+          `registrar_domain_discovery_search-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched registrar_domain_discovery_search", {});

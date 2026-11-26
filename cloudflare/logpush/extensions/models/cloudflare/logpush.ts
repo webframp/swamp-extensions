@@ -1550,15 +1550,32 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "version_id": "version_id",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}/content`,
+          `/accounts/${accountId}/logpush/transformers/${args.transformer_id}/content${qs}`,
         );
 
         const handle = await context.writeResource(
           "accounts_account_id_logpush_transformers_transformer_id_content",
-          sanitizeInstanceName(String(args.transformer_id)),
+          sanitizeInstanceName(`${String(args.transformer_id)}${querySuffix}`),
           result,
         );
         context.logger.info(

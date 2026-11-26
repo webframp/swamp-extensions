@@ -3861,15 +3861,36 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "granularity": "granularity",
+          "aggregate": "aggregate",
+          "tz": "tz",
+          "days": "days",
+          "response_status": "response_status",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/access/ai-controls/mcp/analytics/portals/${args.portal_id}/tool-calls/timeseries`,
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/portals/${args.portal_id}/tool-calls/timeseries${qs}`,
         );
 
         const handle = await context.writeResource(
           "mcp_portals_api_portal_tool_call_timeseries",
-          sanitizeInstanceName(String(args.portal_id)),
+          sanitizeInstanceName(`${String(args.portal_id)}${querySuffix}`),
           result,
         );
         context.logger.info(
@@ -3909,15 +3930,36 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "granularity": "granularity",
+          "aggregate": "aggregate",
+          "tz": "tz",
+          "days": "days",
+          "response_status": "response_status",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/access/ai-controls/mcp/analytics/servers/${args.server_id}/tool-calls/timeseries`,
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/servers/${args.server_id}/tool-calls/timeseries${qs}`,
         );
 
         const handle = await context.writeResource(
           "mcp_portals_api_server_tool_call_timeseries",
-          sanitizeInstanceName(String(args.server_id)),
+          sanitizeInstanceName(`${String(args.server_id)}${querySuffix}`),
           result,
         );
         context.logger.info(
@@ -3942,7 +3984,7 @@ export const model = {
           ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -3956,15 +3998,36 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "granularity": "granularity",
+          "aggregate": "aggregate",
+          "tz": "tz",
+          "days": "days",
+          "response_status": "response_status",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/access/ai-controls/mcp/analytics/tool-calls/timeseries`,
+          `/accounts/${accountId}/access/ai-controls/mcp/analytics/tool-calls/timeseries${qs}`,
         );
 
         const handle = await context.writeResource(
           "mcp_portals_api_account_tool_call_timeseries",
-          "mcp_portals_api_account_tool_call_timeseries-current",
+          `mcp_portals_api_account_tool_call_timeseries-current${querySuffix}`,
           result,
         );
         context.logger.info(

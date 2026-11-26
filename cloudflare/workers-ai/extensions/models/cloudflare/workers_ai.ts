@@ -3733,7 +3733,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -3747,15 +3747,30 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = { "type": "type" };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/billing/invoice-history`,
+          `/accounts/${accountId}/ai-gateway/billing/invoice-history${qs}`,
         );
 
         const handle = await context.writeResource(
           "invoice_history",
-          "invoice_history-current",
+          `invoice_history-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched invoice_history", {});
@@ -4009,7 +4024,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -4023,15 +4038,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "value_grouping_window": "value_grouping_window",
+          "start_time": "start_time",
+          "end_time": "end_time",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/billing/usage-history`,
+          `/accounts/${accountId}/ai-gateway/billing/usage-history${qs}`,
         );
 
         const handle = await context.writeResource(
           "usage_history",
-          "usage_history-current",
+          `usage_history-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched usage_history", {});
@@ -6309,15 +6343,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "page": "page",
+          "per_page": "per_page",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes`,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_routes",
-          sanitizeInstanceName(String(args.gateway_id)),
+          sanitizeInstanceName(`${String(args.gateway_id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched list_gateway_dynamic_routes", {});
@@ -6595,15 +6647,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "page": "page",
+          "per_page": "per_page",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes/${args.id}/deployments`,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes/${args.id}/deployments${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_deployments",
-          sanitizeInstanceName(String(args.id)),
+          sanitizeInstanceName(`${String(args.id)}${querySuffix}`),
           result,
         );
         context.logger.info(
@@ -6693,15 +6763,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "page": "page",
+          "per_page": "per_page",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes/${args.id}/versions`,
+          `/accounts/${accountId}/ai-gateway/gateways/${args.gateway_id}/routes/${args.id}/versions${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_gateway_dynamic_route_versions",
-          sanitizeInstanceName(String(args.id)),
+          sanitizeInstanceName(`${String(args.id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched list_gateway_dynamic_route_versions", {});
@@ -9891,7 +9979,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -9905,15 +9993,30 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = { "model": "model" };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai/models/schema`,
+          `/accounts/${accountId}/ai/models/schema${qs}`,
         );
 
         const handle = await context.writeResource(
           "model_schema",
-          "model_schema-current",
+          `model_schema-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched model_schema", {});
@@ -9940,7 +10043,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -9954,15 +10057,40 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "per_page": "per_page",
+          "page": "page",
+          "task": "task",
+          "author": "author",
+          "source": "source",
+          "hide_experimental": "hide_experimental",
+          "search": "search",
+          "include_deprecated": "include_deprecated",
+          "format": "format",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/ai/models/search`,
+          `/accounts/${accountId}/ai/models/search${qs}`,
         );
 
         const handle = await context.writeResource(
           "workers_ai_search_model",
-          "workers_ai_search_model-current",
+          `workers_ai_search_model-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched workers_ai_search_model", {});

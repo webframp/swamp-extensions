@@ -8,7 +8,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { z } from "npm:zod@4.6.7";
-import { cfApi, cfApiPaginated, sanitizeInstanceName } from "./_lib/api.ts";
+import {
+  cfApi,
+  cfApiPaginated,
+  sanitizeInstanceName,
+  shortHash,
+} from "./_lib/api.ts";
 
 const EXTENSION_NAME = "@webframp/cloudflare/spectrum";
 
@@ -466,7 +471,7 @@ export const model = {
         ]).optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -480,15 +485,38 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "dimensions": "dimensions",
+          "sort": "sort",
+          "until": "until",
+          "metrics": "metrics",
+          "filters": "filters",
+          "since": "since",
+          "time_delta": "time_delta",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/analytics/events/bytime`,
+          `/zones/${zoneId}/spectrum/analytics/events/bytime${qs}`,
         );
 
         const handle = await context.writeResource(
           "analytics_by_time",
-          "analytics_by_time-current",
+          `analytics_by_time-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched analytics_by_time", {});
@@ -506,7 +534,7 @@ export const model = {
         since: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -520,15 +548,37 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "dimensions": "dimensions",
+          "sort": "sort",
+          "until": "until",
+          "metrics": "metrics",
+          "filters": "filters",
+          "since": "since",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/analytics/events/summary`,
+          `/zones/${zoneId}/spectrum/analytics/events/summary${qs}`,
         );
 
         const handle = await context.writeResource(
           "analytics_summary",
-          "analytics_summary-current",
+          `analytics_summary-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched analytics_summary", {});
@@ -550,7 +600,7 @@ export const model = {
         ]).optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -564,15 +614,35 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "page": "page",
+          "per_page": "per_page",
+          "direction": "direction",
+          "order": "order",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/spectrum/apps`,
+          `/zones/${zoneId}/spectrum/apps${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_spectrum_applications",
-          "list_spectrum_applications-current",
+          `list_spectrum_applications-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_spectrum_applications", {});

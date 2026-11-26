@@ -1021,7 +1021,7 @@ export const model = {
         ),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1035,15 +1035,36 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "continuation_token": "continuation_token",
+          "per_page": "per_page",
+          "sort_order": "sort_order",
+          "creator": "creator",
+          "meta_field_operator": "meta.<field>[<operator>]",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2`,
+          `/accounts/${accountId}/images/v2${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_images_v2",
-          "list_images_v2-current",
+          `list_images_v2-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_images_v2", {});
@@ -1090,7 +1111,7 @@ export const model = {
         limit: z.number().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1104,15 +1125,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/migrations`,
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_migrations",
-          "list_migrations-current",
+          `list_migrations-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_migrations", {});
@@ -1391,15 +1430,33 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs`,
+          `/accounts/${accountId}/images/v2/sourcingkit/migrations/${args.migration_id}/logs${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_migration_logs",
-          sanitizeInstanceName(String(args.migration_id)),
+          sanitizeInstanceName(`${String(args.migration_id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched list_migration_logs", {});
@@ -1414,7 +1471,7 @@ export const model = {
         name: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1428,15 +1485,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "offset": "offset",
+          "limit": "limit",
+          "name": "name",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/images/v2/sourcingkit/sources`,
+          `/accounts/${accountId}/images/v2/sourcingkit/sources${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_sources",
-          "list_sources-current",
+          `list_sources-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_sources", {});

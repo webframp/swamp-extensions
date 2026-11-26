@@ -583,7 +583,7 @@ export const model = {
         cursor: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -597,15 +597,37 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "name_contains": "name_contains",
+          "start_after": "start_after",
+          "per_page": "per_page",
+          "order": "order",
+          "direction": "direction",
+          "cursor": "cursor",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/r2/buckets`,
+          `/accounts/${accountId}/r2/buckets${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_buckets",
-          "list_buckets-current",
+          `list_buckets-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_buckets", {});
@@ -1247,15 +1269,35 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "jobType": "jobType",
+          "status": "status",
+          "maxKeys": "maxKeys",
+          "continuationToken": "continuationToken",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/jobs`,
+          `/accounts/${accountId}/r2/buckets/${args.bucket_name}/jobs${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_bucket_jobs",
-          sanitizeInstanceName(String(args.bucket_name)),
+          sanitizeInstanceName(`${String(args.bucket_name)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched list_bucket_jobs", {});

@@ -546,7 +546,7 @@ export const model = {
           ),
         }),
         execute: async (
-          _args: Record<string, unknown>,
+          args: Record<string, unknown>,
           context: {
             globalArgs: Record<string, string>;
             writeResource: (
@@ -560,15 +560,32 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
+          const queryNames: Record<string, string> = {
+            "normalize": "normalize",
+          };
+          const queryParts: string[] = [];
+          for (const [k, v] of Object.entries(args)) {
+            if (v !== undefined && k in queryNames) {
+              queryParts.push(
+                `${encodeURIComponent(queryNames[k])}=${
+                  encodeURIComponent(String(v))
+                }`,
+              );
+            }
+          }
+          queryParts.sort();
+          const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+          const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
             "GET",
-            `/zones/${zoneId}/api_gateway/configuration`,
+            `/zones/${zoneId}/api_gateway/configuration${qs}`,
           );
 
           const handle = await context.writeResource(
             "api_shield_settings_retrieve_information_about_specific_configuration_properties",
-            "api_shield_settings_retrieve_information_about_specific_configuration_properties-current",
+            `api_shield_settings_retrieve_information_about_specific_configuration_properties-current${querySuffix}`,
             result,
           );
           context.logger.info(
@@ -1843,7 +1860,7 @@ export const model = {
           ),
         }),
         execute: async (
-          _args: Record<string, unknown>,
+          args: Record<string, unknown>,
           context: {
             globalArgs: Record<string, string>;
             writeResource: (
@@ -1857,15 +1874,33 @@ export const model = {
           },
         ) => {
           const { apiToken, zoneId } = context.globalArgs;
+          const queryNames: Record<string, string> = {
+            "host": "host",
+            "include_schema_kind": "include_schema_kind",
+          };
+          const queryParts: string[] = [];
+          for (const [k, v] of Object.entries(args)) {
+            if (v !== undefined && k in queryNames) {
+              queryParts.push(
+                `${encodeURIComponent(queryNames[k])}=${
+                  encodeURIComponent(String(v))
+                }`,
+              );
+            }
+          }
+          queryParts.sort();
+          const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+          const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
           const result = await cfApi<Record<string, unknown>>(
             apiToken,
             "GET",
-            `/zones/${zoneId}/api_gateway/schemas`,
+            `/zones/${zoneId}/api_gateway/schemas${qs}`,
           );
 
           const handle = await context.writeResource(
             "api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas",
-            "api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas-current",
+            `api_shield_endpoint_management_retrieve_operations_and_features_as_open_api_schemas-current${querySuffix}`,
             result,
           );
           context.logger.info(

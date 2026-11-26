@@ -1452,7 +1452,7 @@ export const model = {
         include_counts: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1466,15 +1466,32 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "include_counts": "include_counts",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/stream/live_inputs`,
+          `/accounts/${accountId}/stream/live_inputs${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_live_inputs",
-          "list_live_inputs-current",
+          `list_live_inputs-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_live_inputs", {});
@@ -1994,7 +2011,7 @@ export const model = {
         creator: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -2008,15 +2025,30 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = { "creator": "creator" };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/stream/storage-usage`,
+          `/accounts/${accountId}/stream/storage-usage${qs}`,
         );
 
         const handle = await context.writeResource(
           "stream_videos_storage_usage",
-          "stream_videos_storage_usage-current",
+          `stream_videos_storage_usage-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched stream_videos_storage_usage", {});

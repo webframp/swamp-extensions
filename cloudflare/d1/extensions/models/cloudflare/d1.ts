@@ -531,15 +531,30 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = { "fields": "fields" };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/d1/database/${args.database_id}`,
+          `/accounts/${accountId}/d1/database/${args.database_id}${qs}`,
         );
 
         const handle = await context.writeResource(
           "database",
-          sanitizeInstanceName(String(args.database_id)),
+          sanitizeInstanceName(`${String(args.database_id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched database", {});
@@ -899,15 +914,30 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = { "timestamp": "timestamp" };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/bookmark`,
+          `/accounts/${accountId}/d1/database/${args.database_id}/time_travel/bookmark${qs}`,
         );
 
         const handle = await context.writeResource(
           "bookmark",
-          sanitizeInstanceName(String(args.database_id)),
+          sanitizeInstanceName(`${String(args.database_id)}${querySuffix}`),
           result,
         );
         context.logger.info("Fetched bookmark", {});
@@ -1101,7 +1131,7 @@ export const model = {
         cursor: z.string().optional(),
       }),
       execute: async (
-        _args: Record<string, unknown>,
+        args: Record<string, unknown>,
         context: {
           globalArgs: Record<string, string>;
           writeResource: (
@@ -1115,15 +1145,34 @@ export const model = {
         },
       ) => {
         const { apiToken, accountId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "database_id": "database_id",
+          "limit": "limit",
+          "cursor": "cursor",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/accounts/${accountId}/d1/insights/recommendations`,
+          `/accounts/${accountId}/d1/insights/recommendations${qs}`,
         );
 
         const handle = await context.writeResource(
           "list_insights_recommendations",
-          "list_insights_recommendations-current",
+          `list_insights_recommendations-current${querySuffix}`,
           result,
         );
         context.logger.info("Fetched list_insights_recommendations", {});

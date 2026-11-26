@@ -1763,15 +1763,33 @@ export const model = {
         },
       ) => {
         const { apiToken, zoneId } = context.globalArgs;
+        const queryNames: Record<string, string> = {
+          "start_at": "start_at",
+          "end_at": "end_at",
+        };
+        const queryParts: string[] = [];
+        for (const [k, v] of Object.entries(args)) {
+          if (v !== undefined && k in queryNames) {
+            queryParts.push(
+              `${encodeURIComponent(queryNames[k])}=${
+                encodeURIComponent(String(v))
+              }`,
+            );
+          }
+        }
+        queryParts.sort();
+        const qs = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
+        const querySuffix = qs ? `-${await shortHash(qs)}` : "";
+
         const result = await cfApi<Record<string, unknown>>(
           apiToken,
           "GET",
-          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/reputation/complaints`,
+          `/zones/${zoneId}/email/sending/subdomains/${args.subdomain_id}/reputation/complaints${qs}`,
         );
 
         const handle = await context.writeResource(
           "sending_subdomain_reputation_complaints",
-          sanitizeInstanceName(String(args.subdomain_id)),
+          sanitizeInstanceName(`${String(args.subdomain_id)}${querySuffix}`),
           result,
         );
         context.logger.info(
